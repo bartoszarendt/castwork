@@ -102,6 +102,7 @@ import {
   validateTaskActivationBindingShape,
 } from './activation-grant.js';
 import { ACTIVATION_MODES, MODE_MINIMUMS } from './activation-policy.js';
+import { readPrepareReturnFacts } from './task-fact-readers.js';
 
 // The canonical dispatch-eligibility evaluator and every shared dimension
 // validator it orchestrates. This module resolves facts, mints packets, and
@@ -889,7 +890,12 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       : null;
 
     // ── The one canonical semantic decision ───────────────────────────────
-    const eligibility = evaluateDispatchEligibility(liveDispatchCandidate({
+    // Resolve one instant for the entire protected evaluation.  Passing `null`
+    // through here used each nested validator's own Date.now() default, so the
+    // decision could straddle a clock boundary and C5 could not bind the instant
+    // it actually evaluated.
+    const evaluationNow = options.now ?? Date.now();
+    const evaluationInput = liveDispatchCandidate({
       snapshot,
       activationEvidence,
       readiness,
@@ -906,8 +912,14 @@ export function prepareRoleDispatch(input = {}, options = {}) {
         verifyActivationSignature: options.verifyActivationSignature,
         hostRoleCapabilities: options.hostRoleCapabilities,
       },
-      now: options.now,
-    }));
+      now: evaluationNow,
+    });
+    // Characterization-only observer. The task CLI uses this to bind the exact
+    // object supplied to the authoritative evaluator before that evaluator runs.
+    // It has no verdict, persistence, or packet-generation authority.
+    options.onBeforeEligibilityEvaluation?.(evaluationInput);
+    const eligibility = evaluateDispatchEligibility(evaluationInput);
+    options.onAfterEligibilityEvaluation?.(evaluationInput, eligibility);
     if (!eligibility.ok) {
       const findings = findingSet(command);
       findings.extend(eligibility.findings);
@@ -1113,6 +1125,10 @@ function staleNestedDegradedReportResult() {
 function validateCurrentDispatchPreparation(packet, options = {}) {
   const findings = findingSet('task prepare-dispatch');
   try {
+    // C5 observes this caller-supplied value as part of the evaluator input and
+    // digest. Packet validation deliberately retains its baseline behavior: it
+    // does not normalize or decide the caller's assurance policy here.
+    void options.assurancePolicy;
     const shapeOk = exactKeys(packet, DISPATCH_FIELDS, 'dispatch preparation', findings);
     if (packet?.kind !== DISPATCH_PREPARATION_KIND) findings.malformed(`dispatch preparation kind must be '${DISPATCH_PREPARATION_KIND}'`);
     if (packet?.schemaVersion !== DISPATCH_PREPARATION_SCHEMA_VERSION) findings.malformed(`dispatch preparation schemaVersion must be ${DISPATCH_PREPARATION_SCHEMA_VERSION}`);
@@ -1125,6 +1141,9 @@ function validateCurrentDispatchPreparation(packet, options = {}) {
     ], 'dispatch preparation task', findings);
     for (const key of ['id', 'carrier', 'scope']) {
       if (typeof packet?.task?.[key] !== 'string' || !packet.task[key]) findings.malformed(`dispatch preparation task ${key} is required`);
+    }
+    if (options.expectedTaskId !== undefined && packet?.task?.id !== options.expectedTaskId) {
+      findings.malformed('dispatch preparation task id does not match the protected requested task');
     }
     for (const key of ['outOfScope', 'acceptanceCriteria', 'independentReviewRequired']) {
       if (typeof packet?.task?.[key] !== 'string') findings.malformed(`dispatch preparation task ${key} must be a string`);
@@ -1202,6 +1221,80 @@ export function validateDispatchPreparation(packet, options = {}) {
     }
   }
   return validateCurrentDispatchPreparation(packet, options);
+}
+
+/**
+ * The return-preparation owner cannot validate a packet that a read-only
+ * invocation was never given.  Expose that missing protected input as a
+ * canonical unknown rather than making a presentation layer parse a schema
+ * refusal or call the absence legal.
+ */
+export function evaluateReadOnlyPrepareReturnProjection(input = null) {
+  const context = input && typeof input === 'object' && !Array.isArray(input) &&
+    (Object.hasOwn(input, 'target') || Object.hasOwn(input, 'packet'))
+    ? input
+    : { packet: input };
+  const packet = context.packet ?? null;
+  const facts = context.target && context.taskId
+    ? readPrepareReturnFacts(context.target, context)
+    : null;
+  // `task explain` has no authenticated host-bound validator, selected
+  // check-evidence aggregate, or caller-authorized output/candidate context.
+  // A packet object alone is therefore not the protected prepare-return input:
+  // validating it with this module's permissive defaults previously made a
+  // read-only caller report `legal` while the real command would still refuse
+  // on trust, attempt, check, or candidate currency. Keep it unknown until a
+  // future caller can provide the complete canonical protected context.
+  {
+    const observedFacts = facts ? Object.freeze([
+      Object.freeze({ fact: 'return.carrier', factOwner: 'task_fact_readers', observedState: facts.carrier.state }),
+      Object.freeze({ fact: 'return.dispatch_attempt', factOwner: 'task_fact_readers', observedState: facts.attempt.state }),
+      Object.freeze({ fact: 'return.candidate', factOwner: 'task_fact_readers', observedState: facts.candidate.state }),
+      Object.freeze({ fact: 'dispatch_packet.current', factOwner: 'task_fact_readers', observedState: facts.packet.state }),
+      Object.freeze({ fact: 'required_check_evidence.current', factOwner: 'task_fact_readers', observedState: facts.checks.state }),
+    ]) : Object.freeze([]);
+    const resolvedFailures = facts
+      ? [
+          facts.carrier.state === 'current' ? null : Object.freeze({
+            fact: 'return.carrier', factOwner: 'task_fact_readers', observedState: facts.carrier.state,
+            state: 'failed', policyCode: null, detail: facts.carrier.detail ?? 'current return carrier is invalid',
+          }),
+          facts.attempt.state === 'current' ? null : Object.freeze({
+            fact: 'return.dispatch_attempt', factOwner: 'task_fact_readers', observedState: facts.attempt.state,
+            state: facts.attempt.state === 'unavailable' ? 'unknown' : 'failed', policyCode: null,
+            detail: facts.attempt.lineage?.errors?.[0] ?? facts.attempt.detail ?? 'current dispatch attempt is invalid',
+          }),
+          facts.candidate.state === 'current' ? null : Object.freeze({
+            fact: 'return.candidate', factOwner: 'task_fact_readers', observedState: facts.candidate.state,
+            state: facts.candidate.state === 'unavailable' ? 'unknown' : 'failed', policyCode: null,
+            detail: 'current task facts lack a valid committed implementation_artifact product head',
+          }),
+        ].filter(Boolean)
+      : [];
+    return Object.freeze({
+      id: 'prepare_return', verdict: 'unknown', applicability: 'applicable',
+      facts: observedFacts,
+      reasons: Object.freeze([...resolvedFailures, Object.freeze({
+        fact: 'dispatch_packet.current', factOwner: 'dispatch_envelope', observedState: facts?.packet.state ?? 'unavailable',
+        state: 'unknown', policyCode: null,
+        detail: packet === null || packet === undefined
+          ? 'the canonical prepared-dispatch validator requires an authenticated dispatch packet'
+          : 'a supplied dispatch packet is not independently authenticated without the protected caller validation context',
+      }), Object.freeze({
+        fact: 'required_check_evidence.current', factOwner: 'dispatch_envelope', observedState: facts?.checks.state ?? 'unavailable',
+        state: 'unknown', policyCode: null,
+        detail: facts?.checks.detail ?? 'the canonical return producer requires an explicit authenticated check-evidence aggregate',
+      })]),
+      prerequisites: Object.freeze([
+        Object.freeze({
+          fact: 'dispatch_packet.current', condition: 'a current authenticated dispatch packet and consumed attempt binding must be supplied',
+        }),
+        Object.freeze({
+          fact: 'required_check_evidence.current', condition: 'the exact authenticated check-evidence aggregate path must be supplied',
+        }),
+      ]),
+    });
+  }
 }
 
 /**

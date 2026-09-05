@@ -147,6 +147,7 @@ export function createIo(options = {}) {
     operatorActivationRoot: options.operatorActivationRoot ?? null,
     hostAuthority: options.hostAuthority ?? null,
     requiredCheckCommandRunner: options.requiredCheckCommandRunner ?? null,
+    protectedTransitionObserver: options.protectedTransitionObserver ?? null,
     fsMutationOptions: options.fsMutationOptions ?? null,
   };
 

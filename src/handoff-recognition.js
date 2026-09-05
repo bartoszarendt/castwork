@@ -22,6 +22,7 @@
  */
 
 import { canonicalSha256 } from './canonical-json.js';
+import { explainReasonFactOwner } from './explain-reason.js';
 // Role start authenticates the exact retained packet through the same closed
 // sealed-decision contract prepared-packet validation produces, defined one
 // layer below both so neither boundary owns a second copy of it.
@@ -1023,6 +1024,52 @@ export function recognizeHandoff({
     identity: evaluated.identity,
     observedGrade: evaluated.grade,
     authenticated: evaluated.authenticated,
+  });
+}
+
+/**
+ * Canonical read-only projection for protected post-dispatch actions.
+ * Missing handoff evidence is epistemic: it remains `unknown` here even
+ * though the mutation-time recognition verdict correctly refuses it.
+ */
+export function projectReadOnlyHandoffRecognition(actionId, recognition, {
+  fact,
+  prerequisite,
+  inputUnavailable = false,
+} = {}) {
+  const diagnostics = Array.isArray(recognition?.diagnostics) ? recognition.diagnostics : [];
+  // A missing current return does not erase a concurrently observed malformed
+  // or stale return-store fact.  Read-only callers must retain that distinction
+  // so only genuinely unavailable inputs become `unknown`.
+  const hasObservableFailure = diagnostics.some(item => {
+    const state = item?.evidence?.state;
+    return ['malformed', 'stale', 'changed'].includes(state);
+  });
+  const unavailable = inputUnavailable ||
+    (!hasObservableFailure && (recognition?.evidenceState === 'missing' || recognition?.evidenceState === undefined));
+  const reasons = recognition?.recognized === true ? [] : diagnostics.map(diagnostic => Object.freeze({
+    fact: fact ?? 'handoff.current',
+    factOwner: explainReasonFactOwner(diagnostic?.code ?? null, 'handoff_recognition'),
+    observedState: diagnostic?.evidence?.state ?? recognition?.evidenceState ?? 'unavailable',
+    state: unavailable ? 'unknown' : 'failed',
+    policyCode: diagnostic?.code ?? null,
+    detail: diagnostic?.message ?? 'canonical handoff evaluation did not recognize the required evidence',
+  }));
+  if (reasons.length === 0 && recognition?.recognized !== true) {
+    reasons.push(Object.freeze({
+      fact: fact ?? 'handoff.current', factOwner: explainReasonFactOwner(null, 'handoff_recognition'),
+      observedState: 'unavailable', state: 'unknown', policyCode: null,
+      detail: 'canonical handoff evaluator input is unavailable',
+    }));
+  }
+  return Object.freeze({
+    id: actionId,
+    verdict: recognition?.recognized === true ? 'legal' : unavailable ? 'unknown' : 'illegal',
+    applicability: 'applicable',
+    reasons: Object.freeze(reasons),
+    prerequisites: Object.freeze(reasons.map(() => Object.freeze({
+      fact: fact ?? 'handoff.current', condition: prerequisite ?? 'the required canonical handoff evidence must be supplied',
+    }))),
   });
 }
 

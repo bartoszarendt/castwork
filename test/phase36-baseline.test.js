@@ -7,19 +7,26 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { canonicalJson, canonicalSha256 } from '../src/canonical-json.js';
 import { assertPrivacyClean } from '../src/workflow-measurement.js';
+import { countCanonicalWords } from '../src/canonical-word-count.js';
+import {
+  PACKAGED_SURFACE_MEASUREMENT_SCHEMA,
+  PACKAGED_SURFACE_MEASUREMENT_SOURCES,
+  packagedSurfaceMeasurementIdentity,
+} from '../src/measurement-implementation-identity.js';
 import { executionAttemptIdentity } from '../src/execution-attempt-identity.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { measureAdapterWords } from '../scripts/measure-adapter-words.mjs';
 import { BASELINE_SCENARIOS, createSyntheticScenarioHarness, runSyntheticScenario } from './helpers/lifecycle-scenario-harness.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGED_SURFACE_SNAPSHOT = JSON.parse(readFileSync(join(REPO_ROOT, 'src', 'packaged-surface-baseline.json'), 'utf8'));
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.jsonc', '.md', '.toml', '.txt', '.yaml', '.yml']);
 // Keep this exact-file exemption synchronized with the tracked-file guard in
 // test/internal-planning-boundary.test.js. This candidate-set check includes
@@ -96,6 +103,42 @@ describe('P36-00A frozen baseline', () => {
     );
   });
 
+  it('re-measures the named clean detached subject when its Git object is available', () => {
+    const { commit, tree } = PACKAGED_SURFACE_SNAPSHOT.subject;
+    assert.equal(execFileSync('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }), '');
+    assert.equal(execFileSync('git', ['rev-parse', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(), tree);
+    assert.equal(
+      execFileSync('git', ['rev-parse', `${PACKAGED_SURFACE_SNAPSHOT.observedArtifact.baseCommit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
+      PACKAGED_SURFACE_SNAPSHOT.observedArtifact.baseTree
+    );
+
+    const subject = mkdtempSync(join(tmpdir(), 'packaged-surface-subject-'));
+    try {
+      execFileSync('git', ['clone', '--no-local', '--no-checkout', REPO_ROOT, subject], { encoding: 'utf8' });
+      execFileSync('git', ['checkout', '--detach', commit], { cwd: subject, encoding: 'utf8' });
+      assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: subject, encoding: 'utf8' }), '');
+      assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: subject, encoding: 'utf8' }).trim(), commit);
+      const implementation = packagedSurfaceMeasurementIdentity(REPO_ROOT);
+      assert.deepEqual(implementation, PACKAGED_SURFACE_SNAPSHOT.measurementImplementation);
+      assert.equal(implementation.schema, PACKAGED_SURFACE_MEASUREMENT_SCHEMA);
+      for (const path of PACKAGED_SURFACE_MEASUREMENT_SOURCES) {
+        copyFileSync(join(REPO_ROOT, path), join(subject, path));
+      }
+      assert.deepEqual(packagedSurfaceMeasurementIdentity(subject), implementation);
+      const result = execFileSync(process.execPath, [join(subject, 'scripts', 'measure-adapter-words.mjs')], {
+        cwd: subject,
+        encoding: 'utf8',
+      });
+      assert.deepEqual(JSON.parse(result), PACKAGED_SURFACE_SNAPSHOT.adapters);
+    } finally {
+      rmSync(subject, { recursive: true, force: true });
+    }
+  });
+
+  it('records methodology baseline size without pretending it meets the later ceiling', () => {
+    assert.equal(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')), 26007);
+  });
+
   it('pins the stable transition key to real immutable dispatch consumption and the outside-attempt sentinel', async () => {
     const harness = await createSyntheticScenarioHarness(temp, 'transition-key');
     const started = await harness.start();
@@ -168,6 +211,13 @@ describe('P36-00A frozen baseline', () => {
     };
     for (const result of results) {
       assert.equal(assertPrivacyClean({ counters: result.counters, scenario: result.scenario }).ok, true);
+      assert.deepEqual(result.delegations, {
+        status: 'partial',
+        ordinaryPrefixCount: 1,
+        completeReference: 'unavailable',
+        repairOnly: 'unavailable',
+        limitation: 'the current route stops before candidate, independent review, and audit; it cannot measure the complete three-role reference or repair-only delegations',
+      });
       const pinned = pinnedScenarios[result.scenario];
       assert.deepEqual(
         [result.counters.workflowCommits, result.counters.productCommits, result.counters.totalCommits],

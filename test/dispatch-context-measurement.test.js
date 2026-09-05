@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { canonicalJson } from '../src/canonical-json.js';
+import { measureCanonicalText } from '../src/canonical-word-count.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCRIPT = join(REPO_ROOT, 'scripts', 'measure-dispatch-context.mjs');
@@ -48,14 +49,13 @@ describe('dispatch acting-context measurement', () => {
       'generated_activation_wrapper',
       'canonical_reference',
     ]);
-    const expected = [
-      Buffer.byteLength(canonicalJson(packetValue), 'utf8'),
-      Buffer.byteLength('role\n', 'utf8'),
-      Buffer.byteLength('activation\n', 'utf8'),
-      Buffer.byteLength('reference\n', 'utf8'),
-    ];
-    assert.deepEqual(result.components.map(item => item.bytes), expected);
-    assert.equal(result.totalBytes, expected.reduce((sum, value) => sum + value, 0));
+    const expected = [canonicalJson(packetValue), 'role\n', 'activation\n', 'reference\n'].map(measureCanonicalText);
+    assert.deepEqual(result.components.map(({ kind, path, bytes, ...measurement }) => measurement), expected);
+    assert.deepEqual(result.components.map(item => item.bytes), expected.map(item => item.utf8Bytes));
+    assert.equal(result.totalCanonicalWords, expected.reduce((sum, item) => sum + item.canonicalWords, 0));
+    assert.equal(result.totalUtf8Bytes, expected.reduce((sum, item) => sum + item.utf8Bytes, 0));
+    assert.equal(result.totalCharacters, expected.reduce((sum, item) => sum + item.characters, 0));
+    assert.equal(result.actualInputTokens, 'unavailable');
 
     const duplicate = run([...args, '--reference', role]);
     assert.equal(duplicate.status, 2);

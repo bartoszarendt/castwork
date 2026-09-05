@@ -383,6 +383,21 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     assert.equal(packed.status, 0, packed.stderr);
     assert.deepEqual(JSON.parse(packed.stdout), JSON.parse(source.stdout));
     assert.equal(JSON.parse(source.stdout).command, 'task explain');
+
+    const humanArgs = args.filter(arg => arg !== '--json');
+    const sourceHuman = await runProcess(process.execPath, [join(REPO_ROOT, 'bin', 'agenticloop.js'), ...humanArgs], { env: fixture.env });
+    const packedHuman = await runPacked(humanArgs, { env: fixture.env });
+    assert.equal(sourceHuman.status, 0, sourceHuman.stderr);
+    assert.equal(packedHuman.status, 0, packedHuman.stderr);
+    // Source semantics owns the JSON/human field parity; this install boundary
+    // proves the exact human rendering ships with the same action facts.
+    assert.equal(packedHuman.stdout, sourceHuman.stdout);
+    const action = JSON.parse(source.stdout).actions[0];
+    assert.match(sourceHuman.stdout, new RegExp(`action: ${action.id}`));
+    assert.match(sourceHuman.stdout, new RegExp(`verdict: ${action.verdict}`));
+    for (const reason of action.reasons) {
+      assert.match(sourceHuman.stdout, new RegExp(`reason: ${reason.fact.replaceAll('.', '\\.')}; state=${reason.state}`));
+    }
   });
 
   it('runs installed host-trust status JSON without a signing boundary', async () => {
@@ -421,6 +436,19 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     ], { cwd: target });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).packetSerialization, 'canonicalJson');
+    assert.equal(JSON.parse(result.stdout).actualInputTokens, 'unavailable');
+  });
+
+  it('ships the immutable packaged-surface snapshot without requiring Git metadata', () => {
+    const snapshotPath = join(packedRoot, 'src', 'packaged-surface-baseline.json');
+    assert.ok(existsSync(snapshotPath));
+    assert.equal(existsSync(join(packedRoot, '.git')), false);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+    assert.equal(snapshot.kind, 'agenticloop.packaged-surface-baseline');
+    assert.equal(snapshot.measurementImplementation.identityKind, 'content');
+    assert.match(snapshot.measurementImplementation.contentDigest, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(snapshot.observedArtifact.baseCommit, '3427b97de8392521153b58ec593164d4ae3877ac');
+    assert.equal(snapshot.adapters.opencode.generatedPayload.canonicalWords, 16120);
   });
 
   it('ships documented data, security modules, and maintenance helpers', async () => {
@@ -436,6 +464,10 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       'src/host-trust-cli.js',
       'src/protected-host-boundary.js',
       'scripts/measure-dispatch-context.mjs',
+      'src/canonical-word-count.js',
+      'src/measurement-implementation-identity.js',
+      'src/protected-transition-inputs.js',
+      'src/packaged-surface-baseline.json',
       'scripts/sign-blocked-authority.mjs',
     ]) {
       assert.ok(existsSync(join(packedRoot, ...path.split('/'))), `${path} must be shipped`);
@@ -469,7 +501,9 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       'assert.deepEqual([...grants.ACTIVATION_ASSURANCE_ORDER], ["operator_confirmed", "host_signed"]);',
        'assert.deepEqual(policy.MODE_MINIMUMS.hardened, { activation: "host_signed", return: "host_receipt" });',
        'assert.equal(typeof execution.parseRequiredCheckCommand, "function");',
-      'assert.equal(typeof boundary.loadProtectedAuditorReturnVerifier, "function");',
+       'const binding = { packetId: "dispatch:11111111-1111-4111-8111-111111111111", packetDigest: "sha256:agenticloop.role-preparation.v8:" + "a".repeat(64), invocationId: "invocation:packed", taskId: "T-001", taskContractDigest: "sha256:v1:" + "b".repeat(64), productHead: "c".repeat(40) };',
+       'for (const invalid of [null, undefined, [], { malformed: true }]) assert.deepEqual(execution.validateExecutionEvidence(invalid, { expectedBinding: binding }), { ok: false, errors: ["execution evidence fields must equal the closed schema"], diagnostics: [] });',
+       'assert.equal(typeof boundary.loadProtectedAuditorReturnVerifier, "function");',
       'assert.equal(typeof root.runCli, "function");',
       'const deep = await import("agenticloop/src/auditor-return-receipt.js");',
       'assert.equal(deep.createAuditorReturnReceipt, receipts.createAuditorReturnReceipt);',

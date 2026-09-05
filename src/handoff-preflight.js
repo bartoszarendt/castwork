@@ -77,6 +77,7 @@ import {
   activationCaptureDisposition,
   observeDispatchInitialState,
   evaluateDispatchEligibility,
+  projectReadOnlyDispatchEligibility,
   liveContinuationCandidate,
   liveReadinessCandidate,
 } from './dispatch-eligibility.js';
@@ -309,6 +310,7 @@ export function evaluateHandoffPreflight(input) {
     hostTrustStore,
     returnAdapter = null,
     now = new Date().toISOString(),
+    onEligibilityEvaluation = null,
   } = input;
 
   const command = 'task handoff-preflight';
@@ -1239,6 +1241,13 @@ export function evaluateHandoffPreflight(input) {
     }
   }
 
+  // This observer is used only by the sibling read-only projection. It sees
+  // exactly the dispatch-eligibility ledger this owner evaluated, while the
+  // protected command retains its closed public result schema.
+  if (typeof onEligibilityEvaluation === 'function') {
+    try { onEligibilityEvaluation(eligibility); } catch { /* observer has no gate authority */ }
+  }
+
   // ── 10. Build result ──────────────────────────────────────────────────
   const activation = activationState ? {
     source: activationState.source ?? null,
@@ -1451,4 +1460,17 @@ export function evaluateHandoffPreflight(input) {
     firstSafeRepair,
     dispositionOwner,
   };
+}
+
+/** Run the existing dispatch evaluator and return its canonical read-only envelope. */
+export function evaluateReadOnlyDispatchProjection(input) {
+  let eligibility = null;
+  evaluateHandoffPreflight({
+    ...input,
+    // The observer is intentionally non-authoritative and cannot alter the
+    // protected command's closed public result. It exposes the evaluator-owned
+    // ledger to this sibling read-only projection without widening that result.
+    onEligibilityEvaluation: decision => { eligibility = decision; },
+  });
+  return projectReadOnlyDispatchEligibility(eligibility);
 }

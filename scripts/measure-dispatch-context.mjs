@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { canonicalJson } from '../src/canonical-json.js';
+import { measureCanonicalText } from '../src/canonical-word-count.js';
 
 function usage() {
   return [
@@ -32,8 +33,10 @@ function parseArgs(argv) {
   return result;
 }
 
-function bytes(text) {
-  return Buffer.byteLength(text, 'utf8');
+function component(kind, path, text) {
+  const measurement = measureCanonicalText(text);
+  // Schema v1 exposed `bytes`; retain it while adding the more specific name.
+  return { kind, path, bytes: measurement.utf8Bytes, ...measurement };
 }
 
 try {
@@ -41,31 +44,27 @@ try {
   const packetPath = resolve(options.packet);
   const packet = JSON.parse(readFileSync(packetPath, 'utf8'));
   const components = [
-    { kind: 'canonical_packet', path: packetPath, bytes: bytes(canonicalJson(packet)) },
-    {
-      kind: 'generated_role_wrapper',
-      path: resolve(options.roleWrapper),
-      bytes: bytes(readFileSync(resolve(options.roleWrapper), 'utf8')),
-    },
-    {
-      kind: 'generated_activation_wrapper',
-      path: resolve(options.activationWrapper),
-      bytes: bytes(readFileSync(resolve(options.activationWrapper), 'utf8')),
-    },
-    ...options.references.map(reference => ({
-      kind: 'canonical_reference',
-      path: resolve(reference),
-      bytes: bytes(readFileSync(resolve(reference), 'utf8')),
-    })),
+    component('canonical_packet', packetPath, canonicalJson(packet)),
+    component('generated_role_wrapper', resolve(options.roleWrapper), readFileSync(resolve(options.roleWrapper), 'utf8')),
+    component('generated_activation_wrapper', resolve(options.activationWrapper), readFileSync(resolve(options.activationWrapper), 'utf8')),
+    ...options.references.map(reference => component(
+      'canonical_reference', resolve(reference), readFileSync(resolve(reference), 'utf8')
+    )),
   ];
   const uniquePaths = new Set(components.map(component => component.path));
   if (uniquePaths.size !== components.length) throw new Error('the same context component was supplied more than once');
+  const totalUtf8Bytes = components.reduce((total, item) => total + item.utf8Bytes, 0);
   process.stdout.write(`${JSON.stringify({
     schemaVersion: 1,
     encoding: 'utf8',
     packetSerialization: 'canonicalJson',
     components,
-    totalBytes: components.reduce((total, component) => total + component.bytes, 0),
+    totalCanonicalWords: components.reduce((total, item) => total + item.canonicalWords, 0),
+    totalUtf8Bytes,
+    // Retained for callers of schema version 1; it is exactly totalUtf8Bytes.
+    totalBytes: totalUtf8Bytes,
+    totalCharacters: components.reduce((total, item) => total + item.characters, 0),
+    actualInputTokens: 'unavailable',
   }, null, 2)}\n`);
 } catch (error) {
   process.stderr.write(`${error.message}\n${usage()}\n`);

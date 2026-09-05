@@ -28,6 +28,10 @@ import { tmpdir } from 'node:os';
 import { createDispatchFixture, git, prepare as prepareDispatch } from './helpers/dispatch-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
+import {
+  evaluateReadOnlyPrepareReturnProjection,
+  validateDispatchPreparation,
+} from '../src/dispatch-envelope.js';
 
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'al-task-surface-')); });
@@ -117,6 +121,53 @@ async function implementedTask(name) {
 }
 
 describe('return gates are scoped to the task surface', () => {
+  it('keeps an authenticated full prepare-return path distinct from read-only unknown inputs', async () => {
+    const { fixture, root, cli, packetPath, productHead } = await implementedTask('full-return-vs-read-only');
+    const packet = JSON.parse(readFileSync(join(root, packetPath), 'utf8'));
+
+    // The exact Auditor mismatch probe: the genuine packet validates with the
+    // protected caller's capability/resolver context, but not with read-only
+    // defaults that have no authenticated capability inventory.
+    assert.equal(validateDispatchPreparation(packet, fixture.options).ok, true);
+    assert.equal(validateDispatchPreparation(packet).ok, false);
+
+    assertOk(await cli([
+      'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
+      '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
+    ]), 'implementation artifact evidence');
+    git(root, ['add', '.agenticloop/tasks']);
+    git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
+    const checksPath = '.agenticloop/tmp/full-return-checks.json';
+    assertOk(await cli([
+      'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath, '--json',
+    ]), 'check evidence init');
+    for (const check of JSON.parse(readFileSync(join(root, checksPath), 'utf8'))) {
+      assertOk(await cli([
+        'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+        '--input', checksPath, '--output', checksPath, '--check', check.id,
+        '--outcome', 'passed', '--evidence', `${check.id} passed`, '--json',
+      ]), `check evidence update ${check.id}`);
+    }
+    assertOk(await cli([
+      'task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', checksPath,
+      '--outcome', 'implementation_ready_for_review', '--output', '.agenticloop/tmp/full-return.json', '--json',
+    ]), 'fully provisioned protected prepare-return');
+
+    // Explain cannot receive caller-only authenticated options, selected
+    // aggregate, and output/candidate authority. It must remain canonical
+    // unknown rather than contradicting the successful protected path with a
+    // false legal (or a false refusal).
+    const projection = evaluateReadOnlyPrepareReturnProjection({
+      target: root, taskId: 'T-001',
+      projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
+      packet,
+    });
+    assert.equal(projection.verdict, 'unknown');
+    assert.notEqual(projection.verdict, 'legal');
+    assert.ok(projection.reasons.some(reason =>
+      reason.fact === 'required_check_evidence.current' && reason.state === 'unknown'));
+  });
+
   it('binds the implementation with unrelated shared paths changed after it', async () => {
     const { root, cli, productHead, sharedHead } = await implementedTask('bind-past-shared-paths');
     assert.notEqual(sharedHead, productHead, 'HEAD is past the implementation, exactly as in the field');

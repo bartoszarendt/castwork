@@ -18,6 +18,7 @@ import { generateClaudeCodeArtifacts } from '../src/adapters/claude-code.js';
 import { generateCopilotArtifacts } from '../src/adapters/copilot.js';
 import { generateCursorArtifacts } from '../src/adapters/cursor.js';
 import { loadAgenticLoopConfig } from '../src/json.js';
+import { countCanonicalWords } from '../src/canonical-word-count.js';
 import { seedTargetLayout } from './helpers/layout-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -409,7 +410,6 @@ const ADAPTERS = [
 let tmpDir;
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-adapterpayload-')); });
 after(() => { rmSync(tmpDir, { recursive: true, force: true }); });
-function wordCount(text) { return text.split(/\s+/).filter(Boolean).length; }
 function walk(dir, acc = []) {
   if (!existsSync(dir)) return acc;
   for (const entry of readdirSync(dir)) {
@@ -426,7 +426,7 @@ function measure(adapter) {
   const counts = { generatedPayload: 0, agentDefinitions: 0, activationSurface: 0, referenceLibrary: 0 };
   for (const dir of adapter.dirs) for (const file of walk(join(out, dir))) {
     if (!/\.(md|toml|ya?ml)$/.test(file)) continue;
-    const words = wordCount(readFileSync(file, 'utf-8'));
+    const words = countCanonicalWords(readFileSync(file, 'utf-8'));
     counts.generatedPayload += words;
     const p = file.replace(/\\/g, '/');
     if (p.includes('/references/')) counts.referenceLibrary += words;

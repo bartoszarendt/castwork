@@ -14,7 +14,7 @@ import {
   validateCarrierMutationReceipt,
 } from './task-evidence-contract.js';
 import { validateAuditRecord } from './audit-record.js';
-import { validateExecutionEvidence } from './execution-evidence.js';
+import { validateExecutionEvidenceStructure } from './execution-evidence.js';
 import {
   executionAttemptAbandonmentRelativePath,
   listExecutionAttemptAbandonments,
@@ -198,7 +198,7 @@ function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier
     } catch {
       throw new VerificationContextMalformedError(`workflow check evidence '${path}' is not valid JSON`);
     }
-    const checked = validateExecutionEvidence(record);
+    const checked = validateExecutionEvidenceStructure(record);
     if (!checked.ok) {
       throw new VerificationContextMalformedError(
         `workflow check evidence '${path}' is not a closed CLI execution artifact: ${checked.errors[0]}`

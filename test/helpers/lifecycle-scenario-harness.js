@@ -99,6 +99,16 @@ function firstFailure(commands) {
   return commands.find(command => command.status !== 0) ?? null;
 }
 
+function delegationObservation(commands) {
+  return Object.freeze({
+    status: 'partial',
+    ordinaryPrefixCount: commands.filter(command => command.step === 'role-start' && command.status === 0).length,
+    completeReference: 'unavailable',
+    repairOnly: 'unavailable',
+    limitation: 'the current route stops before candidate, independent review, and audit; it cannot measure the complete three-role reference or repair-only delegations',
+  });
+}
+
 /** Run one frozen scenario and return only its privacy-clean observation. */
 export async function runSyntheticScenario(temp, scenario) {
   if (!BASELINE_SCENARIOS.includes(scenario)) throw new TypeError(`unknown baseline scenario '${scenario}'`);
@@ -159,6 +169,7 @@ export async function runSyntheticScenario(temp, scenario) {
     unavailableReason,
     refusal: failure ? Object.freeze({ step: failure.step, code: failure.code }) : null,
     commands: Object.freeze(harness.commands.map(command => Object.freeze({ ...command }))),
+    delegations: delegationObservation(harness.commands),
     counters: Object.freeze({ ...harness.measurement().counters }),
   });
 }

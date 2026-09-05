@@ -27,6 +27,7 @@ import {
   createPreparedDispatchValidation,
   recognizeHandoff,
   recognizeStoredReturnHandoff,
+  projectReadOnlyHandoffRecognition,
 } from './handoff-recognition.js';
 import { RETURN_USE_FRESHNESS_POLICY } from './return-use-freshness.js';
 import { resolveReturnUseFreshnessPolicy } from './return-use-freshness.js';
@@ -37,6 +38,12 @@ import {
   revalidateReturnVerification,
 } from './return-verification.js';
 import { currentDispatchConsumption, resolveCarrierLineage } from './handoff-consumption.js';
+import { taskRecordRelativePath } from './terminal-scope.js';
+import { taskContractDigest } from './task-contract-baseline.js';
+import { loadFilesTaskContractRecords } from './files-task-contract.js';
+import { taskRecordDigest } from './readiness-candidates.js';
+import { implementationArtifactHead } from './task-fact-readers.js';
+import { refetchFilesReturnEvidence } from './files-return-evidence.js';
 
 /**
  * Read the operator-owned capability inventory for packet validation.
@@ -81,11 +88,12 @@ export function canonicalDispatchValidator({
   // not retroactive for work it already authorized. Boundaries that authorize
   // *new* work leave it absent and get the current clock.
   activationInstantFor = null,
+  now = null,
 }) {
   return packet => {
     try {
-      const now = typeof activationInstantFor === 'function' ? activationInstantFor(packet) : null;
-      const pinned = typeof now === 'number' && Number.isFinite(now) ? { now } : {};
+      const activationNow = typeof activationInstantFor === 'function' ? activationInstantFor(packet) : now;
+      const pinned = typeof activationNow === 'number' && Number.isFinite(activationNow) ? { now: activationNow } : {};
       const checked = validateDispatchPreparation(packet, {
         capabilities: packetCapabilities(target, io, hostTrustStore),
         // The pin governs the whole packet, not only its activation authority.
@@ -120,7 +128,7 @@ export function canonicalDispatchValidator({
  *   dispatchCarrierDigest: string|null,
  *   packetPath: string|null,
  *   hostTrustStore?: string|undefined,
- *   validatePreparedDispatch?: ((packet: any) => {ok: boolean, errors?: string[]})|null,
+ *   validatePreparedDispatch?: ((packet: any, evaluationNow: number) => {ok: boolean, errors?: string[]})|null,
  *   consumedPacketIds?: string[],
  *   rawStartLabel: string,
  * }} input
@@ -138,6 +146,9 @@ export function recognizeRoleStart({
   validatePreparedDispatch: suppliedValidator = null,
   consumedPacketIds = [],
   rawStartLabel,
+  onBeforeRecognitionEvaluation = null,
+  onAfterRecognitionEvaluation = null,
+  now = null,
 }) {
   let suppliedPacket = null;
   if (packetPath) {
@@ -157,10 +168,17 @@ export function recognizeRoleStart({
     // incomplete and recognition refuses with a typed expectation diagnostic
     // rather than inventing a minimum the operator never pinned.
   }
+  const evaluationNow = Number.isFinite(now) ? now : Date.now();
+  // A supplied validator is still evaluated at this one recognition instant.
+  // In particular, the files CLI's dynamic-adapter validator must not silently
+  // fall back to its own wall clock after recognition has selected a clock.
   const validatePreparedDispatch = suppliedPacket === null
     ? null
-    : suppliedValidator ?? canonicalDispatchValidator({ target, io, hostTrustStore });
-  return recognizeHandoff({
+    : packet => (suppliedValidator ?? canonicalDispatchValidator({ target, io, hostTrustStore, now: evaluationNow }))(
+      packet,
+      evaluationNow,
+    );
+  const evaluationInput = {
     transition: 'role_start',
     expectation: {
       backend,
@@ -175,6 +193,26 @@ export function recognizeRoleStart({
     validatePreparedDispatch,
     consumedPacketIds,
     observations: suppliedPacket === null ? [{ label: rawStartLabel }] : [],
+    now: evaluationNow,
+  };
+  // This observer is deliberately before recognizeHandoff. It is only a
+  // characterization seam; recognition's authority and result are unchanged.
+  onBeforeRecognitionEvaluation?.(evaluationInput);
+  const recognition = recognizeHandoff(evaluationInput);
+  onAfterRecognitionEvaluation?.(evaluationInput, recognition);
+  return recognition;
+}
+
+/** Read-only role-start answer; it uses the same recognition seam as role start. */
+export function evaluateReadOnlyRoleStartProjection({ target, io, backend, taskId, taskContractDigest, dispatchCarrierDigest = null }) {
+  const recognition = recognizeRoleStart({
+    target, io, backend, taskId, taskContractDigest, dispatchCarrierDigest,
+    packetPath: null, rawStartLabel: 'read-only evaluation has no authenticated dispatch packet',
+  });
+  return projectReadOnlyHandoffRecognition('role_start', recognition, {
+    fact: 'dispatch_packet.current',
+    prerequisite: 'a current authenticated dispatch packet must be supplied',
+    inputUnavailable: true,
   });
 }
 
@@ -361,5 +399,59 @@ export function recognizeLifecycleReturn({
       minimumReturnAssurance: policy?.minimumReturn ?? null,
       returnUseFreshnessPolicy: returnUse.policy,
     },
+  });
+}
+
+/**
+ * Read-only review answer.  This deliberately follows the same current-carrier
+ * and return-store path as `task review-prepare`; a malformed or stale stored
+ * return must remain observable instead of being replaced with a guessed null.
+ */
+export function evaluateReadOnlyReviewProjection({ target, io, backend, taskId, taskContractDigest: assertedDigest = null, hostTrustStore = undefined }) {
+  if (backend !== 'files') {
+    const recognition = recognizeHandoff({
+      transition: 'review_entry',
+      expectation: { backend, taskId, roleId: 'engineer', taskContractDigest: assertedDigest },
+      verifiedReturn: null,
+    });
+    return projectReadOnlyHandoffRecognition('review', recognition, {
+      fact: 'verified_engineer_return.current',
+      prerequisite: 'a verified Engineer return bound to a current consumed dispatch attempt must be supplied',
+      inputUnavailable: true,
+    });
+  }
+  let recognition;
+  try {
+    const project = loadProjectMap(target).config;
+    const carrier = resolve(target, taskRecordRelativePath(project, taskId));
+    const body = readFileSync(carrier, 'utf8');
+    const contract = taskContractDigest(body);
+    const currentCarrierDigest = taskRecordDigest(body);
+    const history = loadFilesTaskContractRecords(target, taskId);
+    const snapshot = {
+      backend: 'files', taskId,
+      carrier: taskRecordRelativePath(project, taskId), body, digest: currentCarrierDigest,
+      trustedRecords: history.trustedRecords, trustedRecordErrors: history.errors,
+    };
+    recognition = recognizeLifecycleReturn({
+      target, io, transition: 'review_entry', backend: 'files', taskId,
+      taskContractDigest: contract.ok ? contract.digest : null,
+      currentCarrierDigest, productHead: implementationArtifactHead(body),
+      refetchTask: () => snapshot,
+      refetchRepositoryEvidence: record => refetchFilesReturnEvidence(
+        target, record.evidence.packet, record.evidence.repositoryEvidence
+      ),
+      hostTrustStore,
+    });
+  } catch (error) {
+    recognition = recognizeHandoff({
+      transition: 'review_entry',
+      expectation: { backend, taskId, roleId: 'engineer', taskContractDigest: assertedDigest },
+      observations: [{ label: `current review inputs are unavailable: ${error.message}` }],
+    });
+  }
+  return projectReadOnlyHandoffRecognition('review', recognition, {
+    fact: 'verified_engineer_return.current',
+    prerequisite: 'a verified Engineer return bound to a current consumed dispatch attempt must be supplied',
   });
 }

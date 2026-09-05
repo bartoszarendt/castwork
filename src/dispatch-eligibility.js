@@ -56,6 +56,7 @@
 import { createHash } from 'node:crypto';
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
+import { explainReasonFactOwner } from './explain-reason.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import {
   dispositionForEvidenceState,
@@ -2464,6 +2465,55 @@ export function evaluateDispatchEligibility(candidate) {
   } catch (error) {
     return shapeRefusal(candidate.factShape, `dispatch eligibility could not be evaluated: ${error.message}`);
   }
+}
+
+/**
+ * Canonical read-only presentation of a dispatch decision.
+ *
+ * This deliberately lives beside the decision ledger rather than at a CLI
+ * presentation boundary.  In particular, `not_applicable` means that the
+ * live-readiness evaluator has no assignment to bind yet.  It is therefore an
+ * unavailable material input for a read-only answer, not a lifecycle pass and
+ * not an explain-specific interpretation.
+ */
+export function projectReadOnlyDispatchEligibility(decision) {
+  const dimensions = decision?.dimensions ?? {};
+  const facts = DISPATCH_ELIGIBILITY_DIMENSIONS.map(dimension => {
+    const observed = dimensions[dimension];
+    return Object.freeze({
+      fact: `dispatch.${dimension}`,
+      factOwner: explainReasonFactOwner(observed?.code ?? null, 'dispatch_eligibility'),
+      observedState: observed?.state ?? 'unavailable',
+      policyCode: observed?.code ?? null,
+    });
+  });
+  const reasons = DISPATCH_ELIGIBILITY_DIMENSIONS.flatMap(dimension => {
+    const observed = dimensions[dimension];
+    if (observed?.state === 'satisfied') return [];
+    const unavailable = observed?.state === 'not_applicable' || observed?.state === 'not_reached' || !observed;
+    return [Object.freeze({
+      fact: `dispatch.${dimension}`,
+      factOwner: explainReasonFactOwner(observed?.code ?? null, 'dispatch_eligibility'),
+      observedState: observed?.state ?? 'unavailable',
+      state: unavailable ? 'unknown' : 'failed',
+      policyCode: observed?.code ?? null,
+      ...(observed?.note ? { detail: observed.note } : {}),
+    })];
+  });
+  const verdict = reasons.some(reason => reason.state === 'failed')
+    ? 'illegal'
+    : reasons.length > 0 ? 'unknown' : 'legal';
+  return Object.freeze({
+    id: 'prepare_dispatch',
+    verdict,
+    applicability: 'applicable',
+    facts: Object.freeze(facts),
+    reasons: Object.freeze(reasons),
+    prerequisites: Object.freeze(reasons.map(reason => Object.freeze({
+      fact: reason.fact,
+      condition: `canonical dispatch dimension '${reason.fact.slice('dispatch.'.length)}' must be satisfied`,
+    }))),
+  });
 }
 
 /* ── Closed candidate adapters ───────────────────────────────────────────── */

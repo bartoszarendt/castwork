@@ -31,6 +31,7 @@ import { markdownLines, markdownSection, parseAtxHeading, topLevelListItems } fr
 import { decisionReferenceId } from './verification-learning.js';
 import { isValidTaskId } from './task-id.js';
 import { canonicalSha256 } from './canonical-json.js';
+import { explainReasonFactOwner } from './explain-reason.js';
 import { auditorReturnReceiptIdentity } from './auditor-return-receipt.js';
 import {
   AUDIT_DISPOSITION_TYPES,
@@ -53,6 +54,8 @@ import {
   LEGACY_INLINE_REPORT_VERSION,
 } from './layout.js';
 import { RETURN_ASSURANCE_VALUES, returnAssuranceMeets } from './activation-grant.js';
+import { resolveWorkUnitAudit } from './project-map.js';
+import { resolveCanonicalTerminalScope } from './terminal-scope.js';
 
 /**
  * Frontmatter keys that must never appear on an audit record. `model`,
@@ -2935,4 +2938,42 @@ export function evaluateAuditCloseoutGate(repoRoot, params) {
       ? `agenticloop audit baseline ${record.auditId} --artifact ${expectedCandidate} --covered-tasks ${(expectedCoveredTasks ?? []).join(',')} --evidence <integrated-evidence>`
       : null,
   };
+}
+
+/**
+ * Canonical read-only audit projection.  It resolves the same configured scope
+ * and audit mode that the closeout gate consumes; explain never substitutes a
+ * task id for a work-unit identity or enables a configured opt-out.
+ */
+export function evaluateReadOnlyAuditProjection(repoRoot, {
+  taskId = null,
+  projectConfig = null,
+  workUnit = null,
+} = {}) {
+  const scope = taskId
+    ? resolveCanonicalTerminalScope({ target: repoRoot, config: projectConfig ?? {}, taskId })
+    : null;
+  const resolvedWorkUnit = scope?.workUnit ?? workUnit ?? 'read-only';
+  const workUnitAudit = resolveWorkUnitAudit(projectConfig ?? {});
+  const result = evaluateAuditCloseoutGate(repoRoot, {
+    workUnit: resolvedWorkUnit,
+    workUnitAudit,
+    expectedCandidate: null,
+    expectedCoveredTasks: scope?.tasks?.length ? scope.tasks : null,
+  });
+  const unavailable = ['audit_candidate_missing', 'audit_task_set_missing'].includes(result.state);
+  const reasons = (result.reasons ?? []).map((detail, index) => Object.freeze({
+    fact: index === 0 ? 'audit.candidate' : 'audit.covered_tasks',
+    // Audit-gate state tokens are observations, not registered refusal-policy
+    // codes. Do not relabel them as coded presentation reasons.
+    factOwner: explainReasonFactOwner(null, 'audit_closeout_gate'), observedState: result.state,
+    state: unavailable ? 'unknown' : 'failed', policyCode: null, detail,
+  }));
+  return Object.freeze({
+    id: 'audit', verdict: result.allowed ? 'legal' : unavailable ? 'unknown' : 'illegal', applicability: result.optOut ? 'not_applicable' : 'applicable',
+    reasons: Object.freeze(reasons),
+    prerequisites: Object.freeze(reasons.map(reason => Object.freeze({
+      fact: reason.fact, condition: 'an independently supplied exact candidate and covered-task inventory must be supplied',
+    }))),
+  });
 }
