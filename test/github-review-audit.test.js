@@ -49,14 +49,16 @@ describe('GitHub review provenance audit', () => {
   });
 
   it('rejects older-head, missing-mode, missing-artifact, and unsupported markers', () => {
-    assert.match(evaluateGitHubReviewAudit(data({ comments: [marker({ artifact: OLD_HEAD })] })).errors.join('\n'), /stale/);
+    const stale = evaluateGitHubReviewAudit(data({ comments: [marker({ artifact: OLD_HEAD })] }));
+    assert.match(stale.errors.join('\n'), /stale/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [{ body: `AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_ARTIFACT: ${HEAD}`, author: LOOP_ACCOUNT }] })).errors.join('\n'), /exactly one mode/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [{ body: 'AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_MODE: host_subagent\n[[agent: maintainer]]', author: LOOP_ACCOUNT }] })).errors.join('\n'), /exactly one artifact/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [marker({ mode: 'unknown' })] })).errors.join('\n'), /unsupported review mode/);
   });
 
   it('enforces independent review from the linked task issue', () => {
-    assert.match(evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'single_agent_fallback' })] })).errors.join('\n'), /cannot accept/);
+    const invalid = evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'single_agent_fallback' })] }));
+    assert.match(invalid.errors.join('\n'), /cannot accept/);
     assert.equal(evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'host_subagent' })] })).ok, true);
   });
 

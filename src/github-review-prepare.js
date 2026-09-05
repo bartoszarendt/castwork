@@ -58,25 +58,46 @@ function refetchCurrentHead(commandRunner, prNumber, repo) {
   const args = ['pr', 'view', String(prNumber), '--json', 'headRefOid'];
   if (repo) args.push('--repo', repo);
   const data = runGhJson(commandRunner, args);
-  return String(data?.headRefOid ?? '');
+  return data?.headRefOid;
 }
 
 function validateHeadFreshness(stampedHead, currentHead) {
-  const stamped = String(stampedHead ?? '');
-  const current = String(currentHead ?? '');
-  if (!isGitObjectId(stamped)) {
-    return { valid: false, stale: false, reason: 'packet is missing a complete stamped Git object identity' };
+  if (typeof stampedHead !== 'string' || !isGitObjectId(stampedHead)) {
+    return { valid: false, stale: false, failure: 'malformed', reason: 'evaluated head is missing or malformed; cannot confirm packet freshness' };
   }
-  if (!isGitObjectId(current)) {
-    return { valid: false, stale: false, reason: 'current head is missing or malformed; cannot confirm packet freshness' };
+  if (currentHead === null || currentHead === undefined || currentHead === '') {
+    return { valid: false, stale: false, failure: 'unavailable', reason: 'current PR head is unavailable; cannot confirm packet freshness' };
   }
-  if (!sameGitObjectFormat([stamped, current])) {
-    return { valid: false, stale: false, reason: `packet head ${stamped} and current head ${current} use different Git object formats` };
+  if (typeof currentHead !== 'string' || !isGitObjectId(currentHead)) {
+    return { valid: false, stale: false, failure: 'malformed', reason: 'current PR head is missing or malformed; cannot confirm packet freshness' };
   }
-  if (stamped !== current) {
-    return { valid: false, stale: true, stampedHead: stamped, currentHead: current, reason: `packet head ${stamped} differs from current head ${current}; the packet is stale` };
+  if (!sameGitObjectFormat([stampedHead, currentHead])) {
+    return { valid: false, stale: false, failure: 'malformed', reason: `evaluated and current PR heads use different Git object formats` };
   }
-  return { valid: true, stale: false, stampedHead: stamped, currentHead: current };
+  if (stampedHead !== currentHead) {
+    return { valid: false, stale: true, stampedHead, currentHead, reason: `packet head ${stampedHead} differs from current head ${currentHead}; the packet is stale` };
+  }
+  return { valid: true, stale: false, stampedHead, currentHead };
+}
+
+function createHeadFreshnessDiagnostic(freshness, { refetchError = null } = {}) {
+  if (refetchError) return createDiagnostic({
+    code: 'review_prepare.head_refetch_failed',
+    message: `cannot refetch the current PR head: ${refetchError.message}`,
+    repairHint: 'Restore read-only PR-head access and rerun github-review-prepare.',
+  });
+  if (freshness.stale) return createDiagnostic({
+    code: 'review_prepare.stale_head',
+    message: `evaluated head ${freshness.stampedHead} differs from the current PR head ${freshness.currentHead}; the preparation is stale and no packet is emitted`,
+    repairHint: 'Rerun github-review-prepare against the current head before review dispatch.',
+  });
+  return freshness.failure === 'unavailable' ? createDiagnostic({
+    code: 'review_prepare.head_unavailable', message: `cannot confirm packet freshness: ${freshness.reason}`,
+    repairHint: 'Restore a current PR head and rerun github-review-prepare.',
+  }) : createDiagnostic({
+    code: 'review_prepare.head_malformed', message: `cannot confirm packet freshness: ${freshness.reason}`,
+    repairHint: 'Repair the malformed PR-head evidence and rerun github-review-prepare.',
+  });
 }
 
 function validateReviewPacketShape(packet, expectedPr) {
@@ -267,9 +288,36 @@ export function runGitHubReviewPrepare({ pr, workspace, packet: packetPath, ...o
       repairHint: 'Repair the workspace so it matches the exact review head before dispatch.',
     })]
     : [];
+  const preflightFacts = !result.ok
+    ? [createDiagnostic({
+      code: 'review_prepare.preflight_failed',
+      message: result.errors?.[0] ?? 'fresh preflight evidence fails for the current review candidate',
+      repairHint: 'Repair the fresh preflight failures before review dispatch.',
+    })]
+    : [];
+  // Evaluate the dedicated policy fact before the aggregate preflight result:
+  // preflight also reports malformed policy text, but that broader result must
+  // not hide the stable review-preparation policy refusal and its repair route.
+  const independence = taskRequiresIndependentReview(loaded.input.issueData.body);
+  if (independence.error) {
+    const errors = [independence.error];
+    const facts = errors.map(message => createDiagnostic({
+      code: 'review_prepare.independent_review_policy',
+      message,
+      repairHint: 'Repair the independent-review task contract before review dispatch.',
+    }));
+    const routed = routeDiagnostics(facts, capabilities);
+    return {
+      schemaVersion: 1, ok: false, pr: loaded.input.prData.number, issue: loaded.input.issueData.number,
+      headRefOid: head, errors, warnings: result.warnings ?? [],
+      diagnostics: routed.diagnostics, ownerRouting: routed.ownerRouting, packet: null,
+      resumePacket: createReviewEntryFailurePacket({ loaded, result: { ...result, ok: false, errors }, diagnostics: routed.diagnostics }),
+      firstSafeRepair: routed.diagnostics[0]?.nextAction ?? null,
+    };
+  }
   if (!result.ok || workspaceResult.error) {
     const errors = [...(result.errors ?? []), ...workspaceFacts.map(d => d.message)];
-    const routed = routeDiagnostics([...(result.diagnostics ?? []), ...workspaceFacts], capabilities);
+    const routed = routeDiagnostics([...(result.diagnostics ?? []), ...preflightFacts, ...workspaceFacts], capabilities);
     const failedResult = { ...result, ok: false, errors };
     return {
       schemaVersion: 1, ok: false, pr: loaded.input.prData.number, issue: loaded.input.issueData.number,
@@ -279,45 +327,36 @@ export function runGitHubReviewPrepare({ pr, workspace, packet: packetPath, ...o
       firstSafeRepair: routed.diagnostics[0]?.nextAction ?? null,
     };
   }
-  const independence = taskRequiresIndependentReview(loaded.input.issueData.body);
-  if (independence.errors?.length) {
-    const facts = independence.errors.map(message => createDiagnostic({
-      code: 'preflight.task_policy',
-      message,
-      repairHint: 'Repair the independent-review task contract before review dispatch.',
-    }));
-    const routed = routeDiagnostics(facts, capabilities);
-    return {
-      schemaVersion: 1, ok: false, pr: loaded.input.prData.number, issue: loaded.input.issueData.number,
-      headRefOid: head, errors: independence.errors, warnings: result.warnings ?? [],
-      diagnostics: routed.diagnostics, ownerRouting: routed.ownerRouting, packet: null,
-      resumePacket: createReviewEntryFailurePacket({ loaded, result: { ...result, ok: false, errors: independence.errors }, diagnostics: routed.diagnostics }),
-      firstSafeRepair: routed.diagnostics[0]?.nextAction ?? null,
-    };
-  }
   // Re-fetch every receipt binding immediately before emission. A head-only
   // re-read cannot detect task-body, check, attribution, or review drift.
   const refreshed = loadPreflightInput({ pr, ...options, includeBasePaths: true });
   const freshResult = evaluatePreparationInput(refreshed.input, evaluatePreflight, { referenceResolvers: refreshed.referenceResolvers });
-  const freshHead = String(refreshed.input.prData.headRefOid ?? '');
+  const freshHead = refreshed.input.prData.headRefOid;
   const commandRunner = options.commandRunner ?? defaultGhCommandRunner;
-  const emittedHead = refetchCurrentHead(commandRunner, refreshed.input.prData.number, options.repo);
-  const freshness = validateHeadFreshness(freshHead, emittedHead);
+  let emittedHead = null;
+  let refetchError = null;
+  try { emittedHead = refetchCurrentHead(commandRunner, refreshed.input.prData.number, options.repo); } catch (error) { refetchError = error; }
+  const freshness = refetchError
+    ? { valid: false, stale: false, failure: 'refetch_failed', reason: 'current PR head could not be refetched' }
+    : validateHeadFreshness(freshHead, emittedHead);
   const finalIndependence = taskRequiresIndependentReview(refreshed.input.issueData.body);
   const finalWorkspace = workspace
     ? validateReviewWorkspace({ workspace, expectedArtifact: freshHead })
     : { provided: false, valid: true, workspace: null, head: null };
-  if (!freshness.valid || !freshResult.ok || finalIndependence.errors?.length || finalWorkspace.error) {
-    const fact = createDiagnostic({
-      code: 'review_prepare.stale_head',
-      message: !freshness.valid && freshness.stale
-        ? `evaluated head ${freshHead} differs from the current PR head ${emittedHead}; the preparation is stale and no packet is emitted`
-        : !freshness.valid
-          ? `cannot confirm packet freshness: ${freshness.reason}`
-          : finalWorkspace.error
-            ? finalWorkspace.error
-            : finalIndependence.errors?.[0] ??
-              'review-entry bindings changed or are no longer valid after the final refetch; no receipt is emitted',
+  if (!freshness.valid || !freshResult.ok || finalIndependence.error || finalWorkspace.error) {
+    let fact;
+    if (!freshness.valid) fact = createHeadFreshnessDiagnostic(freshness, { refetchError });
+    else if (finalIndependence.error) fact = createDiagnostic({
+      code: 'review_prepare.independent_review_policy', message: finalIndependence.error,
+      repairHint: 'Repair the independent-review policy before review dispatch.',
+    });
+    else if (!freshResult.ok) fact = createDiagnostic({
+      code: 'review_prepare.preflight_failed',
+      message: 'review-entry bindings changed or are no longer valid after the final refetch; no receipt is emitted',
+      repairHint: 'Repair the fresh preflight failures before review dispatch.',
+    });
+    else fact = createDiagnostic({
+      code: 'review_prepare.workspace', message: finalWorkspace.error,
       repairHint: 'Rerun github-review-prepare against the current head before review dispatch.',
     });
     const routed = routeDiagnostics([fact], capabilities);
@@ -515,16 +554,25 @@ export function verifyReviewPacket({
       packetCheck: shape, packet: null, firstSafeRepair: diagnostic.nextAction,
     };
   }
-  const currentHead = refetchCurrentHead(commandRunner, prNumber, repo);
+  let currentHead = null;
+  let refetchError = null;
+  try { currentHead = refetchCurrentHead(commandRunner, prNumber, repo); } catch (error) { refetchError = error; }
+  if (refetchError) {
+    const routed = routeDiagnostics([createHeadFreshnessDiagnostic(null, { refetchError })], capabilities);
+    const diagnostic = routed.diagnostics[0];
+    return {
+      schemaVersion: 1, ok: false, pr: prNumber, headRefOid: null, errors: [diagnostic.message], warnings: [],
+      diagnostics: routed.diagnostics, ownerRouting: routed.ownerRouting,
+      packetCheck: { valid: false, stale: false, reason: 'current PR head refetch failed' }, packet: null,
+      firstSafeRepair: diagnostic.nextAction,
+    };
+  }
   const check = validateReviewPacket(parsed, currentHead, { expectedPr: prNumber });
   const facts = [];
   let handoffRecognition = null;
   if (!check.valid) {
-    facts.push(createDiagnostic({
-      code: 'review_prepare.stale_head',
-      message: `review packet rejected before dispatch: ${check.reason}`,
-      repairHint: 'Regenerate the packet with github-review-prepare before dispatch.',
-    }));
+    const headFact = createHeadFreshnessDiagnostic(check);
+    facts.push(headFact);
   }
   if (check.valid) {
     try {

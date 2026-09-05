@@ -315,6 +315,41 @@ describe('review preparation contract - preparation-input parity', () => {
   });
 });
 
+describe('review preparation exact-head diagnostic split', () => {
+  function packetFile(packet) {
+    const root = mkdtempSync(join(tmpdir(), 'al-review-head-'));
+    const path = join(root, 'packet.json');
+    writeFileSync(path, JSON.stringify(packet), 'utf8');
+    return { root, path };
+  }
+
+  function runnerWithHead(head) {
+    return () => ({ status: 0, stdout: JSON.stringify({ headRefOid: head }), stderr: '' });
+  }
+
+  it('uses stale_head only when two complete unequal heads were observed', () => {
+    const { root, path } = packetFile(reviewPacket());
+    try {
+      const result = verifyReviewPacket({ pr: 42, packet: path, target: REPO_ROOT, commandRunner: runnerWithHead('c'.repeat(40)) });
+      assert.equal(result.diagnostics[0].code, 'review_prepare.stale_head');
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  it('separates unavailable, malformed, and failed head refetch before packet dispatch', () => {
+    for (const [label, runner, expected] of [
+      ['unavailable', runnerWithHead(null), 'review_prepare.head_unavailable'],
+      ['malformed', runnerWithHead(42), 'review_prepare.head_malformed'],
+      ['refetch failure', () => { throw new Error('network unavailable'); }, 'review_prepare.head_refetch_failed'],
+    ]) {
+      const { root, path } = packetFile(reviewPacket());
+      try {
+        const result = verifyReviewPacket({ pr: 42, packet: path, target: REPO_ROOT, commandRunner: runner });
+        assert.equal(result.diagnostics[0].code, expected, label);
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Step 1: live deviation integration through evaluatePreflight
 // ---------------------------------------------------------------------------
@@ -1429,20 +1464,23 @@ describe('review preparation contract - review preparation and packet freshness'
     '[[agent: engineer]]',
   ].join('\n');
 
-  function prepareRunner({ prBody = prepBody, issueBody = PREP_ISSUE, refetchHead = HEAD } = {}) {
-    const prData = {
-      number: 42, body: prBody, headRefOid: HEAD, baseRefOid: BASE,
+  function prepareRunner({ prBody = prepBody, finalPrBody = prBody, issueBody = PREP_ISSUE, finalIssueBody = issueBody, refetchHead = HEAD } = {}) {
+    let prReads = 0;
+    let issueReads = 0;
+    const prData = body => ({
+      number: 42, body, headRefOid: HEAD, baseRefOid: BASE,
       closingIssuesReferences: [{ number: 7 }], statusCheckRollup: [],
       commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
-    };
-    const issueData = { number: 7, body: issueBody, title: 'T' };
+    });
     return (command, args) => {
       if (args[0] === 'pr') {
         const fields = args[args.indexOf('--json') + 1] ?? '';
         if (fields === 'headRefOid') return { status: 0, stdout: JSON.stringify({ headRefOid: refetchHead }), stderr: '' };
-        return { status: 0, stdout: JSON.stringify(prData), stderr: '' };
+        return { status: 0, stdout: JSON.stringify(prData(prReads++ === 0 ? prBody : finalPrBody)), stderr: '' };
       }
-      if (args[0] === 'issue') return { status: 0, stdout: JSON.stringify(issueData), stderr: '' };
+      if (args[0] === 'issue') {
+        return { status: 0, stdout: JSON.stringify({ number: 7, body: issueReads++ === 0 ? issueBody : finalIssueBody, title: 'T' }), stderr: '' };
+      }
       if (args[0] === 'repo') return { status: 0, stdout: JSON.stringify({ nameWithOwner: 'o/r' }), stderr: '' };
       if (args[0] === 'api' && args[1] === 'user') return { status: 0, stdout: JSON.stringify({ login: 'loop-bot', type: 'User' }), stderr: '' };
       if (args[0] === 'api' && args.includes('--paginate')) return { status: 0, stdout: JSON.stringify([[]]), stderr: '' };
@@ -1625,7 +1663,32 @@ describe('review preparation contract - review preparation and packet freshness'
     const result = runGitHubReviewPrepare({ pr: 42, commandRunner: prepareRunner({ prBody: brokenBody }), verificationContext: verifyContext });
     assert.equal(result.ok, false);
     assert.equal(result.packet, null);
+    assert.ok(result.diagnostics.some(item => item.code === 'review_prepare.preflight_failed'));
     assert.ok((result.ownerRouting.engineer ?? []).length > 0, JSON.stringify(result.ownerRouting));
+  });
+
+  it('gives final-refetched independent-review policy failure precedence over aggregate preflight failure', () => {
+    const contradictory = `${PREP_ISSUE.replace('task_id: T-007', 'task_id: T-007\nindependent_review_required: false')}\nAGENT_INDEPENDENT_REVIEW_REQUIRED: true`;
+    const result = runGitHubReviewPrepare({
+      pr: 42,
+      commandRunner: prepareRunner({ finalIssueBody: contradictory }),
+      verificationContext: verifyContext,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.packet, null);
+    assert.deepEqual(result.diagnostics.map(item => item.code), ['review_prepare.independent_review_policy']);
+  });
+
+  it('keeps generic final-refetch failure on preflight_failed when the refetched policy is valid', () => {
+    const finalBrokenBody = prepBody.replace('  Evidence: tests passed (exit 0)', '  Evidence:');
+    const result = runGitHubReviewPrepare({
+      pr: 42,
+      commandRunner: prepareRunner({ finalPrBody: finalBrokenBody }),
+      verificationContext: verifyContext,
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.packet, null);
+    assert.deepEqual(result.diagnostics.map(item => item.code), ['review_prepare.preflight_failed']);
   });
 
   it('routes a workspace failure to the Engineer owner', async () => {
@@ -1633,6 +1696,7 @@ describe('review preparation contract - review preparation and packet freshness'
     const result = runGitHubReviewPrepare({ pr: 42, commandRunner: prepareRunner(), verificationContext: verifyContext, workspace: 'nonexistent-workspace-path-xyz' });
     assert.equal(result.ok, false);
     assert.equal(result.packet, null);
+    assert.ok(result.diagnostics.some(item => item.code === 'review_prepare.workspace'));
     assert.ok((result.ownerRouting.engineer ?? []).some(item => /workspace/i.test(item.message)), JSON.stringify(result.ownerRouting));
   });
 
@@ -1642,6 +1706,7 @@ describe('review preparation contract - review preparation and packet freshness'
     assert.equal(result.ok, false);
     assert.equal(result.packet, null);
     assert.match(result.errors.join('\n'), /stale/);
+    assert.ok(result.diagnostics.some(item => item.code === 'review_prepare.stale_head'));
     assert.ok((result.ownerRouting.orchestrator ?? []).length > 0, JSON.stringify(result.ownerRouting));
   });
 

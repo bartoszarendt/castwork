@@ -343,6 +343,28 @@ export function gitTracksPath(target, relPath, runGit = targetGitRunner(target))
   return result.status === 0;
 }
 
+/** Classify each guarded files review-entry persistence terminal fact. */
+export function reviewEntryPersistenceFailure(stage, { stale = false } = {}) {
+  const facts = {
+    conflict: ['review.entry.persistence_conflict', 'negative', 'blocked'],
+    carrier: ['review.entry.persistence_carrier_changed', 'changed', 'superseded'],
+    write: ['review.entry.persistence_write_changed', 'negative', 'blocked'],
+    refetch: ['review.entry.persistence_refetch_changed', 'changed', 'superseded'],
+  };
+  const [code, evidenceState, disposition] = facts[stage === 'write' && stale ? 'carrier' : stage] ?? [];
+  if (!code) return null;
+  return { code, evidenceState, disposition };
+}
+
+/** The review-entry guard's non-persistence facts are deliberately distinct. */
+export function reviewEntryPreparationFailure(stage) {
+  const facts = {
+    fixup: { code: 'review.entry.fixup_invalid', evidenceState: 'malformed', disposition: 'blocked' },
+    matrix: { code: 'review.entry.matrix_stale', evidenceState: 'changed', disposition: 'superseded' },
+  };
+  return facts[stage] ?? null;
+}
+
 /**
  * Mutable check state is a local aggregate, never return evidence. Keep it at
  * one predictable scratch path so callers cannot accidentally commit a file
@@ -4815,7 +4837,7 @@ export async function cmdTask(args, io = createIo()) {
         if (episodeErrors.length > 0) {
           return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
             `task record contains an invalid Maintainer Review Fixup: ${episodeErrors[0]}`, {
-              code: 'review.entry.fixup_invalid', evidenceState: 'malformed', disposition: 'blocked',
+              ...reviewEntryPreparationFailure('fixup'),
               safeRepair: 'Repair the ## Maintainer Review Fixup subsection and rerun task review-prepare.',
             }
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
@@ -4869,7 +4891,7 @@ export async function cmdTask(args, io = createIo()) {
         if (!matrixValidation.ok) {
           return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
             `finding-resolution matrix is stale or invalid: ${matrixValidation.errors[0]}`, {
-              code: 'review.entry.matrix_stale', evidenceState: 'changed', disposition: 'superseded',
+              ...reviewEntryPreparationFailure('matrix'),
               safeRepair: `Refresh the finding-resolution matrix against the current product artifact ${currentProductArtifact} and rerun task review-prepare.`,
             }
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
@@ -4951,7 +4973,7 @@ export async function cmdTask(args, io = createIo()) {
         if (!alreadyCurrent) {
           return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
             `conflicting review-entry content already exists at ${reviewPath}`, {
-              code: 'review.entry.persistence', evidenceState: 'negative', disposition: 'blocked',
+              ...reviewEntryPersistenceFailure('conflict'),
             }
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
         }
@@ -4967,8 +4989,7 @@ export async function cmdTask(args, io = createIo()) {
         const stale = applied.stale === true;
         return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
           `review-entry persistence failed: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`, {
-            code: 'review.entry.persistence', evidenceState: stale ? 'changed' : 'negative',
-            disposition: stale ? 'superseded' : 'blocked',
+            ...reviewEntryPersistenceFailure('write', { stale }),
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
@@ -4977,7 +4998,7 @@ export async function cmdTask(args, io = createIo()) {
       if (finalCarrier !== body || finalReceipt !== receiptText) {
         return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
           'review-entry persistence did not refetch to the exact intended carrier and receipt bytes', {
-            code: 'review.entry.persistence', evidenceState: 'changed', disposition: 'superseded',
+            ...reviewEntryPersistenceFailure('refetch'),
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }

@@ -25,6 +25,8 @@ import { createCheckEvidenceSupersession } from '../src/check-evidence-supersess
 import {
   gitTracksPath,
   isExactImplementationArtifactReaffirmation,
+  reviewEntryPersistenceFailure,
+  reviewEntryPreparationFailure,
 } from '../src/task-cli.js';
 
 let tmpDir;
@@ -77,6 +79,26 @@ describe('task CLI fail-closed guard helpers', () => {
     assert.equal(isExactImplementationArtifactReaffirmation(`---\nimplementation_artifact: commit:${head}  \n---\n`, head), false);
     assert.equal(isExactImplementationArtifactReaffirmation(carrier(`range:${base}..${head}`), head), false);
     assert.equal(isExactImplementationArtifactReaffirmation(carrier(`commit:${base}`), head), false);
+  });
+
+  it('splits review-entry persistence conflicts from every recompute path', () => {
+    assert.deepEqual(reviewEntryPersistenceFailure('conflict'), {
+      code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+    });
+    assert.deepEqual(reviewEntryPersistenceFailure('write', { stale: true }), {
+      code: 'review.entry.persistence_carrier_changed', evidenceState: 'changed', disposition: 'superseded',
+    });
+    assert.deepEqual(reviewEntryPersistenceFailure('write'), {
+      code: 'review.entry.persistence_write_changed', evidenceState: 'negative', disposition: 'blocked',
+    });
+    assert.deepEqual(reviewEntryPersistenceFailure('refetch'), {
+      code: 'review.entry.persistence_refetch_changed', evidenceState: 'changed', disposition: 'superseded',
+    });
+  });
+
+  it('emits dedicated review-entry fixup and matrix guard codes', () => {
+    assert.equal(reviewEntryPreparationFailure('fixup').code, 'review.entry.fixup_invalid');
+    assert.equal(reviewEntryPreparationFailure('matrix').code, 'review.entry.matrix_stale');
   });
 });
 

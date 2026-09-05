@@ -191,14 +191,13 @@ export function runGitHubReady({
     errors,
     warnings: [],
     diagnostics: [
-      ...(preflight.diagnostics?.length
-        ? preflight.diagnostics
-        : (preflight.errors ?? []).map(message => createDiagnostic({ code: 'ready.preflight', message }))),
+      ...(preflight.diagnostics ?? []),
+      // Preserve detailed preflight diagnostics while publishing the composite
+      // gate's own exact-candidate fact whenever that component fails.
+      ...(preflight.errors ?? []).map(message => createDiagnostic({ code: 'ready.preflight', message })),
       ...(reviewAudit.errors ?? []).map(message => createDiagnostic({ code: 'ready.review_audit', message })),
       ...(identity.diagnostics ?? []),
-      ...(identity.errors ?? [])
-        .filter(message => !(identity.diagnostics ?? []).some(diagnostic => diagnostic.message === message || message.includes(diagnostic.message)))
-        .map(message => createDiagnostic({ code: 'ready.task_identity', message })),
+      ...(identity.errors ?? []).map(message => createDiagnostic({ code: 'ready.task_identity', message })),
       ...errors.filter(message => !(identity.errors ?? []).includes(message))
         .map(message => createDiagnostic({ code: 'ready.cross_gate_identity', message })),
     ],

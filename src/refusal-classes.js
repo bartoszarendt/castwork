@@ -18,6 +18,9 @@ export const REFUSAL_DISPOSITIONS = Object.freeze([
 
 const PENDING_CLASSIFICATION = 'pending_classification';
 
+/** Families whose complete catalog rows have passed the classification ratchet. */
+export const ACCEPTED_REFUSAL_FAMILIES = Object.freeze(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8']);
+
 /**
  * Every accepted code has one named live evaluation surface. Entries can name
  * more than one surface where a public command forwards the same fact. This is
@@ -39,12 +42,17 @@ const PRODUCER_INVENTORY_ROWS = [
     'task.contract.malformed', 'contract.baseline.invalid', 'readiness.base_inventory.missing', 'evidence.malformed',
     'dependency.unresolved', 'dispatch.packet.invalid', 'dispatch.packet.stale', 'capability.declaration.invalid',
     'capability.action.denied', 'parallel_scan.decomposition.invalid', 'return.assurance.insufficient',
+    'worktree.clean_gate.failed',
   ]],
   ['src/task-cli.js', [
     'activation.capture.missing', 'activation.capture.malformed', 'activation.capture.mismatch', 'activation.capture.unsupported',
     'task.evidence.not_in_progress', 'task.evidence.provenance_mismatch', 'task.evidence.atomic_write',
     'task.evidence.final_validation', 'task.role_start.check_evidence_missing', 'task.role_start.check_evidence_mismatch',
     'handoff.refresh.plan.malformed', 'handoff.refresh.plan.unsupported', 'return.lane.implementation_absent',
+    'review.entry.fixup_invalid', 'review.entry.matrix_stale',
+    'review.entry.persistence_conflict', 'review.entry.persistence_carrier_changed',
+    'review.entry.persistence_write_changed', 'review.entry.persistence_refetch_changed',
+    'check.aggregate.git_probe_failed',
   ]],
   ['src/required-checks.js', ['required_check.explain_forbidden']],
   ['src/task-readiness.js', [
@@ -58,7 +66,9 @@ const PRODUCER_INVENTORY_ROWS = [
   ]],
   ['src/github-ready.js', ['task.body.bom', 'task.body.collapsed_newlines', 'task.body.utf8']],
   ['src/audit-cli.js', ['task.record.structure', 'audit.already_exists']],
-  ['src/github-preflight.js', ['contract.baseline.missing']],
+  ['src/github-preflight.js', [
+    'contract.baseline.missing', 'preflight.attribution', 'preflight.review_checkpoint', 'preflight.review_history_invalid', 'preflight.revision_resolution',
+  ]],
   ['src/cli.js', ['contract.baseline.stale', 'evidence.changed', 'task.evidence.lineage', 'task.evidence.contract_drift', 'task.evidence.product_head']],
   ['src/handoff-preflight.js', [
     'evidence.missing', 'task.evidence.lineage.stale', 'task.record.identity_mismatch', 'dependency.evidence.stale',
@@ -74,7 +84,7 @@ const PRODUCER_INVENTORY_ROWS = [
     'verification.context.missing', 'verification.context.malformed', 'verification.context.stale',
     'host.boundary.unsupported', 'parallel_scan.record.invalid', 'return.assurance.session_reported',
   ]],
-  ['src/repository-state.js', ['task.mutation.unresolved']],
+  ['src/repository-state.js', ['task.mutation.unresolved', 'worktree.clean_gate.failed']],
   ['src/execution-attempt.js', [
     'dispatch.attempt.budget_exhausted', 'dispatch.packet.conserved', 'dispatch.attempt.history_rewritten',
     'attempt_return_unbound', 'attempt_return_ambiguous', 'attempt_return_conflict', 'attempt_terminal_conflict',
@@ -102,6 +112,38 @@ const PRODUCER_INVENTORY_ROWS = [
   ]],
   ['src/commit-range.js', ['role_return.stale']],
   ['src/host-handoff.js', ['role_return.receipt_stale', 'role_return.producer_mismatch']],
+  ['src/commit-attribution.js', ['attribution.work_unit', 'attribution.trailer', 'attribution.role']],
+  ['src/closeout.js', ['closeout.marker.stale']],
+  ['src/github-review-prepare.js', [
+    'review_prepare.workspace', 'review_prepare.stale_head', 'review_prepare.packet',
+    'review_prepare.preflight_failed', 'review_prepare.independent_review_policy',
+    'review_prepare.head_unavailable', 'review_prepare.head_malformed', 'review_prepare.head_refetch_failed',
+  ]],
+  ['src/github-ready.js', ['ready.preflight', 'ready.review_audit', 'ready.task_identity', 'ready.cross_gate_identity']],
+  ['src/github-review-audit.js', ['review_audit.task_contract', 'review_audit.failure']],
+  ['src/projection-reconciliation.js', ['state.host_local', 'projection.state.unexplained']],
+  ['src/task-readiness.js', ['readiness.mode.invalid']],
+  ['src/github-preflight.js', [
+    'preflight.head_identity', 'preflight.summary_shape', 'preflight.scope_deviations',
+    'preflight.task_contract', 'preflight.path_intent', 'preflight.generated_paths',
+    'preflight.dependencies', 'preflight.evidence', 'preflight.checks',
+    'preflight.checks.task_contract', 'preflight.task_policy', 'preflight.other',
+  ]],
+  ['src/pr-body.js', ['pr_body.structural', 'preflight.task_policy']],
+  ['src/preparation-input.js', ['pr_body.input']],
+  ['src/cli.js', ['pr_body.input']],
+  ['src/pr-body-context.js', ['pr_body.snapshot']],
+  ['src/cli.js', ['pr_body.deprecation', 'pr_body.local_file', 'pr_body.input_format', 'cli.operational']],
+  ['src/cli-main.js', ['cli.usage', 'cli.unexpected']],
+  ['src/cli-io.js', ['cli.usage']],
+  ['src/github-task-body.js', ['cli.usage']],
+  ['src/closeout-cli.js', ['cli.operational']],
+  ['src/diagnostic-presentation.js', ['cli.unexpected']],
+  ['src/projection-reconciliation.js', [
+    'projection.observation.invalid', 'projection.carrier.not_applicable',
+    'projection.evidence.superseded', 'projection.fact.contradiction',
+    'projection.authority.untyped',
+  ]],
 ];
 
 // A code can be emitted by several independent evaluator modules. Keep rows
@@ -185,7 +227,10 @@ export const DYNAMIC_DIAGNOSTIC_PRODUCERS = Object.freeze({
     'human_disposition.stale', 'human_disposition.invalid',
   ]) }),
   'src/cli-main.js': Object.freeze({ codes: 'external' }),
-  'src/cli.js': Object.freeze({ codes: 'external' }),
+  'src/cli.js': Object.freeze({ codes: 'external', knownCodes: Object.freeze(['pr_body.input']) }),
+  'src/commit-attribution.js': Object.freeze({ codes: Object.freeze([
+    'attribution.trailer', 'attribution.role',
+  ]) }),
   'src/commit-range.js': Object.freeze({ codes: 'external' }),
   'src/dispatch-eligibility.js': Object.freeze({
     codes: 'external',
@@ -209,7 +254,19 @@ export const DYNAMIC_DIAGNOSTIC_PRODUCERS = Object.freeze({
       'task.body.base_inventory.missing', 'task.body.attribution',
     ]),
   }),
-  'src/github-preflight.js': Object.freeze({ codes: 'external' }),
+  'src/github-preflight.js': Object.freeze({
+    codes: 'external',
+    knownCodes: Object.freeze([
+      'preflight.attribution', 'preflight.review_checkpoint', 'preflight.review_history_invalid', 'preflight.revision_resolution',
+      'preflight.head_identity', 'preflight.summary_shape', 'preflight.scope_deviations',
+      'preflight.task_contract', 'preflight.path_intent', 'preflight.generated_paths',
+      'preflight.dependencies', 'preflight.evidence', 'preflight.checks',
+      'preflight.checks.task_contract', 'preflight.task_policy', 'preflight.other',
+    ]),
+  }),
+  'src/github-review-audit.js': Object.freeze({ codes: Object.freeze([
+    'review_audit.task_contract', 'review_audit.failure',
+  ]) }),
   'src/handoff-recognition.js': Object.freeze({ codes: Object.freeze([
     'handoff.evidence.mismatched', 'handoff.evidence.malformed', 'handoff.evidence.freshness_expired',
     'handoff.expectation.malformed', 'handoff.evidence.missing', 'handoff.evidence.schema_retired',
@@ -220,9 +277,18 @@ export const DYNAMIC_DIAGNOSTIC_PRODUCERS = Object.freeze({
     'parallel_scan.evidence.stale', 'parallel_scan.record.invalid', 'parallel_scan.inventory.incomplete',
     'parallel_scan.decomposition.invalid',
   ]) }),
-  'src/projection-reconciliation.js': Object.freeze({ codes: Object.freeze(['evidence.missing']) }),
+  'src/pr-body.js': Object.freeze({ codes: Object.freeze([
+    'pr_body.structural', 'preflight.task_policy',
+  ]) }),
+  'src/projection-reconciliation.js': Object.freeze({ codes: Object.freeze([
+    'evidence.missing', 'state.host_local', 'projection.state.unexplained',
+    'projection.observation.invalid', 'projection.carrier.not_applicable',
+    'projection.evidence.superseded', 'projection.fact.contradiction',
+    'projection.authority.untyped',
+  ]) }),
   'src/public-error.js': Object.freeze({ codes: 'external' }),
   'src/public-result.js': Object.freeze({ codes: 'external' }),
+  'src/closeout-cli.js': Object.freeze({ codes: 'external', knownCodes: Object.freeze(['cli.operational']) }),
   'src/task-cli.js': Object.freeze({ codes: Object.freeze([
     'activation.capture.missing', 'activation.capture.malformed',
     'activation.capture.mismatch', 'activation.capture.unsupported',
@@ -232,6 +298,7 @@ export const DYNAMIC_DIAGNOSTIC_PRODUCERS = Object.freeze({
     'scope.declaration.missing', 'generated.path.invalid', 'scope.intent.invalid', 'scope.intended_creation.uncovered',
     'readiness.base_inventory.missing', 'scope.glob.unmatched', 'scope.intended_creation.missing',
     'scope.deviation.malformed', 'scope.deviation.missing', 'dependency.unresolved',
+    'readiness.mode.invalid',
   ]) }),
   'src/task-record-root.js': Object.freeze({ codes: Object.freeze([
     'task.body.utf8', 'task.body.bom', 'task.body.collapsed_newlines',
@@ -242,6 +309,64 @@ export const DYNAMIC_DIAGNOSTIC_PRODUCERS = Object.freeze({
 // derived fact used by that diagnostic and intentionally need not contain its
 // literal; they are existence-checked rather than treated as fake emitters.
 const CONSUMER_INVENTORY = Object.freeze({
+  'attribution.work_unit': Object.freeze([
+    'src/committed-source.js', 'src/readiness-apply.js',
+  ]),
+  'attribution.trailer': Object.freeze([
+    'src/cli.js', 'src/commit-range.js', 'src/committed-source.js',
+    'src/handoff-evidence-refresh.js', 'src/readiness-apply.js',
+    'src/review-entry-receipt.js', 'src/task-cli.js',
+  ]),
+  'attribution.role': Object.freeze([
+    'src/cli.js', 'src/commit-range.js', 'src/committed-source.js',
+    'src/handoff-evidence-refresh.js', 'src/readiness-apply.js',
+    'src/review-entry-receipt.js', 'src/task-cli.js',
+  ]),
+  'preflight.attribution': Object.freeze([
+    'src/cli.js', 'src/github-ready.js', 'src/github-review-prepare.js',
+  ]),
+  'closeout.marker.stale': Object.freeze(['src/closeout-cli.js']),
+  'review_prepare.workspace': Object.freeze(['src/cli.js']),
+  'review_prepare.stale_head': Object.freeze(['src/cli.js']),
+  'review_prepare.preflight_failed': Object.freeze(['src/cli.js']),
+  'review_prepare.independent_review_policy': Object.freeze(['src/cli.js']),
+  'review_prepare.head_unavailable': Object.freeze(['src/cli.js']),
+  'review_prepare.head_malformed': Object.freeze(['src/cli.js']),
+  'review_prepare.head_refetch_failed': Object.freeze(['src/cli.js']),
+  'review_prepare.packet': Object.freeze(['src/cli.js']),
+  'ready.preflight': Object.freeze(['src/cli.js']),
+  'ready.review_audit': Object.freeze(['src/cli.js']),
+  'ready.task_identity': Object.freeze(['src/cli.js']),
+  'ready.cross_gate_identity': Object.freeze(['src/cli.js']),
+  'review_audit.task_contract': Object.freeze(['src/cli.js', 'src/github-ready.js']),
+  'review_audit.failure': Object.freeze(['src/cli.js', 'src/github-ready.js']),
+  'preflight.review_checkpoint': Object.freeze([
+    'src/cli.js', 'src/github-ready.js', 'src/github-review-prepare.js',
+  ]),
+  'preflight.review_history_invalid': Object.freeze([
+    'src/cli.js', 'src/github-ready.js', 'src/github-review-prepare.js',
+  ]),
+  'preflight.revision_resolution': Object.freeze([
+    'src/cli.js', 'src/github-ready.js', 'src/github-review-prepare.js',
+  ]),
+  'readiness.mode.invalid': Object.freeze([
+    'src/cli.js', 'src/github-preflight.js', 'src/github-task-body.js',
+    'src/handoff-preflight.js', 'src/parallel-scan.js', 'src/readiness-candidates.js',
+    'src/task-cli.js',
+  ]),
+  ...Object.fromEntries([
+    'preflight.head_identity', 'preflight.summary_shape', 'preflight.scope_deviations',
+    'preflight.task_contract', 'preflight.path_intent', 'preflight.generated_paths',
+    'preflight.dependencies', 'preflight.evidence', 'preflight.checks',
+    'preflight.checks.task_contract', 'preflight.task_policy', 'preflight.other',
+  ].map(code => [code, Object.freeze([
+    'src/cli.js', 'src/github-ready.js', 'src/github-review-prepare.js',
+  ])])),
+  'pr_body.structural': Object.freeze(['src/cli.js']),
+  'pr_body.input': Object.freeze(['src/cli.js']),
+  'pr_body.snapshot': Object.freeze(['src/cli.js']),
+  'compatibility.waiver_scope_retired': Object.freeze(['src/closeout-cli.js']),
+  'worktree.clean_gate.failed': Object.freeze(['src/dispatch-eligibility.js']),
   'handoff.evidence.freshness_expired': Object.freeze([
     'src/return-verification.js', 'src/return-use-freshness.js',
   ]),
@@ -251,42 +376,196 @@ const CONSUMER_INVENTORY = Object.freeze({
   'handoff.evidence.ambiguous_return': Object.freeze(['src/return-verification.js']),
 });
 
-const PENDING_EVALUATION_SURFACES = Object.freeze({
-  'attribution.work_unit': ['src/commit-attribution.js'], 'attribution.trailer': ['src/commit-attribution.js'],
-  'attribution.role': ['src/commit-attribution.js'], 'preflight.attribution': ['src/github-preflight.js'],
-  'closeout.marker.stale': ['src/closeout.js'], 'review_prepare.workspace': ['src/github-review-prepare.js'],
-  'review_prepare.stale_head': ['src/github-review-prepare.js'], 'review_prepare.packet': ['src/github-review-prepare.js'],
-  'ready.preflight': ['src/github-ready.js'], 'ready.review_audit': ['src/github-ready.js'],
-  'ready.task_identity': ['src/github-ready.js'], 'ready.cross_gate_identity': ['src/github-ready.js'],
-  'review_audit.task_contract': ['src/github-review-audit.js'], 'review_audit.failure': ['src/github-review-audit.js'],
-  'preflight.review_checkpoint': ['src/github-preflight.js'], 'preflight.revision_resolution': ['src/github-preflight.js'],
-  'preflight.review_provenance': ['src/github-preflight.js'],
-  'check.aggregate.git_probe_failed': ['src/task-cli.js'], 'worktree.clean_gate.failed': ['src/repository-state.js'],
-  'audit.already_exists': ['src/audit-cli.js'], 'compatibility.waiver_scope_retired': ['src/closeout-waiver.js'],
-  'state.host_local': ['src/projection-reconciliation.js'], 'projection.state.unexplained': ['src/projection-reconciliation.js'],
-  'readiness.mode.invalid': ['src/task-readiness.js'], 'preflight.head_identity': ['src/github-preflight.js'],
-  'preflight.summary_shape': ['src/github-preflight.js'], 'preflight.scope_deviations': ['src/github-preflight.js'],
-  'preflight.task_contract': ['src/github-preflight.js'], 'preflight.path_intent': ['src/github-preflight.js'],
-  'preflight.generated_paths': ['src/github-preflight.js'], 'preflight.dependencies': ['src/github-preflight.js'],
-  'preflight.evidence': ['src/github-preflight.js'], 'preflight.checks': ['src/github-preflight.js'],
-  'preflight.checks.task_contract': ['src/github-preflight.js'], 'preflight.task_policy': ['src/github-preflight.js'],
-  'preflight.other': ['src/github-preflight.js'], 'pr_body.structural': ['src/pr-body.js'],
-  'pr_body.input': ['src/preparation-input.js'], 'pr_body.snapshot': ['src/pr-body-context.js'],
-  'pr_body.deprecation': ['src/cli.js'], 'pr_body.local_file': ['src/cli.js'], 'pr_body.input_format': ['src/cli.js'],
-  'cli.usage': ['src/cli-main.js'], 'cli.operational': ['src/cli.js'], 'cli.unexpected': ['src/cli-main.js'],
-  'projection.observation.invalid': ['src/projection-reconciliation.js'],
-  'projection.carrier.not_applicable': ['src/projection-reconciliation.js'],
-  'projection.evidence.superseded': ['src/projection-reconciliation.js'],
-  'projection.fact.contradiction': ['src/projection-reconciliation.js'],
-  'projection.authority.untyped': ['src/projection-reconciliation.js'],
+const EVALUATION_SURFACES = Object.freeze({
+  'attribution.work_unit': Object.freeze(['src/commit-attribution.js']),
+  'attribution.trailer': Object.freeze(['src/commit-attribution.js']),
+  'attribution.role': Object.freeze(['src/commit-attribution.js']),
+  'preflight.attribution': Object.freeze(['src/github-preflight.js']),
+  'closeout.marker.stale': Object.freeze(['src/closeout.js']),
+  'review_prepare.workspace': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.stale_head': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.preflight_failed': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.independent_review_policy': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.head_unavailable': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.head_malformed': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.head_refetch_failed': Object.freeze(['src/github-review-prepare.js']),
+  'review_prepare.packet': Object.freeze(['src/github-review-prepare.js']),
+  'ready.preflight': Object.freeze(['src/github-ready.js']),
+  'ready.review_audit': Object.freeze(['src/github-ready.js']),
+  'ready.task_identity': Object.freeze(['src/github-ready.js']),
+  'ready.cross_gate_identity': Object.freeze(['src/github-ready.js']),
+  'review_audit.task_contract': Object.freeze(['src/github-review-audit.js']),
+  'review_audit.failure': Object.freeze(['src/github-review-audit.js']),
+  'preflight.review_checkpoint': Object.freeze(['src/github-preflight.js']),
+  'preflight.review_history_invalid': Object.freeze(['src/github-preflight.js']),
+  'preflight.revision_resolution': Object.freeze(['src/github-preflight.js']),
+  'compatibility.waiver_scope_retired': Object.freeze(['src/closeout-waiver.js']),
+  'check.aggregate.git_probe_failed': Object.freeze(['src/task-cli.js']),
+  'worktree.clean_gate.failed': Object.freeze(['src/dispatch-eligibility.js', 'src/repository-state.js']),
+  'state.host_local': Object.freeze(['src/projection-reconciliation.js']),
+  'projection.state.unexplained': Object.freeze(['src/projection-reconciliation.js']),
+  'audit.already_exists': Object.freeze(['src/audit-cli.js']),
+  'review.entry.fixup_invalid': Object.freeze(['src/task-cli.js']),
+  'review.entry.matrix_stale': Object.freeze(['src/task-cli.js']),
+  'review.entry.persistence_conflict': Object.freeze(['src/task-cli.js']),
+  'review.entry.persistence_carrier_changed': Object.freeze(['src/task-cli.js']),
+  'review.entry.persistence_write_changed': Object.freeze(['src/task-cli.js']),
+  'review.entry.persistence_refetch_changed': Object.freeze(['src/task-cli.js']),
+  'readiness.mode.invalid': Object.freeze(['src/task-readiness.js']),
+  ...Object.fromEntries([
+    'preflight.head_identity', 'preflight.summary_shape', 'preflight.scope_deviations',
+    'preflight.task_contract', 'preflight.path_intent', 'preflight.generated_paths',
+    'preflight.dependencies', 'preflight.evidence', 'preflight.checks',
+    'preflight.checks.task_contract', 'preflight.task_policy', 'preflight.other',
+  ].map(code => [code, Object.freeze(
+    code === 'preflight.task_policy'
+      ? ['src/github-preflight.js', 'src/pr-body.js']
+      : ['src/github-preflight.js'],
+  )])),
+  'pr_body.structural': Object.freeze(['src/pr-body.js']),
+  'pr_body.input': Object.freeze(['src/preparation-input.js', 'src/cli.js']),
+  'pr_body.snapshot': Object.freeze(['src/pr-body-context.js']),
+  'pr_body.deprecation': Object.freeze(['src/cli.js']),
+  'pr_body.local_file': Object.freeze(['src/cli.js']),
+  'pr_body.input_format': Object.freeze(['src/cli.js']),
+  'cli.usage': Object.freeze(['src/cli-main.js', 'src/cli-io.js', 'src/github-task-body.js']),
+  'cli.operational': Object.freeze(['src/cli.js', 'src/closeout-cli.js']),
+  'cli.unexpected': Object.freeze(['src/cli-main.js', 'src/diagnostic-presentation.js']),
+  'projection.observation.invalid': Object.freeze(['src/projection-reconciliation.js']),
+  'projection.carrier.not_applicable': Object.freeze(['src/projection-reconciliation.js']),
+  'projection.evidence.superseded': Object.freeze(['src/projection-reconciliation.js']),
+  'projection.fact.contradiction': Object.freeze(['src/projection-reconciliation.js']),
+  'projection.authority.untyped': Object.freeze(['src/projection-reconciliation.js']),
 });
 
 const METADATA_OVERRIDES = Object.freeze({
+  'attribution.work_unit': Object.freeze({
+    semanticInvalidators: 'the final contiguous Work-Unit, Tasks, and Agent trailers exactly match the requested work unit, canonical task set, and role',
+    proof: 'test/attribution-refusal-family.test.js: work-unit-mismatch-is-refused proves a mismatched work-unit trailer cannot certify shared Maintainer work',
+  }),
+  'attribution.trailer': Object.freeze({
+    semanticInvalidators: 'the final contiguous Task and Agent trailers exactly bind the current task and expected role',
+    proof: 'test/attribution-refusal-family.test.js: task-trailer-mismatch-is-refused proves a stale task trailer cannot claim product lineage',
+  }),
+  'attribution.role': Object.freeze({
+    semanticInvalidators: 'the requested role is lowercase and resolves in the canonical workflow-role registry',
+    proof: 'test/attribution-refusal-family.test.js: code-disjointness-separates-requested-role-validity-from-final-agent-trailer proves invalid or non-lowercase requested roles cannot claim canonical commit attribution',
+  }),
+  'preflight.attribution': Object.freeze({
+    semanticInvalidators: 'the final live PR body role trailer and current-head final Task/Agent trailers agree with the strict linked task identity',
+    proof: 'test/attribution-refusal-family.test.js: github-role-conflict-is-refused proves a conflicting GitHub attribution claim cannot enter review',
+  }),
   'audit.already_exists': Object.freeze({
     semanticInvalidators: 'the existing audit record is selected or rebaselined for the requested candidate and covered tasks',
+    proof: 'test/audit-cli.test.js: refuses-a-duplicate-work-unit proves an existing work-unit audit is selected or deliberately rebaselined rather than duplicated',
+  }),
+  'closeout.marker.stale': Object.freeze({
+    semanticInvalidators: 'a newly evaluated closeout packet reconstructs the marker against the exact current task, audit, and candidate state',
+    proof: 'test/closeout-record.test.js: records-a-complete-marker-and-verifies-it-after-the-packet-is-deleted proves a stale marker is not current and requires a fresh closeout packet',
+  }),
+  'review_prepare.workspace': Object.freeze({
+    semanticInvalidators: 'the supplied review workspace resolves to the exact current review artifact before packet emission or dispatch',
+    proof: 'test/review-preparation-contract.test.js: rejects-a-workspace-that-does-not-match-the-review-head proves a different workspace cannot enter review',
+  }),
+  'review_prepare.stale_head': Object.freeze({
+    semanticInvalidators: 'the final PR refetch and every receipt binding agree on one exact current head',
+    proof: 'test/review-preparation-contract.test.js: refuses-a-packet-after-the-pr-head-changes proves a stale review packet cannot dispatch',
+  }),
+  'review_prepare.preflight_failed': Object.freeze({
+    semanticInvalidators: 'fresh preflight succeeds for the exact refetched review candidate',
+    proof: 'test/review-preparation-contract.test.js: fresh-preflight-failure-is-not-reported-as-head-drift proves a failed final preflight cannot be recomputed away as head drift',
+  }),
+  'review_prepare.independent_review_policy': Object.freeze({
+    semanticInvalidators: 'the refetched task independently parses one valid independent-review policy',
+    proof: 'test/review-preparation-contract.test.js: invalid-independent-review-policy-has-its-own-review-prepare-code proves policy failure does not inherit stale-head repair',
+  }),
+  'review_prepare.packet': Object.freeze({
+    semanticInvalidators: 'the review packet has the closed canonical shape, intact receipt digest, and mutually consistent exact-head bindings',
+    proof: 'test/review-authority-adversarial.test.js: rejects-a-fabricated-partial-receipt-that-only-echoes-head-task-and-contract proves a fabricated packet cannot dispatch review',
+  }),
+  'ready.preflight': Object.freeze({
+    semanticInvalidators: 'the current PR evidence preflight succeeds for the exact candidate before merge readiness is certified',
+    proof: 'test/github-ready.test.js: fails-when-the-preflight-fails-while-the-review-passes proves failed evidence preflight blocks readiness',
+  }),
+  'ready.review_audit': Object.freeze({
+    semanticInvalidators: 'a current independently authored review audit succeeds for the exact candidate before merge readiness is certified',
+    proof: 'test/github-ready.test.js: fails-when-the-review-fails-while-the-preflight-passes proves stale review provenance blocks readiness',
+  }),
+  'ready.task_identity': Object.freeze({
+    semanticInvalidators: 'the linked issue is the unique carrier for its materialized task identity across the repository inventory',
+    proof: 'test/github-ready.test.js: rejects-a-nonunique-linked-task-identity proves ambiguous task identity cannot certify readiness',
+  }),
+  'ready.cross_gate_identity': Object.freeze({
+    semanticInvalidators: 'preflight and review audit resolve the same linked issue and exact current PR head',
+    proof: 'test/github-ready.test.js: rejects-mismatched-linked-issue-or-pr-head proves disagreeing certification gates cannot certify readiness',
+  }),
+  'review_audit.task_contract': Object.freeze({
+    semanticInvalidators: 'the linked task contract has one non-conflicting independent-review requirement before review provenance is accepted',
+    proof: 'test/github-review-audit.test.js: enforces-independent-review-from-the-linked-task-issue proves a conflicting or unmet task review policy cannot accept a review',
+  }),
+  'review_audit.failure': Object.freeze({
+    semanticInvalidators: 'one authenticated current-head review outcome has valid provenance, mode, artifact, and any required independent-human reference',
+    proof: 'test/github-review-audit.test.js: rejects-older-head-missing-mode-missing-artifact-and-unsupported-markers proves invalid review evidence cannot be accepted',
+  }),
+  'preflight.review_checkpoint': Object.freeze({
+    semanticInvalidators: 'a durable authorized human review checkpoint is recorded for the exact required review round',
+    proof: 'test/github-preflight.test.js and F6 executable probe preflight-review-checkpoint prove that a missing or consumed valid checkpoint requires fresh human authority',
+  }),
+  'preflight.review_history_invalid': Object.freeze({
+    semanticInvalidators: 'raw review carriers and any supplied normalized history agree and parse as one canonical ordered history',
+    proof: 'test/github-preflight.test.js: fabricated-review-history-has-integrity-code-not-human-checkpoint proves malformed or fabricated history cannot inherit checkpoint authority repair',
+  }),
+  'preflight.revision_resolution': Object.freeze({
+    semanticInvalidators: 'every latest required finding has one canonical resolution entry bound to the current artifact',
+    proof: 'test/review-provenance.test.js: rejects-rereview-without-a-resolution-for-every-prior-finding proves unresolved findings cannot enter rereview',
+  }),
+  'review.entry.fixup_invalid': Object.freeze({
+    semanticInvalidators: 'each Maintainer Review Fixup episode has the canonical durable shape and coherent resulting artifact before review entry',
+    proof: 'test/task-cli.test.js: rejects-an-invalid-maintainer-review-fixup-before-review-entry proves malformed fixup disclosure cannot prepare entry',
+  }),
+  'review.entry.matrix_stale': Object.freeze({
+    semanticInvalidators: 'the finding-resolution matrix is regenerated against the bound current product artifact and unchanged protected contract',
+    proof: 'test/task-cli.test.js: rejects-a-stale-finding-resolution-matrix-before-review-entry proves stale resolution state cannot be reused',
+  }),
+  'review.entry.persistence_conflict': Object.freeze({
+    semanticInvalidators: 'no existing review-entry receipt conflicts with the recognized verified return',
+    proof: 'test/task-cli.test.js: conflicting-review-entry-persistence-is-refused proves a conflicting persisted receipt remains blocked',
+  }),
+  'review.entry.persistence_carrier_changed': Object.freeze({
+    semanticInvalidators: 'a fresh review-entry evaluation binds the current carrier immediately before persistence',
+    proof: 'test/task-cli.test.js: review-entry-carrier-race-is-superseded proves carrier drift requests recomputation rather than conflict repair',
+  }),
+  'review.entry.persistence_write_changed': Object.freeze({
+    semanticInvalidators: 'a new guarded persistence attempt establishes one current atomic write',
+    proof: 'test/task-cli.test.js: review-entry-write-failure-is-superseded proves an unproven write is recomputed rather than treated as a conflicting receipt',
+  }),
+  'review.entry.persistence_refetch_changed': Object.freeze({
+    semanticInvalidators: 'a fresh review-entry evaluation refetches exact intended carrier and receipt bytes',
+    proof: 'test/task-cli.test.js: review-entry-refetch-drift-is-superseded proves changed final bytes request recomputation',
   }),
   'compatibility.waiver_scope_retired': Object.freeze({
-    semanticInvalidators: 'a canonical activation-only waiver supersedes the authentic historical two-scope record',
+    semanticInvalidators: 'an authentic historical two-scope waiver is projected as activation-only while canonical dispatch consumption and verified-return evidence remain mandatory',
+    proof: 'test/closeout-waiver.test.js: verifies-an-authentic-historical-two-scope-record-but-projects-activation-only-behavior proves the retired return scope is ignored rather than granted authority',
+  }),
+  'check.aggregate.git_probe_failed': Object.freeze({
+    semanticInvalidators: 'Git conclusively reports whether the mutable check aggregate is tracked before the local aggregate can be used',
+    proof: 'test/task-cli.test.js: fails-closed-with-an-actionable-typed-diagnostic-when-aggregate-tracking-cannot-be-probed proves an unknown aggregate tracking state cannot be used',
+  }),
+  'worktree.clean_gate.failed': Object.freeze({
+    semanticInvalidators: 'the exact dispatch worktree has no staged, unstaged, relevant untracked, or relevant ignored state and its clean-state binding equals the canonical identity',
+    proof: 'test/dispatch-hardening.test.js: blocks-staged-unstaged-untracked-in-scope-and-shared-state-changes proves pre-existing or unclaimed workspace state cannot enter a dispatch',
+  }),
+  'state.host_local': Object.freeze({
+    semanticInvalidators: 'recorded host-local provenance remains an advisory observation and confers no lifecycle authority',
+    proof: 'test/projection-reconciliation.test.js: classifies-provenanced-host-local-state-without-blocking proves recorded host-local state is surfaced without inventing a refusal',
+  }),
+  'projection.state.unexplained': Object.freeze({
+    semanticInvalidators: 'every current authority-sensitive projection state has canonical workflow, product, or recorded host-local provenance rather than unexplained drift',
+    proof: 'test/projection-reconciliation.test.js: blocks-authority-sensitive-conclusions-on-unexplained-drift proves unexplained current drift cannot certify an authority-sensitive conclusion',
+  }),
+  'projection.fact.contradiction': Object.freeze({
+    semanticInvalidators: 'one current typed canonical carrier value is established for every authority-sensitive projection fact',
+    proof: 'F8 executable probe projection-authoritative-contradiction invokes reconcileProjections with conflicting current typed audit-state carriers and observes only projection.fact.contradiction',
   }),
   'execution_evidence.stale_version': Object.freeze({
     semanticInvalidators: 'a current-schema recomputation supersedes the retired representation',
@@ -335,20 +614,16 @@ function defaultProof(code, family, refusalClass, rationale, producers) {
 function classified(code, family, refusalClass, factOwner, rationale, repairClass) {
   const producers = ACCEPTED_PRODUCER_INVENTORY[code] ?? [];
   const consumers = CONSUMER_INVENTORY[code] ?? [];
-  const pendingSurfaces = PENDING_EVALUATION_SURFACES[code] ?? [];
+  const evaluationSurfaces = EVALUATION_SURFACES[code] ?? [];
   const override = METADATA_OVERRIDES[code] ?? {};
   return Object.freeze({
     code, family, refusalClass, factOwner, rationale, repairClass,
     producers: producers.length > 0 ? producers : null,
     ...(consumers.length > 0 ? { consumers } : {}),
-    ...(pendingSurfaces.length > 0 ? { pendingSurfaces } : {}),
+    ...(evaluationSurfaces.length > 0 ? { evaluationSurfaces } : {}),
     semanticInvalidators: override.semanticInvalidators ?? defaultSemanticInvalidators(refusalClass, rationale),
     proof: override.proof ?? defaultProof(code, family, refusalClass, rationale, producers),
   });
-}
-
-function pending(family, codes) {
-  return codes.map(code => classified(code, family, PENDING_CLASSIFICATION, null, null, null));
 }
 
 const F1 = [
@@ -502,36 +777,84 @@ const F4 = [
   classified('human_disposition.untrusted', 'F4', 'retained_hard_refusal', 'human_authority', 'authorization-absent', 'supply trusted disposition'),
 ];
 
-const PENDING = [
-  ...pending('F5', [
-    'attribution.work_unit', 'attribution.trailer', 'attribution.role', 'preflight.attribution',
-  ]),
-  ...pending('F6', [
-    'closeout.marker.stale', 'review_prepare.workspace', 'review_prepare.stale_head', 'review_prepare.packet',
-    'ready.preflight', 'ready.review_audit', 'ready.task_identity', 'ready.cross_gate_identity',
-    'review_audit.task_contract', 'review_audit.failure', 'preflight.review_checkpoint',
-    'preflight.revision_resolution', 'preflight.review_provenance',
-  ]),
-  classified('audit.already_exists', 'F6', PENDING_CLASSIFICATION, 'audit_record', 'duplicate-audit-record-prevention', 'inspect or rebaseline existing audit'),
-  ...pending('F7', [
-    'check.aggregate.git_probe_failed', 'worktree.clean_gate.failed', 'state.host_local',
-    'projection.state.unexplained',
-  ]),
-  classified('compatibility.waiver_scope_retired', 'F7', PENDING_CLASSIFICATION, 'compatibility_waiver', 'retired-waiver-scope-observation', 'use canonical evidence requirements'),
-  ...pending('F8', [
-    'readiness.mode.invalid', 'preflight.head_identity', 'preflight.summary_shape',
-    'preflight.scope_deviations', 'preflight.task_contract', 'preflight.path_intent',
-    'preflight.generated_paths', 'preflight.dependencies', 'preflight.evidence',
-    'preflight.checks', 'preflight.checks.task_contract', 'preflight.task_policy',
-    'preflight.other', 'pr_body.structural', 'pr_body.input', 'pr_body.snapshot',
-    'pr_body.deprecation', 'pr_body.local_file', 'pr_body.input_format', 'cli.usage',
-    'cli.operational', 'cli.unexpected', 'projection.observation.invalid',
-    'projection.carrier.not_applicable', 'projection.evidence.superseded',
-    'projection.fact.contradiction', 'projection.authority.untyped',
-  ]),
+const F5 = [
+  classified('attribution.work_unit', 'F5', 'retained_hard_refusal', 'product_lineage', 'work-unit-attribution-integrity', 'repair attribution trailer'),
+  classified('attribution.trailer', 'F5', 'retained_hard_refusal', 'product_lineage', 'commit-task-attribution-integrity', 'repair attribution trailer'),
+  classified('attribution.role', 'F5', 'retained_hard_refusal', 'attribution_identity', 'requested-workflow-role-validity', 'repair requested role'),
+  classified('preflight.attribution', 'F5', 'retained_hard_refusal', 'github_attribution', 'github-attribution-integrity', 'repair attribution'),
 ];
 
-const catalog = [...F1, ...F2, ...F3, ...F4, ...PENDING];
+const F6 = [
+  classified('audit.already_exists', 'F6', 'single_action_mechanical_repair', 'audit_record', 'duplicate-audit-record-prevention', 'select or rebaseline existing audit'),
+  classified('closeout.marker.stale', 'F6', 'migration_recompute', 'closeout_marker', 'closeout-marker-currentness', 'recompute closeout packet'),
+  classified('review_prepare.workspace', 'F6', 'retained_hard_refusal', 'review_workspace', 'exact-candidate-workspace-integrity', 'use exact review workspace'),
+  classified('review_prepare.stale_head', 'F6', 'migration_recompute', 'review_candidate', 'derived-review-preparation-currentness', 'regenerate review preparation'),
+  classified('review_prepare.preflight_failed', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'fresh-preflight-integrity', 'repair preflight evidence'),
+  classified('review_prepare.independent_review_policy', 'F6', 'retained_hard_refusal', 'review_policy', 'independent-review-policy-integrity', 'repair review policy'),
+  classified('review_prepare.head_unavailable', 'F6', 'migration_recompute', 'review_candidate', 'current-head-unavailable', 'restore current head and regenerate review preparation'),
+  classified('review_prepare.head_malformed', 'F6', 'migration_recompute', 'review_candidate', 'head-evidence-malformed', 'repair head evidence and regenerate review preparation'),
+  classified('review_prepare.head_refetch_failed', 'F6', 'migration_recompute', 'review_candidate', 'head-refetch-failed', 'restore head refetch and regenerate review preparation'),
+  classified('review_prepare.packet', 'F6', 'retained_hard_refusal', 'review_entry_packet', 'review-entry-packet-integrity', 'regenerate canonical review packet'),
+  classified('ready.preflight', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'exact-candidate-preflight-integrity', 'repair preflight evidence'),
+  classified('ready.review_audit', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-audit-integrity', 'obtain current independent review'),
+  classified('ready.task_identity', 'F6', 'retained_hard_refusal', 'task_identity', 'unique-task-carrier-integrity', 'repair task identity'),
+  classified('ready.cross_gate_identity', 'F6', 'retained_hard_refusal', 'candidate_certification', 'cross-gate-exact-candidate-integrity', 'reconcile certification gates'),
+  classified('review_audit.task_contract', 'F6', 'retained_hard_refusal', 'review_contract', 'independent-review-contract-integrity', 'repair review contract'),
+  classified('review_audit.failure', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-provenance-integrity', 'obtain valid independent review'),
+  classified('preflight.review_checkpoint', 'F6', 'material_human_decision', 'review_authority', 'review-round-authorization-unproven', 'record authorized review checkpoint'),
+  classified('preflight.review_history_invalid', 'F6', 'retained_hard_refusal', 'review_history', 'review-history-carrier-integrity', 'repair review history'),
+  classified('preflight.revision_resolution', 'F6', 'retained_hard_refusal', 'review_findings', 'required-finding-resolution-integrity', 'repair revision resolution'),
+  classified('preflight.review_provenance', 'F6', 'removal', 'review_provenance', 'historical-preflight-category-without-live-emitter', 'remove registry compatibility row when a live evaluator is introduced or the policy migrates'),
+  classified('review.entry.fixup_invalid', 'F6', 'retained_hard_refusal', 'review_fixup', 'fixup-disclosure-integrity', 'repair maintainer review fixup'),
+  classified('review.entry.matrix_stale', 'F6', 'migration_recompute', 'revision_resolution', 'derived-finding-resolution-currentness', 'regenerate finding-resolution matrix'),
+  classified('review.entry.persistence_conflict', 'F6', 'retained_hard_refusal', 'review_entry_receipt', 'review-entry-persistence-conflict', 'resolve review-entry conflict'),
+  classified('review.entry.persistence_carrier_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-carrier-currentness', 'regenerate review entry'),
+  classified('review.entry.persistence_write_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-write-currentness', 'regenerate review entry'),
+  classified('review.entry.persistence_refetch_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-refetch-currentness', 'regenerate review entry'),
+];
+
+const F7 = [
+  classified('compatibility.waiver_scope_retired', 'F7', 'advisory_diagnostic', 'compatibility_waiver', 'retired-waiver-scope-observation', 'retain canonical evidence requirements'),
+  classified('check.aggregate.git_probe_failed', 'F7', 'single_action_mechanical_repair', 'check_aggregate_tracking', 'aggregate-tracking-probe-unavailable', 'restore readable Git index and worktree'),
+  classified('worktree.clean_gate.failed', 'F7', 'retained_hard_refusal', 'dispatch_workspace', 'clean-dispatch-workspace-integrity', 'restore exact clean dispatch workspace'),
+  classified('state.host_local', 'F7', 'advisory_diagnostic', 'projection_provenance', 'recorded-host-local-state-observation', 'record canonical provenance'),
+  classified('projection.state.unexplained', 'F7', 'retained_hard_refusal', 'projection_provenance', 'unexplained-authority-sensitive-drift', 'reconcile authoritative projection state'),
+];
+
+const F8 = [
+  // These labels project readiness and preflight facts. They do not create a
+  // second lifecycle authority: the cited F1--F7 evaluator facts retain their
+  // existing material classifications and guards.
+  classified('readiness.mode.invalid', 'F8', 'advisory_diagnostic', 'readiness_mode', 'library-readiness-mode-validation', 'select readiness mode'),
+  classified('preflight.head_identity', 'F8', 'migration_recompute', 'candidate_identity', 'derived-preflight-head-currentness', 'refetch current PR head and rerun preflight'),
+  classified('preflight.summary_shape', 'F8', 'single_action_mechanical_repair', 'completion_summary', 'completion-summary-rendering-invalid', 'repair PR completion summary'),
+  classified('preflight.scope_deviations', 'F8', 'advisory_diagnostic', 'scope_projection', 'preflight-scope-presentation', 'repair the cited canonical scope or deviation fact'),
+  classified('preflight.task_contract', 'F8', 'advisory_diagnostic', 'task_contract_projection', 'preflight-contract-presentation', 'repair the cited canonical task-contract fact'),
+  classified('preflight.path_intent', 'F8', 'advisory_diagnostic', 'path_intent_projection', 'preflight-path-intent-presentation', 'repair the cited canonical path-intent fact'),
+  classified('preflight.generated_paths', 'F8', 'advisory_diagnostic', 'generated_path_projection', 'preflight-generated-path-presentation', 'repair the cited canonical generated-path fact'),
+  classified('preflight.dependencies', 'F8', 'advisory_diagnostic', 'dependency_projection', 'preflight-dependency-presentation', 'repair the cited canonical dependency fact'),
+  classified('preflight.evidence', 'F8', 'advisory_diagnostic', 'evidence_projection', 'preflight-evidence-presentation', 'repair the cited canonical evidence fact'),
+  classified('preflight.checks', 'F8', 'advisory_diagnostic', 'required_check_projection', 'preflight-check-presentation', 'repair the cited canonical required-check fact'),
+  classified('preflight.checks.task_contract', 'F8', 'advisory_diagnostic', 'required_check_contract_projection', 'preflight-required-check-contract-presentation', 'repair the cited canonical required-check contract'),
+  classified('preflight.task_policy', 'F8', 'advisory_diagnostic', 'task_policy_projection', 'preflight-policy-presentation', 'repair the cited canonical task-policy fact'),
+  classified('preflight.other', 'F8', 'advisory_diagnostic', 'preflight_observation', 'unclassified-preflight-presentation', 'inspect and classify the underlying preflight fact'),
+  classified('pr_body.structural', 'F8', 'single_action_mechanical_repair', 'pr_body_rendering', 'PR-body-structural-rendering-invalid', 'repair PR body structure'),
+  classified('pr_body.input', 'F8', 'single_action_mechanical_repair', 'preparation_input', 'serialized-preparation-input-invalid', 'complete preparation input'),
+  classified('pr_body.snapshot', 'F8', 'migration_recompute', 'snapshot_context', 'offline-snapshot-projection-invalid', 'regenerate PR-body snapshot'),
+  classified('pr_body.deprecation', 'F8', 'advisory_diagnostic', 'command_deprecation', 'deprecated-command-presentation', 'use the current PR-body command'),
+  classified('pr_body.local_file', 'F8', 'single_action_mechanical_repair', 'local_pr_body_file', 'local-PR-body-file-unavailable', 'restore local PR-body file'),
+  classified('pr_body.input_format', 'F8', 'single_action_mechanical_repair', 'pr_body_input_format', 'PR-body-input-format-invalid', 'repair PR-body input format'),
+  classified('cli.usage', 'F8', 'advisory_diagnostic', 'command_usage', 'public-command-usage-invalid', 'correct command usage'),
+  classified('cli.operational', 'F8', 'advisory_diagnostic', 'command_environment', 'public-command-environment-unavailable', 'repair command environment'),
+  classified('cli.unexpected', 'F8', 'advisory_diagnostic', 'command_observation', 'unexpected-public-command-observation', 'inspect public command failure'),
+  classified('projection.observation.invalid', 'F8', 'single_action_mechanical_repair', 'projection_observation', 'projection-observation-malformed', 'repair projection observation'),
+  classified('projection.carrier.not_applicable', 'F8', 'single_action_mechanical_repair', 'projection_carrier', 'projection-carrier-not-applicable', 'select applicable projection carrier'),
+  classified('projection.evidence.superseded', 'F8', 'migration_recompute', 'projection_evidence', 'projection-evidence-superseded', 'recompute projection evidence'),
+  classified('projection.fact.contradiction', 'F8', 'retained_hard_refusal', 'projection_authority', 'current-authoritative-projection-contradiction', 'reconcile authoritative projection state'),
+  classified('projection.authority.untyped', 'F8', 'advisory_diagnostic', 'projection_authority', 'untyped-projection-observation', 'record typed canonical authority'),
+];
+
+const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
 const byCode = new Map();
 for (const entry of catalog) {
   if (byCode.has(entry.code)) throw new Error(`duplicate refusal classification: ${entry.code}`);
@@ -545,6 +868,17 @@ for (const code of byCode.keys()) {
 }
 
 export const REFUSAL_CLASSES = Object.freeze(Object.fromEntries(catalog.map(entry => [entry.code, entry])));
+
+/** Generated current classification totals; tests consume this rather than private matrix prose. */
+export const REFUSAL_FAMILY_TALLY = Object.freeze(Object.fromEntries(
+  [...new Set(catalog.map(entry => entry.family))].sort().map(family => {
+    const rows = catalog.filter(entry => entry.family === family);
+    return [family, Object.freeze({
+      total: rows.length,
+      pending: rows.filter(entry => entry.refusalClass === PENDING_CLASSIFICATION).length,
+    })];
+  }),
+));
 
 /** Accepted-slice entries intentionally retained at a material boundary. */
 const HARD_REFUSAL_CODES = Object.freeze([
@@ -573,6 +907,14 @@ const HARD_REFUSAL_CODES = Object.freeze([
   'attempt_return_ambiguous', 'attempt_return_conflict', 'attempt_terminal_conflict',
   'blocked_result.owner_mismatch', 'blocked_result.redelegation_required',
   'blocked_result.redelegation_untrusted', 'human_disposition.required', 'human_disposition.untrusted',
+  'attribution.work_unit', 'attribution.trailer', 'attribution.role', 'preflight.attribution',
+  'review_prepare.workspace', 'review_prepare.packet', 'review_prepare.preflight_failed',
+  'review_prepare.independent_review_policy',
+  'ready.preflight', 'ready.review_audit', 'ready.task_identity', 'ready.cross_gate_identity',
+  'review_audit.task_contract', 'review_audit.failure', 'preflight.review_checkpoint', 'preflight.review_history_invalid',
+  'preflight.revision_resolution', 'review.entry.fixup_invalid',
+  'review.entry.persistence_conflict',
+  'worktree.clean_gate.failed', 'projection.state.unexplained', 'projection.fact.contradiction',
 ]);
 
 const NEGATIVE_PROOF_BY_CODE = Object.freeze({
@@ -649,6 +991,28 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'blocked_result.redelegation_untrusted': 'Material fact: redelegation authority is untrusted. scenario: untrusted-redelegation-is-refused.',
   'human_disposition.required': 'Material fact: protected recovery requires a human decision. scenario: missing-human-disposition-blocks-recovery.',
   'human_disposition.untrusted': 'Material fact: human disposition provenance is untrusted. scenario: untrusted-human-disposition-is-refused.',
+  'attribution.work_unit': 'Material fact: work-unit task-set attribution does not bind this shared artifact. scenario: work-unit-mismatch-is-refused; test/attribution-refusal-family.test.js.',
+  'attribution.trailer': 'Material fact: final commit trailers do not bind this task. scenario: task-trailer-mismatch-is-refused; test/attribution-refusal-family.test.js.',
+  'attribution.role': 'Material fact: the requested commit-attribution role is invalid or not lowercase. scenario: code-disjointness-separates-requested-role-validity-from-final-agent-trailer; test/attribution-refusal-family.test.js.',
+  'preflight.attribution': 'Material fact: PR and head commit attribution claims conflict. scenario: github-role-conflict-is-refused; test/attribution-refusal-family.test.js.',
+  'review_prepare.workspace': 'Material fact: review workspace does not resolve to the exact candidate head. scenario: mismatched-review-workspace-is-refused; test/review-preparation-contract.test.js.',
+  'review_prepare.preflight_failed': 'Material fact: refetched candidate preflight fails. scenario: fresh-preflight-failure-is-not-reported-as-head-drift; test/review-preparation-contract.test.js.',
+  'review_prepare.independent_review_policy': 'Material fact: refetched independent-review policy is invalid. scenario: invalid-independent-review-policy-has-its-own-review-prepare-code; test/review-preparation-contract.test.js.',
+  'review_prepare.packet': 'Material fact: review packet shape or receipt bindings are not canonical. scenario: fabricated-review-packet-is-refused; test/review-authority-adversarial.test.js.',
+  'ready.preflight': 'Material fact: exact-candidate preflight evidence fails. scenario: failed-preflight-blocks-github-ready; test/github-ready.test.js.',
+  'ready.review_audit': 'Material fact: independent review audit is not current and valid for the candidate. scenario: stale-review-audit-blocks-github-ready; test/github-ready.test.js.',
+  'ready.task_identity': 'Material fact: linked issue does not uniquely carry its task identity. scenario: nonunique-task-identity-blocks-github-ready; test/github-ready.test.js.',
+  'ready.cross_gate_identity': 'Material fact: preflight and audit resolve different candidate identities. scenario: cross-gate-identity-mismatch-blocks-github-ready; test/github-ready.test.js.',
+  'review_audit.task_contract': 'Material fact: linked task contract cannot establish its independent-review requirement. scenario: conflicting-independent-review-contract-is-refused; test/github-review-audit.test.js.',
+  'review_audit.failure': 'Material fact: no authenticated valid current-head review outcome exists. scenario: invalid-review-marker-is-refused; test/github-review-audit.test.js.',
+  'preflight.review_checkpoint': 'Material fact: no fresh valid checkpoint authorizes this review round. scenario: consumed-valid-checkpoint-requires-fresh-human-authority; F6 executable probe preflight-review-checkpoint.',
+  'preflight.review_history_invalid': 'Material fact: review history or carrier is fabricated, inconsistent, or malformed. scenario: fabricated-review-history-has-integrity-code-not-human-checkpoint; test/github-preflight.test.js.',
+  'preflight.revision_resolution': 'Material fact: prior required finding IDs lack canonical current-artifact resolution. scenario: unresolved-prior-findings-block-rereview; test/review-provenance.test.js.',
+  'review.entry.fixup_invalid': 'Material fact: Maintainer Review Fixup disclosure is malformed. scenario: malformed-fixup-cannot-prepare-review-entry; test/task-cli.test.js.',
+  'review.entry.persistence_conflict': 'Material fact: persisted review-entry receipt conflicts with the recognized verified return. scenario: conflicting-review-entry-persistence-is-refused; test/task-cli.test.js.',
+  'worktree.clean_gate.failed': 'Material fact: the exact dispatch workspace is dirty, unreadable, or does not bind the canonical clean-state identity. scenario: dirty-workspace-cannot-enter-dispatch; F7 executable probe dispatch-clean-worktree.',
+  'projection.state.unexplained': 'Material fact: a current authority-sensitive projection reports unexplained drift. scenario: unexplained-drift-cannot-certify-projection; F7 executable probe projection-unexplained-drift.',
+  'projection.fact.contradiction': 'Material fact: current authoritative projection carriers disagree about one canonical fact. scenario: contradictory-authoritative-projections-cannot-certify; F8 executable probe projection-authoritative-contradiction.',
 });
 
 export const HARD_REFUSAL_ALLOWLIST = Object.freeze([
@@ -664,6 +1028,7 @@ export const HARD_REFUSAL_ALLOWLIST = Object.freeze([
 /** Codes preserved for historical compatibility but no longer emitted by runtime producers. */
 export const HISTORICAL_PRODUCER_EXCEPTIONS = Object.freeze({
   'scope.existing_path.missing': 'removal disposition: catalog compatibility entry with no live runtime producer',
+  'preflight.review_provenance': 'removal disposition: registered category has no live preflight producer at this artifact',
 });
 
 export function refusalClassFor(code) {
@@ -706,7 +1071,7 @@ export function assertRefusalClassCatalog({
     if (!REFUSAL_DISPOSITIONS.includes(entry.refusalClass)) {
       throw new Error(`diagnostic has unknown refusal disposition: ${code}`);
     }
-    const accepted = ['F1', 'F2', 'F3', 'F4'].includes(entry.family);
+    const accepted = ACCEPTED_REFUSAL_FAMILIES.includes(entry.family);
     if (accepted && entry.refusalClass === PENDING_CLASSIFICATION) {
       throw new Error(`accepted family has pending classification: ${code}`);
     }

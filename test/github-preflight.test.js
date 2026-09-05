@@ -1363,7 +1363,7 @@ describe('runPreflight (injected gh runner)', () => {
     assert.equal(result.checkpointValidation?.authorized, true);
   });
 
-  it('fails closed when a checkpoint and outcome share a cross-endpoint timestamp', () => {
+  it('fails closed on checkpoint-history integrity when a checkpoint and outcome share a cross-endpoint timestamp', () => {
     const artifactB = 'b'.repeat(40);
     const prData = {
       number: 42,
@@ -1394,9 +1394,10 @@ describe('runPreflight (injected gh runner)', () => {
         commandRunner: productionHistoryRunner(prData, issueData, carriers),
       });
       assert.equal(result.ok, false, result.errors.join('\n'));
-      assert.ok(
-        result.errors.some(error => /ambiguous GitHub timestamp|treated as consumed/i.test(error)),
-        result.errors.join('\n')
+      assert.deepEqual(result.checkpointValidation?.failureKinds, ['invalid_checkpoint_history']);
+      assert.deepEqual(
+        result.diagnostics.filter(item => item.code.startsWith('preflight.review_')).map(item => item.code),
+        ['preflight.review_history_invalid'],
       );
     }
   });
@@ -2371,6 +2372,109 @@ describe('Defect: structured error routing uses ambiguous substring matching', (
     assert.ok(checkpointCat, 'Should have review_checkpoint category');
     assert.ok(checkpointCat.errors.some(e => /checkpoint.*required|budget.*exhausted/i.test(e)),
       `Expected checkpoint error in category, got: ${checkpointCat.errors.join('; ')}`);
+    assert.ok(result.diagnostics.some(item => item.code === 'preflight.review_checkpoint'));
+    assert.equal(result.diagnostics.some(item => item.code === 'preflight.review_history_invalid'), false);
+  });
+
+  it('separates fabricated review history integrity from a missing human checkpoint', () => {
+    const result = evaluatePreflight({
+      prData: {
+        number: 42, headRefOid: HEAD,
+        body: prBody({ head: HEAD, entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
+        statusCheckRollup: [], comments: [], reviews: [],
+      },
+      issueData: { number: 7, body: issueBody(['`npm test`']), comments: [] },
+      reviewHistory: { events: [{ type: 'outcome', status: 'needs_revision', artifact: HEAD }], errors: [] },
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.diagnostics.some(item => item.code === 'preflight.review_history_invalid'));
+    assert.equal(result.diagnostics.some(item => item.code === 'preflight.review_checkpoint'), false);
+  });
+
+  it('routes a consumed valid checkpoint to fresh human checkpoint authority', () => {
+    const checkpoint = {
+      type: 'checkpoint', direction: 'targeted_revision', cause: 'implementation_defect', reviewCount: 1,
+      artifact: HEAD, target: 'repair F-1', orchestratorAttribution: LOOP_ACCOUNT.login,
+      roleId: 'orchestrator', roleCarrierSchemaVersion: 1, sourceOrder: 1,
+    };
+    const result = evaluatePreflight({
+      prData: {
+        number: 42, headRefOid: 'c'.repeat(40),
+        body: prBody({ head: 'c'.repeat(40), entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
+        statusCheckRollup: [],
+      },
+      issueData: { number: 7, body: issueBody(['`npm test`']), comments: [] },
+      reviewHistory: {
+        events: [
+          { type: 'outcome', status: 'needs_revision', artifact: HEAD, sourceOrder: 0 },
+          checkpoint,
+          { type: 'outcome', status: 'needs_revision', artifact: 'b'.repeat(40), sourceOrder: 2 },
+        ],
+        errors: [],
+      },
+      reviewBudget: 1,
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.checkpointValidation?.failureKinds, ['consumed_checkpoint']);
+    assert.ok(result.diagnostics.some(item => item.code === 'preflight.review_checkpoint'));
+    assert.equal(result.diagnostics.some(item => item.code === 'preflight.review_history_invalid'), false);
+  });
+
+  it('keeps an inconsistent checkpoint carrier on review-history integrity', () => {
+    const result = evaluatePreflight({
+      prData: {
+        number: 42, headRefOid: 'c'.repeat(40),
+        body: prBody({ head: 'c'.repeat(40), entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
+        statusCheckRollup: [],
+      },
+      issueData: { number: 7, body: issueBody(['`npm test`']), comments: [] },
+      reviewHistory: {
+        events: [
+          { type: 'outcome', status: 'needs_revision', artifact: HEAD, sourceOrder: 0 },
+          {
+            type: 'checkpoint', direction: 'targeted_revision', cause: 'implementation_defect', reviewCount: 2,
+            artifact: HEAD, target: 'repair F-1', orchestratorAttribution: LOOP_ACCOUNT.login,
+            roleId: 'orchestrator', roleCarrierSchemaVersion: 1, sourceOrder: 1,
+          },
+        ],
+        errors: [],
+      },
+      reviewBudget: 1,
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.checkpointValidation?.failureKinds, ['invalid_checkpoint_history']);
+    assert.ok(result.diagnostics.some(item => item.code === 'preflight.review_history_invalid'));
+    assert.equal(result.diagnostics.some(item => item.code === 'preflight.review_checkpoint'), false);
+  });
+
+  it('does not compound inconsistent checkpoint history with a consumed-checkpoint diagnostic', () => {
+    const result = evaluatePreflight({
+      prData: {
+        number: 42, headRefOid: 'c'.repeat(40),
+        body: prBody({ head: 'c'.repeat(40), entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
+        statusCheckRollup: [],
+      },
+      issueData: { number: 7, body: issueBody(['`npm test`']), comments: [] },
+      reviewHistory: {
+        events: [
+          { type: 'outcome', status: 'needs_revision', artifact: HEAD, sourceOrder: 0 },
+          {
+            type: 'checkpoint', direction: 'targeted_revision', cause: 'implementation_defect', reviewCount: 2,
+            artifact: HEAD, target: 'repair F-1', orchestratorAttribution: LOOP_ACCOUNT.login,
+            roleId: 'orchestrator', roleCarrierSchemaVersion: 1, sourceOrder: 1,
+          },
+          { type: 'outcome', status: 'needs_revision', artifact: 'b'.repeat(40), sourceOrder: 2 },
+        ],
+        errors: [],
+      },
+      reviewBudget: 1,
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.checkpointValidation?.failureKinds, ['invalid_checkpoint_history']);
+    assert.deepEqual(
+      result.diagnostics.filter(item => item.code.startsWith('preflight.review_')).map(item => item.code),
+      ['preflight.review_history_invalid'],
+    );
   });
 });
 
