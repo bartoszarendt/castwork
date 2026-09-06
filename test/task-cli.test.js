@@ -12,7 +12,9 @@ import { createDispatchFixture, prepare as prepareDispatch, git as fixtureGit, r
 import { createAuthenticatedReturnReceipts, protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
 import { createCancellationProvenance } from '../src/cancellation-provenance.js';
-import { createRoleReturn, dispatchPreparationDigest } from '../src/dispatch-envelope.js';
+import { createRoleReturn, dispatchPreparationDigest, prepareDecompositionSource } from '../src/dispatch-envelope.js';
+import { buildGitHubTaskIdentityInventory } from '../src/github-task-identity.js';
+import { createTaskInventoryEnumeration, normalizeGitHubTaskInventory } from '../src/parallel-scan.js';
 import { createExecutionReceiptReplayAuthority } from '../src/host-trust.js';
 import { listReturnVerifications, revalidateReturnVerification, writeReturnVerification } from '../src/return-verification.js';
 import { recognizeHandoff } from '../src/handoff-recognition.js';
@@ -1490,15 +1492,20 @@ describe('task CLI', () => {
   });
 
   it('prepares an ordinary derived dispatch from durable selectors without --input', async () => {
-    const fixture = await createDispatchFixture(tmpDir, 'derived-dispatch');
+    const fixture = await createDispatchFixture(tmpDir, 'derived-dispatch', {
+      taskIds: ['T-001', 'T-002'],
+      parallel: true,
+    });
     const decomposition = JSON.parse(readFileSync(
       join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), 'utf8'));
     // The semantic dependency source identity is not a path; the persisted
     // target-relative sourceRef is the only artifact selector.
-    assert.equal(decomposition.scan.readinessContext.dependencies.source, 'files:.agenticloop/tasks');
-    assert.equal(decomposition.scan.readinessContext.dependencies.sourceRef, 'dependencies.json');
+    const dependencyEvidence = decomposition.scan.readinessContext.dependenciesByTask
+      .find(entry => entry.taskId === 'T-001').evidence;
+    assert.equal(dependencyEvidence.source, 'files:.agenticloop/tasks');
+    assert.equal(dependencyEvidence.sourceRef, 'dependencies.json');
     const args = [
-      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--host', 'opencode', '--role', 'engineer',
       '--json', '--target', fixture.root,
     ];
     const options = {
@@ -1511,11 +1518,382 @@ describe('task CLI', () => {
     assert.equal(packet.task.id, 'T-001');
     assert.equal(packet.assignment.host, 'opencode');
     assert.equal(packet.assignment.roleId, 'engineer');
+    assert.equal(packet.decomposition.route, 'parallel');
     // The derived command is read-only and reusable: a second run succeeds and
     // the committed worktree is untouched.
     const second = await runCliInProcess(args, options);
     assertOk(second);
     assert.equal(fixtureGit(fixture.root, ['status', '--porcelain']), '');
+  });
+
+  it('binds every explicit dispatch route to the decomposition source and packet route', async () => {
+    const optionsFor = fixture => ({
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    const serial = await createDispatchFixture(tmpDir, 'route-agreement-serial', { parallel: false });
+    const parallel = await createDispatchFixture(tmpDir, 'route-agreement-parallel', {
+      taskIds: ['T-001', 'T-002'],
+      parallel: true,
+    });
+    const ordinary = (fixture, route, extra = []) => runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--route', route, '--host', 'opencode', '--role', 'engineer',
+      '--json', '--target', fixture.root, ...extra,
+    ], optionsFor(fixture));
+    const preflight = (fixture, route) => runCliInProcess([
+      'task', 'handoff-preflight', 'T-001', '--route', route, '--host', 'opencode', '--json', '--target', fixture.root,
+    ], optionsFor(fixture));
+    const assertRouteRefusal = result => {
+      assert.notEqual(result.status, 0);
+      assert.ok(JSON.parse(result.stdout).diagnostics.some(item => item.code === 'parallel_scan.decomposition.invalid'), result.stdout);
+    };
+
+    // Only an explicit parallel route consumes and validates the artifact.
+    // Explicit serial, like the default, ignores it completely.
+    assertRouteRefusal(await ordinary(serial, 'parallel'));
+    assertRouteRefusal(await preflight(serial, 'parallel'));
+    assertOk(await ordinary(parallel, 'serial'));
+    assertOk(await preflight(parallel, 'serial'));
+
+    // The advanced compatibility input cannot use its decomposition object to
+    // escape route agreement either.
+    for (const [fixture, route, inputPath, input] of [
+      [serial, 'parallel', 'parallel-over-serial.json', { readiness: serial.readiness, decomposition: serial.decomposition, assignment: serial.assignment }],
+      [parallel, 'serial', 'serial-over-parallel.json', { decomposition: parallel.decomposition, assignment: parallel.assignment }],
+    ]) {
+      writeFileSync(join(fixture.root, inputPath), JSON.stringify(input), 'utf8');
+      const result = await runCliInProcess([
+        'task', 'prepare-dispatch', 'T-001', '--route', route, '--input', inputPath, '--json', '--target', fixture.root,
+      ], optionsFor(fixture));
+      if (route === 'parallel') assertRouteRefusal(result);
+      else assertOk(result);
+    }
+
+    // A serial packet and a parallel packet both retain their sealed route;
+    // --packet therefore cannot reinterpret either binding with a free flag.
+    const serialPath = '.agenticloop/tmp/serial-route.json';
+    const parallelPath = '.agenticloop/tmp/parallel-route.json';
+    mkdirSync(join(serial.root, '.agenticloop', 'tmp'), { recursive: true });
+    mkdirSync(join(parallel.root, '.agenticloop', 'tmp'), { recursive: true });
+    assertOk(await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--output', serialPath,
+      '--json', '--target', serial.root,
+    ], optionsFor(serial)));
+    assertOk(await ordinary(parallel, 'parallel', ['--output', parallelPath]));
+    for (const [fixture, packetPath, route] of [
+      [serial, serialPath, 'parallel'],
+      [parallel, parallelPath, 'serial'],
+    ]) {
+      const result = await runCliInProcess([
+        'task', 'prepare-dispatch', 'T-001', '--packet', packetPath, '--route', route, '--role', 'engineer',
+        '--json', '--target', fixture.root,
+      ], optionsFor(fixture));
+      assertRouteRefusal(result);
+    }
+
+    // Genuine independent ownership evidence is accepted across every parallel
+    // surface, including packet revalidation.
+    const parallelInputPath = 'parallel-input.json';
+    writeFileSync(join(parallel.root, parallelInputPath), JSON.stringify({
+      readiness: parallel.readiness,
+      decomposition: parallel.decomposition,
+      assignment: parallel.assignment,
+    }), 'utf8');
+    assertOk(await ordinary(parallel, 'parallel'));
+    assertOk(await preflight(parallel, 'parallel'));
+    assertOk(await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', parallelInputPath,
+      '--json', '--target', parallel.root,
+    ], optionsFor(parallel)));
+    assertOk(await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--packet', parallelPath, '--route', 'parallel', '--role', 'engineer',
+      '--json', '--target', parallel.root,
+    ], optionsFor(parallel)));
+  });
+
+  it('carries current direct serial dependency evidence from preflight into a mintable packet', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'serial-direct-dependency-dispatch', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    // This is an order-sensitive route probe: serial resolves the direct
+    // carrier first and has no fallback to parallel artifacts. If either
+    // preflight or packet preparation reads/parses the deleted decomposition
+    // or dependency snapshot, the otherwise-valid serial dispatch regresses.
+    rmSync(join(fixture.root, '.agenticloop', 'decompositions'), { recursive: true, force: true });
+    rmSync(join(fixture.root, 'dependencies.json'), { force: true });
+    fixtureGit(fixture.root, ['add', '-A']);
+    fixtureGit(fixture.root, ['commit', '-m', 'remove parallel artifacts\n\nTask: T-001\nAgent: maintainer']);
+    const preflight = await runCliInProcess([
+      'task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json', '--target', fixture.root,
+    ], options);
+    assertOk(preflight);
+
+    const prepared = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--json', '--target', fixture.root,
+    ], options);
+    assertOk(prepared);
+    const packet = JSON.parse(prepared.stdout);
+    assert.equal(packet.decomposition, null);
+    assert.equal(packet.readiness.evidence.dependencies.source, 'files:.agenticloop/tasks/{taskId}.md');
+    assert.deepEqual(packet.readiness.evidence.dependencies.statuses, [{ id: 'T-002', status: 'accepted' }]);
+
+    // Advanced input supplies only the compatibility assignment. With every
+    // parallel artifact already absent, this proves it cannot reintroduce a
+    // snapshot dependency source on the serial route.
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    writeFileSync(join(fixture.root, '.agenticloop', 'tmp', 'serial-input.json'), JSON.stringify({
+      assignment: fixture.assignment,
+    }), 'utf8');
+    const advanced = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--input', '.agenticloop/tmp/serial-input.json', '--json', '--target', fixture.root,
+    ], options);
+    assertOk(advanced);
+    const advancedPacket = JSON.parse(advanced.stdout);
+    assert.equal(advancedPacket.decomposition, null);
+    assert.deepEqual(advancedPacket.readiness.evidence.dependencies.statuses, [{ id: 'T-002', status: 'accepted' }]);
+  });
+
+  it('revalidates serial dependency truth before inherited packet identity at role start', async () => {
+    const optionsFor = fixture => ({
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    const preparePacket = async fixture => {
+      const packetPath = '.agenticloop/tmp/serial-dispatch.json';
+      mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+      const prepared = await runCliInProcess([
+        'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+        '--output', packetPath, '--json', '--target', fixture.root,
+      ], optionsFor(fixture));
+      assertOk(prepared);
+      return { packetPath, packet: JSON.parse(readFileSync(join(fixture.root, packetPath), 'utf8')) };
+    };
+
+    const current = await createDispatchFixture(tmpDir, 'serial-role-start-current', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    // Serial start must not fall back to either parallel artifact. Removing
+    // both before minting makes a later role-start read fail if it does.
+    rmSync(join(current.root, '.agenticloop', 'decompositions'), { recursive: true, force: true });
+    rmSync(join(current.root, 'dependencies.json'), { force: true });
+    fixtureGit(current.root, ['add', '-A']);
+    fixtureGit(current.root, ['commit', '-m', 'remove parallel artifacts\n\nTask: T-001\nAgent: maintainer']);
+    const currentPacket = await preparePacket(current);
+    assert.equal(currentPacket.packet.decomposition, null);
+    const currentStart = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', currentPacket.packetPath, '--json', '--target', current.root,
+    ], optionsFor(current));
+    assertOk(currentStart);
+    const dispatchDir = join(current.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001');
+    const consumption = JSON.parse(readFileSync(join(dispatchDir, readdirSync(dispatchDir)[0]), 'utf8'));
+    assert.equal(consumption.workUnitIdentity, null, 'serial consumption retains no work-unit identity');
+
+    // An unresolved current dependency wins even when its commit also moves
+    // HEAD: current dependency truth is evaluated before inherited packet
+    // identity. No role-start mutation is permitted on that refusal path.
+    const stale = await createDispatchFixture(tmpDir, 'serial-role-start-stale-dependency', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const stalePacket = await preparePacket(stale);
+    const carrierPath = join(stale.root, '.agenticloop', 'tasks', 'T-001.md');
+    const before = readFileSync(carrierPath, 'utf8');
+    const dependencyPath = join(stale.root, '.agenticloop', 'tasks', 'T-002.md');
+    writeFileSync(dependencyPath, readFileSync(dependencyPath, 'utf8').replace('status: accepted', 'status: agent-ready'), 'utf8');
+    fixtureGit(stale.root, ['add', '.agenticloop/tasks/T-002.md']);
+    fixtureGit(stale.root, ['commit', '-m', 'reopen dependency\n\nTask: T-002\nAgent: maintainer']);
+
+    const refused = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', stalePacket.packetPath, '--json', '--target', stale.root,
+    ], optionsFor(stale));
+    assert.notEqual(refused.status, 0);
+    const refusal = JSON.parse(refused.stdout);
+    assert.deepEqual(refusal.diagnostics.map(item => item.code), ['dependency.unresolved'], JSON.stringify(refusal));
+    assert.equal(readFileSync(carrierPath, 'utf8'), before, 'stale serial start must not mutate its carrier');
+    assert.equal(existsSync(join(stale.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001')), false);
+    assert.equal(existsSync(join(stale.root, '.agenticloop', 'tmp', 'T-001-checks.json')), false);
+
+    // A still-satisfied dependency does not override the inherited packet
+    // identity gate. Moving HEAD after minting therefore remains the existing
+    // dispatch.packet.stale outcome, not a serial-route exception.
+    const moved = await createDispatchFixture(tmpDir, 'serial-role-start-moved-head', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const movedPacket = await preparePacket(moved);
+    const movedCarrierPath = join(moved.root, '.agenticloop', 'tasks', 'T-001.md');
+    const movedCarrierBefore = readFileSync(movedCarrierPath, 'utf8');
+    writeFileSync(join(moved.root, 'src', 'existing.js'), 'export const current = "moved-head";\n', 'utf8');
+    fixtureGit(moved.root, ['add', 'src/existing.js']);
+    fixtureGit(moved.root, ['commit', '-m', 'move unrelated head\n\nTask: T-001\nAgent: maintainer']);
+    const movedRefusal = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', movedPacket.packetPath, '--json', '--target', moved.root,
+    ], optionsFor(moved));
+    assert.notEqual(movedRefusal.status, 0);
+    assert.deepEqual(JSON.parse(movedRefusal.stdout).diagnostics.map(item => item.code), ['dispatch.packet.stale']);
+    assert.equal(readFileSync(movedCarrierPath, 'utf8'), movedCarrierBefore, 'moved-HEAD refusal must not mutate its carrier');
+    assert.equal(existsSync(join(moved.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001')), false);
+    assert.equal(existsSync(join(moved.root, '.agenticloop', 'tmp', 'T-001-checks.json')), false);
+
+    // Reverting exactly to the mint-time history restores the packet's
+    // inherited identity comparison. The serial packet can then start with no
+    // decomposition or work-unit identity.
+    const restored = await createDispatchFixture(tmpDir, 'serial-role-start-restored-history', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const restoredPacket = await preparePacket(restored);
+    assert.equal(restoredPacket.packet.decomposition, null, 'restored packet retains the serial null decomposition');
+    const mintHead = fixtureGit(restored.root, ['rev-parse', 'HEAD']);
+    writeFileSync(join(restored.root, 'src', 'existing.js'), 'export const current = "temporarily-moved";\n', 'utf8');
+    fixtureGit(restored.root, ['add', 'src/existing.js']);
+    fixtureGit(restored.root, ['commit', '-m', 'temporarily move head\n\nTask: T-001\nAgent: maintainer']);
+    fixtureGit(restored.root, ['reset', '--hard', mintHead]);
+    const restoredStart = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', restoredPacket.packetPath, '--json', '--target', restored.root,
+    ], optionsFor(restored));
+    assertOk(restoredStart);
+    const restoredConsumptionDir = join(restored.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001');
+    const restoredConsumption = JSON.parse(readFileSync(join(restoredConsumptionDir, readdirSync(restoredConsumptionDir)[0]), 'utf8'));
+    assert.equal(restoredConsumption.workUnitIdentity, null, 'restored serial start retains no work-unit identity');
+  });
+
+  it('refuses unresolved and directly changed serial dependencies at preflight and dispatch', async () => {
+    const optionsFor = fixture => ({
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    const commandFor = fixture => [
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--json', '--target', fixture.root,
+    ];
+    const unresolved = await createDispatchFixture(tmpDir, 'serial-unresolved-dependency', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      allowUnreadyTaskIds: ['T-001'],
+      decompositionTaskIds: ['T-002'],
+    });
+    const unresolvedOptions = optionsFor(unresolved);
+    const unresolvedPreflight = await runCliInProcess([
+      'task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json', '--target', unresolved.root,
+    ], unresolvedOptions);
+    const unresolvedDispatch = await runCliInProcess(commandFor(unresolved), unresolvedOptions);
+    for (const result of [unresolvedPreflight, unresolvedDispatch]) {
+      assert.notEqual(result.status, 0);
+      assert.ok(JSON.parse(result.stdout).diagnostics.some(item => item.code === 'dependency.unresolved'));
+    }
+
+    const changed = await createDispatchFixture(tmpDir, 'serial-changed-dependency', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const dependencyPath = join(changed.root, '.agenticloop', 'tasks', 'T-002.md');
+    writeFileSync(dependencyPath, readFileSync(dependencyPath, 'utf8').replace('status: accepted', 'status: agent-ready'), 'utf8');
+    fixtureGit(changed.root, ['add', '.agenticloop/tasks/T-002.md']);
+    fixtureGit(changed.root, ['commit', '-m', 'reopen dependency\n\nTask: T-002\nAgent: maintainer']);
+    const changedOptions = optionsFor(changed);
+    const changedPreflight = await runCliInProcess([
+      'task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json', '--target', changed.root,
+    ], changedOptions);
+    const changedDispatch = await runCliInProcess(commandFor(changed), changedOptions);
+    for (const result of [changedPreflight, changedDispatch]) {
+      assert.notEqual(result.status, 0);
+      assert.ok(JSON.parse(result.stdout).diagnostics.some(item => item.code === 'dependency.unresolved'));
+    }
+  });
+
+  it('derives --input serial dependencies from current carriers and refuses caller parallel evidence', async () => {
+    const optionsFor = fixture => ({
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    const changed = await createDispatchFixture(tmpDir, 'serial-input-current-dependency', {
+      taskIds: ['T-001', 'T-002'],
+      dependsOn: { 'T-001': ['T-002'] },
+      initialStatuses: { 'T-002': 'accepted' },
+    });
+    const dependencyPath = join(changed.root, '.agenticloop', 'tasks', 'T-002.md');
+    writeFileSync(dependencyPath, readFileSync(dependencyPath, 'utf8').replace('status: accepted', 'status: agent-ready'), 'utf8');
+    fixtureGit(changed.root, ['add', '.agenticloop/tasks/T-002.md']);
+    fixtureGit(changed.root, ['commit', '-m', 'reopen dependency\n\nTask: T-002\nAgent: maintainer']);
+    writeFileSync(join(changed.root, 'serial-input.json'), JSON.stringify({ assignment: changed.assignment }), 'utf8');
+
+    const ordinary = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--json', '--target', changed.root,
+    ], optionsFor(changed));
+    const advanced = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--input', 'serial-input.json', '--json', '--target', changed.root,
+    ], optionsFor(changed));
+    for (const result of [ordinary, advanced]) {
+      assert.notEqual(result.status, 0);
+      assert.ok(JSON.parse(result.stdout).diagnostics.some(item => item.code === 'dependency.unresolved'));
+    }
+
+    // A serial dispatch derives dependency truth from direct carriers. It must
+    // refuse, rather than silently discard, caller-provided parallel evidence.
+    // This fixture has no declared direct dependency, isolating route selection
+    // from the per-member provenance that explicit parallel must retain.
+    const accepted = await createDispatchFixture(tmpDir, 'serial-input-selector-refusal', {
+      taskIds: ['T-001', 'T-002'], parallel: true,
+    });
+    assert.equal(accepted.decomposition.scan.readinessContext.dependenciesByTask.length, 2);
+    writeFileSync(join(accepted.root, 'dispatch-input.json'), JSON.stringify({
+      readiness: accepted.readiness,
+      decomposition: accepted.decomposition,
+      assignment: accepted.assignment,
+    }), 'utf8');
+
+    writeFileSync(join(accepted.root, 'assignment-only.json'), JSON.stringify({ assignment: accepted.assignment }), 'utf8');
+    writeFileSync(join(accepted.root, 'serial-per-task-input.json'), JSON.stringify({
+      readiness: { dependenciesByTask: accepted.decomposition.scan.readinessContext.dependenciesByTask },
+      assignment: accepted.assignment,
+    }), 'utf8');
+    const assignmentOnly = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--input', 'assignment-only.json', '--json', '--target', accepted.root,
+    ], optionsFor(accepted));
+    assertOk(assignmentOnly);
+    assert.equal(JSON.parse(assignmentOnly.stdout).decomposition, null, 'assignment-only serial input remains valid');
+
+    const before = fixtureGit(accepted.root, ['status', '--porcelain', '--untracked-files=all']);
+    for (const route of [[], ['--route', 'serial']]) {
+      const output = `.agenticloop/tmp/serial-${route.length ? 'explicit' : 'default'}.json`;
+      const serial = await runCliInProcess([
+        'task', 'prepare-dispatch', 'T-001', ...route, '--input', 'dispatch-input.json', '--output', output,
+        '--json', '--target', accepted.root,
+      ], optionsFor(accepted));
+      assert.notEqual(serial.status, 0);
+      const serialResult = JSON.parse(serial.stdout);
+      assert.equal(serialResult.ok, false);
+      assert.equal(serialResult.diagnostics[0].code, 'verification.context.malformed');
+      assert.equal(existsSync(join(accepted.root, output)), false, 'serial refusal must not write an output packet');
+    }
+    const perTaskSerial = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--input', 'serial-per-task-input.json', '--json', '--target', accepted.root,
+    ], optionsFor(accepted));
+    assert.notEqual(perTaskSerial.status, 0);
+    assert.equal(JSON.parse(perTaskSerial.stdout).diagnostics[0].code, 'verification.context.malformed');
+    assert.equal(
+      fixtureGit(accepted.root, ['status', '--porcelain', '--untracked-files=all']),
+      before,
+      'serial refusal must not mutate the fixture'
+    );
+
+    const parallel = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', 'dispatch-input.json', '--json', '--target', accepted.root,
+    ], optionsFor(accepted));
+    assertOk(parallel);
+    assert.notEqual(JSON.parse(parallel.stdout).decomposition, null, 'explicit parallel retains genuine per-task snapshot evidence');
   });
 
   it('fails closed with a typed regeneration diagnostic when the persisted selector is missing', async () => {
@@ -1525,7 +1903,7 @@ describe('task CLI', () => {
     delete decomposition.scan.readinessContext.dependencies.sourceRef;
     writeFileSync(sourcePath, JSON.stringify(decomposition, null, 2), 'utf8');
     const result = await runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--host', 'opencode', '--role', 'engineer',
       '--json', '--target', fixture.root,
     ], {
       operatorTrustRoot: fixture.operatorTrustRoot,
@@ -1545,7 +1923,7 @@ describe('task CLI', () => {
     decomposition.scan.readinessContext.dependencies.sourceRef = '../outside.json';
     writeFileSync(sourcePath, JSON.stringify(decomposition, null, 2), 'utf8');
     const result = await runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--host', 'opencode', '--role', 'engineer',
       '--json', '--target', fixture.root,
     ], {
       operatorTrustRoot: fixture.operatorTrustRoot,
@@ -2175,6 +2553,8 @@ describe('return evidence, cancellation provenance, and current-repository verif
   it('persists and reuses a GitHub authenticated execution receipt from public CLI lifecycle inputs without rerunning or re-consuming it', async () => {
     const fixture = await createDispatchFixture(tmpDir, 'github-authenticated-execution', {
       requiredChecksText: '- [RC-1] command: `node --version`',
+      taskIds: ['T-001', 'T-002'],
+      parallel: true,
     });
     const issue = 42;
     const packetPath = '.agenticloop/tmp/github.packet.json';
@@ -2185,7 +2565,12 @@ describe('return evidence, cancellation provenance, and current-repository verif
     const executionReceiptPath = '.agenticloop/tmp/github.execution-receipt.json';
     let body = `${readFileSync(fixture.taskPath, 'utf8')
       .replace(/^backend: files$/m, 'backend: github')
+      .replace('  - src/lane-1/**', '  - src/existing.js')
       .replace(/^status: agent-ready$/m, 'status: draft')
+      .replace(/\s*\[\[agent: [^\]]+\]\]\s*$/i, '')
+      .trimEnd()}\n\n[[agent: maintainer]]\n`;
+    const companionBody = `${readFileSync(fixture.taskFixtures.get('T-002').taskPath, 'utf8')
+      .replace(/^backend: files$/m, 'backend: github')
       .replace(/\s*\[\[agent: [^\]]+\]\]\s*$/i, '')
       .trimEnd()}\n\n[[agent: maintainer]]\n`;
     const comments = [];
@@ -2210,10 +2595,13 @@ describe('return evidence, cancellation provenance, and current-repository verif
       author_association: 'MEMBER',
       created_at: '2026-08-10T00:00:00Z', updated_at: '2026-08-10T00:00:00Z', body: text,
     });
+    const companionIssue = {
+      number: 43, state: 'OPEN', title: 'T-002 GitHub authenticated execution', body: companionBody, labels,
+    };
     const ghCommandRunner = (_command, args) => {
       if (args[0] === 'repo') return { status: 0, stdout: JSON.stringify({ nameWithOwner: 'example/repo' }), stderr: '' };
       if (args[0] === 'api' && args[1] === 'user') return { status: 0, stdout: JSON.stringify({ login: 'maintainer' }), stderr: '' };
-      if (args[0] === 'api' && args.some(arg => String(arg).includes('/issues?state=all'))) return { status: 0, stdout: JSON.stringify([[{ number: issue, state: state.issueState ?? (state.prState === 'MERGED' ? 'CLOSED' : 'OPEN'), title: 'T-001 GitHub authenticated execution', body, labels }]]), stderr: '' };
+      if (args[0] === 'api' && args.some(arg => String(arg).includes('/issues?state=all'))) return { status: 0, stdout: JSON.stringify([[{ number: issue, state: state.issueState ?? (state.prState === 'MERGED' ? 'CLOSED' : 'OPEN'), title: 'T-001 GitHub authenticated execution', body, labels }, companionIssue]]), stderr: '' };
       if (args[0] === 'api' && args.includes('--paginate')) {
         const endpoint = args.find(arg => /^repos\//.test(arg)) ?? '';
         return {
@@ -2222,7 +2610,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
           stderr: '',
         };
       }
-      if (args[0] === 'issue' && args[1] === 'list') return { status: 0, stdout: JSON.stringify([{ number: issue, state: state.issueState ?? (state.prState === 'MERGED' ? 'CLOSED' : 'OPEN'), title: 'T-001 GitHub authenticated execution', body, labels }]), stderr: '' };
+      if (args[0] === 'issue' && args[1] === 'list') return { status: 0, stdout: JSON.stringify([{ number: issue, state: state.issueState ?? (state.prState === 'MERGED' ? 'CLOSED' : 'OPEN'), title: 'T-001 GitHub authenticated execution', body, labels }, companionIssue]), stderr: '' };
       if (args[0] === 'issue' && args[1] === 'view' && args.includes('closedByPullRequestsReferences')) {
         return { status: 0, stdout: JSON.stringify({ closedByPullRequestsReferences: [{ number: 7 }] }), stderr: '' };
       }
@@ -2292,20 +2680,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
       '--authority', 'policy:T-001', '--actor', 'maintainer', '--repo', 'example/repo', '--yes', '--json', '--target', fixture.root,
     ]));
     assert.equal(comments.length, 1);
-    assertOk(await call([
-      'task', 'prepare-decomposition', 'T-001', '--work-unit', 'milestone:M00',
-      '--source-ref', '.agenticloop/decompositions/T-001.json', '--source-revision', 'fixture',
-      '--base', base, '--dependencies', dependencies, '--json', '--target', fixture.root,
-    ]));
-    const decomposition = JSON.parse((await call([
-      'task', 'prepare-decomposition', 'T-001', '--work-unit', 'milestone:M00',
-      '--source-ref', '.agenticloop/decompositions/T-001.json', '--source-revision', 'fixture',
-      '--base', base, '--dependencies', dependencies, '--json', '--target', fixture.root,
-    ])).stdout);
-    mkdirSync(join(fixture.root, '.agenticloop', 'decompositions'), { recursive: true });
-    writeFileSync(join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), JSON.stringify(decomposition, null, 2), 'utf8');
-    fixtureGit(fixture.root, ['add', '.agenticloop/decompositions']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record GitHub decomposition\n\nTask: T-001\nAgent: maintainer']);
     writeFileSync(join(fixture.root, '.agenticloop', 'project.md'), readFileSync(join(fixture.root, '.agenticloop', 'project.md'), 'utf8')
       .replace('task_backend: files', 'task_backend: github')
       .replace('work_unit_audit: enabled', 'work_unit_audit: disabled'), 'utf8');
@@ -2316,16 +2690,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
     fixtureGit(fixture.root, ['add', '.agenticloop/project.md', githubDependenciesPath]);
     fixtureGit(fixture.root, ['commit', '-m', 'configure GitHub receipt fixture\n\nTask: #42\nAgent: maintainer']);
     base = fixtureGit(fixture.root, ['rev-parse', 'HEAD^{tree}']);
-    const githubDecomposition = await call([
-      'task', 'prepare-decomposition', 'T-001', '--work-unit', 'milestone:M00',
-      '--source-ref', '.agenticloop/decompositions/T-001.json', '--source-revision', 'github-fixture',
-      '--base', base, '--dependencies', dependencies, '--json', '--target', fixture.root,
-    ]);
-    assertOk(githubDecomposition);
-    writeFileSync(join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), githubDecomposition.stdout, 'utf8');
-    fixtureGit(fixture.root, ['add', '.agenticloop/decompositions/T-001.json']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record GitHub decomposition\n\nTask: T-001\nAgent: maintainer']);
-
     const ready = await call([
       'task-body', 'transition', '--issue', String(issue), '--status', 'agent-ready', '--expect-digest', currentBodyDigest(),
       '--base', base, '--dependencies', githubDependenciesPath, '--repo', 'example/repo', '--yes', '--json', '--target', fixture.root,
@@ -2333,18 +2697,47 @@ describe('return evidence, cancellation provenance, and current-repository verif
     assertOk(ready);
     body = body.replace(/^status: draft$/m, 'status: agent-ready');
     base = fixtureGit(fixture.root, ['rev-parse', 'HEAD^{tree}']);
-    const refreshedDecomposition = await call([
-      'task', 'prepare-decomposition', 'T-001', '--work-unit', 'milestone:M00',
-      '--source-ref', '.agenticloop/decompositions/T-001.json', '--source-revision', 'github-ready-fixture',
-      '--base', base, '--dependencies', dependencies, '--json', '--target', fixture.root,
-    ]);
-    assertOk(refreshedDecomposition);
-    writeFileSync(join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), refreshedDecomposition.stdout, 'utf8');
+    const observedAt = new Date().toISOString();
+    const githubIssues = [
+      { number: issue, state: 'OPEN', title: 'T-001 GitHub authenticated execution', body, labels },
+      companionIssue,
+    ];
+    const identityInventory = buildGitHubTaskIdentityInventory(githubIssues, { complete: true });
+    const inventory = normalizeGitHubTaskInventory({
+      inventoryId: 'github:example/repo',
+      inventory: { ...identityInventory, issues: githubIssues },
+      enumeration: createTaskInventoryEnumeration({
+        backend: 'github', inventoryId: 'github:example/repo', observedAt,
+        discovered: githubIssues.length, returned: githubIssues.length,
+      }),
+    });
+    const basePaths = fixtureGit(fixture.root, ['ls-tree', '-r', '--name-only', base]).split(/\r?\n/).filter(Boolean);
+    const dependencyByTask = Object.fromEntries(['T-001', 'T-002'].map(taskId => {
+      const evidence = fixture.taskFixtures.get(taskId).readiness.evidence.dependencies;
+      return [taskId, { evidence, statuses: Object.fromEntries(evidence.statuses.map(({ id, status }) => [id, status])) }];
+    }));
+    const preparedDecomposition = prepareDecompositionSource({
+      enumerateInventory: () => inventory,
+      workUnit: { id: 'milestone:M00', backend: 'github' }, taskId: 'T-001',
+      sourceRef: '.agenticloop/decompositions/T-001.json', sourceRevision: `git-commit:${fixtureGit(fixture.root, ['rev-parse', 'HEAD'])}`,
+      route: 'parallel', observedAt, freshnessPolicy: { maxAgeSeconds: 3600 }, basePaths,
+      dependencies: dependencyByTask['T-001'].statuses, dependenciesByTask: dependencyByTask,
+      readinessContext: {
+        base: {
+          kind: 'git_tree', identity: `git-tree:${base}`,
+          inventoryDigest: `sha256:${canonicalSha256([...basePaths].sort())}`,
+          pathCount: basePaths.length, revalidationArgs: ['--base', base],
+        },
+        dependencies: dependencyByTask['T-001'].evidence,
+      },
+      rescanTrigger: 'ready membership, dependencies, ownership, coupling, or source revision changes',
+    });
+    assert.equal(preparedDecomposition.ok, true, preparedDecomposition.validation.errors?.join('\n'));
+    writeFileSync(join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), preparedDecomposition.source, 'utf8');
     fixtureGit(fixture.root, ['add', '.agenticloop/decompositions/T-001.json']);
-    fixtureGit(fixture.root, ['commit', '-m', 'refresh GitHub ready decomposition\n\nTask: T-001\nAgent: maintainer']);
-
+    fixtureGit(fixture.root, ['commit', '-m', 'record GitHub parallel decomposition\n\nTask: T-001\nAgent: maintainer']);
     const packetResult = await call([
-      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--return-adapter', fixture.trust.adapterId,
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--route', 'parallel', '--return-adapter', fixture.trust.adapterId,
       '--repo', 'example/repo', '--json', '--target', fixture.root,
     ]);
     assertOk(packetResult);

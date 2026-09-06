@@ -27,6 +27,7 @@ import { evaluateDispatchableLifecycle, DISPATCHABLE_TASK_STATUSES } from '../sr
 import { prepareRoleDispatch, dispatchPreparationDigest } from '../src/dispatch-envelope.js';
 import { createDispatchFixture, sha256 } from './helpers/dispatch-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { shellQuoteArgument } from '../src/task-evidence-contract.js';
 
 let temp;
@@ -286,7 +287,7 @@ describe('N7: role-start behavioral tests', () => {
       '--check-evidence-output', '.agenticloop/tmp/checks.json',
       '--json',
       '--target', root,
-    ], { operatorTrustRoot: fixture.operatorTrustRoot });
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
     assert.equal(result1.status, 0, `first role-start failed: ${result1.stdout} ${result1.stderr}`);
     const output1 = JSON.parse(result1.stdout);
     assert.equal(output1.ok, true);
@@ -323,7 +324,7 @@ describe('N7: role-start behavioral tests', () => {
       '--check-evidence-output', '.agenticloop/tmp/checks.json',
       '--json',
       '--target', root,
-    ], { operatorTrustRoot: fixture.operatorTrustRoot });
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
     assert.equal(result2.status, 0, `retry failed: ${result2.stdout} ${result2.stderr}`);
     const output2 = JSON.parse(result2.stdout);
     assert.equal(output2.disposition, 'already_current', 'exact retry must return already_current');
@@ -350,7 +351,7 @@ describe('N7: role-start behavioral tests', () => {
       '--check-evidence-output', '.agenticloop/tmp/checks.json',
       '--json',
       '--target', root,
-    ], { operatorTrustRoot: fixture.operatorTrustRoot });
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
     assert.equal(result.status, 1, 'must reject tampered head');
     const output = JSON.parse(result.stdout);
     assert.equal(output.ok, false);

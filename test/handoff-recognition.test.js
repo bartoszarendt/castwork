@@ -70,13 +70,11 @@ before(async () => {
   temp = mkdtempSync(join(tmpdir(), 'al-handoff-recognition-'));
   dispatch = await createDispatchFixture(temp, 'handoff');
   mkdirSync(join(dispatch.root, '.agenticloop', 'tmp'), { recursive: true });
-  writeFileSync(join(dispatch.root, '.agenticloop', 'tmp', 'dispatch-input.json'), JSON.stringify({
-    activation: dispatch.activation,
-    assignment: dispatch.assignment,
-    readiness: dispatch.readiness,
-    decomposition: dispatch.decomposition,
-    priorGateReceipts: dispatch.priorGateReceipts,
-  }, null, 2), 'utf8');
+    writeFileSync(join(dispatch.root, '.agenticloop', 'tmp', 'dispatch-input.json'), JSON.stringify({
+      activation: dispatch.activation,
+      assignment: dispatch.assignment,
+      priorGateReceipts: dispatch.priorGateReceipts,
+    }, null, 2), 'utf8');
   const prepared = await runCliInProcess([
     'task', 'prepare-dispatch', 'T-001',
     '--input', '.agenticloop/tmp/dispatch-input.json',
@@ -97,7 +95,7 @@ function roleStartExpectation(overrides = {}) {
     dispatchCarrierDigest: packet.task.dispatchCarrierDigest,
     packetId: packet.packetId,
     packetDigest: packet.digest,
-    workUnitIdentity: packet.decomposition.workUnitId,
+    workUnitIdentity: packet.decomposition?.workUnitId ?? null,
     productBaseHead: packet.repository.head,
     worktreeRoot: packet.repository.worktree,
     minimumActivationAssurance: 'operator_confirmed',
@@ -388,25 +386,23 @@ describe('role start recognition', () => {
     assert.equal(verdict.evidenceState, 'malformed');
   });
 
-  it('refuses a stale packet by its own declared freshness policy', () => {
-    const maxAge = packet.decomposition.freshnessPolicy.maxAgeSeconds;
+  it('does not apply parallel decomposition freshness to a serial packet', () => {
+    assert.equal(packet.decomposition, null);
     const verdict = recognizeHandoff({
       transition: 'role_start', expectation: roleStartExpectation(), preparedDispatch: packet,
       validatePreparedDispatch: validator(),
-      now: Date.parse(packet.decomposition.observedAt) + (maxAge + 1) * 1000,
+      now: Date.now() + 24 * 60 * 60 * 1000,
     });
-    assert.deepEqual(codes(verdict), ['handoff.evidence.freshness_expired']);
-    assert.equal(verdict.disposition, 'superseded');
+    assert.equal(verdict.recognized, true);
   });
 
-  it('refuses a packet observed in the future rather than treating it as fresh', () => {
+  it('does not require a parallel observation time for a serial packet', () => {
     const verdict = recognizeHandoff({
       transition: 'role_start', expectation: roleStartExpectation(), preparedDispatch: packet,
       validatePreparedDispatch: validator(),
-      now: Date.parse(packet.decomposition.observedAt) - 60 * 60 * 1000,
+      now: 0,
     });
-    assert.deepEqual(codes(verdict), ['handoff.evidence.malformed']);
-    assert.match(verdict.diagnostics[0].message, /observed in the future/);
+    assert.equal(verdict.recognized, true);
   });
 
   it('refuses a replayed packet that was already consumed', () => {
@@ -1150,8 +1146,6 @@ describe('task status role start', () => {
     writeFileSync(join(fresh.root, '.agenticloop', 'tmp', 'dispatch-input.json'), JSON.stringify({
       activation: fresh.activation,
       assignment: fresh.assignment,
-      readiness: fresh.readiness,
-      decomposition: fresh.decomposition,
       priorGateReceipts: fresh.priorGateReceipts,
     }, null, 2), 'utf8');
     const prepared = await runCliInProcess([
@@ -1366,7 +1360,7 @@ describe('review entry claim gate', () => {
     assert.equal(withChain[0].handoffBindings[0].taskId, packet.task.id);
     assert.equal(withChain[0].handoffBindings[0].packetId, packet.packetId);
     assert.equal(withChain[0].handoffBindings[0].dispatchCarrierDigest, packet.task.dispatchCarrierDigest);
-    assert.equal(withChain[0].handoffBindings[0].workUnitIdentity, packet.decomposition.workUnitId);
+    assert.equal(withChain[0].handoffBindings[0].workUnitIdentity, packet.decomposition?.workUnitId ?? null);
     assert.equal(withChain[0].handoffBindings[0].repositoryIdentity, verdict.boundIdentity.repositoryIdentity);
     assert.equal(withChain[0].handoffBindings[0].worktreeRoot, packet.repository.worktree);
     assert.equal(withChain[0].handoffBindings[0].productBaseHead, verdict.boundIdentity.productBaseHead);

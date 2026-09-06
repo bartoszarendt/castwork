@@ -79,6 +79,7 @@ import { createValidationResult, serializeValidationResult, validationResultDige
 import { createDiagnostic } from './repair-policy.js';
 import { COMMAND_REGISTRY, parseCommandArgs, suggestName } from './cli-registry.js';
 import { evaluateTaskReadiness } from './task-readiness.js';
+import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 import { executeMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
 import { createTaskContractBaselineRecord, createTaskContractCorrectionRecord, taskContractDigest, trustedChainTerminal, validActivationCaptureRef, validateTaskContractBaseline } from './task-contract-baseline.js';
 import { appendFilesTaskContractRecord, loadFilesTaskContractRecords } from './files-task-contract.js';
@@ -418,7 +419,8 @@ function buildDecompositionRevalidationCommand(taskId, opts, target) {
   ];
   if (opts.base) revalArgs.push('--base', shellQuoteArgument(opts.base));
   if (opts.basePaths) revalArgs.push('--base-paths', shellQuoteArgument(opts.basePaths));
-  revalArgs.push('--dependencies', shellQuoteArgument(opts.dependencies));
+  if (opts.dependenciesByTask) revalArgs.push('--dependencies-by-task', shellQuoteArgument(opts.dependenciesByTask));
+  else revalArgs.push('--dependencies', shellQuoteArgument(opts.dependencies));
   if (opts.route) revalArgs.push('--route', shellQuoteArgument(opts.route));
   if (opts.observedAt) revalArgs.push('--observed-at', shellQuoteArgument(opts.observedAt));
   if (opts.maxAgeSeconds) revalArgs.push('--max-age-seconds', shellQuoteArgument(opts.maxAgeSeconds));
@@ -654,11 +656,15 @@ export async function verifyCurrentDispatchPacket({
   roleId = 'engineer',
   hostTrustStore = undefined,
   repo = undefined,
+  includeGateResult = false,
+  now = undefined,
 }) {
   const stdout = [];
   const stderr = [];
   const captureIo = {
     ...io,
+    ...(Number.isFinite(now) ? { now } : {}),
+    suppressProtectedTransitionObserver: true,
     out: (...args) => stdout.push(args.join(' ')),
     err: (...args) => stderr.push(args.join(' ')),
     warn: (...args) => stderr.push(args.join(' ')),
@@ -688,7 +694,10 @@ export async function verifyCurrentDispatchPacket({
   }
   try {
     const status = await cmdTask(args, captureIo);
-    if (status === 0) return createPreparedDispatchValidation(exactPacket, { ok: true, errors: [] });
+    if (status === 0) {
+      const validation = createPreparedDispatchValidation(exactPacket, { ok: true, errors: [] });
+      return includeGateResult ? { validation, gateResult: null } : validation;
+    }
     let parsed = null;
     try {
       parsed = JSON.parse(stdout.join('\n'));
@@ -699,11 +708,13 @@ export async function verifyCurrentDispatchPacket({
     const errors = Array.isArray(parsed?.errors) && parsed.errors.length > 0
       ? parsed.errors.map(String)
       : stderr.length > 0 ? stderr : ['dispatch packet is not current for this role start'];
-    return createPreparedDispatchValidation(exactPacket, { ok: false, errors });
+    const validation = createPreparedDispatchValidation(exactPacket, { ok: false, errors });
+    return includeGateResult ? { validation, gateResult: parsed } : validation;
   } catch (error) {
-    return createPreparedDispatchValidation(exactPacket, {
+    const validation = createPreparedDispatchValidation(exactPacket, {
       ok: false, errors: [`dispatch packet freshness check failed: ${error.message}`],
     });
+    return includeGateResult ? { validation, gateResult: null } : validation;
   }
 }
 
@@ -1382,11 +1393,19 @@ function dispatchAssignmentFromCurrentFacts({ taskId, host, repository, backend,
   };
 }
 
-function dispatchSourcesFromDurableState(target, taskId) {
+function dispatchSourcesFromDurableState(target, taskId, { parallelRequested = false } = {}) {
+  if (!parallelRequested) {
+    return {
+      decomposition: null,
+      readiness: { serial: true },
+    };
+  }
   const sourceRef = `.agenticloop/decompositions/${taskId}.json`;
   const decomposition = readTargetJson(target, sourceRef, 'derived decomposition source');
   const base = decomposition?.scan?.readinessContext?.base;
-  const dependency = decomposition?.scan?.readinessContext?.dependencies;
+  const dependency = decomposition?.scan?.readinessContext?.dependencies ??
+    decomposition?.scan?.readinessContext?.dependenciesByTask
+      ?.find(entry => entry?.taskId === taskId)?.evidence;
   const regeneration =
     `regenerate the decomposition source with 'agenticloop task prepare-decomposition ${taskId} ` +
     `--work-unit <work-unit-id> --source-ref ${sourceRef} --source-revision <ref> --base <ref-or-tree> ` +
@@ -1415,6 +1434,24 @@ function dispatchSourcesFromDurableState(target, taskId) {
       },
     },
   };
+}
+
+/**
+ * Serial dispatch derives dependency truth from the current declared carriers.
+ * An advanced input may carry assignment and activation compatibility facts, but
+ * no caller-provided dependency evidence can be silently discarded on this
+ * route. Keep the recognised compatibility spellings together so a later
+ * readiness projection cannot create an alternate serial dependency channel.
+ */
+function hasSuppliedReadinessDependencyEvidence(readiness) {
+  const supplied = [
+    readiness?.evidence?.dependencies,
+    readiness?.evidence?.dependenciesByTask,
+    readiness?.dependencies,
+    readiness?.dependenciesByTask,
+    readiness?.dependencyEvidence,
+  ];
+  return supplied.some(value => value !== null && value !== undefined);
 }
 
 /**
@@ -1576,7 +1613,43 @@ function refetchDispatchRepository(target, readiness) {
  * Re-run readiness from the exact base and dependency sources named by the
  * request. Caller-authored result/evidence claims are never copied forward.
  */
-function refetchDispatchReadiness(target, snapshot, requested) {
+function refetchDispatchReadiness(target, snapshot, requested, projectConfig) {
+  if (requested?.serial === true) {
+    const base = readExplicitBaseEvidence(target, { base: 'HEAD' });
+    const dependency = resolveSerialDependencyEvidence({
+      target,
+      taskBody: snapshot.body,
+      projectConfig,
+    });
+    const evaluated = evaluateTaskReadiness({
+      taskBody: snapshot.body,
+      basePaths: base.paths,
+      mode: 'authoring',
+      dependencies: dependency.statuses,
+    });
+    const result = createValidationResult({
+      command: 'task-readiness',
+      ok: evaluated.ok,
+      evidenceState: evaluated.evidenceState,
+      disposition: evaluated.disposition,
+      errors: evaluated.errors,
+      warnings: evaluated.warnings,
+      diagnostics: evaluated.diagnostics,
+    });
+    const evidence = createTaskReadinessEvidence({
+      backend: snapshot.backend,
+      task: {
+        id: snapshot.taskId,
+        carrier: snapshot.carrier,
+        expectedDigest: snapshot.digest,
+      },
+      base: base.evidence,
+      dependencies: dependency.evidence,
+      trustedRecordCount: snapshot.trustedRecords.length,
+      trustedRecordErrors: snapshot.trustedRecordErrors,
+    });
+    return { evidence, result, resultDigest: validationResultDigest(result) };
+  }
   const baseArgs = requested?.evidence?.base?.revalidationArgs;
   const dependencyArgs = requested?.evidence?.dependencies?.revalidationArgs;
   if (!Array.isArray(baseArgs) || baseArgs.length !== 2 || baseArgs[0] !== '--base') {
@@ -2587,9 +2660,51 @@ export async function cmdTask(args, io = createIo()) {
       }
       let base;
       let dependency;
+      let dependenciesByTask = null;
+      let inventory;
+      const backend = selectedBackend.backend;
+      const observedAt = opts.observedAt ? String(opts.observedAt) : new Date().toISOString();
+      const enumerateInventory = backend === 'github'
+        ? () => enumerateGitHubTaskInventory(projectConfig, io, { observedAt, repo: opts.repo }).normalized
+        : () => enumerateFilesTaskInventory(target, projectConfig, { observedAt });
       try {
         base = readExplicitBaseEvidence(target, { base: opts.base, basePaths: opts.basePaths });
-        dependency = readDependencyEvidence(target, opts.dependencies, taskId);
+        inventory = enumerateInventory();
+        const workUnitTaskIds = [...new Set((inventory?.members ?? []).map(member => String(member?.taskId ?? '')).filter(Boolean))].sort();
+        const multiMemberParallel = opts.route === 'parallel' && workUnitTaskIds.length > 1;
+        if (multiMemberParallel && opts.dependencies) {
+          throw new VerificationContextMalformedError('explicit multi-member parallel decomposition requires --dependencies-by-task; legacy --dependencies is not permitted');
+        }
+        if (multiMemberParallel && !opts.dependenciesByTask) {
+          throw new VerificationContextMalformedError('explicit multi-member parallel decomposition requires --dependencies-by-task with exactly one Maintainer-attributed snapshot per work-unit task');
+        }
+        if (opts.dependenciesByTask) {
+          const paths = readTargetJson(target, opts.dependenciesByTask, 'per-task dependency map');
+          if (!paths || typeof paths !== 'object' || Array.isArray(paths) || Object.keys(paths).length === 0 ||
+              Object.entries(paths).some(([id, path]) => !isValidTaskId(id, projectConfig.task_id_regex ?? PROJECT_MAP_DEFAULTS.task_id_regex) || typeof path !== 'string')) {
+            throw new VerificationContextMalformedError('--dependencies-by-task must be a non-empty JSON object mapping task ids to target-relative paths');
+          }
+          if (multiMemberParallel) {
+            const suppliedTaskIds = Object.keys(paths).sort();
+            const missing = workUnitTaskIds.filter(id => !Object.hasOwn(paths, id));
+            const extras = suppliedTaskIds.filter(id => !workUnitTaskIds.includes(id));
+            if (missing.length || extras.length) {
+              throw new VerificationContextMalformedError(`--dependencies-by-task must exactly cover multi-member parallel work-unit tasks (missing: ${missing.join(', ') || 'none'}; extras: ${extras.join(', ') || 'none'})`);
+            }
+            const sourceRefs = Object.values(paths);
+            if (new Set(sourceRefs).size !== sourceRefs.length) {
+              throw new VerificationContextMalformedError('--dependencies-by-task must name a distinct Maintainer-attributed dependency snapshot for every multi-member parallel work-unit task');
+            }
+          }
+          dependenciesByTask = Object.fromEntries(Object.entries(paths).map(([id, path]) => {
+            const evidence = readDependencyEvidence(target, path, id);
+            return [id, { evidence: evidence.evidence, statuses: evidence.statuses }];
+          }));
+          dependency = { evidence: dependenciesByTask[taskId]?.evidence, statuses: dependenciesByTask[taskId]?.statuses };
+          if (!dependency.evidence) throw new VerificationContextMalformedError(`--dependencies-by-task must include dispatched task '${taskId}'`);
+        } else {
+          dependency = readDependencyEvidence(target, opts.dependencies, taskId);
+        }
       } catch (error) {
         return printGateResult('task prepare-decomposition', commandFailure('task prepare-decomposition', error, 'operational_error', {}, target), asJson, io);
       }
@@ -2608,16 +2723,11 @@ export async function cmdTask(args, io = createIo()) {
       // One observation instant for the enumeration receipt and the scan: they
       // describe the same observation, so the emitted source is byte-identical
       // for identical inputs.
-      const observedAt = opts.observedAt ? String(opts.observedAt) : new Date().toISOString();
-      const backend = selectedBackend.backend;
-      const enumerateInventory = backend === 'github'
-        ? () => enumerateGitHubTaskInventory(projectConfig, io, { observedAt, repo: opts.repo }).normalized
-        : () => enumerateFilesTaskInventory(target, projectConfig, { observedAt });
       const prepared = prepareDecompositionSource({
         // The producer never receives a caller-supplied inventory: it calls the
         // authoritative enumerator, which lists the configured task directory
         // and issues the typed enumeration receipt completeness derives from.
-        enumerateInventory,
+        enumerateInventory: () => inventory,
         workUnit: { id: String(opts.workUnit), backend },
         taskId,
         sourceRef: String(opts.sourceRef),
@@ -2627,6 +2737,7 @@ export async function cmdTask(args, io = createIo()) {
         freshnessPolicy: { maxAgeSeconds },
         basePaths: base.paths,
         dependencies: dependency.statuses,
+        ...(dependenciesByTask ? { dependenciesByTask } : {}),
         readinessContext: { base: base.evidence, dependencies: dependency.evidence },
         rescanTrigger: opts.rescanTrigger ? String(opts.rescanTrigger) : DECOMPOSITION_RESCAN_TRIGGER,
       });
@@ -2732,6 +2843,7 @@ export async function cmdTask(args, io = createIo()) {
       const taskId = positional[0];
       const asJson = Boolean(opts.json);
       const advancedInput = Boolean(opts.input);
+      const serialRoute = !opts.packet && opts.route !== 'parallel';
       if (!taskId || (opts.input && opts.packet) || (!opts.packet && !advancedInput && (!opts.host || opts.role !== 'engineer'))) {
         const error = new CliUsageError('task prepare-dispatch requires <id>; ordinary packet creation requires --host <host> and --role engineer, while --input remains an advanced compatibility route; --input and --packet are mutually exclusive');
         return printGateResult('task prepare-dispatch', commandFailure('task prepare-dispatch', error, 'usage', {}, target), asJson, io, EXIT_USAGE);
@@ -2745,6 +2857,14 @@ export async function cmdTask(args, io = createIo()) {
       let priorGateReceipts = [];
       try {
         input = opts.input ? readJson(opts.input, 'dispatch input') : null;
+        if (serialRoute && hasSuppliedReadinessDependencyEvidence(input?.readiness)) {
+          throw new VerificationContextMalformedError(
+            'serial dispatch input must not supply readiness dependency evidence; serial dependency truth is derived from current declared carriers'
+          );
+        }
+        // Advanced compatibility input may retain assignment and activation
+        // facts. Current serial dependency truth is derived below from declared
+        // files carriers and trusted contract history.
         capabilities = resolveActivationCapabilities(target, io, opts.hostTrustStore);
         hostRoleCapabilities = resolveEffectiveHostRoleCapabilities(target);
         if (opts.priorReceipts) {
@@ -2796,21 +2916,27 @@ export async function cmdTask(args, io = createIo()) {
       };
       let derivedSources;
       try {
-        derivedSources = opts.packet || advancedInput ? null : dispatchSourcesFromDurableState(target, taskId);
+        derivedSources = opts.packet || advancedInput ? null : dispatchSourcesFromDurableState(target, taskId, {
+          parallelRequested: opts.route === 'parallel',
+        });
       } catch (error) {
         return printGateResult('task prepare-dispatch', commandFailure('task prepare-dispatch', error, 'operational_error', {}, target), asJson, io);
       }
-      const refetchReadiness = ({ snapshot }) => refetchDispatchReadiness(
-        target,
-        snapshot,
-        derivedSources?.readiness ?? input?.readiness ?? packet?.readiness
-      );
+        const refetchReadiness = ({ snapshot }) => refetchDispatchReadiness(
+          target,
+          snapshot,
+          serialRoute || packet?.readiness?.evidence?.dependencies?.revalidationArgs?.[0] === '--serial-dependencies'
+            ? { serial: true }
+            : derivedSources?.readiness ?? input?.readiness ?? packet?.readiness,
+          projectConfig
+        );
       const refetchRepository = ({ readiness }) => refetchDispatchRepository(target, readiness);
-      const refetchDecomposition = ({ snapshot }) => refetchDispatchDecomposition(
-        target,
-        derivedSources?.decomposition ?? input?.decomposition ?? packet?.decomposition,
-        snapshot.taskId
-      );
+        const refetchDecomposition = ({ snapshot }) => {
+          const source = derivedSources?.decomposition ?? input?.decomposition ?? packet?.decomposition;
+          return source === null || source === undefined
+            ? null
+            : refetchDispatchDecomposition(target, source, snapshot.taskId);
+        };
       const refetchParallelScanInventory = ({ decomposition, readiness }) => {
         const boundByTask = decomposition?.scan?.readinessContext?.dependenciesByTask;
         if (Array.isArray(boundByTask)) {
@@ -2886,6 +3012,7 @@ export async function cmdTask(args, io = createIo()) {
       const dispatchOptions = {
         capabilities,
         hostRoleCapabilities,
+        ...(Number.isFinite(io?.now) ? { now: io.now } : {}),
         assurancePolicy,
         verifyActivationSignature: activationVerification.verify,
         resolveActivationBinding: candidate => resolvePacketActivationBinding(target, io, candidate, {
@@ -2899,6 +3026,8 @@ export async function cmdTask(args, io = createIo()) {
             readiness: evaluatorInput.readiness,
             repository: evaluatorInput.repository,
             decomposition: evaluatorInput.decomposition,
+            parallelRequested: evaluatorInput.parallelRequested,
+            routeAgreementRequested: false,
             parallelScanInventory: evaluatorInput.parallelScanInventory,
             assignment: evaluatorInput.assignment,
             policy: evaluatorInput.policy,
@@ -2909,9 +3038,11 @@ export async function cmdTask(args, io = createIo()) {
             now: evaluatorInput.now,
           });
         },
-        onAfterEligibilityEvaluation: (evaluatorInput, evaluatorOutcome) => observeProtectedTransitionEvaluation(
-          io, 'dispatch', evaluatorInput, dispatchBinding, evaluatorOutcome,
-        ),
+        onAfterEligibilityEvaluation: (evaluatorInput, evaluatorOutcome) => {
+          if (io?.suppressProtectedTransitionObserver !== true) {
+            observeProtectedTransitionEvaluation(io, 'dispatch', evaluatorInput, dispatchBinding, evaluatorOutcome);
+          }
+        },
       };
       const eligibleReturnAdapters = Object.values(activationVerification.adapters ?? {})
         .filter(adapter => adapter.capabilities?.returnReceipt === 'supported');
@@ -2957,6 +3088,7 @@ export async function cmdTask(args, io = createIo()) {
           refetchDecomposition,
           ...stateInputs,
           roleId: opts.role,
+          ...(opts.route ? { requestedRoute: opts.route } : {}),
         }, dispatchOptions);
       } else {
         // Packet conservation, asked only when a *new* packet is being minted.
@@ -2985,11 +3117,19 @@ export async function cmdTask(args, io = createIo()) {
         }
         let assignment;
         try {
-          const readinessSource = derivedSources?.readiness ?? input?.readiness;
-          const repository = refetchDispatchRepository(target, {
-            evidence: { base: { identity: readinessSource?.evidence?.base?.revalidationArgs?.[1]?.startsWith('git-tree:')
+          // A serial mint always derives its base and dependency observations
+          // locally. `--input` readiness is not an alternate serial evidence
+          // channel; only an explicit parallel route consumes it.
+          const readinessSource = serialRoute
+            ? { serial: true }
+            : derivedSources?.readiness ?? input?.readiness;
+          const baseIdentity = readinessSource?.serial === true
+            ? readExplicitBaseEvidence(target, { base: 'HEAD' }).evidence.identity
+            : readinessSource?.evidence?.base?.revalidationArgs?.[1]?.startsWith('git-tree:')
               ? readinessSource.evidence.base.revalidationArgs[1]
-              : `git-tree:${readinessSource?.evidence?.base?.revalidationArgs?.[1] ?? ''}` } },
+              : `git-tree:${readinessSource?.evidence?.base?.revalidationArgs?.[1] ?? ''}`;
+          const repository = refetchDispatchRepository(target, {
+            evidence: { base: { identity: baseIdentity } },
           });
           assignment = advancedInput && input?.assignment
             ? input.assignment
@@ -3011,6 +3151,8 @@ export async function cmdTask(args, io = createIo()) {
           ...stateInputs,
           activation: input?.activation,
           assignment,
+          parallelRequested: opts.route === 'parallel',
+          routeAgreementRequested: false,
         }, dispatchOptions);
       }
       const presentedValidation = presentGateResultForTarget(prepared.validation, target);
@@ -3186,10 +3328,32 @@ export async function cmdTask(args, io = createIo()) {
           STALE_CARRIER_DIGEST_CONTEXT
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
-      // Create a custom validator that handles dynamic supported adapters
-      // by loading the trust store directly without the boundary check.
+      const evaluationNow = Date.now();
+      // Serial packets use the current prepare-dispatch seam before they reach
+      // recognition. The packet's sealed proof cannot establish that direct
+      // dependency carriers still hold their minted facts. Explicit-parallel
+      // packets retain their existing recognition path exactly.
+      const currentDispatch = dispatchPacket.decomposition === null
+        ? await verifyCurrentDispatchPacket({
+            target,
+            io,
+            taskId,
+            packetPath: packetPathStr,
+            hostTrustStore: opts.hostTrustStore,
+            includeGateResult: true,
+            now: evaluationNow,
+          })
+        : null;
+      if (currentDispatch && !currentDispatch.validation.ok && currentDispatch.gateResult) {
+        if (asJson) io.out(JSON.stringify(currentDispatch.gateResult));
+        else for (const error of currentDispatch.gateResult.errors ?? []) io.err(`ERROR: ${error}`);
+        return 1;
+      }
       let roleStartBinding = null;
-      const customValidator = (packet, evaluationNow) => {
+      // Explicit parallel packets keep the original dynamic-adapter validator;
+      // serial packets have already completed the current-truth revalidation
+      // above and pass that sealed result into recognition.
+      const customValidator = (packet, validatorNow) => {
         try {
           const capabilities = (() => {
             try {
@@ -3217,10 +3381,10 @@ export async function cmdTask(args, io = createIo()) {
           const checked = validateDispatchPreparation(packet, {
             capabilities,
             hostRoleCapabilities: resolveEffectiveHostRoleCapabilities(target),
-            now: evaluationNow,
+            now: validatorNow,
             resolveActivationBinding: candidate => resolvePacketActivationBinding(target, io, candidate, {
               hostTrustStorePath: opts.hostTrustStore,
-              now: evaluationNow,
+              now: validatorNow,
             }),
           });
           return createPreparedDispatchValidation(packet, { ok: checked.ok, errors: checked.errors });
@@ -3237,7 +3401,9 @@ export async function cmdTask(args, io = createIo()) {
           taskContractDigest: recordContract.digest,
           dispatchCarrierDigest: currentDigest,
           packetPath: packetPathStr,
-          validatePreparedDispatch: customValidator,
+          validatePreparedDispatch: currentDispatch
+            ? () => currentDispatch.validation
+            : customValidator,
           consumedPacketIds: consumed.records.map(record => record.packetId),
           rawStartLabel: `role-start requested for ${taskId}`,
           onBeforeRecognitionEvaluation: evaluatorInput => {
@@ -3253,6 +3419,7 @@ export async function cmdTask(args, io = createIo()) {
           onAfterRecognitionEvaluation: (evaluatorInput, evaluatorOutcome) => observeProtectedTransitionEvaluation(
             io, 'role_start', evaluatorInput, roleStartBinding, evaluatorOutcome,
           ),
+          now: evaluationNow,
         });
       } catch (error) {
         if (error instanceof PublicCommandError) {
@@ -3456,6 +3623,7 @@ export async function cmdTask(args, io = createIo()) {
           projectConfig,
           io,
           host: opts.host,
+          route: opts.route,
           hostTrustStore: opts.hostTrustStore,
           returnAdapter: opts.returnAdapter,
         });

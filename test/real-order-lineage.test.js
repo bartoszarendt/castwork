@@ -90,6 +90,7 @@ function receiptRecords(root) {
 async function realOrderAttempt(name, { projectMapContent = CLOSEOUT_PROJECT_MAP } = {}) {
   const fixture = await createDispatchFixture(temp, name, {
     workUnit: 'milestone:M00',
+    parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
     projectMapContent,
     additionalAllowedPaths: ['.agenticloop/audits/**'],
   });
@@ -604,7 +605,7 @@ describe('an expired grant still closes out the attempt it authorized', () => {
   it('completes the consumed attempt, refuses a new packet, and keeps revocation separate', async () => {
     const projectMap = CLOSEOUT_PROJECT_MAP.replace('work_unit_audit: enabled', 'work_unit_audit: disabled');
     const fixture = await createDispatchFixture(temp, 'grant-closeout', {
-      scaffold: true, workUnit: 'milestone:M00', projectMapContent: projectMap,
+      scaffold: true, workUnit: 'milestone:M00', parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'], projectMapContent: projectMap,
     });
     const root = fixture.root;
     fixture.operatorTrustRoot = mkdtempSync(join(temp, 'grant-closeout-empty-trust-'));
@@ -637,7 +638,7 @@ describe('an expired grant still closes out the attempt it authorized', () => {
       readiness: fixture.readiness, decomposition: fixture.decomposition, assignment: fixture.assignment,
     }, null, 2), 'utf8');
     const dispatched = await runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--input', dispatchInputPath, '--target', root,
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', dispatchInputPath, '--target', root,
     ], cli);
     assert.equal(dispatched.status, 0, `${dispatched.stdout}${dispatched.stderr}`);
     const packet = JSON.parse(dispatched.stdout);

@@ -726,7 +726,7 @@ describe('observed return verification storage', () => {
           taskContractDigest: prepared.packet.task.contractDigest,
           carrierDigest: prepared.packet.task.digest,
           packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
-          workUnitIdentity: prepared.packet.decomposition.workUnitId,
+          workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
           artifactHead: prepared.packet.repository.head,
           worktreeRoot: prepared.packet.repository.worktree,
           minimumActivationAssurance: 'operator_confirmed',
@@ -905,7 +905,7 @@ describe('observed return verification storage', () => {
       hostAuthority: protectedHostBoundary(dispatch.trust),
     }, 'files', {
       config: loadProjectMap(dispatch.root).config,
-      workUnit: prepared.packet.decomposition.workUnitId,
+      workUnit: prepared.packet.decomposition?.workUnitId ?? null,
     });
     assert.ok(closeout, 'closeout assurance context should resolve');
     const observed = closeout.resolveReturns('T-001');

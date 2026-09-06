@@ -1230,7 +1230,8 @@ export function validateCarrierMutationReceipt(receipt) {
       : { workflowRole: 'engineer', assuranceGrade: 'session_reported' };
   if (!isPlainObject(producer) || Object.keys(producer).length !== (structuredEvidence ? 6 : 5) || producer.workflowRole !== expectedProducer.workflowRole ||
       producer.assuranceGrade !== expectedProducer.assuranceGrade ||
-      !['invocationId', 'workUnitIdentity', 'repositoryIdentity'].every(field => typeof producer[field] === 'string' && producer[field]) ||
+      !['invocationId', 'repositoryIdentity'].every(field => typeof producer[field] === 'string' && producer[field]) ||
+      (producer.workUnitIdentity !== null && (typeof producer.workUnitIdentity !== 'string' || !producer.workUnitIdentity)) ||
       (structuredEvidence && !/^attempt:[a-f0-9]{32}$/.test(String(producer.attemptId ?? '')))) {
     errors.push('carrier mutation producer identity is invalid');
   }

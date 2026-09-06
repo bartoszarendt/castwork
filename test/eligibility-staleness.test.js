@@ -28,13 +28,26 @@ afterEach(() => { rmSync(temp, { recursive: true, force: true }); });
  * carrier content for the dispatched task.
  */
 function modifiedInventory(fixture, modifiedBody, taskId = 'T-001') {
-  const entries = [{ carrier: `.agenticloop/tasks/${taskId}.md`, content: modifiedBody, readError: null }];
+  const entries = [...fixture.taskFixtures.keys()].map(id => ({
+    carrier: `.agenticloop/tasks/${id}.md`,
+    content: id === taskId ? modifiedBody : readFileSync(join(fixture.root, '.agenticloop', 'tasks', `${id}.md`), 'utf8'),
+    readError: null,
+  }));
   return filesScanInventory('files:.agenticloop/tasks', entries);
+}
+
+function parallelFixture(name, options = {}) {
+  return createDispatchFixture(temp, name, {
+    parallel: true,
+    taskIds: ['T-001', 'T-002'],
+    decompositionTaskIds: ['T-001'],
+    ...options,
+  });
 }
 
 describe('eligibility-aware inventory staleness', () => {
   it('A4.1: prose-only carrier drift does not stale dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'prose-drift');
+    const fixture = await parallelFixture( 'prose-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     // Append prose that does NOT touch frontmatter contract fields.
@@ -51,7 +64,7 @@ describe('eligibility-aware inventory staleness', () => {
     // Build a modified inventory with the prose-appended body but same membership.
     const currentInventory = modifiedInventory(fixture, modifiedBody);
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, true, `dispatch must succeed for prose-only drift: ${prepared.validation?.errors?.join('; ')}`);
     assert.equal(prepared.validation.proseDriftAccepted, true);
 
@@ -63,7 +76,7 @@ describe('eligibility-aware inventory staleness', () => {
   });
 
   it('A4.2: status change still fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'status-drift');
+    const fixture = await parallelFixture( 'status-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     // Change status from agent-ready to in-progress.
@@ -72,14 +85,14 @@ describe('eligibility-aware inventory staleness', () => {
 
     const currentInventory = modifiedInventory(fixture, modifiedBody);
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for status change');
     const errorText = prepared.validation?.errors?.join('; ') ?? '';
     assert.match(errorText, /eligibility|stale|carrier drift/i, `error must mention eligibility or stale: ${errorText}`);
   });
 
   it('A4.3: scope change still fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'scope-drift');
+    const fixture = await parallelFixture( 'scope-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     // Change allowed_paths. This changes the contract digest.
@@ -87,14 +100,14 @@ describe('eligibility-aware inventory staleness', () => {
 
     const currentInventory = modifiedInventory(fixture, modifiedBody);
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for scope change');
     const errorText = prepared.validation?.errors?.join('; ') ?? '';
     assert.match(errorText, /eligibility|stale|carrier drift/i, `error must mention eligibility or stale: ${errorText}`);
   });
 
   it('A4.4: membership change still fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'membership-drift');
+    const fixture = await parallelFixture( 'membership-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     // Add a new task to the inventory (membership change).
@@ -110,7 +123,7 @@ describe('eligibility-aware inventory staleness', () => {
       complete: true,
     });
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for membership change');
     const errorText = prepared.validation?.errors?.join('; ') ?? '';
     assert.match(errorText, /membership/i, `error must mention membership: ${errorText}`);
@@ -144,7 +157,7 @@ describe('eligibility-aware inventory staleness', () => {
 
 describe('F5: old-shape eligibility entries fail closed', () => {
   it('scan without declaredDependencies fails recheck', async () => {
-    const fixture = await createDispatchFixture(temp, 'old-shape');
+    const fixture = await parallelFixture( 'old-shape');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
     const proseAppend = '\n\n## Comments\n\nReviewed by human.\n';
     const modifiedBody = originalBody + proseAppend;
@@ -179,7 +192,7 @@ describe('F5: old-shape eligibility entries fail closed', () => {
 
 describe('regression: material drift detection via re-derivation', () => {
   it('R1: dependency drift fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'dep-drift');
+    const fixture = await parallelFixture( 'dep-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     const modifiedBody = originalBody.replace(
@@ -192,12 +205,12 @@ describe('regression: material drift detection via re-derivation', () => {
       { carrier: '.agenticloop/tasks/T-001.md', content: modifiedBody, readError: null },
     ]);
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for dependency drift');
   });
 
   it('R2: sibling status drift fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'sibling-drift', { taskIds: ['T-001', 'T-002'] });
+    const fixture = await parallelFixture( 'sibling-drift', { taskIds: ['T-001', 'T-002'] });
     const body1 = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
     const body2 = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-002.md'), 'utf8');
     const modifiedBody2 = body2.replace('status: agent-ready', 'status: done');
@@ -208,7 +221,7 @@ describe('regression: material drift detection via re-derivation', () => {
     ]);
 
     const primary = fixture.taskFixtures.get('T-001');
-    const prepared = prepare(primary, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(primary, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for sibling status drift');
     const errorText = prepared.validation?.errors?.join('; ') ?? '';
     assert.match(errorText, /eligibility|stale|carrier drift/i,
@@ -216,18 +229,18 @@ describe('regression: material drift detection via re-derivation', () => {
   });
 
   it('R3: knowledge coupling drift fails dispatch', async () => {
-    const fixture = await createDispatchFixture(temp, 'coupling-drift');
+    const fixture = await parallelFixture( 'coupling-drift');
     const originalBody = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
 
     const modifiedBody = originalBody.replace(
-      '- Knowledge coupling: independent | coupled | unknown',
+      '- **Knowledge coupling**: independent',
       '- **Knowledge coupling**: coupled'
     );
     assert.notEqual(modifiedBody, originalBody, 'coupling replacement must succeed');
 
     const currentInventory = modifiedInventory(fixture, modifiedBody);
 
-    const prepared = prepare(fixture, { refetchParallelScanInventory: () => currentInventory });
+    const prepared = prepare(fixture, { refetchParallelScanInventory: args => { fixture.refetchParallelScanInventory(args); return currentInventory; } });
     assert.equal(prepared.ok, false, 'dispatch must fail for coupling drift');
   });
 });

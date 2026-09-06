@@ -50,7 +50,11 @@ after(() => {
 });
 describe('work-unit activation from committed decomposition', () => {
   it('derives a child binding only from the canonical ready set', async () => {
-    const fixture = await scaffoldFixture(temp, 'activate-work-unit');
+    const fixture = await scaffoldFixture(temp, 'activate-work-unit', {
+      parallel: true,
+      taskIds: ['T-001', 'T-002'],
+      decompositionTaskIds: ['T-001'],
+    });
     const activated = await runCliInProcess(
       ['activate', '--work-unit', 'fixture-work-unit', '--json', '--target', fixture.root],
       interactiveOptions(fixture)
@@ -59,10 +63,10 @@ describe('work-unit activation from committed decomposition', () => {
     const report = JSON.parse(activated.stdout);
     assert.equal(report.scopeType, 'work_unit');
     assert.equal(report.workUnitId, 'fixture-work-unit');
-    assert.equal(report.tasks.length, 1);
+    assert.equal(report.tasks.length, 2);
     assert.equal(report.tasks[0].derivation, 'committed_decomposition_membership');
 
-    const packet = await prepareThroughCli(fixture);
+    const packet = await prepareThroughCli(fixture, ['--route', 'parallel']);
     assert.equal(packet.activationBinding.binding.derivation, 'committed_decomposition_membership');
     assert.equal(packet.activationBinding.grant.scope.type, 'work_unit');
     assert.equal(packet.activationBinding.grant.workUnitId, 'fixture-work-unit');

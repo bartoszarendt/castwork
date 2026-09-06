@@ -594,15 +594,20 @@ function recognizePreparedDispatch({
       { field: 'packetId', observed: String(packet.packetId) }
     ));
   }
-  evaluateFreshness({
-    observedAt: packet.decomposition?.observedAt,
-    maxAgeSeconds: Number.isFinite(maxEvidenceAgeSeconds)
-      ? maxEvidenceAgeSeconds
-      : Number(packet.decomposition?.freshnessPolicy?.maxAgeSeconds),
-    now,
-    label: 'prepared dispatch',
-    diagnostics,
-  });
+  // A serial packet has no parallel scan to age. Do not manufacture a
+  // decomposition observation requirement at role start; a parallel packet
+  // retains the original freshness proof unchanged.
+  if (packet.decomposition !== null) {
+    evaluateFreshness({
+      observedAt: packet.decomposition?.observedAt,
+      maxAgeSeconds: Number.isFinite(maxEvidenceAgeSeconds)
+        ? maxEvidenceAgeSeconds
+        : Number(packet.decomposition?.freshnessPolicy?.maxAgeSeconds),
+      now,
+      label: 'prepared dispatch',
+      diagnostics,
+    });
+  }
 
   const identity = {
     backend: bind('backend', expectation.backend, packet.backend, diagnostics, 'prepared dispatch backend'),

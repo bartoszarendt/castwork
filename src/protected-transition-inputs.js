@@ -71,6 +71,8 @@ export const PROTECTED_TRANSITION_INPUTS = Object.freeze([
     authoritative('readiness', 'fresh readiness facts supplied to evaluateDispatchEligibility'),
     authoritative('repository', 'fresh repository facts supplied to evaluateDispatchEligibility'),
     authoritative('decomposition', 'fresh decomposition facts supplied to evaluateDispatchEligibility'),
+    authoritative('parallelRequested', 'explicit serial or parallel dispatch route supplied to evaluateDispatchEligibility'),
+    authoritative('routeAgreementRequested', 'explicit serial route requires any available decomposition artifact to agree before dispatch'),
     authoritative('parallelScanInventory', 'fresh parallel-scan inventory supplied to evaluateDispatchEligibility'),
     authoritative('assignment', 'bound role assignment supplied to evaluateDispatchEligibility'),
     authoritative('policy', 'resolved assurance policy supplied to evaluateDispatchEligibility'),

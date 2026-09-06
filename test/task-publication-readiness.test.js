@@ -553,6 +553,7 @@ Implemented the scoped task.
 async function closeoutFixture(name) {
   const fixture = await createDispatchFixture(temp, name, {
     workUnit: 'milestone:M00',
+    parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
     additionalAllowedPaths: ['.agenticloop/audits/**'],
     projectMapContent: [
       '---',

@@ -488,7 +488,9 @@ describe('github closeout evaluation', () => {
   }
 
   async function establishGitHubHandoff(name, harness, policy = null) {
-    const fixture = await createDispatchFixture(tmpDir, `${name}-dispatch`, { workUnit: 'milestone:M00' });
+    const fixture = await createDispatchFixture(tmpDir, `${name}-dispatch`, {
+      workUnit: 'milestone:M00', parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+    });
     const target = fixture.root;
     writeFileSync(join(target, '.agenticloop', 'project.md'), [
       '---', 'setup_status: confirmed', 'development_stage: expansion',
@@ -561,7 +563,7 @@ describe('github closeout evaluation', () => {
         backend: 'github', taskId: 'T-001', roleId: 'engineer',
         taskContractDigest: packet.task.contractDigest, carrierDigest: packet.task.digest,
         packetId: packet.packetId, packetDigest: packet.digest,
-        workUnitIdentity: packet.decomposition.workUnitId, artifactHead: packet.repository.head,
+        workUnitIdentity: packet.decomposition?.workUnitId ?? null, artifactHead: packet.repository.head,
         worktreeRoot: packet.repository.worktree, minimumActivationAssurance: 'operator_confirmed',
       },
       preparedDispatch: packet,

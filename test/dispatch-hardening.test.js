@@ -538,7 +538,7 @@ describe('initial repository state binds the dispatch', () => {
       assignment: fixture.assignment,
     }), 'utf8');
     const command = () => runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--input', 'dispatch-input.json',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', 'dispatch-input.json',
       '--prior-receipts', receiptPath, '--host-trust-store', fixture.trustStorePath,
       '--json', '--target', fixture.root,
     ], { operatorTrustRoot: fixture.operatorTrustRoot });
@@ -759,7 +759,7 @@ describe('return ancestry is proven, not assumed', () => {
 
 describe('host receipt trust boundary', () => {
   async function signed(name) {
-    const fixture = await createDispatchFixture(temp, name);
+    const fixture = await createDispatchFixture(temp, name, { taskIds: ['T-001', 'T-002'], parallel: true });
     const prepared = prepare(fixture);
     assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
     const evidence = repositoryEvidence(prepared.packet);
@@ -1126,7 +1126,7 @@ describe('OpenCode activation transport corruption regression', () => {
 describe('role-return core boundary authenticates evidence itself', () => {
   let blockedExecutionCounter = 0;
   async function committed(name) {
-    const fixture = await createDispatchFixture(temp, name);
+    const fixture = await createDispatchFixture(temp, name, { taskIds: ['T-001', 'T-002'], parallel: true });
     const prepared = prepare(fixture);
     assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
     const recognition = recognizeHandoff({
@@ -1136,7 +1136,7 @@ describe('role-return core boundary authenticates evidence itself', () => {
         taskContractDigest: prepared.packet.task.contractDigest,
         carrierDigest: prepared.packet.task.digest,
         packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
-        workUnitIdentity: prepared.packet.decomposition.workUnitId,
+        workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
         artifactHead: prepared.packet.repository.head,
         worktreeRoot: prepared.packet.repository.worktree,
         minimumActivationAssurance: 'operator_confirmed',

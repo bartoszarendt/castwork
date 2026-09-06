@@ -71,9 +71,29 @@ function assertOk(result, label) {
 describe('a resumed attempt whose product work is already committed can return', () => {
   it('drives abandon, regenerate, remint, role start, evidence, and return to a verified return', async () => {
     const fixture = await createDispatchFixture(temp, 'resumed-return', {
+      parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
       requiredChecksText: '- [RC-1] command: `node --version`\n- [RC-2] command: `node --version`',
     });
     const root = fixture.root;
+    // A real parallel regeneration reads a committed per-task snapshot, rather
+    // than relying on the fixture's in-memory dependency evidence.
+    const dependencySnapshot = readFileSync(join(root, 'dependencies.json'), 'utf8');
+    writeFileSync(join(root, '.agenticloop', 'decompositions', 'T-001.dependencies.json'), dependencySnapshot, 'utf8');
+    git(root, ['add', '.agenticloop/decompositions/T-001.dependencies.json']);
+    git(root, ['commit', '-m', 'record parallel dependency snapshot\n\nTask: T-001\nAgent: maintainer']);
+    writeFileSync(join(root, '.agenticloop', 'decompositions', 'T-002.dependencies.json'), dependencySnapshot, 'utf8');
+    git(root, ['add', '.agenticloop/decompositions/T-002.dependencies.json']);
+    git(root, ['commit', '-m', 'record parallel dependency snapshot\n\nTask: T-002\nAgent: maintainer']);
+    writeFileSync(join(root, '.agenticloop', 'decompositions', 'T-001.dependencies-by-task.json'), JSON.stringify({
+      'T-001': '.agenticloop/decompositions/T-001.dependencies.json',
+      'T-002': '.agenticloop/decompositions/T-002.dependencies.json',
+    }, null, 2), 'utf8');
+    git(root, ['add', '.agenticloop/decompositions/T-001.dependencies-by-task.json']);
+    git(root, ['commit', '-m', 'record parallel dependency map\n\nTask: T-001\nAgent: maintainer']);
+    const fixtureRepository = fixture.repository;
+    const fixtureHead = git(root, ['rev-parse', 'HEAD']);
+    fixture.repository = () => ({ ...fixtureRepository(), head: fixtureHead, baseHead: fixtureHead });
+    fixture.refetchRepository = fixture.repository;
     const cli = args => runCliInProcess([...args, '--target', root], {
       operatorTrustRoot: fixture.operatorTrustRoot,
       hostAuthority: protectedHostBoundary(fixture.trust),
@@ -128,18 +148,18 @@ describe('a resumed attempt whose product work is already committed can return',
 
     // ── the repairs preflight demands, each one another workflow commit ───
     const blocked = await cli([
-      'task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json',
+      'task', 'handoff-preflight', 'T-001', '--route', 'parallel', '--host', 'opencode', '--json',
     ]);
     assert.equal(blocked.status, 1, 'the carrier drifted, so preflight refuses before a packet can be minted');
     const regenerate = JSON.parse(blocked.stdout).firstSafeRepair.replace(/^npx agenticloop /, '').split(' ');
-    assertOk(await cli([...regenerate, '--json']), 'regenerate the decomposition');
+    assertOk(await cli([...regenerate, '--route', 'parallel', '--json']), 'regenerate the decomposition');
     commitWorkflow(root, 'regenerate the decomposition', 'maintainer');
-    assertOk(await cli(['task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json']), 'preflight after the repairs');
+    assertOk(await cli(['task', 'handoff-preflight', 'T-001', '--route', 'parallel', '--host', 'opencode', '--json']), 'preflight after the repairs');
 
     // ── attempt 2 is minted on top of all of that ─────────────────────────
     const secondPacket = '.agenticloop/tmp/packet-2.json';
     assertOk(await cli([
-      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--host', 'opencode', '--role', 'engineer',
       '--output', secondPacket, '--json',
     ]), 'mint a fresh packet');
     const packet = JSON.parse(readFileSync(join(root, secondPacket), 'utf8'));

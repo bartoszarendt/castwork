@@ -54,7 +54,7 @@ function consumeOnePacket(fixture, taskId = 'T-001') {
       backend: 'files', taskId, roleId: 'engineer',
       taskContractDigest: packet.task.contractDigest, carrierDigest: packet.task.digest,
       packetId: packet.packetId, packetDigest: packet.digest,
-      workUnitIdentity: packet.decomposition.workUnitId, artifactHead: packet.repository.head,
+      workUnitIdentity: packet.decomposition?.workUnitId ?? null, artifactHead: packet.repository.head,
       worktreeRoot: packet.repository.worktree, minimumActivationAssurance: 'operator_confirmed',
     },
     preparedDispatch: packet,

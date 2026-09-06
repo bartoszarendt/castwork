@@ -817,6 +817,7 @@ describe('packed public handoff lifecycle', () => {
     );
     const prepared = await runPackedWithHostContext([
       'task', 'prepare-dispatch', 'T-001',
+      '--route', 'parallel',
       '--input', 'dispatch-input.json',
       '--host-trust-store', fixture.trustStorePath,
       '--json',

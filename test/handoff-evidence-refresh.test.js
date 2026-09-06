@@ -343,7 +343,7 @@ describe('handoff derived-evidence refresh', () => {
         taskContractDigest: prepared.packet.task.contractDigest,
         carrierDigest: prepared.packet.task.digest,
         packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
-        workUnitIdentity: prepared.packet.decomposition.workUnitId,
+        workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
         artifactHead: prepared.packet.repository.head,
         worktreeRoot: prepared.packet.repository.worktree,
         minimumActivationAssurance: 'operator_confirmed',
@@ -919,6 +919,168 @@ describe('handoff derived-evidence refresh', () => {
     const expectedDepDigest = `sha256:${canonicalSha256(depWrite.content)}`;
     assert.equal(depEvidence.digest, expectedDepDigest, 'decomposition bound digest must equal snapshot write digest');
     assert.equal(depEvidence.observedAt, writtenSnapshot.observedAt, 'decomposition bound observedAt must equal snapshot observedAt');
+  });
+
+  it('rebuilds a multi-member repair plan with a per-task map and no TDZ failure', async () => {
+    const fixture = await createDispatchFixture(root, 'multi-member-refresh', {
+      parallel: true,
+      taskIds: ['T-001', 'T-002'],
+    });
+    const sourcePath = join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json');
+    const malformedSource = JSON.parse(readFileSync(sourcePath, 'utf8'));
+    malformedSource.authority = 'engineer';
+    writeFileSync(sourcePath, `${JSON.stringify(malformedSource)}\n`, 'utf8');
+    const current = preflight(fixture.root);
+    const stalePreflight = {
+      ...current,
+      dependencyAge: { state: 'observed' },
+      decomposition: {
+        ...current.decomposition,
+        sourceRef: '.agenticloop/decompositions/T-001.json',
+        dispatchCompatible: false,
+      },
+    };
+
+    const plan = createHandoffEvidenceRefreshPlan({ target: fixture.root, preflight: stalePreflight });
+    const mapWrite = plan.additionalWrites.find(entry => entry.path === '.agenticloop/decompositions/T-001.dependencies-by-task.json');
+    assert.ok(mapWrite, 'multi-member repair plan must write the exact per-task map consumed by regeneration');
+    assert.deepEqual(JSON.parse(mapWrite.content), {
+      'T-001': 'dependencies.json',
+      'T-002': 'dependencies.T-002.json',
+    });
+
+    const applied = applyHandoffEvidenceRefresh({ target: fixture.root, plan, preflight: stalePreflight });
+    assert.equal(applied.disposition, 'written_pending_commit', applied.errors?.join('; '));
+    assert.match(applied.nextOperation, /--dependencies-by-task \.agenticloop\/decompositions\/T-001\.dependencies-by-task\.json/);
+    assert.equal(applied.nextOperation.includes(' --dependencies dependencies.json'), false);
+  });
+
+  for (const [name, corrupt, diagnostic] of [
+    [
+      'incomplete',
+      source => { source.scan.readinessContext.dependenciesByTask.pop(); },
+      '[handoff.refresh.dependencies_by_task.missing_member] multi-member parallel dependency map is missing entries for: T-002',
+    ],
+    [
+      'duplicate-source',
+      source => { source.scan.readinessContext.dependenciesByTask[1].evidence.sourceRef = 'dependencies.json'; },
+      '[handoff.refresh.dependencies_by_task.duplicate_source] multi-member parallel dependency map reuses a source across members',
+    ],
+  ]) {
+    it(`fails closed for a ${name} multi-member parallel dependency map`, async () => {
+      const fixture = await createDispatchFixture(root, `multi-member-${name}-refresh`, {
+        parallel: true,
+        taskIds: ['T-001', 'T-002'],
+      });
+      const sourcePath = join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json');
+      const source = JSON.parse(readFileSync(sourcePath, 'utf8'));
+      corrupt(source);
+      writeFileSync(sourcePath, `${JSON.stringify(source)}\n`, 'utf8');
+      const current = preflight(fixture.root);
+      const stalePreflight = {
+        ...current,
+        dependencyAge: { state: 'observed' },
+        decomposition: { ...current.decomposition, sourceRef: '.agenticloop/decompositions/T-001.json', dispatchCompatible: false },
+      };
+
+      const plan = createHandoffEvidenceRefreshPlan({ target: fixture.root, preflight: stalePreflight });
+      const decompCategory = plan.categories.find(category => category.category === 'decomposition_provenance');
+      assert.equal(decompCategory.action, 'requires_maintainer_regeneration');
+      assert.equal(decompCategory.reason, diagnostic);
+      assert.equal(plan.additionalWrites.some(entry => entry.path === '.agenticloop/decompositions/T-001.json'), false, 'invalid maps must not re-scan or regenerate a decomposition');
+      assert.equal(plan.additionalWrites.some(entry => entry.path === '.agenticloop/decompositions/T-001.dependencies-by-task.json'), false, 'invalid maps must not emit a replacement map');
+
+      const applied = applyHandoffEvidenceRefresh({ target: fixture.root, plan, preflight: stalePreflight });
+      assert.equal(applied.disposition, 'written_pending_commit', applied.errors?.join('; '));
+      assert.match(applied.nextOperation, new RegExp(diagnostic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.doesNotMatch(applied.nextOperation, / --dependencies\s/);
+      assert.doesNotMatch(applied.nextOperation, /--route\s+serial/);
+    });
+  }
+
+  it('fails closed for a duplicate member entry before building a multi-member dependency map', async () => {
+    const fixture = await createDispatchFixture(root, 'multi-member-duplicate-member-refresh', {
+      parallel: true,
+      taskIds: ['T-001', 'T-002', 'T-003'],
+    });
+    const sourcePath = join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json');
+    const source = JSON.parse(readFileSync(sourcePath, 'utf8'));
+    const duplicate = structuredClone(source.scan.readinessContext.dependenciesByTask
+      .find(entry => entry.taskId === 'T-001'));
+    source.scan.readinessContext.dependenciesByTask.push(duplicate);
+    writeFileSync(sourcePath, `${JSON.stringify(source)}\n`, 'utf8');
+    const current = preflight(fixture.root);
+    const stalePreflight = {
+      ...current,
+      dependencyAge: { state: 'observed' },
+      decomposition: { ...current.decomposition, sourceRef: '.agenticloop/decompositions/T-001.json', dispatchCompatible: false },
+    };
+
+    const plan = createHandoffEvidenceRefreshPlan({ target: fixture.root, preflight: stalePreflight });
+    const diagnostic = '[handoff.refresh.dependencies_by_task.duplicate_member] multi-member parallel dependency map has duplicate member entry: T-001';
+    const decompCategory = plan.categories.find(category => category.category === 'decomposition_provenance');
+    assert.equal(decompCategory.action, 'requires_maintainer_regeneration');
+    assert.equal(decompCategory.reason, diagnostic);
+    assert.equal(plan.additionalWrites.length, 0, 'duplicate member maps must not emit dependency, decomposition, or map writes');
+
+    const applied = applyHandoffEvidenceRefresh({ target: fixture.root, plan, preflight: stalePreflight });
+    assert.equal(applied.disposition, 'written_pending_commit', applied.errors?.join('; '));
+    assert.deepEqual(applied.changedFiles, [`${HANDOFF_REFRESH_ROOT}/T-001.json`], 'only the derived receipt may record the refusal');
+    assert.match(applied.nextOperation, new RegExp(diagnostic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(applied.nextOperation, /npx agenticloop|task prepare-decomposition|--dependencies(?:-by-task)?/);
+  });
+
+  it('rejects an extra member entry before building a multi-member dependency map', async () => {
+    const fixture = await createDispatchFixture(root, 'multi-member-invalid-member-refresh', {
+      parallel: true,
+      taskIds: ['T-001', 'T-002', 'T-003'],
+    });
+    const sourcePath = join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json');
+    const source = JSON.parse(readFileSync(sourcePath, 'utf8'));
+    source.scan.readinessContext.dependenciesByTask.push({ taskId: 'T-004', evidence: null });
+    writeFileSync(sourcePath, `${JSON.stringify(source)}\n`, 'utf8');
+    const current = preflight(fixture.root);
+    const stalePreflight = {
+      ...current,
+      dependencyAge: { state: 'observed' },
+      decomposition: { ...current.decomposition, sourceRef: '.agenticloop/decompositions/T-001.json', dispatchCompatible: false },
+    };
+
+    const plan = createHandoffEvidenceRefreshPlan({ target: fixture.root, preflight: stalePreflight });
+    const diagnostic = '[handoff.refresh.dependencies_by_task.invalid_member] multi-member parallel dependency map has invalid member entry: T-004';
+    const decompCategory = plan.categories.find(category => category.category === 'decomposition_provenance');
+    assert.equal(decompCategory.reason, diagnostic);
+    assert.equal(plan.additionalWrites.length, 0, 'extra member maps must not emit writes');
+  });
+
+  it('keeps a single-member refresh on the legacy dependency repair command', () => {
+    const value = target();
+    const sourcePath = join(value, '.agenticloop', 'decompositions', 'T-001.json');
+    const source = {
+      kind: 'agenticloop.decomposition-provenance', schemaVersion: 2,
+      taskId: 'T-001', authority: 'engineer', route: 'parallel',
+      scan: {
+        workUnit: { id: 'test-work-unit', backend: 'files' },
+        inventory: { members: [{ taskId: 'T-001' }] },
+        decomposition: { source: 'task-decomposition' },
+        readinessContext: {
+          base: { identity: `git-tree:${spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: value, encoding: 'utf8' }).stdout.trim()}` },
+          dependencies: { sourceRef: 'dependencies.json' },
+        },
+      },
+    };
+    mkdirSync(join(value, '.agenticloop', 'decompositions'), { recursive: true });
+    writeFileSync(sourcePath, `${JSON.stringify(source)}\n`, 'utf8');
+    const current = preflight(value);
+    const stalePreflight = {
+      ...current,
+      dependencyAge: { state: 'observed' },
+      decomposition: { ...current.decomposition, dispatchCompatible: false },
+    };
+    const plan = createHandoffEvidenceRefreshPlan({ target: value, preflight: stalePreflight });
+    const applied = applyHandoffEvidenceRefresh({ target: value, plan, preflight: stalePreflight });
+    assert.match(applied.nextOperation, /--dependencies dependencies\.json/);
+    assert.doesNotMatch(applied.nextOperation, /--dependencies-by-task/);
   });
 
   it('NF3: snapshot binding re-derivation failure with snapshot in additionalWrites returns changed/superseded', () => {

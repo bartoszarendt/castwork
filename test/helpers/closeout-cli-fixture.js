@@ -94,7 +94,7 @@ export function createCloseoutCliFixture() {
     const setupOptions = { auditEnabled, projectMap };
     const configuredCheckpoint = `configured:${sha256(JSON.stringify(setupOptions))}`;
     const fixture = await fixturePool.acquire(temp, name, {
-      workUnit: 'milestone:M00', projectMapContent: projectMap,
+      workUnit: 'milestone:M00', parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'], projectMapContent: projectMap,
       additionalAllowedPaths: ['.agenticloop/audits/**'],
     }, { preferredCheckpoint: configuredCheckpoint, resetPaths: [join(temp, 'operator-activation')] });
     const target = fixture.root;

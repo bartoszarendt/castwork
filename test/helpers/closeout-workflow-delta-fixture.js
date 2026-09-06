@@ -57,6 +57,9 @@ export function createCloseoutWorkflowDeltaFixture() {
   async function makeGitTarget(name) {
     const setupOptions = {
       workUnit: 'milestone:M00', projectMapContent: PROJECT_MAP,
+      parallel: true,
+      taskIds: ['T-001', 'T-002'],
+      decompositionTaskIds: ['T-001'],
       additionalAllowedPaths: [
         '.agenticloop/audits/**', '.agenticloop/improvements/**', '.agenticloop/logs/**',
         '.agenticloop/tasks/**', '.agenticloop/tmp/**', 'app.js',

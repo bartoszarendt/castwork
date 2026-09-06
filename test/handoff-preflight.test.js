@@ -356,9 +356,9 @@ describe('handoff-preflight', () => {
     assert.equal(result.operatorAuthorization, 'authorized');
     assert.ok(result.readiness, 'readiness should be evaluated');
     assert.equal(result.readiness.ok, true, 'readiness should pass');
-    assert.equal(result.dependencyAge.evaluatedAt, now);
-    assert.ok(result.decomposition, 'decomposition should be present');
-    assert.equal(result.decomposition.dispatchCompatible, true);
+    assert.equal(result.dependencyAge.state, 'missing');
+    assert.equal(result.dependencyAge.evaluatedAt, null);
+    assert.equal(result.decomposition, null, 'serial preflight must not bind a decomposition');
     assert.equal(result.cleanState, 'clean');
     assert.deepEqual(result.siblingCollisions, []);
     assert.ok(Array.isArray(result.degradedEnforcementReports));
@@ -448,6 +448,7 @@ describe('handoff-preflight', () => {
 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-005', backend: 'files',
+      route: 'parallel',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
     });
@@ -463,6 +464,43 @@ describe('handoff-preflight', () => {
     assert.ok(result.diagnostics[0].code.includes('decomposition'), `expected decomposition code, got ${result.diagnostics[0].code}`);
     assert.ok(result.firstSafeRepair, 'first safe repair should be present');
     assert.ok(result.firstSafeRepair.includes('prepare-decomposition'), 'first safe repair should mention prepare-decomposition');
+  });
+
+  it('does not require a decomposition source for serial preflight', () => {
+    const target = makeTarget('serial-no-decomposition');
+    writeTask(target, 'T-005S', { withActivation: true });
+    git(target, ['add', '.']);
+    git(target, ['commit', '-m', 'task T-005S\n\nTask: T-005S\nAgent: maintainer']);
+    establishBaseline(target, 'T-005S');
+
+    const result = evaluateHandoffPreflight({
+      target, taskId: 'T-005S', backend: 'files',
+      projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
+      io: {},
+    });
+
+    assertPreflight(result, { expectOk: true, expectErrors: 0 });
+    assert.equal(result.decomposition, null);
+  });
+
+  it('validates serial task-declared dependencies directly from their carriers', () => {
+    const target = makeTarget('serial-direct-dependency');
+    writeTask(target, 'T-005D-DEPENDENCY', { status: 'accepted' });
+    writeTask(target, 'T-005D', { withActivation: true, depends_on: ['T-005D-DEPENDENCY'] });
+    git(target, ['add', '.']);
+    git(target, ['commit', '-m', 'serial dependency tasks\n\nTask: T-005D\nAgent: maintainer']);
+    establishBaseline(target, 'T-005D');
+    establishBaseline(target, 'T-005D-DEPENDENCY');
+
+    const result = evaluateHandoffPreflight({
+      target, taskId: 'T-005D', backend: 'files',
+      projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
+      io: {},
+    });
+
+    assertPreflight(result, { expectOk: true, expectErrors: 0 });
+    assert.deepEqual(result.readiness.dependencies, [{ id: 'T-005D-DEPENDENCY', status: 'accepted' }]);
+    assert.equal(result.decomposition, null, 'serial dependency validation must not load a decomposition');
   });
 
   it('reports malformed decomposition with negative evidence', () => {
@@ -481,6 +519,7 @@ describe('handoff-preflight', () => {
 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-006', backend: 'files',
+      route: 'parallel',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
     });
@@ -509,6 +548,7 @@ describe('handoff-preflight', () => {
 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-007', backend: 'files',
+      route: 'parallel',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
     });
@@ -1018,6 +1058,7 @@ describe('handoff-preflight', () => {
 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-020', backend: 'files',
+      route: 'parallel',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
     });
@@ -1039,6 +1080,7 @@ describe('handoff-preflight', () => {
 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-021', backend: 'files',
+      route: 'parallel',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
     });
@@ -1074,11 +1116,11 @@ describe('handoff-preflight', () => {
       target, taskId: 'T-022', backend: 'files',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
       io: {},
-      now,
+      now, route: 'serial',
     });
     assert.equal(ready.ok, true);
-    assert.equal(ready.dependencyAge.state, 'observed');
-    assert.equal(ready.dependencyAge.evaluatedAt, now);
+    assert.equal(ready.dependencyAge.state, 'missing');
+    assert.equal(ready.dependencyAge.evaluatedAt, null);
 
     const missing = evaluateHandoffPreflight({
       target, taskId: 'T-023', backend: 'files',
@@ -1093,9 +1135,11 @@ describe('handoff-preflight', () => {
   it('reports dependencyAge observed for a valid dependency snapshot', () => {
     const target = makeTarget('dep-valid');
     writeTask(target, 'T-030', { withActivation: true, depends_on: ['T-029'] });
+    writeTask(target, 'T-029', { status: 'accepted', withActivation: true });
     git(target, ['add', '.']);
     git(target, ['commit', '-m', 'task T-030\n\nTask: T-030\nAgent: maintainer']);
     establishBaseline(target, 'T-030');
+    establishBaseline(target, 'T-029');
 
     const observedAt = new Date().toISOString();
     const depSnapshot = {
@@ -1114,18 +1158,13 @@ describe('handoff-preflight', () => {
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-030', backend: 'files',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
-      io: {},
+      io: {}, route: 'serial',
       now,
     });
 
     assertPreflight(result, { expectOk: true, expectErrors: 0 });
-    assert.equal(result.dependencyAge.state, 'observed');
-    assert.equal(result.dependencyAge.observedAt, observedAt);
-    // The snapshot declares the legacy one-hour window every pre-default
-    // snapshot carries. It is re-derived rather than honoured verbatim, so a
-    // committed snapshot cannot keep a window the current toolkit would not
-    // have written and expire inside a single delegation cycle.
-    assert.equal(result.dependencyAge.maxAgeSeconds, defaultDependencyFreshnessSeconds('files'));
+    assert.equal(result.dependencyAge.state, 'missing');
+    assert.equal(result.dependencyAge.observedAt, undefined);
   });
 
   it('reports dependencyAge stale for an expired dependency snapshot', () => {
@@ -1161,7 +1200,7 @@ describe('handoff-preflight', () => {
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-032', backend: 'files',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
-      io: {},
+      io: {}, route: 'parallel',
     });
 
     assert.equal(result.dependencyAge.state, 'stale');

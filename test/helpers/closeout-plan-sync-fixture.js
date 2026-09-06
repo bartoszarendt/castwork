@@ -74,6 +74,7 @@ export function createCloseoutPlanSyncFixture() {
     const configuredCheckpoint = `configured:${sha256(JSON.stringify(setupOptions))}`;
     const fixture = await fixturePool.acquire(temp, name, {
       workUnit: 'milestone:M00',
+      parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
       projectMapContent: projectMap(withPlan), additionalAllowedPaths: ['.agenticloop/audits/**', 'PLAN.md'],
     }, { cacheKey: { withPlan }, preferredCheckpoint: configuredCheckpoint, resetPaths: [join(temp, 'operator-activation')] });
     const target = fixture.root;
@@ -175,7 +176,7 @@ export function createCloseoutPlanSyncFixture() {
     }
     cacheStats.certificationExecutions += 1;
     cacheStats.lastRestoredCheckpoint = null;
-    assert.equal(fixture.taskFixtures.size, 1, 'plan-sync certification covers exactly T-001');
+    assert.ok(fixture.taskFixtures.has('T-001'), 'plan-sync certification includes T-001');
     const cli = { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) };
     const taskBody = () => readFileSync(fixture.taskPath, 'utf8');
     const carrierDigest = () => sha256(taskBody());

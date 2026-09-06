@@ -155,36 +155,11 @@ async function commitProduct(cli, root, packetPath, value) {
 }
 
 async function refreshDecomposition(cli, root, { liveAttempt = false } = {}) {
-  const blocked = await cli(['task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json']);
-  const result = JSON.parse(blocked.stdout);
-  let command;
-  if (liveAttempt) {
-    assert.equal(blocked.status, 0, 'live preflight predicts the current attempt instead of proposing fresh dispatch');
-    assert.equal(result.liveAttemptGate.nextStep, 'product_work');
-    const head = git(root, ['rev-parse', 'HEAD']);
-    const tree = git(root, ['rev-parse', 'HEAD^{tree}']);
-    command = [
-      'task', 'prepare-decomposition', TASK_ID,
-      '--work-unit', 'fixture-work-unit',
-      '--source-ref', `.agenticloop/decompositions/${TASK_ID}.json`,
-      '--source-revision', `git-commit:${head}`,
-      '--base', tree,
-      '--dependencies', 'dependencies.json',
-      '--output', `.agenticloop/decompositions/${TASK_ID}.json`,
-    ];
-  } else {
-    assert.equal(blocked.status, 1, 'the retired role-start carrier makes the committed decomposition stale');
-    assert.match(result.firstSafeRepair, /task prepare-decomposition/);
-    command = result.firstSafeRepair.replace(/^npx agenticloop /, '').split(' ');
-  }
-  assertOk(await cli([...command, '--json']), 'refresh decomposition');
-  await canonicalCommit(
-    cli,
-    root,
-    'handoff_evidence_refresh',
-    'Refresh handoff decomposition',
-    [`.agenticloop/decompositions/${TASK_ID}.json`],
-  );
+  const preflight = JSON.parse(assertOk(await cli([
+    'task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json',
+  ]), 'serial preflight').stdout);
+  if (liveAttempt) assert.equal(preflight.liveAttemptGate?.nextStep, 'product_work');
+  else assert.equal(preflight.liveAttemptGate, null);
 }
 
 async function abandon(cli, root, attemptId, disposition) {

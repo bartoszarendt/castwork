@@ -22,7 +22,7 @@ after(() => { rmSync(temp, { recursive: true, force: true }); });
 // self-fulfilling.
 const EVALUATOR_CONTRACTS = Object.freeze({
   dispatch: Object.freeze([
-    'snapshot', 'activationEvidence', 'readiness', 'repository', 'decomposition',
+    'snapshot', 'activationEvidence', 'readiness', 'repository', 'decomposition', 'parallelRequested', 'routeAgreementRequested',
     'parallelScanInventory', 'assignment', 'policy', 'returnAdapter',
     'cleanStateObservation', 'inventoryRecheck', 'authority', 'factShape', 'now',
   ]),
@@ -40,8 +40,19 @@ const EVALUATOR_FIELD_CONTRACTS = Object.freeze({
     activationEvidence: outcome => assertDispatchDimension(outcome, 'activation', 'refused'),
     readiness: outcome => assertDispatchDimension(outcome, 'readiness', 'refused'),
     repository: outcome => assertDispatchDimension(outcome, 'repository_identity', 'refused'),
-    decomposition: outcome => assertDispatchDimension(outcome, 'decomposition', 'refused'),
-    parallelScanInventory: outcome => assertDispatchDimension(outcome, 'work_unit_membership', 'refused'),
+    decomposition: (outcome, baseline) => {
+      assert.equal(outcome.ok, baseline.ok);
+      assert.deepEqual(outcome.dimensions, baseline.dimensions);
+    },
+    parallelRequested: outcome => assertDispatchDimension(outcome, 'decomposition', 'refused'),
+    routeAgreementRequested: (outcome, baseline) => {
+      assert.equal(outcome.ok, baseline.ok);
+      assert.deepEqual(outcome.dimensions, baseline.dimensions);
+    },
+    parallelScanInventory: (outcome, baseline) => {
+      assert.equal(outcome.ok, baseline.ok);
+      assert.deepEqual(outcome.dimensions, baseline.dimensions);
+    },
     assignment: outcome => assertDispatchDimension(outcome, 'assignment', 'refused'),
     policy: outcome => assertDispatchDimension(outcome, 'activation_assurance', 'refused'),
     cleanStateObservation: outcome => assertDispatchDimension(outcome, 'clean_state', 'refused'),
@@ -56,7 +67,7 @@ const EVALUATOR_FIELD_CONTRACTS = Object.freeze({
       assert.equal(outcome.ok, baseline.ok);
       assert.deepEqual(outcome.dimensions, baseline.dimensions);
     },
-    now: outcome => assertDispatchDimension(outcome, 'decomposition', 'refused'),
+    now: outcome => assert.equal(outcome.ok, false),
   }),
   role_start: Object.freeze({
     transition: outcome => assertHandoffDiagnostic(outcome, 'handoff.transition.unsupported'),
@@ -66,7 +77,10 @@ const EVALUATOR_FIELD_CONTRACTS = Object.freeze({
     observations: outcome => assert.deepEqual(outcome.observations, [{
       label: 'C5 independently observed evidence', grade: 'session_reported', claimedGrade: 'host_receipt', authoritative: false,
     }]),
-    now: outcome => assertHandoffDiagnostic(outcome, 'handoff.evidence.freshness_expired'),
+    now: (outcome, baseline) => {
+      assert.equal(outcome.recognized, baseline.recognized);
+      assert.deepEqual(outcome.diagnostics, baseline.diagnostics);
+    },
   }),
   prepare_return: Object.freeze({
     taskId: outcome => assert.match(outcome.errors.join('; '), /does not match the protected requested task/),
@@ -146,6 +160,8 @@ function invokeCanonicalEvaluator(actionId, input) {
 
 function mutationFor(actionId, field, input) {
   if (actionId === 'dispatch' && field === 'factShape') return '[C5 factShape mutation]';
+  if (actionId === 'dispatch' && field === 'parallelRequested') return true;
+  if (actionId === 'dispatch' && field === 'routeAgreementRequested') return true;
   if (actionId === 'dispatch' && field === 'now') return input.now + 7 * 24 * 60 * 60 * 1000;
   if (actionId === 'role_start' && field === 'consumedPacketIds') return [input.preparedDispatch.packetId];
   if (actionId === 'role_start' && field === 'observations') {
@@ -218,7 +234,7 @@ describe('P36 C5 protected evaluator bindings', () => {
   });
 
   it('observes each real task handler binding before its authoritative evaluator', async () => {
-    const fixture = await createDispatchFixture(temp, 'protected-handler-binding');
+    const fixture = await createDispatchFixture(temp, 'protected-handler-binding', { parallel: false });
     mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
     const observed = [];
     const run = args => runCliInProcess([...args, '--target', fixture.root], {

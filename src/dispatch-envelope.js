@@ -444,6 +444,7 @@ export function createDecompositionProvenance(input = {}, options = {}) {
  *   joinPlans?: Record<string, any>,
  *   laneArtifacts?: Record<string, any>,
  *   declaredCompleteness?: 'complete'|'incomplete',
+ *   route?: 'serial'|'parallel',
  * }} input
  * @param {{ now?: number }} [options]
  * @returns {{ ok: boolean, validation: any, scan: any|null, decomposition: any|null, source: string|null }}
@@ -485,6 +486,7 @@ export function prepareDecompositionSource(input = {}, options = {}) {
       basePaths: input.basePaths,
       dependencies: input.dependencies ?? {},
       dependenciesByTask: input.dependenciesByTask,
+      route: input.route,
       readinessContext: input.readinessContext,
       rescanTrigger: input.rescanTrigger,
       joinPlans: input.joinPlans ?? {},
@@ -492,6 +494,14 @@ export function prepareDecompositionSource(input = {}, options = {}) {
     }, { now });
     if (!scanned.ok) {
       return { ok: false, validation: scanned.result, scan: scanned.scan, decomposition: null, source: null };
+    }
+    if (input.route === 'parallel' && !scanned.scan.candidatePairs.some(pair => pair.includes(input.taskId))) {
+      const findings = findingSet(command);
+      findings.negative(
+        `parallel decomposition requires a candidate pair containing '${input.taskId}'`,
+        { code: 'parallel_scan.decomposition.invalid' },
+      );
+      return { ...failure(command, findings), scan: scanned.scan, decomposition: null, source: null };
     }
     // The emitted scan is held to the exact validator dispatch runs on it, in
     // this process, before anything is rendered for commit.
@@ -709,7 +719,7 @@ function packetFromBindings({ snapshot, activation, returnAdapter, readiness, de
       derivation: activation.derivation,
     }),
     readiness: structuredClone(readiness),
-    decomposition: decompositionBinding(decomposition),
+    decomposition: decomposition === null ? null : decompositionBinding(decomposition),
     assignment: structuredClone(assignment),
     repository: structuredClone(repository),
     freshness: { invalidatedBy: [...RETURN_INVALIDATORS] },
@@ -795,7 +805,13 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       priorGateReceipts = [],
       readCarrierDigest = null,
       assignment,
+      parallelRequested: requestedParallel,
+      routeAgreementRequested: requestedRouteAgreement,
     } = input;
+    // An omitted selector is serial. Providers for a decomposition must not
+    // silently select or read parallel-only authority.
+    const parallelRequested = requestedParallel === true;
+    const routeAgreementRequested = false;
     const resolved = resolveInventory(options);
     if (!resolved.ok) return singleFailure(command, 'malformed', 'rejected', 'activation capability inventory must be an object');
     const policyCheck = normalizeAssurancePolicy(options.assurancePolicy);
@@ -805,8 +821,10 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       ['refetchTask', 'a current task refetch function is required'],
       ['refetchReadiness', 'an authoritative readiness refetch function is required'],
       ['refetchRepository', 'a current repository refetch function is required'],
-      ['refetchDecomposition', 'an authoritative decomposition refetch function is required'],
-      ['refetchParallelScanInventory', 'an authoritative parallel-scan inventory refetch function is required'],
+      ...(parallelRequested ? [
+        ['refetchDecomposition', 'an authoritative decomposition refetch function is required'],
+        ['refetchParallelScanInventory', 'an authoritative parallel-scan inventory refetch function is required'],
+      ] : []),
     ]) {
       if (typeof input[name] !== 'function') return singleFailure(command, 'missing', 'needs_context', label);
     }
@@ -830,8 +848,10 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       }
       readiness = refetchReadiness({ snapshot });
       repository = refetchRepository({ snapshot, readiness });
-      decomposition = refetchDecomposition({ snapshot, readiness, repository });
-      if (decomposition?.schemaVersion === DECOMPOSITION_SCHEMA_VERSION) {
+      decomposition = parallelRequested
+        ? refetchDecomposition({ snapshot, readiness, repository })
+        : null;
+      if (parallelRequested && decomposition?.schemaVersion === DECOMPOSITION_SCHEMA_VERSION) {
         parallelScanInventory = refetchParallelScanInventory({ snapshot, readiness, repository, decomposition });
       }
     } catch (error) {
@@ -883,10 +903,11 @@ export function prepareRoleDispatch(input = {}, options = {}) {
           taskId: snapshot.taskId,
           backend: decomposition.scan.workUnit.backend,
           currentContractDigest: scopeContract.digest,
-          runGit,
-          baseEvidence: readiness?.evidence?.base ?? null,
-          dependencyEvidence: readiness?.evidence?.dependencies ?? null,
-        }
+           runGit,
+           baseEvidence: readiness?.evidence?.base ?? null,
+           dependencyEvidence: readiness?.evidence?.dependencies ?? null,
+           dependenciesByTask: readiness?.dependenciesByTask ?? null,
+         }
       : null;
 
     // ── The one canonical semantic decision ───────────────────────────────
@@ -901,6 +922,8 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       readiness,
       repository: { ...repository, worktree: pathIdentity(repository?.worktree).authorityPath },
       decomposition,
+      parallelRequested,
+      routeAgreementRequested,
       parallelScanInventory: parallelScanInventory ?? null,
       assignment: boundAssignment,
       policy,
@@ -937,7 +960,7 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       snapshot,
       activation: eligibility.bindings.activation,
       readiness,
-      decomposition,
+      decomposition: parallelRequested ? decomposition : null,
       assignment: boundAssignment,
       repository: bound,
       contract: eligibility.bindings.contract,
@@ -1307,7 +1330,7 @@ export function evaluateReadOnlyPrepareReturnProjection(input = null) {
 export function verifyDispatchBeforeMutation(input = {}, options = {}) {
   const command = 'dispatch receive';
   try {
-    const { packet, roleId } = input;
+    const { packet, roleId, requestedRoute = null } = input;
     const schema = validateDispatchPreparation(packet, options);
     if (!schema.ok) {
       const findings = findingSet(command);
@@ -1316,6 +1339,17 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
     }
     if (roleId !== packet.assignment.roleId) {
       return singleFailure(command, 'negative', 'rejected', 'receiving immutable role does not match packet assignment');
+    }
+    const packetRoute = packet.decomposition === null ? 'serial' : packet.decomposition?.route;
+    if (requestedRoute !== null && requestedRoute !== packetRoute) {
+      return singleFailure(
+        command,
+        'negative',
+        'rejected',
+        `requested '${requestedRoute}' dispatch route does not match packet-bound '${String(packetRoute)}' route`,
+        {},
+        'parallel_scan.decomposition.invalid'
+      );
     }
     const current = prepareRoleDispatch({
       refetchTask: input.refetchTask,
@@ -1328,6 +1362,7 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
       runGit: input.runGit,
       priorGateReceipts: input.priorGateReceipts ?? [],
       readCarrierDigest: input.readCarrierDigest ?? null,
+      parallelRequested: packetRoute === 'parallel',
       activation: packet.activation,
       assignment: packet.assignment,
     }, { ...options, assurancePolicy: options.assurancePolicy ?? packet.assurance });
@@ -1336,10 +1371,25 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
       const state = current.validation.evidenceState;
       // A refetch that cannot even be evaluated stays missing; anything that
       // evaluated and disagrees supersedes the packet.
-      findings.add(state, current.validation.errors[0] ?? 'dispatch preparation could not be revalidated', {
-        disposition: state === 'missing' ? 'needs_context' : 'superseded',
-      });
-      for (const error of current.validation.errors.slice(1)) findings.add(state, error, { disposition: 'superseded' });
+      // Preserve the current evaluator's stable diagnostic code. The receive
+      // boundary owns stale-packet disposition, not a replacement diagnosis of
+      // why the freshly refetched serial or parallel facts failed.
+      const diagnostics = Array.isArray(current.validation.diagnostics)
+        ? current.validation.diagnostics
+        : [];
+      if (diagnostics.length > 0) {
+        for (const diagnostic of diagnostics) {
+          findings.add(diagnostic?.evidence?.state ?? state, diagnostic?.message ?? 'dispatch preparation could not be revalidated', {
+            code: diagnostic?.code,
+            disposition: state === 'missing' ? 'needs_context' : 'superseded',
+          });
+        }
+      } else {
+        findings.add(state, current.validation.errors[0] ?? 'dispatch preparation could not be revalidated', {
+          disposition: state === 'missing' ? 'needs_context' : 'superseded',
+        });
+        for (const error of current.validation.errors.slice(1)) findings.add(state, error, { disposition: 'superseded' });
+      }
       return failure(command, findings);
     }
     const fields = [

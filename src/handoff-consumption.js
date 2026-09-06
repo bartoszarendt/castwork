@@ -117,7 +117,10 @@ export function validateDispatchConsumption(record, {
   if (!CONTRACT_DIGEST_RE.test(String(record.taskContractDigest ?? ''))) errors.push('dispatch consumption taskContractDigest is invalid');
   if (!TASK_DIGEST_RE.test(String(record.dispatchCarrierDigest ?? ''))) errors.push('dispatch consumption dispatchCarrierDigest is invalid');
   if (!TASK_DIGEST_RE.test(String(record.currentCarrierDigest ?? ''))) errors.push('dispatch consumption currentCarrierDigest is invalid');
-  if (typeof record.workUnitIdentity !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,200}$/.test(record.workUnitIdentity)) errors.push('dispatch consumption workUnitIdentity is invalid');
+  if (record.workUnitIdentity !== null &&
+      (typeof record.workUnitIdentity !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,200}$/.test(record.workUnitIdentity))) {
+    errors.push('dispatch consumption workUnitIdentity is invalid');
+  }
   if (typeof record.repositoryIdentity !== 'string' || !record.repositoryIdentity) errors.push('dispatch consumption repositoryIdentity is invalid');
   if (typeof record.worktreeRoot !== 'string' || !record.worktreeRoot) errors.push('dispatch consumption worktreeRoot is invalid');
   if (!GIT_OBJECT_ID_RE.test(String(record.productBaseHead ?? ''))) errors.push('dispatch consumption productBaseHead is invalid');

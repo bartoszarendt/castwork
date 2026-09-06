@@ -32,7 +32,10 @@ after(() => { rmSync(temp, { recursive: true, force: true }); });
 
 function captureProtectedDispatchCandidate(fixture) {
   let candidate = null;
-  const result = prepareRoleDispatch(fixture, {
+  const result = prepareRoleDispatch({
+    ...fixture,
+    parallelRequested: fixture.decomposition?.route === 'parallel',
+  }, {
     ...fixture.options,
     onBeforeEligibilityEvaluation(value) { candidate = value; },
   });
@@ -70,7 +73,10 @@ function assertActualCodedReasonOwners(action, observedCodes) {
 
 describe('P36-09A protected dispatch differential matrix', () => {
   it('perturbs every declared dispatch dimension through the protected evaluator and never projects it legal', async () => {
-    const fixture = await createDispatchFixture(temp, 'all-dispatch-dimensions');
+    const fixture = await createDispatchFixture(temp, 'all-dispatch-dimensions', {
+      parallel: true,
+      taskIds: ['T-001', 'T-002'],
+    });
     const base = captureProtectedDispatchCandidate(fixture);
     const observedCodes = new Set();
 

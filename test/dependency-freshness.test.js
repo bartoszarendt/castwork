@@ -243,13 +243,37 @@ describe('semantic bindings still carry the weight', () => {
     const past = new Date(Date.parse(decomposition.scan.observedAt) + (declared + 60) * 1000).toISOString();
     const result = evaluateHandoffPreflight({
       target: fixture.root, taskId: 'T-001', backend: 'files',
-      projectConfig: {}, io: {}, now: past,
+      projectConfig: {}, io: {}, route: 'parallel', now: past,
     });
     assert.equal(result.ok, false, 'a declared window is still enforced past its end');
   });
 });
 
 describe('a stale snapshot is stale evidence, not an unresolved dependency', () => {
+  it('ignores a stale committed parallel snapshot for the default serial route', async () => {
+    const fixture = await createDispatchFixture(temp, 'serial-stale-parallel-artifact');
+    const aged = new Date(Date.now() - (defaultDependencyFreshnessSeconds('files') + 3600) * 1000).toISOString();
+    const dependencyPath = join(fixture.root, 'dependencies.json');
+    const staleSnapshot = JSON.parse(readFileSync(dependencyPath, 'utf8'));
+    staleSnapshot.observedAt = aged;
+    staleSnapshot.freshnessPolicy = { maxAgeSeconds: 60 };
+    writeFileSync(dependencyPath, `${JSON.stringify(staleSnapshot)}\n`, 'utf8');
+    fixtureGit(fixture.root, ['add', 'dependencies.json']);
+    fixtureGit(fixture.root, ['commit', '-m', 'stale parallel evidence\n\nTask: T-001\nAgent: maintainer']);
+
+    const result = evaluateHandoffPreflight({
+      target: fixture.root, taskId: 'T-001', backend: 'files', projectConfig: {}, io: {},
+    });
+
+    assert.equal(result.ok, true, `serial preflight must ignore parallel evidence: ${JSON.stringify(result.errors)}`);
+    assert.equal(result.decomposition, null, 'serial preflight must not load a decomposition');
+    assert.equal(
+      result.diagnostics.some(item => item.code === 'dependency.evidence.stale'),
+      false,
+      'serial preflight must not age a parallel dependency snapshot'
+    );
+  });
+
   it('names the snapshot, its age, its policy, and the statuses it records', () => {
     // The field run met `ERROR: A declared dependency is unresolved.` while the
     // snapshot the refusal was derived from recorded that dependency as
@@ -280,7 +304,7 @@ describe('a stale snapshot is stale evidence, not an unresolved dependency', () 
     const result = evaluateHandoffPreflight({
       target, taskId: 'T-001', backend: 'files',
       projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
-      io: {},
+      io: {}, route: 'parallel',
     });
 
     assert.equal(result.ok, false, 'stale evidence still refuses');
