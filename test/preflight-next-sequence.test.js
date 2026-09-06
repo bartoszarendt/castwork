@@ -41,7 +41,7 @@ describe('the preflight sequence names every step and the commits it forces', ()
     const roleStart = sequence.steps.find(item => /task role-start T-018/.test(item.command));
     assert.ok(roleStart, 'role start is part of the sequence preflight is predicting');
     assert.equal(roleStart.commitRequired, true);
-    assert.equal(roleStart.gate, 'dispatch.packet.stale');
+    assert.equal(roleStart.gate, 'handoff.evidence.mismatched');
     assert.match(roleStart.commitReason, /mutates the carrier/);
     assert.ok(roleStart.writes.includes('.agenticloop/tasks/T-018.md'));
   });

@@ -6,8 +6,9 @@
  * never a prediction: in the field it returned `ok: true` at 19:27:16, the
  * required next action wrote an untracked abandonment receipt at 19:28:44, and
  * `prepare-dispatch` refused with `worktree.clean_gate.failed` three seconds
- * later. The same shape recurred an hour later, with `dispatch.packet.stale`
- * after role start legitimately mutated the carrier.
+ * later. A later role start legitimately mutates the carrier, so its next
+ * command must derive from that post-transition state rather than ask a
+ * broad pre-start packet comparison to survive it.
  *
  * Neither refusal is wrong. What was wrong is that one successful preflight was
  * supposed to imply dispatch and role start will succeed, and a green that does
@@ -102,7 +103,7 @@ export function deriveHandoffSequence({
       commitRequired: true,
       reason:
         'role start mutates the carrier and writes a dispatch consumption record; commit those durable outputs before the evidence chain reads them from Git; the mutable check aggregate remains scratch',
-      gate: 'dispatch.packet.stale',
+       gate: 'handoff.evidence.mismatched',
     }));
   } else {
     steps.push(step(order += 1, {

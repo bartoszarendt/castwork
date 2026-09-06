@@ -158,6 +158,7 @@ import { refetchFilesReturnEvidence } from './files-return-evidence.js';
 import {
   createDispatchConsumption,
   carrierMutationRelativePath,
+  dispatchConsumptionForTransitionKey,
   dispatchConsumptionRelativePath,
   listCarrierMutationReceipts,
   listDispatchConsumptions,
@@ -218,6 +219,7 @@ import { isAbsoluteOrDriveQualifiedPath, isPathWithin, pathIdentity, samePathAut
 import { runRequiredCheckCommand } from './cross-platform-runner.js';
 import { evaluateTaskCarrierMutationGuard } from './task-carrier-guard.js';
 import { bindProtectedTransitionEvaluation } from './protected-transition-inputs.js';
+import { protectedTransitionKey } from './protected-transition-key.js';
 
 function immutableInspectionProjection(value, seen = new Map()) {
   if (value === null || typeof value !== 'object' && typeof value !== 'function') return value;
@@ -626,6 +628,33 @@ function deriveRoleStartSequence({ taskId, packetPath, checksPath, postStartDige
     receiverSteps: Object.freeze(receiverSteps),
     commitCount: steps.filter(item => item.commitRequired).length,
   });
+}
+
+/** The persisted authority a status-route role-start response exposes. */
+function persistedRoleStartResult(consumption, disposition) {
+  const accepted = consumption.acceptedResult;
+  return {
+    disposition,
+    packetId: consumption.packetId,
+    transitionKey: accepted.transitionKey,
+    protectedInputDigest: accepted.protectedInputDigest,
+    currentCarrierDigest: accepted.currentCarrierDigest,
+    acceptedResult: accepted,
+  };
+}
+
+/** Refuse a packet whose persisted repository base no longer names live HEAD. */
+function repositoryBaseHeadInvalidator(target, productBaseHead) {
+  const currentHead = String(targetGitRunner(target)(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
+  if (currentHead === productBaseHead) return null;
+  return new PublicCommandError(
+    'prepared dispatch product base head changed after preparation',
+    {
+      code: 'dispatch.packet.stale', evidenceState: 'changed', disposition: 'superseded',
+      committedStateEvaluated: true,
+      safeRepair: 'Rerun npx agenticloop task prepare-dispatch to mint a fresh packet.',
+    },
+  );
 }
 
 function taskLintCommandRunner(command, args, options = {}) {
@@ -3258,9 +3287,16 @@ export async function cmdTask(args, io = createIo()) {
 
       // A2: Idempotent check with full binding comparison.
       if (currentStatus === 'in-progress') {
-        const matchingConsumption = consumed.records.find(
+        const packetConsumption = consumed.records.find(
           record => record.packetId === dispatchPacket.packetId
         );
+        // A packet id locates the prior accepted result, but replay authority is
+        // the persisted P36 transition key. Do not regenerate an old protected
+        // input digest (its recognition instant is intentionally non-replayable)
+        // or compare a newly rendered packet and hope it is the same result.
+        const matchingConsumption = packetConsumption
+          ? dispatchConsumptionForTransitionKey(consumed.records, packetConsumption.transitionKey)
+          : null;
         if (matchingConsumption) {
           // M1: Compare ALL documented bindings including productBaseHead and assuranceGrade.
           const bindingMismatch =
@@ -3274,9 +3310,12 @@ export async function cmdTask(args, io = createIo()) {
             !samePathAuthority(matchingConsumption.worktreeRoot, target) ||
             matchingConsumption.productBaseHead !== (dispatchPacket.repository?.head ?? null) ||
             matchingConsumption.assuranceGrade !== (dispatchPacket.assurance?.activation ?? null);
-          if (bindingMismatch) {
+          const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead);
+          if (bindingMismatch || baseHeadInvalidator) {
             return printGateResult('task role-start', commandFailure('task role-start', new PublicCommandError(
-              `dispatch packet ${dispatchPacket.packetId} was consumed against different binding state; a fresh packet is required`,
+              baseHeadInvalidator
+                ? baseHeadInvalidator.message
+                : `dispatch packet ${dispatchPacket.packetId} was consumed against different binding state; a fresh packet is required`,
               { code: 'dispatch.packet.stale', evidenceState: 'changed', disposition: 'superseded', committedStateEvaluated: true,
                 safeRepair: 'Rerun npx agenticloop task prepare-dispatch to mint a fresh packet.' }
             ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
@@ -3298,16 +3337,20 @@ export async function cmdTask(args, io = createIo()) {
             ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
           }
           // All bound state is identical.
+          const accepted = matchingConsumption.acceptedResult;
           const nextSequence = deriveRoleStartSequence({
-            taskId, packetPath: packetPathStr, checksPath: checkEvidencePath.relPath, postStartDigest: currentDigest,
-            requiredChecks: dispatchPacket.task.requiredChecks,
+            taskId, packetPath: packetPathStr, checksPath: accepted.checkEvidenceOutput ?? checkEvidencePath.relPath,
+            postStartDigest: accepted.currentCarrierDigest, requiredChecks: dispatchPacket.task.requiredChecks,
           });
           if (asJson) {
             io.out(JSON.stringify({
               ok: true, command: 'task role-start', task_id: taskId,
               disposition: 'already_current', backend: 'files', carrier,
               currentCarrierDigest: currentDigest, taskContractDigest: recordContract.digest,
-              packetId: dispatchPacket.packetId, checkEvidenceOutput: checkEvidencePath.relPath,
+              packetId: dispatchPacket.packetId, transitionKey: accepted.transitionKey,
+              protectedInputDigest: accepted.protectedInputDigest,
+              checkEvidenceOutput: accepted.checkEvidenceOutput ?? checkEvidencePath.relPath,
+              acceptedResult: accepted,
               nextSequence,
             }, null, 2));
           } else {
@@ -3329,10 +3372,9 @@ export async function cmdTask(args, io = createIo()) {
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
       const evaluationNow = Date.now();
-      // Serial packets use the current prepare-dispatch seam before they reach
-      // recognition. The packet's sealed proof cannot establish that direct
-      // dependency carriers still hold their minted facts. Explicit-parallel
-      // packets retain their existing recognition path exactly.
+      // Serial starts retain their direct dependency safety proof. The current
+      // evaluator rejects a changed head or unresolved dependency by its own
+      // typed invariant; it no longer uses packet-wide rendering equality.
       const currentDispatch = dispatchPacket.decomposition === null
         ? await verifyCurrentDispatchPacket({
             target,
@@ -3350,9 +3392,9 @@ export async function cmdTask(args, io = createIo()) {
         return 1;
       }
       let roleStartBinding = null;
-      // Explicit parallel packets keep the original dynamic-adapter validator;
-      // serial packets have already completed the current-truth revalidation
-      // above and pass that sealed result into recognition.
+      // Role start validates its own protected packet, expectation, replay
+      // inventory, and recognition instant. It must not re-derive a broad
+      // dispatch packet and compare its mutable rendering to the packet here.
       const customValidator = (packet, validatorNow) => {
         try {
           const capabilities = (() => {
@@ -3401,9 +3443,7 @@ export async function cmdTask(args, io = createIo()) {
           taskContractDigest: recordContract.digest,
           dispatchCarrierDigest: currentDigest,
           packetPath: packetPathStr,
-          validatePreparedDispatch: currentDispatch
-            ? () => currentDispatch.validation
-            : customValidator,
+          validatePreparedDispatch: currentDispatch ? () => currentDispatch.validation : customValidator,
           consumedPacketIds: consumed.records.map(record => record.packetId),
           rawStartLabel: `role-start requested for ${taskId}`,
           onBeforeRecognitionEvaluation: evaluatorInput => {
@@ -3441,6 +3481,17 @@ export async function cmdTask(args, io = createIo()) {
           task_id: taskId, file: carrier,
         }, asJson, io);
       }
+      // Parallel starts retain their dedicated decomposition, scan, inventory,
+      // dependency, and route validation above. They also need the same live
+      // repository-base invalidator that protects the serial revalidation path.
+      if (dispatchPacket.decomposition !== null) {
+        const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, dispatchPacket.repository?.head ?? null);
+        if (baseHeadInvalidator) {
+          return printGateResult('task role-start', commandFailure(
+            'task role-start', baseHeadInvalidator, 'operational_error', { task_id: taskId, file: carrier }, target,
+          ), asJson, io);
+        }
+      }
       const built = prepareTaskStatusCandidate({
         currentContent, relPath: carrier, nextStatus: 'in-progress',
       });
@@ -3453,9 +3504,26 @@ export async function cmdTask(args, io = createIo()) {
         }, asJson, io);
       }
       const { candidate, candidateDigest } = built;
+      const plannedAttemptId = executionAttemptIdentity({
+        packetId: dispatchPacket.packetId,
+        packetDigest: dispatchPacket.digest,
+        invocationId: dispatchPacket.assignment.invocationId,
+        productBaseHead: dispatchPacket.repository.head,
+        taskId,
+      });
+      const transitionKey = protectedTransitionKey({
+        repositoryIdentity: roleStartRecognition.boundIdentity.repositoryIdentity,
+        taskId,
+        attemptId: plannedAttemptId,
+        actionId: 'role_start',
+        protectedInputDigest: roleStartBinding.digest,
+      });
       const roleStartConsumption = createDispatchConsumption({
         backend: 'files', taskId, recognition: roleStartRecognition,
         currentCarrierDigest: candidateDigest,
+        protectedInputDigest: roleStartBinding.digest,
+        transitionKey,
+        checkEvidenceOutput: checkEvidencePath.relPath,
       });
       const superseded = deriveAttemptSupersessions(target, taskId, roleStartConsumption, { backend: 'files' });
       if (!superseded.ok) {
@@ -3592,7 +3660,8 @@ export async function cmdTask(args, io = createIo()) {
           disposition: 'committed', backend: 'files', carrier,
           currentCarrierDigest: resultingDigest, taskContractDigest: recordContract.digest,
           dispatchCarrierDigest: roleStartRecognition.boundIdentity.dispatchCarrierDigest,
-          packetId: dispatchPacket.packetId, checkEvidenceOutput: checkEvidencePath.relPath,
+          packetId: dispatchPacket.packetId, transitionKey,
+          protectedInputDigest: roleStartBinding.digest, checkEvidenceOutput: checkEvidencePath.relPath,
           nextSequence,
         }, null, 2));
       } else {
@@ -6158,16 +6227,93 @@ export async function cmdTask(args, io = createIo()) {
       // holds is still a role start being claimed, so it is still recognized;
       // whether anything is written is the separate no-op decision below.
       let roleStartRecognition = null;
+      let roleStartBinding = null;
       let roleStartConsumption = null;
       let attemptSupersessions = [];
       let lifecycleHandoffRecognition = null;
       if (nextStatus === 'in-progress') {
         const recordContract = taskContractDigest(currentContent);
-        try {
-          const consumed = listDispatchConsumptions(target, taskId, { backend: 'files' });
-          if (!consumed.ok) {
-            throw new VerificationContextMalformedError(consumed.errors.join('; '));
+        const consumed = listDispatchConsumptions(target, taskId, { backend: 'files' });
+        if (!consumed.ok) {
+          return failure(new VerificationContextMalformedError(consumed.errors.join('; ')));
+        }
+
+        // A status-route retry reaches this command after its own successful
+        // start changed the carrier. Resolve the durable transition result
+        // before trying to authenticate that now-consumed packet again.
+        if (currentStatus === 'in-progress' && opts.dispatchPacket) {
+          let suppliedPacket;
+          try {
+            suppliedPacket = readTargetJson(target, String(opts.dispatchPacket), 'dispatch packet');
+          } catch (error) {
+            return failure(error);
           }
+          const packetConsumption = consumed.records.find(record => record.packetId === suppliedPacket.packetId);
+          const matchingConsumption = packetConsumption
+            ? dispatchConsumptionForTransitionKey(consumed.records, packetConsumption.transitionKey)
+            : null;
+          if (matchingConsumption) {
+            const bindingMismatch =
+              matchingConsumption.packetDigest !== suppliedPacket.digest ||
+              matchingConsumption.taskContractDigest !== recordContract.digest ||
+              matchingConsumption.dispatchCarrierDigest !== suppliedPacket.task?.dispatchCarrierDigest ||
+              matchingConsumption.currentCarrierDigest !== currentDigest ||
+              matchingConsumption.invocationId !== suppliedPacket.assignment?.invocationId ||
+              matchingConsumption.workflowRole !== suppliedPacket.assignment?.roleId ||
+              matchingConsumption.repositoryIdentity !== targetRepositoryIdentity(target) ||
+              !samePathAuthority(matchingConsumption.worktreeRoot, target) ||
+              matchingConsumption.productBaseHead !== (suppliedPacket.repository?.head ?? null) ||
+              matchingConsumption.assuranceGrade !== (suppliedPacket.assurance?.activation ?? null);
+            const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead);
+            if (bindingMismatch || baseHeadInvalidator) {
+              return failure(new PublicCommandError(
+                baseHeadInvalidator
+                  ? baseHeadInvalidator.message
+                  : `dispatch packet ${suppliedPacket.packetId} was consumed against different binding state; a fresh packet is required`,
+                {
+                  code: 'dispatch.packet.stale', evidenceState: 'changed', disposition: 'superseded',
+                  committedStateEvaluated: true,
+                  safeRepair: 'Rerun npx agenticloop task prepare-dispatch to mint a fresh packet.',
+                },
+              ));
+            }
+            const result = createValidationResult({
+              command: 'task status', ok: true, evidenceState: 'current', disposition: 'proceed', ...domain,
+            });
+            const receipt = createTaskMutationReceipt({
+              backend: 'files', taskId, carrier: relPath,
+              expectedDigest: currentDigest, candidateDigest: currentDigest, resultingDigest: currentDigest,
+              verification: { resultKind: VALIDATION_RESULT_KIND, digest: validationResultDigest(result) },
+              ownedProjections: ['task_record_status'], changedPaths: [], mutationDisposition: 'already_current',
+              revalidateCommand: readinessRevalidationCommand({
+                taskId, carrier: relPath, resultingDigest: currentDigest, context: evidenceContext,
+              }),
+            });
+            if (asJson) {
+              const roleStart = persistedRoleStartResult(matchingConsumption, 'already_current');
+              io.out(JSON.stringify({
+                ...domain,
+                ok: true,
+                disposition: roleStart.disposition,
+                backend: 'files',
+                carrier: relPath,
+                currentCarrierDigest: roleStart.currentCarrierDigest,
+                taskContractDigest: matchingConsumption.taskContractDigest,
+                packetId: roleStart.packetId,
+                transitionKey: roleStart.transitionKey,
+                protectedInputDigest: roleStart.protectedInputDigest,
+                acceptedResult: roleStart.acceptedResult,
+                receipt,
+                handoff_recognition: matchingConsumption.recognition,
+                role_start: roleStart,
+              }, null, 2));
+            } else {
+              io.out(`${taskId} role start already current against packet ${suppliedPacket.packetId}`);
+            }
+            return 0;
+          }
+        }
+        try {
           const currentDispatch = opts.dispatchPacket
             ? await verifyCurrentDispatchPacket({
                 target,
@@ -6191,6 +6337,19 @@ export async function cmdTask(args, io = createIo()) {
               : null,
             consumedPacketIds: consumed.records.map(record => record.packetId),
             rawStartLabel: `raw role start requested for ${taskId} without a prepared dispatch`,
+            onBeforeRecognitionEvaluation: evaluatorInput => {
+              roleStartBinding = bindProtectedTransitionEvaluationInput('role_start', {
+                transition: evaluatorInput.transition,
+                expectation: evaluatorInput.expectation,
+                preparedDispatch: evaluatorInput.preparedDispatch,
+                consumedPacketIds: evaluatorInput.consumedPacketIds,
+                observations: evaluatorInput.observations,
+                now: evaluatorInput.now,
+              });
+            },
+            onAfterRecognitionEvaluation: (evaluatorInput, evaluatorOutcome) => observeProtectedTransitionEvaluation(
+              io, 'role_start', evaluatorInput, roleStartBinding, evaluatorOutcome,
+            ),
           });
         } catch (error) {
           if (error instanceof PublicCommandError) return failure(error);
@@ -6294,9 +6453,24 @@ export async function cmdTask(args, io = createIo()) {
       const candidate = built.candidate;
       const candidateDigest = built.candidateDigest;
       if (roleStartRecognition?.recognized) {
+        const plannedAttemptId = executionAttemptIdentity({
+          packetId: roleStartRecognition.boundIdentity.packetId,
+          packetDigest: roleStartRecognition.boundIdentity.packetDigest,
+          invocationId: roleStartRecognition.boundIdentity.invocationId,
+          productBaseHead: roleStartRecognition.boundIdentity.productBaseHead,
+          taskId,
+        });
         roleStartConsumption = createDispatchConsumption({
           backend: 'files', taskId, recognition: roleStartRecognition,
           currentCarrierDigest: candidateDigest,
+          protectedInputDigest: roleStartBinding.digest,
+          transitionKey: protectedTransitionKey({
+            repositoryIdentity: roleStartRecognition.boundIdentity.repositoryIdentity,
+            taskId,
+            attemptId: plannedAttemptId,
+            actionId: 'role_start',
+            protectedInputDigest: roleStartBinding.digest,
+          }),
         });
         // A task and role carry at most one live attempt. Consuming a fresh
         // packet retires its predecessors in the same transaction that records
@@ -6329,10 +6503,26 @@ export async function cmdTask(args, io = createIo()) {
       });
       const emitReceipt = receipt => {
         if (asJson) {
+          const roleStart = roleStartConsumption
+            ? persistedRoleStartResult(roleStartConsumption, receipt.mutationDisposition)
+            : null;
           io.out(JSON.stringify({
             ...domain,
             receipt,
             ...(roleStartRecognition ? { handoff_recognition: roleStartRecognition } : {}),
+            ...(roleStart ? {
+              ok: true,
+              disposition: roleStart.disposition,
+              backend: 'files',
+              carrier: relPath,
+              currentCarrierDigest: roleStart.currentCarrierDigest,
+              taskContractDigest: roleStartConsumption.taskContractDigest,
+              packetId: roleStart.packetId,
+              transitionKey: roleStart.transitionKey,
+              protectedInputDigest: roleStart.protectedInputDigest,
+              acceptedResult: roleStart.acceptedResult,
+              role_start: roleStart,
+            } : {}),
             ...(!roleStartRecognition && lifecycleHandoffRecognition
               ? { handoff_recognition: lifecycleHandoffRecognition }
               : {}),

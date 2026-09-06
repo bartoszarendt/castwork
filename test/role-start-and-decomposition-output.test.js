@@ -29,10 +29,35 @@ import { createDispatchFixture, sha256 } from './helpers/dispatch-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { shellQuoteArgument } from '../src/task-evidence-contract.js';
+import { listDispatchConsumptions } from '../src/handoff-consumption.js';
+import { validationResultDigest } from '../src/result-envelope.js';
+import { canonicalSha256 } from '../src/canonical-json.js';
 
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'role-start-')); });
 after(() => { try { rmSync(temp, { recursive: true, force: true }); } catch {} });
+
+function persistSchemaV3Consumption(root, taskId) {
+  const listed = listDispatchConsumptions(root, taskId, { backend: 'files' });
+  assert.equal(listed.ok, true, listed.errors?.join('\n'));
+  assert.equal(listed.records.length, 1, 'fixture must contain one current consumption before conversion');
+  const record = structuredClone(listed.records[0]);
+  const path = join(
+    root, '.agenticloop', 'handoffs', 'dispatch', taskId,
+    `${record.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`,
+  );
+  const legacy = { ...record, schemaVersion: 3 };
+  delete legacy.transitionKey;
+  delete legacy.protectedInputDigest;
+  delete legacy.acceptedResult;
+  delete legacy.digest;
+  legacy.digest = `sha256:agenticloop.dispatch-consumption.v3:${canonicalSha256(legacy)}`;
+  const source = `${JSON.stringify(legacy, null, 2)}\n`;
+  writeFileSync(path, source, 'utf8');
+  const resolved = listDispatchConsumptions(root, taskId, { backend: 'files' });
+  assert.equal(resolved.ok, true, resolved.errors?.join('\n'));
+  return { legacy, path, source, resolved: resolved.records[0] };
+}
 
 // ── N1: role-start is NOT receipt-revalidation safe ────────────────────────
 
@@ -330,6 +355,43 @@ describe('N7: role-start behavioral tests', () => {
     assert.equal(output2.disposition, 'already_current', 'exact retry must return already_current');
   });
 
+  it('accepts a current role start when only the retired readiness rendering differs', async () => {
+    const fixture = await createDispatchFixture(temp, 'retired-readiness-rendering', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+
+    // The warning is a mutable, non-authoritative rendering. The sealed packet
+    // remains structurally valid, but a fresh evaluator derives no such warning.
+    // The retired packet-wide equality compared the whole readiness projection.
+    const packet = structuredClone(prepared.packet);
+    packet.readiness.result.warnings = ['rendered after packet preparation'];
+    packet.readiness.resultDigest = validationResultDigest(packet.readiness.result);
+    packet.digest = dispatchPreparationDigest(packet);
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+
+    // This is the exact current-evaluation seam role-start invokes immediately
+    // before its mutation. It must succeed despite the rendering-only drift.
+    const current = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--role', 'engineer', '--json', '--target', root,
+    ], options);
+    assert.equal(current.status, 0, current.stdout);
+
+    const started = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ], options);
+    assert.equal(started.status, 0, started.stdout);
+    assert.equal(JSON.parse(started.stdout).disposition, 'committed');
+  });
+
   it('F1: tampered head fails closed', async () => {
     const fixture = await createDispatchFixture(temp, 'tampered', { initialStatus: 'agent-ready' });
     const root = fixture.root;
@@ -422,6 +484,324 @@ describe('N7: role-start behavioral tests', () => {
     assert.equal(postCarrier, preCarrier, 'carrier must be unchanged after injected failure');
     assert.equal(existsSync(consumptionDir), preConsumptionExists, 'consumption dir must be unchanged');
     assert.equal(existsSync(checksPath), preChecksExists, 'checks file must be unchanged');
+  });
+
+  it('persists one protected transition result so a response-loss retry resumes the same attempt', async () => {
+    const fixture = await createDispatchFixture(temp, 'atomic-retry', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+
+    // Treat this successful invocation as a process crash after its mutation and
+    // before its response reached the caller. The durable result must resume it.
+    const first = await runCliInProcess(argv, {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    assert.equal(first.status, 0, first.stdout);
+    const accepted = JSON.parse(first.stdout);
+    assert.match(accepted.transitionKey, /^[a-f0-9]{64}$/);
+    assert.match(accepted.protectedInputDigest, /^[a-f0-9]{64}$/);
+
+    const retry = await runCliInProcess(argv, {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    assert.equal(retry.status, 0, retry.stdout);
+    const resumed = JSON.parse(retry.stdout);
+    assert.equal(resumed.disposition, 'already_current');
+    assert.equal(resumed.transitionKey, accepted.transitionKey);
+    assert.equal(resumed.protectedInputDigest, accepted.protectedInputDigest);
+    assert.deepEqual(resumed.nextSequence, accepted.nextSequence);
+    assert.match(resumed.nextSequence.steps[2].command, new RegExp(accepted.currentCarrierDigest));
+
+    const consumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptions.ok, true, consumptions.errors?.join('\n'));
+    assert.equal(consumptions.records.length, 1, 'retry must not create another attempt or consumption');
+    assert.equal(consumptions.records[0].transitionKey, accepted.transitionKey);
+    assert.equal(consumptions.records[0].acceptedResult.currentCarrierDigest, accepted.currentCarrierDigest);
+    assert.equal(consumptions.records[0].acceptedResult.checkEvidenceOutput, '.agenticloop/tmp/checks.json');
+  });
+
+  it('resumes a complete schema-v3 consumption without rewriting its identity or duplicating its start', async () => {
+    const fixture = await createDispatchFixture(temp, 'legacy-v3-canonical-retry', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const start = await runCliInProcess(argv, options);
+    assert.equal(start.status, 0, start.stdout);
+    const legacy = persistSchemaV3Consumption(root, 'T-001');
+    const attemptsBefore = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsBefore.status, 0, attemptsBefore.stdout);
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+    const checksBefore = readFileSync(checksPath, 'utf8');
+
+    const retry = await runCliInProcess(argv, options);
+    assert.equal(retry.status, 0, retry.stdout);
+    const resumed = JSON.parse(retry.stdout);
+    assert.equal(resumed.disposition, 'already_current');
+    assert.equal(resumed.transitionKey, legacy.resolved.transitionKey);
+    assert.equal(resumed.protectedInputDigest, legacy.resolved.protectedInputDigest);
+    assert.deepEqual(resumed.acceptedResult, legacy.resolved.acceptedResult);
+    assert.equal(readFileSync(legacy.path, 'utf8'), legacy.source, 'legacy record must stay byte-for-byte intact');
+    const consumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptions.ok, true, consumptions.errors?.join('\n'));
+    assert.equal(consumptions.records.length, 1, 'resume must not duplicate consumption or attempts');
+    const attemptsAfterRetry = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfterRetry.status, 0, attemptsAfterRetry.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfterRetry.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts);
+    assert.equal(readFileSync(checksPath, 'utf8'), checksBefore, 'resume must not duplicate check evidence');
+
+    writeFileSync(join(root, 'src', 'moved-head-after-v3.js'), 'export const invalidated = true;\n', 'utf8');
+    const add = spawnSync('git', ['add', 'src/moved-head-after-v3.js'], { cwd: root, encoding: 'utf8' });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync('git', ['commit', '-m', 'move head after legacy v3 role start'], { cwd: root, encoding: 'utf8' });
+    assert.equal(commit.status, 0, commit.stderr);
+    const invalidated = await runCliInProcess(argv, options);
+    assert.equal(invalidated.status, 1, invalidated.stdout);
+    assert.equal(JSON.parse(invalidated.stdout).diagnostics[0].code, 'dispatch.packet.stale');
+    assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 1);
+    const attemptsAfterInvalidation = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfterInvalidation.status, 0, attemptsAfterInvalidation.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfterInvalidation.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts);
+  });
+
+  it('fails closed when a schema-v3 consumption lacks an authoritative identity field', async () => {
+    const fixture = await createDispatchFixture(temp, 'legacy-v3-corrupt', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const start = await runCliInProcess(argv, options);
+    assert.equal(start.status, 0, start.stdout);
+    const legacy = persistSchemaV3Consumption(root, 'T-001');
+    const corrupt = JSON.parse(legacy.source);
+    delete corrupt.recognition;
+    writeFileSync(legacy.path, `${JSON.stringify(corrupt, null, 2)}\n`, 'utf8');
+
+    const retry = await runCliInProcess(argv, options);
+    assert.equal(retry.status, 1, retry.stdout);
+    const refusal = JSON.parse(retry.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'verification.context.malformed');
+    assert.match(refusal.errors.join('\n'), /closed schema|embedded recognition/i);
+  });
+
+  it('refuses a response-loss retry after its repository base head moves without duplicating durable state', async () => {
+    const fixture = await createDispatchFixture(temp, 'atomic-retry-moved-head', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+
+    const started = await runCliInProcess(argv, options);
+    assert.equal(started.status, 0, started.stdout);
+    const consumptionsBefore = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsBefore.ok, true, consumptionsBefore.errors?.join('\n'));
+    const attemptsBefore = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsBefore.status, 0, attemptsBefore.stdout);
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+    const checksBefore = readFileSync(checksPath, 'utf8');
+
+    writeFileSync(join(root, 'src', 'after-role-start.js'), 'export const invalidated = true;\n', 'utf8');
+    const add = spawnSync('git', ['add', 'src/after-role-start.js'], { cwd: root, encoding: 'utf8' });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync('git', ['commit', '-m', 'invalidate role-start repository base'], { cwd: root, encoding: 'utf8' });
+    assert.equal(commit.status, 0, commit.stderr);
+
+    const retry = await runCliInProcess(argv, options);
+    assert.equal(retry.status, 1, retry.stdout);
+    const refusal = JSON.parse(retry.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'dispatch.packet.stale');
+
+    const consumptionsAfter = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsAfter.ok, true, consumptionsAfter.errors?.join('\n'));
+    assert.deepEqual(consumptionsAfter.records, consumptionsBefore.records, 'retry must not create or alter consumption evidence');
+    const attemptsAfter = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfter.status, 0, attemptsAfter.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfter.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts,
+      'retry must not create or alter attempts');
+    assert.equal(readFileSync(checksPath, 'utf8'), checksBefore, 'retry must not alter check evidence');
+  });
+
+  it('refuses an initial parallel start after its repository base head moves without writes', async () => {
+    const fixture = await createDispatchFixture(temp, 'parallel-initial-moved-head', {
+      taskIds: ['T-001', 'T-002'], parallel: true, initialStatus: 'agent-ready',
+    });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch({ ...fixture, parallelRequested: true }, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    assert.equal(prepared.packet.decomposition?.route, 'parallel', 'fixture must exercise the parallel role-start path');
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const roleStart = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const consumptionBefore = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionBefore.ok, true, consumptionBefore.errors?.join('\n'));
+    const attemptsBefore = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsBefore.status, 0, attemptsBefore.stdout);
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+    assert.equal(existsSync(checksPath), false, 'initial check evidence must not exist before start');
+
+    writeFileSync(join(root, 'src', 'before-parallel-role-start.js'), 'export const invalidated = true;\n', 'utf8');
+    const add = spawnSync('git', ['add', 'src/before-parallel-role-start.js'], { cwd: root, encoding: 'utf8' });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync('git', ['commit', '-m', 'invalidate parallel role-start repository base'], { cwd: root, encoding: 'utf8' });
+    assert.equal(commit.status, 0, commit.stderr);
+
+    const canonical = await runCliInProcess(roleStart, options);
+    assert.equal(canonical.status, 1, canonical.stdout);
+    assert.equal(JSON.parse(canonical.stdout).diagnostics[0].code, 'dispatch.packet.stale');
+
+    const consumptionAfter = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionAfter.ok, true, consumptionAfter.errors?.join('\n'));
+    assert.deepEqual(consumptionAfter.records, consumptionBefore.records, 'refusals must not create consumption evidence');
+    const attemptsAfter = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfter.status, 0, attemptsAfter.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfter.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts,
+      'refusals must not create attempts');
+    assert.equal(existsSync(checksPath), false, 'refusals must not initialize check evidence');
+  });
+
+  it('starts a current parallel packet and matches the status route when its moved-head retry is refused', async () => {
+    const fixture = await createDispatchFixture(temp, 'parallel-retry-moved-head', {
+      taskIds: ['T-001', 'T-002'], parallel: true, initialStatus: 'agent-ready',
+    });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch({ ...fixture, parallelRequested: true }, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    assert.equal(prepared.packet.decomposition?.route, 'parallel', 'fixture must preserve P36-05 parallel guards');
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const started = await runCliInProcess(argv, options);
+    assert.equal(started.status, 0, started.stdout);
+    const accepted = JSON.parse(started.stdout);
+    assert.equal(accepted.disposition, 'committed');
+    const consumptionsBefore = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsBefore.ok, true, consumptionsBefore.errors?.join('\n'));
+    const attemptsBefore = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsBefore.status, 0, attemptsBefore.stdout);
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+    const checksBefore = readFileSync(checksPath, 'utf8');
+
+    writeFileSync(join(root, 'src', 'after-parallel-role-start.js'), 'export const invalidated = true;\n', 'utf8');
+    const add = spawnSync('git', ['add', 'src/after-parallel-role-start.js'], { cwd: root, encoding: 'utf8' });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync('git', ['commit', '-m', 'invalidate parallel role-start retry repository base'], { cwd: root, encoding: 'utf8' });
+    assert.equal(commit.status, 0, commit.stderr);
+
+    const retry = await runCliInProcess(argv, options);
+    assert.equal(retry.status, 1, retry.stdout);
+    assert.equal(JSON.parse(retry.stdout).diagnostics[0].code, 'dispatch.packet.stale');
+    const statusRetry = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', accepted.currentCarrierDigest,
+      '--dispatch-packet', '.agenticloop/tmp/packet.json', '--json', '--target', root,
+    ], options);
+    assert.equal(statusRetry.status, 1, statusRetry.stdout);
+    assert.equal(JSON.parse(statusRetry.stdout).diagnostics[0].code, 'dispatch.packet.stale');
+
+    const consumptionsAfter = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsAfter.ok, true, consumptionsAfter.errors?.join('\n'));
+    assert.deepEqual(consumptionsAfter.records, consumptionsBefore.records, 'retry must not alter consumption evidence');
+    const attemptsAfter = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfter.status, 0, attemptsAfter.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfter.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts,
+      'retry must not alter attempts');
+    assert.equal(readFileSync(checksPath, 'utf8'), checksBefore, 'retry must not alter check evidence');
+  });
+
+  it('refuses a post-start packet through its typed lifecycle result, not a generic packet-equality stale wrapper', async () => {
+    const fixture = await createDispatchFixture(temp, 'post-start-stale', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const started = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json', '--json', '--target', root,
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
+    assert.equal(started.status, 0, started.stdout);
+
+    const stale = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--packet', '.agenticloop/tmp/packet.json', '--role', 'engineer', '--json', '--target', root,
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
+    assert.equal(stale.status, 1, stale.stdout);
+    const result = JSON.parse(stale.stdout);
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), /clean checkout|in-progress|dispatchable lifecycle/i);
+    assert.doesNotMatch(result.errors.join('\n'), /bindings changed after preparation/);
   });
 });
 

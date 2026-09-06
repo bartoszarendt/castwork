@@ -86,6 +86,28 @@ before(async () => {
 });
 after(() => { rmSync(temp, { recursive: true, force: true }); });
 
+function persistSchemaV3Consumption(root, taskId) {
+  const listed = listDispatchConsumptions(root, taskId, { backend: 'files' });
+  assert.equal(listed.ok, true, listed.errors?.join('\n'));
+  assert.equal(listed.records.length, 1, 'fixture must contain one current consumption before conversion');
+  const record = structuredClone(listed.records[0]);
+  const path = join(
+    root, '.agenticloop', 'handoffs', 'dispatch', taskId,
+    `${record.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`,
+  );
+  const legacy = { ...record, schemaVersion: 3 };
+  delete legacy.transitionKey;
+  delete legacy.protectedInputDigest;
+  delete legacy.acceptedResult;
+  delete legacy.digest;
+  legacy.digest = `sha256:agenticloop.dispatch-consumption.v3:${canonicalSha256(legacy)}`;
+  const source = `${JSON.stringify(legacy, null, 2)}\n`;
+  writeFileSync(path, source, 'utf8');
+  const resolved = listDispatchConsumptions(root, taskId, { backend: 'files' });
+  assert.equal(resolved.ok, true, resolved.errors?.join('\n'));
+  return { path, source, resolved: resolved.records[0] };
+}
+
 function roleStartExpectation(overrides = {}) {
   return {
     backend: 'files',
@@ -1121,18 +1143,77 @@ describe('task status role start', () => {
     assert.equal(digest, currentTaskDigest(before));
   });
 
-  it('refuses replay of a packet already consumed by a role start', async () => {
-    const root = dispatch.root;
+  it('resolves a schema-v3 status-route role-start retry by its persisted transition key', async () => {
+    const fixture = await createDispatchFixture(temp, 'status-role-start-retry');
+    const root = fixture.root;
     const taskFile = join(root, '.agenticloop', 'tasks', 'T-001.md');
-    const before = readFileSync(taskFile, 'utf8');
-    const result = await runCliInProcess([
-      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentTaskDigest(before),
-      '--dispatch-packet', '.agenticloop/tmp/packet.json', '--json', '--target', root,
-    ], cliOptions());
-    assert.equal(result.status, 1);
-    const payload = JSON.parse(result.stdout);
-    assert.ok(payload.handoff_recognition.diagnostics.some(item => item.code === 'handoff.evidence.replayed'));
-    assert.equal(readFileSync(taskFile, 'utf8'), before);
+    const packetPath = '.agenticloop/tmp/packet.json';
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    mkdirSync(join(root, '.agenticloop', 'tmp'), { recursive: true });
+    writeFileSync(join(root, packetPath), JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const start = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentTaskDigest(readFileSync(taskFile, 'utf8')),
+      '--dispatch-packet', packetPath, '--json', '--target', root,
+    ], options);
+    assert.equal(start.status, 0, `${start.stdout}\n${start.stderr}`);
+    const accepted = JSON.parse(start.stdout);
+    assert.equal(accepted.disposition, 'committed');
+    assert.equal(accepted.role_start.disposition, 'committed');
+    assert.match(accepted.role_start.transitionKey, /^[a-f0-9]{64}$/);
+    const legacy = persistSchemaV3Consumption(root, 'T-001');
+    const attemptsBefore = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsBefore.status, 0, attemptsBefore.stdout);
+
+    const afterStartDigest = currentTaskDigest(readFileSync(taskFile, 'utf8'));
+    const retry = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', afterStartDigest,
+      '--dispatch-packet', packetPath, '--json', '--target', root,
+    ], options);
+    assert.equal(retry.status, 0, `${retry.stdout}\n${retry.stderr}`);
+    const resumed = JSON.parse(retry.stdout);
+    assert.equal(resumed.disposition, 'already_current');
+    assert.equal(resumed.receipt.mutationDisposition, 'already_current');
+    assert.equal(resumed.role_start.disposition, 'already_current');
+    assert.deepEqual(resumed.acceptedResult, legacy.resolved.acceptedResult);
+    assert.deepEqual(resumed.role_start.acceptedResult, legacy.resolved.acceptedResult);
+    assert.equal(resumed.role_start.transitionKey, legacy.resolved.transitionKey);
+    assert.equal(resumed.role_start.protectedInputDigest, legacy.resolved.protectedInputDigest);
+    assert.equal(readFileSync(legacy.path, 'utf8'), legacy.source, 'legacy record must stay byte-for-byte intact');
+    const consumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptions.ok, true, consumptions.errors?.join('\n'));
+    assert.equal(consumptions.records.length, 1, 'retry must not duplicate dispatch consumption or evidence');
+    const attemptsAfterRetry = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfterRetry.status, 0, attemptsAfterRetry.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfterRetry.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts);
+
+    const changedContract = readFileSync(taskFile, 'utf8').replace(
+      '\n## Out of Scope', '\n- Changed protected scope after v3 role start.\n\n## Out of Scope',
+    );
+    writeFileSync(taskFile, changedContract, 'utf8');
+    const invalidated = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentTaskDigest(changedContract),
+      '--dispatch-packet', packetPath, '--json', '--target', root,
+    ], options);
+    assert.equal(invalidated.status, 1, `${invalidated.stdout}\n${invalidated.stderr}`);
+    const refusal = JSON.parse(invalidated.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'dispatch.packet.stale');
+    assert.notEqual(refusal.diagnostics[0].code, 'verification.context.stale');
+    assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 1);
+    const attemptsAfterInvalidation = await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', root,
+    ], options);
+    assert.equal(attemptsAfterInvalidation.status, 0, attemptsAfterInvalidation.stdout);
+    assert.deepEqual(JSON.parse(attemptsAfterInvalidation.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts);
   });
 
   it('refuses a previously valid packet after the repository head moves', async () => {

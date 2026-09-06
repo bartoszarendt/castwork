@@ -226,13 +226,6 @@ const RETURN_INVALIDATORS = Object.freeze([
   'initial_repository_state_changes',
 ]);
 
-function stableReadinessProjection(readiness) {
-  if (!isObject(readiness) || !isObject(readiness.evidence) || !isObject(readiness.evidence.dependencies)) return readiness;
-  const copy = structuredClone(readiness);
-  delete copy.evidence.dependencies.evaluatedAt;
-  return copy;
-}
-
 function validation(command, ok, evidenceState, disposition, findings, domain = {}) {
   const primary = ok ? null : findings?.primary ?? null;
   const orderedFindings = ok ? [] : [
@@ -1392,15 +1385,24 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
       }
       return failure(command, findings);
     }
-    const fields = [
-      'backend', 'task', 'activation', 'activationBinding', 'assurance',
-      'returnAdapter',
-      'decomposition', 'assignment', 'repository', 'freshness',
-    ];
-    if (fields.some(field => !sameCanonical(current.packet[field], packet[field])) ||
-        !sameCanonical(stableReadinessProjection(current.packet.readiness), stableReadinessProjection(packet.readiness))) {
-      return singleFailure(command, 'changed', 'superseded', 'dispatch packet bindings changed after preparation');
+    // Product base is an action-specific protected input: consuming a packet
+    // after HEAD moved would bind an attempt to a different product range.
+    // This is deliberately not the retired packet-wide projection comparison.
+    if (current.packet.repository?.head !== packet.repository?.head) {
+      return singleFailure(
+        command,
+        'changed',
+        'superseded',
+        'prepared dispatch product base head changed after preparation',
+        {},
+        'dispatch.packet.stale',
+      );
     }
+    // The current evaluator has just validated the action-specific protected
+    // inputs.  Do not turn its newly derived packet rendering back into an
+    // authority gate: the former ten-field-plus-readiness equality made a
+    // packet stale merely because its own successful start changed the carrier.
+    // A current evaluator refusal above remains typed by its actual invariant.
     return { ok: true, packet, validation: validation(command, true, 'current', 'proceed', null) };
   } catch (error) {
     return singleFailure(command, 'malformed', 'rejected', `dispatch receive could not be evaluated: ${error.message}`);

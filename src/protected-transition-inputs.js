@@ -162,8 +162,9 @@ export const PROTECTED_TRANSITION_INPUTS = Object.freeze([
 
 /**
  * Bind the exact, canonicalizable input projection immediately before its
- * authoritative evaluator runs. This is a characterization assertion only:
- * callers neither persist it nor branch on its digest.
+ * authoritative evaluator runs. This binding seam neither persists nor branches
+ * on the digest; role-start persists it, derives its transition key from it,
+ * and keyed retry resolution branches on that key.
  */
 export function bindProtectedTransitionEvaluation(actionId, values) {
   const transitionDefinition = PROTECTED_TRANSITION_INPUTS.find(item => item.actionId === actionId);

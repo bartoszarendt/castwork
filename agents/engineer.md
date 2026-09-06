@@ -160,11 +160,11 @@ task-record obligation.
   role start has consumed and revalidated it. For the files backend, use the
   canonical single command `task role-start <id> --packet <packet-path>`, which atomically combines the in-progress
   carrier transition, dispatch consumption, attempt supersession, and required-check
-  evidence initialization at `.agenticloop/tmp/<id>-checks.json`. `role-start`
-  performs the authoritative full packet revalidation immediately before its
-  atomic mutation. Do not rerun `prepare-dispatch --packet` after role start:
-  that pre-start diagnostic recomputes the sealed repository binding, while a
-  successful role start has necessarily advanced it.
+   evidence initialization at `.agenticloop/tmp/<id>-checks.json`. `role-start`
+   validates its action-specific protected inputs and atomically binds their
+   digest and transition key to the accepted post-transition result. Do not
+   rerun `prepare-dispatch --packet` after role start: a retry resolves that
+   persisted result, while broad packet re-equality is not an authority gate.
   A stale or malformed packet is a status return, not permission to edit.
   Shipped and public in-process adapters cannot establish this authority.
   Without an externally authenticated packet, return blocked; never substitute

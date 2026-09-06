@@ -22,6 +22,7 @@ import {
 } from '../src/measurement-implementation-identity.js';
 import { executionAttemptIdentity } from '../src/execution-attempt-identity.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
+import { protectedTransitionKey } from '../src/protected-transition-key.js';
 import { measureAdapterWords } from '../scripts/measure-adapter-words.mjs';
 import { BASELINE_SCENARIOS, createSyntheticScenarioHarness, runSyntheticScenario } from './helpers/lifecycle-scenario-harness.js';
 
@@ -35,11 +36,11 @@ const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
 const SYNTHETIC_BASELINE_TEST = 'test/phase36-baseline.test.js';
 const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
-  opencode: { generatedPayload: 16120, agentDefinitions: 15143, activationSurface: 977, referenceLibrary: 0 },
-  codex: { generatedPayload: 76885, agentDefinitions: 15482, activationSurface: 1260, referenceLibrary: 60143 },
-  'claude-code': { generatedPayload: 57503, agentDefinitions: 13964, activationSurface: 2157, referenceLibrary: 41382 },
-  copilot: { generatedPayload: 74914, agentDefinitions: 15210, activationSurface: 1314, referenceLibrary: 58390 },
-  cursor: { generatedPayload: 74666, agentDefinitions: 15208, activationSurface: 1068, referenceLibrary: 58390 },
+  opencode: { generatedPayload: 16125, agentDefinitions: 15148, activationSurface: 977, referenceLibrary: 0 },
+  codex: { generatedPayload: 76890, agentDefinitions: 15487, activationSurface: 1260, referenceLibrary: 60143 },
+  'claude-code': { generatedPayload: 57508, agentDefinitions: 13969, activationSurface: 2157, referenceLibrary: 41382 },
+  copilot: { generatedPayload: 74919, agentDefinitions: 15215, activationSurface: 1314, referenceLibrary: 58390 },
+  cursor: { generatedPayload: 74671, agentDefinitions: 15213, activationSurface: 1068, referenceLibrary: 58390 },
 });
 
 function candidateRepositoryFiles() {
@@ -76,19 +77,7 @@ after(() => { rmSync(temp, { recursive: true, force: true }); });
 
 export const NO_ATTEMPT_ID = 'none';
 
-export function transitionKey({
-  kind, schemaVersion, repositoryIdentity, taskId, attemptId, actionId, protectedInputDigest,
-}) {
-  return canonicalSha256({
-    actionId,
-    attemptId,
-    kind,
-    protectedInputDigest,
-    repositoryIdentity,
-    schemaVersion,
-    taskId,
-  });
-}
+export const transitionKey = protectedTransitionKey;
 
 describe('P36-00A frozen baseline', () => {
   it('keeps the tracked and untracked candidate set within the internal planning boundary', () => {
@@ -155,6 +144,15 @@ describe('P36-00A frozen baseline', () => {
       invocationId: consumption.invocationId,
       productBaseHead: consumption.productBaseHead,
       taskId: consumption.taskId,
+    }));
+    assert.equal(consumption.transitionKey, transitionKey({
+      kind: 'agenticloop.transition.start',
+      schemaVersion: 1,
+      repositoryIdentity: consumption.repositoryIdentity,
+      taskId: consumption.taskId,
+      attemptId: actualAttemptId,
+      actionId: 'role_start',
+      protectedInputDigest: consumption.protectedInputDigest,
     }));
     const identity = {
       kind: 'agenticloop.transition.start',

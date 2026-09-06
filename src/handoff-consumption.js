@@ -8,12 +8,14 @@ import { GIT_OBJECT_ID_RE } from './git-oid.js';
 import { validateHandoffRecognition } from './handoff-recognition.js';
 import { executeMutationBatch } from './fs-mutation-kernel.js';
 import { executionAttemptIdentity } from './execution-attempt-identity.js';
+import { protectedTransitionKey } from './protected-transition-key.js';
 import { ENGINEER_CARRIER_MUTATION_CLASSES, validateCarrierMutationReceipt } from './task-evidence-contract.js';
 import { classifyLifecycleCompatibility, compatibilityMessage } from './lifecycle-compatibility.js';
 import { producerRefusal } from './public-error.js';
 
 export const DISPATCH_CONSUMPTION_KIND = 'agenticloop.dispatch-consumption';
-export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 3;
+export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 4;
+const LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION = 3;
 export const DISPATCH_CONSUMPTION_CLOCK_SKEW_MS = 1000;
 export const TASK_CARRIER_MUTATION_ROOT = '.agenticloop/handoffs/task-mutations';
 
@@ -41,13 +43,18 @@ function safeSegment(value) {
 }
 
 export function dispatchConsumptionDigest(record) {
+  return dispatchConsumptionDigestForSchema(record, DISPATCH_CONSUMPTION_SCHEMA_VERSION);
+}
+
+function dispatchConsumptionDigestForSchema(record, schemaVersion) {
   const projection = { ...record };
   delete projection.digest;
-  return `sha256:agenticloop.dispatch-consumption.v${DISPATCH_CONSUMPTION_SCHEMA_VERSION}:${canonicalSha256(projection)}`;
+  return `sha256:agenticloop.dispatch-consumption.v${schemaVersion}:${canonicalSha256(projection)}`;
 }
 
 export function createDispatchConsumption({
-  backend, taskId, recognition, currentCarrierDigest, consumedAt = new Date().toISOString(),
+  backend, taskId, recognition, currentCarrierDigest, protectedInputDigest = null,
+  transitionKey = null, checkEvidenceOutput = null, consumedAt = new Date().toISOString(),
 }) {
   const checked = validateHandoffRecognition(recognition);
   if (!checked.ok || recognition?.recognized !== true || recognition.transition !== 'role_start' ||
@@ -55,6 +62,18 @@ export function createDispatchConsumption({
     throw refuse('dispatch consumption requires a valid recognized prepared-dispatch role-start verdict');
   }
   const identity = recognition.boundIdentity;
+  const attemptId = executionAttemptIdentity({ ...identity, taskId });
+  const resolvedProtectedInputDigest = protectedInputDigest ?? canonicalSha256({
+    actionId: 'role_start', preparedDispatch: identity,
+  });
+  const resolvedTransitionKey = transitionKey ?? protectedTransitionKey({
+    repositoryIdentity: identity.repositoryIdentity,
+    taskId,
+    attemptId,
+    actionId: 'role_start',
+    protectedInputDigest: resolvedProtectedInputDigest,
+  });
+  const resolvedCarrierDigest = currentCarrierDigest ?? identity.currentCarrierDigest ?? identity.dispatchCarrierDigest;
   const record = {
     kind: DISPATCH_CONSUMPTION_KIND,
     schemaVersion: DISPATCH_CONSUMPTION_SCHEMA_VERSION,
@@ -67,7 +86,7 @@ export function createDispatchConsumption({
     dispatchCarrierDigest: identity.dispatchCarrierDigest,
     // At role start the sealed dispatch carrier is the current carrier unless
     // the caller observed a later authoritative carrier explicitly.
-    currentCarrierDigest: currentCarrierDigest ?? identity.currentCarrierDigest ?? identity.dispatchCarrierDigest,
+    currentCarrierDigest: resolvedCarrierDigest,
     workUnitIdentity: identity.workUnitIdentity,
     repositoryIdentity: identity.repositoryIdentity,
     worktreeRoot: identity.worktreeRoot,
@@ -77,6 +96,15 @@ export function createDispatchConsumption({
     assuranceGrade: recognition.observedGrade,
     recognitionDigest: recognition.digest,
     recognition,
+    transitionKey: resolvedTransitionKey,
+    protectedInputDigest: resolvedProtectedInputDigest,
+    acceptedResult: {
+      transitionKey: resolvedTransitionKey,
+      protectedInputDigest: resolvedProtectedInputDigest,
+      currentCarrierDigest: resolvedCarrierDigest,
+      checkEvidenceOutput,
+      nextStep: 'implementation_artifact_evidence',
+    },
     consumedAt,
     digest: null,
   };
@@ -92,12 +120,15 @@ export function dispatchConsumptionRelativePath(record) {
 
 export function validateDispatchConsumption(record, {
   backend = null, taskId = null, filename = null, now = Date.now(),
-} = {}) {
+} = {}, schemaVersion = DISPATCH_CONSUMPTION_SCHEMA_VERSION) {
+  const legacy = schemaVersion === LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION;
   const required = [
     'kind', 'schemaVersion', 'backend', 'taskId', 'packetId', 'packetDigest', 'invocationId',
     'taskContractDigest', 'dispatchCarrierDigest', 'currentCarrierDigest', 'workUnitIdentity', 'repositoryIdentity',
     'worktreeRoot', 'productBaseHead', 'mutationClass', 'workflowRole', 'assuranceGrade',
-    'recognitionDigest', 'recognition', 'consumedAt', 'digest',
+    'recognitionDigest', 'recognition',
+    ...(!legacy ? ['transitionKey', 'protectedInputDigest', 'acceptedResult'] : []),
+    'consumedAt', 'digest',
   ];
   const errors = [];
   if (!record || typeof record !== 'object' || Array.isArray(record) ||
@@ -106,7 +137,7 @@ export function validateDispatchConsumption(record, {
     return { ok: false, errors: ['dispatch consumption fields must equal the closed schema'] };
   }
   if (record.kind !== DISPATCH_CONSUMPTION_KIND) errors.push(`dispatch consumption kind must be '${DISPATCH_CONSUMPTION_KIND}'`);
-  if (record.schemaVersion !== DISPATCH_CONSUMPTION_SCHEMA_VERSION) errors.push(`dispatch consumption schemaVersion must be ${DISPATCH_CONSUMPTION_SCHEMA_VERSION}`);
+  if (record.schemaVersion !== schemaVersion) errors.push(`dispatch consumption schemaVersion must be ${schemaVersion}`);
   if (!['files', 'github'].includes(record.backend)) errors.push('dispatch consumption backend is invalid');
   if (backend !== null && record.backend !== backend) errors.push(`dispatch consumption backend '${record.backend}' does not match expected backend '${backend}'`);
   if (typeof record.taskId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(record.taskId)) errors.push('dispatch consumption taskId is invalid');
@@ -128,6 +159,8 @@ export function validateDispatchConsumption(record, {
   if (record.workflowRole !== 'engineer') errors.push("dispatch consumption workflowRole must be immutable 'engineer'");
   if (!['operator_confirmed', 'host_signed'].includes(record.assuranceGrade)) errors.push('dispatch consumption assuranceGrade is invalid');
   if (!SEMANTIC_DIGEST_RE.test(String(record.recognitionDigest ?? ''))) errors.push('dispatch consumption recognitionDigest is invalid');
+  if (!legacy && !/^[a-f0-9]{64}$/.test(String(record.transitionKey ?? ''))) errors.push('dispatch consumption transitionKey is invalid');
+  if (!legacy && !/^[a-f0-9]{64}$/.test(String(record.protectedInputDigest ?? ''))) errors.push('dispatch consumption protectedInputDigest is invalid');
 
   const recognition = validateHandoffRecognition(record.recognition);
   if (!recognition.ok) errors.push(...recognition.errors.map(error => `embedded recognition: ${error}`));
@@ -144,6 +177,31 @@ export function validateDispatchConsumption(record, {
     ]) {
       if (record[field] !== identity[field]) errors.push(`dispatch consumption ${field} does not match embedded recognition`);
     }
+    if (!legacy) {
+      const attemptId = executionAttemptIdentity(record);
+      const expectedTransitionKey = protectedTransitionKey({
+        repositoryIdentity: record.repositoryIdentity,
+        taskId: record.taskId,
+        attemptId,
+        actionId: 'role_start',
+        protectedInputDigest: record.protectedInputDigest,
+      });
+      if (record.transitionKey !== expectedTransitionKey) errors.push('dispatch consumption transitionKey does not match its protected role-start identity');
+    }
+  }
+  if (!legacy) {
+    const accepted = record.acceptedResult;
+    if (!accepted || typeof accepted !== 'object' || Array.isArray(accepted) ||
+        Object.keys(accepted).length !== 5 ||
+        !['transitionKey', 'protectedInputDigest', 'currentCarrierDigest', 'checkEvidenceOutput', 'nextStep'].every(key => Object.hasOwn(accepted, key))) {
+      errors.push('dispatch consumption acceptedResult fields must equal the closed schema');
+    } else {
+      if (accepted.transitionKey !== record.transitionKey) errors.push('dispatch consumption acceptedResult transitionKey does not match record');
+      if (accepted.protectedInputDigest !== record.protectedInputDigest) errors.push('dispatch consumption acceptedResult protectedInputDigest does not match record');
+      if (accepted.currentCarrierDigest !== record.currentCarrierDigest) errors.push('dispatch consumption acceptedResult currentCarrierDigest does not match record');
+      if (accepted.checkEvidenceOutput !== null && (typeof accepted.checkEvidenceOutput !== 'string' || !accepted.checkEvidenceOutput)) errors.push('dispatch consumption acceptedResult checkEvidenceOutput is invalid');
+      if (accepted.nextStep !== 'implementation_artifact_evidence') errors.push('dispatch consumption acceptedResult nextStep is invalid');
+    }
   }
 
   const consumedMs = Date.parse(record.consumedAt);
@@ -155,8 +213,34 @@ export function validateDispatchConsumption(record, {
   if (filename !== null && filename !== `${safeSegment(record.packetId)}.json`) {
     errors.push('dispatch consumption filename does not match its packet identity');
   }
-  if (record.digest !== dispatchConsumptionDigest(record)) errors.push('dispatch consumption digest is invalid');
+  if (record.digest !== dispatchConsumptionDigestForSchema(record, schemaVersion)) errors.push('dispatch consumption digest is invalid');
   return { ok: errors.length === 0, errors };
+}
+
+/** Resolve a complete v3 identity without rewriting the persisted evidence. */
+function resolveLegacyDispatchConsumption(record) {
+  const protectedInputDigest = canonicalSha256({
+    actionId: 'role_start', preparedDispatch: record.recognition.boundIdentity,
+  });
+  const transitionKey = protectedTransitionKey({
+    repositoryIdentity: record.repositoryIdentity,
+    taskId: record.taskId,
+    attemptId: executionAttemptIdentity(record),
+    actionId: 'role_start',
+    protectedInputDigest,
+  });
+  return Object.freeze({
+    ...record,
+    transitionKey,
+    protectedInputDigest,
+    acceptedResult: Object.freeze({
+      transitionKey,
+      protectedInputDigest,
+      currentCarrierDigest: record.currentCarrierDigest,
+      checkEvidenceOutput: null,
+      nextStep: 'implementation_artifact_evidence',
+    }),
+  });
 }
 
 /**
@@ -177,12 +261,16 @@ export function listDispatchConsumptions(target, taskId, options = {}) {
     try {
       const record = JSON.parse(readFileSync(path, 'utf8'));
       const compatibility = classifyLifecycleCompatibility(record, DISPATCH_CONSUMPTION_KIND);
-      if (compatibility.state !== 'current') {
-        errors.push(`${name}: ${compatibilityMessage(compatibility, 'dispatch consumption')}`);
-      } else {
+      if (compatibility.state === 'current') {
         const checked = validateDispatchConsumption(record, { ...options, taskId, filename: name });
         if (!checked.ok) errors.push(...checked.errors.map(error => `${name}: ${error}`));
         else records.push(record);
+      } else if (record.schemaVersion === LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION) {
+        const checked = validateDispatchConsumption(record, { ...options, taskId, filename: name }, LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION);
+        if (!checked.ok) errors.push(...checked.errors.map(error => `${name}: ${error}`));
+        else records.push(resolveLegacyDispatchConsumption(record));
+      } else {
+        errors.push(`${name}: ${compatibilityMessage(compatibility, 'dispatch consumption')}`);
       }
     } catch (error) {
       errors.push(`${name}: dispatch consumption is unreadable: ${error.message}`);
@@ -197,6 +285,12 @@ export function currentDispatchConsumption(target, taskId, options = {}) {
   const ordered = [...listed.records].sort((a, b) =>
     Date.parse(a.consumedAt) - Date.parse(b.consumedAt) || a.packetId.localeCompare(b.packetId));
   return { ok: true, records: listed.records, errors: [], record: ordered.at(-1) };
+}
+
+/** Resolve an accepted role-start result by its persisted transition key. */
+export function dispatchConsumptionForTransitionKey(records, transitionKey) {
+  const matches = (records ?? []).filter(record => record.transitionKey === transitionKey);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export function carrierMutationRelativePath(receipt) {
