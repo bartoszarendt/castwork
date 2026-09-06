@@ -58,6 +58,7 @@ const MANIFEST = {
     'test/activation-grant-cli.test.js',
     'test/activation-grant-dispatch.test.js',
     'test/activation-grant-store.test.js',
+    'test/authorization-identity-separation.test.js',
     'test/activation-assurance-docs.test.js',
     'test/activation-scorer.test.js',
     'test/audit-record.test.js',

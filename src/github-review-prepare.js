@@ -199,7 +199,7 @@ function validateReviewPacketShape(packet, expectedPr) {
     errors.push('packet digest is invalid');
   }
   // The embedded receipt is validated as a complete, digest-consistent,
-  // correctly digested v3 receipt in its own right. Matching projections alone are not
+  // correctly digested v4 receipt in its own right. Matching projections alone are not
   // evidence: a fabricated object that merely echoes the packet's head and task
   // must not pass this boundary.
   const receipt = packet.reviewEntryReceipt;
@@ -482,7 +482,7 @@ function recognizeReviewEntryHandoff({
  * caller already holds.
  *
  * This proves the packet is a complete closed-schema packet, that its embedded
- * review-entry receipt is a complete digest-consistent v3 receipt, that no outer field
+ * review-entry receipt is a complete digest-consistent v4 receipt, that no outer field
  * contradicts that receipt, and that the stamped head equals the supplied head.
  *
  * It does **not** prove current repository state: it performs no refetch, no

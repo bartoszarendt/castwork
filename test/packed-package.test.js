@@ -367,9 +367,10 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     const projection = JSON.parse(source.stdout);
     assert.deepEqual(JSON.parse(packed.stdout), projection);
     assert.equal(projection.activationScope.scopes.some(scope => scope.grantId === fixture.active.grantId), true);
-    for (const grant of [fixture.expired, fixture.future, fixture.revoked]) {
+    for (const grant of [fixture.future, fixture.revoked]) {
       assert.equal(projection.activationScope.scopes.some(scope => scope.grantId === grant.grantId), false);
     }
+    assert.equal(projection.activationScope.scopes.some(scope => scope.grantId === fixture.expired.grantId), true);
     assert.equal(projection.operatorAuthorizedSet.bindings[0].grantId, fixture.active.grantId);
     assert.ok(projection.diagnostics.some(item => item.includes('files--T-999.json is unreadable or invalid JSON')));
   });

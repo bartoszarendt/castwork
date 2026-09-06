@@ -34,7 +34,7 @@ export const LIFECYCLE_ORIENTATION_SCHEMA_VERSION = 2;
 
 /** The closed set of authorization states the snapshot can report. */
 export const AUTHORIZATION_STATES = Object.freeze([
-  'present', 'missing', 'malformed', 'expired', 'revoked', 'stale', 'mismatched', 'unauthenticated',
+  'present', 'missing', 'malformed', 'unavailable', 'revoked', 'stale', 'mismatched', 'unauthenticated',
 ]);
 
 const TOP_LEVEL_FIELDS = Object.freeze([
@@ -175,7 +175,7 @@ function activeGrantScopes(target, io) {
         errors.push(`grant:${path}: activation grant is issued in the future`);
         continue;
       }
-      if (grant.repositoryIdentity !== targetRepositoryIdentity(target) || !authenticated || revoked || Date.parse(grant.expiresAt) <= now ||
+      if (grant.repositoryIdentity !== targetRepositoryIdentity(target) || !authenticated || revoked ||
           (policy.minimumActivation === 'host_signed' && grant.assurance !== 'host_signed')) continue;
       scopes.push({
         grantId: grant.grantId,

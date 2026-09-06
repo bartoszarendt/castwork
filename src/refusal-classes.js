@@ -29,9 +29,9 @@ export const ACCEPTED_REFUSAL_FAMILIES = Object.freeze(['F1', 'F2', 'F3', 'F4', 
  */
 const PRODUCER_INVENTORY_ROWS = [
   ['src/activation-grant.js', [
-    'activation.grant.malformed', 'activation.grant.expired', 'activation.grant.revoked',
+    'activation.grant.malformed', 'activation.grant.revoked',
     'activation.grant.repository_mismatch', 'activation.grant.out_of_scope', 'activation.binding.malformed',
-    'activation.binding.unauthenticated', 'activation.binding.expired', 'activation.binding.mismatch',
+    'activation.binding.unauthenticated', 'activation.binding.mismatch',
     'activation.binding.task_mismatch', 'activation.binding.repository_mismatch', 'activation.binding.stale_contract',
     'activation.binding.decomposition_missing', 'activation.binding.decomposition_invalid', 'activation.binding.decomposition_changed',
   ]],
@@ -159,7 +159,7 @@ const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
     'activation.assurance.insufficient', 'activation.binding.mismatch', 'activation.binding.stale_contract',
     'activation.capture.expired', 'activation.capture.malformed', 'activation.capture.mismatch',
     'activation.capture.missing', 'activation.capture.unsupported',
-    'activation.grant.expired', 'activation.grant.malformed', 'activation.grant.revoked', 'activation.grant.unauthenticated',
+    'activation.grant.malformed', 'activation.grant.revoked', 'activation.grant.unauthenticated',
     'role_return.invalid', 'role_return.stale',
   ]],
   ['src/dispatch-envelope.js', [
@@ -190,7 +190,6 @@ const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
   ['src/task-contract-baseline.js', ['contract.baseline.invalid', 'contract.baseline.missing', 'contract.baseline.stale']],
   ['src/task-readiness.js', ['dependency.unresolved', 'readiness.base_inventory.missing', 'task.contract.absent', 'task.contract.malformed', 'task.record.structure']],
   ['src/task-record-root.js', ['task.body.bom', 'task.body.collapsed_newlines', 'task.body.utf8']],
-  ['src/work-unit-lease.js', ['activation.grant.expired']],
   ['src/work-unit-lease.js', ['activation.binding.mismatch']],
 ];
 
@@ -634,13 +633,11 @@ const F1 = [
   classified('activation.capture.unsupported', 'F1', 'advisory_diagnostic', 'host_boundary', 'unsupported-observation', 'select supported boundary'),
   classified('activation.grant.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair grant encoding'),
   classified('activation.grant.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated grant'),
-  classified('activation.grant.expired', 'F1', 'migration_recompute', 'activation_authority', 'derived-freshness', 'recompute current authorization'),
   classified('activation.grant.revoked', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-revoked', 'obtain new authorization'),
   classified('activation.grant.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository'),
   classified('activation.grant.out_of_scope', 'F1', 'material_human_decision', 'activation_authority', 'scope-not-authorized', 'obtain scope authorization'),
   classified('activation.binding.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair binding encoding'),
   classified('activation.binding.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated binding'),
-  classified('activation.binding.expired', 'F1', 'migration_recompute', 'activation_authority', 'derived-freshness', 'recompute current authorization'),
   classified('activation.binding.mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'rebind current authorization'),
   classified('activation.binding.task_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'task-mismatch', 'use authorized task'),
   classified('activation.binding.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository'),

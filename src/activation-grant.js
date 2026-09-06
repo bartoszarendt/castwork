@@ -900,7 +900,10 @@ export function resolveTaskActivationBinding(input = {}) {
     fail(errors, 'an exact-task activation grant cannot produce a decomposition-derived binding', 'malformed', 'activation.binding.mismatch');
   }
 
-  // Freshness and expiry, evaluated independently for grant and binding.
+  // Issuance time guards against a future-dated authority.  `expiresAt` remains
+  // signed historical metadata for compatibility and audit, but is not an
+  // authorization invalidator: standard authority ends through revocation or a
+  // changed protected binding, never elapsed wall time.
   const grantIssued = instantMs(grant.issuedAt);
   const grantExpires = instantMs(grant.expiresAt);
   const bindingIssued = instantMs(binding.issuedAt);
@@ -908,14 +911,8 @@ export function resolveTaskActivationBinding(input = {}) {
   if (grantIssued !== null && grantIssued - skew > now) {
     fail(errors, 'activation grant is issued in the future', 'malformed', 'activation.grant.malformed');
   }
-  if (grantExpires !== null && grantExpires <= now) {
-    fail(errors, 'activation grant has expired; re-run the activation command', 'stale', 'activation.grant.expired');
-  }
   if (bindingIssued !== null && bindingIssued - skew > now) {
     fail(errors, 'task activation binding is issued in the future', 'malformed', 'activation.binding.malformed');
-  }
-  if (bindingExpires !== null && bindingExpires <= now) {
-    fail(errors, 'task activation binding has expired; re-run the activation command', 'stale', 'activation.binding.expired');
   }
   if (grantExpires !== null && bindingExpires !== null && bindingExpires > grantExpires) {
     fail(errors, 'task activation binding cannot outlive its activation grant', 'malformed', 'activation.binding.malformed');

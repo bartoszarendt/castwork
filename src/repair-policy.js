@@ -102,13 +102,11 @@ export const REPAIR_POLICY = Object.freeze({
   // agent session.
   'activation.grant.malformed': policy('activation', 'repair_evidence', 'none', 'An activation grant or task activation binding is malformed.'),
   'activation.grant.unauthenticated': policy('activation', 'repair_evidence', 'human_authority_review', 'An activation grant is unsigned or does not verify against the external operator or pinned host key.'),
-  'activation.grant.expired': policy('activation', 'repair_evidence', 'none', 'The activation grant has expired.'),
   'activation.grant.revoked': policy('activation', 'repair_evidence', 'none', 'The activation grant was revoked, or a revocation record for this target is unreadable.'),
   'activation.grant.repository_mismatch': policy('activation', 'repair_evidence', 'none', 'The activation grant was issued for a different target repository.'),
   'activation.grant.out_of_scope': policy('activation', 'repair_evidence', 'none', 'The activation grant scope does not authorize this task.'),
   'activation.binding.malformed': policy('activation', 'repair_evidence', 'none', 'The task activation binding is malformed.'),
   'activation.binding.unauthenticated': policy('activation', 'repair_evidence', 'human_authority_review', 'The task activation binding is unsigned or does not verify against the external operator or pinned host key.'),
-  'activation.binding.expired': policy('activation', 'repair_evidence', 'none', 'The task activation binding has expired.'),
   'activation.binding.mismatch': policy('activation', 'repair_evidence', 'none', 'The task activation binding contradicts its grant, assurance, or derivation.'),
   'activation.binding.task_mismatch': policy('activation', 'repair_evidence', 'none', 'The task activation binding authorizes a different task, backend, or carrier.'),
   'activation.binding.repository_mismatch': policy('activation', 'repair_evidence', 'none', 'The task activation binding was issued for a different target repository.'),

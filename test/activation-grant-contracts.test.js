@@ -185,12 +185,13 @@ describe('activation binding resolution', () => {
     assert.ok(resolved.errors.some(item => item.code === 'activation.binding.repository_mismatch'));
   });
 
-  it('refuses an expired grant as stale', () => {
+  it('keeps a signed grant and binding valid after their historical expiry metadata', () => {
     const grant = grantFor({ ttlSeconds: 60 });
-    const resolved = resolveWith({ grant, input: { now: Date.parse(grant.expiresAt) + 1000 } });
-    assert.equal(resolved.ok, false);
-    assert.equal(resolved.evidenceState, 'stale');
-    assert.ok(resolved.errors.some(item => item.code === 'activation.grant.expired'));
+    const resolved = resolveWith({
+      grant,
+      input: { now: Date.parse(grant.expiresAt) + 5 * 24 * 60 * 60 * 1000 },
+    });
+    assert.equal(resolved.ok, true, JSON.stringify(resolved.errors));
   });
 
   it('refuses a revoked grant', () => {

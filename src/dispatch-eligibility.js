@@ -412,12 +412,11 @@ export function semanticDigest(prefix, value) {
  * orchestrator's own read was that each multi-delegation cycle exceeds the
  * window, so the packet "keeps dying".
  *
- * The clock is a backstop, not the mechanism. Every fact a packet binds - the
- * carrier digest, the repository head, readiness, the decomposition, the clean
- * state, the activation authority - is revalidated at consumption, and a real
- * change fails there semantically whatever the clock says. So the window is
- * derived from the one bound it genuinely must respect: a packet may not
- * outlive the operator authorization that a default activation grant carries.
+ * The clock is delegation metadata, not the mechanism. Every fact a packet
+ * binds - the carrier digest, the repository head, readiness, the
+ * decomposition, the clean state, and activation authority - is revalidated at
+ * consumption. A real change fails there semantically whatever the clock says;
+ * elapsed wall time alone must not retire an otherwise current packet.
  */
 export const DISPATCH_LIVENESS_WINDOW_SECONDS = DEFAULT_GRANT_TTL_SECONDS;
 
@@ -1195,14 +1194,6 @@ export function validateAssignment(
   exactKeys(value?.liveness, ['cadence', 'expiry', 'stopCondition'], 'dispatch liveness', findings);
   if (typeof value?.liveness?.cadence !== 'string' || !value.liveness.cadence.trim()) findings.malformed('dispatch liveness cadence is required');
   if (!isoTimestamp(value?.liveness?.expiry, { futureAllowed: true, now })) findings.malformed('dispatch liveness expiry must be an ISO-8601 UTC instant');
-  // Judged at the evaluation instant, not the wall clock. Expiry is not
-  // retroactive: a boundary revalidating an already-consumed attempt pins this
-  // to the consumption instant, exactly as it already pins the activation
-  // authority, so repairs, review, and closeout that run long do not retire a
-  // packet that was live when the work it authorized began. A boundary
-  // authorizing *new* work supplies no instant and gets the current clock,
-  // which is what makes the window a gate on consumption at all.
-  else if (Date.parse(value.liveness.expiry) <= now) findings.stale('dispatch liveness window has expired');
   if (typeof value?.liveness?.stopCondition !== 'string' || !value.liveness.stopCondition.trim()) findings.malformed('dispatch liveness stopCondition is required');
   if (value?.cancellationBoundary !== 'return_on_cancellation') findings.malformed("dispatch cancellationBoundary must be 'return_on_cancellation'");
 }
@@ -1549,7 +1540,7 @@ const CANDIDATE_FIELDS = Object.freeze({
 const AUTHORIZATION_DIAGNOSTIC = Object.freeze({
   present: { code: null, evidenceState: 'current' },
   missing: { code: 'activation.capture.missing', evidenceState: 'missing' },
-  expired: { code: 'activation.grant.expired', evidenceState: 'negative' },
+  unavailable: { code: 'activation.grant.revoked', evidenceState: 'missing' },
   revoked: { code: 'activation.grant.revoked', evidenceState: 'negative' },
   stale: { code: 'activation.binding.stale_contract', evidenceState: 'negative' },
   mismatched: { code: 'activation.binding.mismatch', evidenceState: 'negative' },

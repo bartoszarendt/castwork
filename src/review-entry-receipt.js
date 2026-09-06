@@ -16,15 +16,15 @@ import { evaluateCommitAttribution } from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 
 export const REVIEW_ENTRY_RECEIPT_KIND = 'agenticloop.review-entry-receipt';
-export const REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION = 3;
+export const REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION = 4;
 export const REVIEW_ENTRY_FAILURE_KIND = 'agenticloop.review-entry-resume';
 export const REVIEW_ENTRY_FAILURE_SCHEMA_VERSION = 1;
 
 /**
  * The receipt digest domain is derived from the schema version so the two can
- * never drift: a v3 receipt is only ever digested and verified in the v3
+ * never drift: a v4 receipt is only ever digested and verified in the v4
  * domain. An older digest is a legacy identity - it may be recognized for
- * diagnostics but is never reinterpreted as v3 and never authorizes the v3
+ * diagnostics but is never reinterpreted as v4 and never authorizes the v4
  * review-entry or dispatch boundary.
  */
 export const REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN =
@@ -43,12 +43,11 @@ export const REVIEW_ENTRY_RECEIPT_FIELDS = Object.freeze([
 const REVIEW_ENTRY_RECEIPT_MODES = Object.freeze(['host_subagent', 'independent_human']);
 
 const INVALIDATORS = Object.freeze([
-  'artifact_head_changed', 'task_body_changed', 'task_contract_changed',
+  'artifact_head_changed', 'task_contract_changed',
   'required_checks_changed', 'check_evidence_changed', 'attribution_changed',
   'review_evidence_changed',
 ]);
 
-const BODY_DIGEST_RE = /^sha256:[a-f0-9]{64}$/;
 const CONTRACT_DIGEST_RE = /^sha256:v1:[a-f0-9]{64}$/;
 const SEMANTIC_DIGEST_RE = /^sha256:agenticloop\.[a-z-]+\.v[1-9]\d*:[a-f0-9]{64}$/;
 
@@ -59,10 +58,6 @@ function isObject(value) {
 function exactKeys(value, expected) {
   return isObject(value) && Object.keys(value).length === expected.length &&
     Object.keys(value).every(key => expected.includes(key));
-}
-
-function bodyDigest(body) {
-  return `sha256:${canonicalSha256(String(body ?? ''))}`;
 }
 
 function semanticDigest(domain, value) {
@@ -245,7 +240,7 @@ function receiptMaterial(loaded, result, observedAt) {
     schemaVersion: REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION,
     backend: 'github',
     task: {
-      id: String(issueData.number), bodyDigest: bodyDigest(issueData.body), contractDigest: contract.digest,
+      id: String(issueData.number), contractDigest: contract.digest,
       contractBaseline: result.contractBaseline.baseline,
     },
     artifact: { kind: 'pull_request', pr: Number(prData.number), head },
@@ -269,7 +264,7 @@ export function createReviewEntryReceipt(loaded, result, { observedAt = new Date
 /**
  * Static closed-schema and integrity validation for a review-entry receipt.
  *
- * This proves the receipt is a complete, self-consistent, digest-consistent v3
+ * This proves the receipt is a complete, self-consistent, digest-consistent v4
  * receipt. It deliberately requires no current repository state and therefore
  * proves nothing about whether the receipt is still *current*: only
  * {@link validateReviewEntryReceipt} - and, at the dispatch boundary,
@@ -296,11 +291,10 @@ export function validateReviewEntryReceiptShape(receipt) {
   if (receipt?.workOwnerRoleId !== 'engineer') errors.push('review-entry receipt work owner must be immutable engineer');
 
   const task = receipt?.task;
-  if (!exactKeys(task, ['id', 'bodyDigest', 'contractDigest', 'contractBaseline'])) {
+  if (!exactKeys(task, ['id', 'contractDigest', 'contractBaseline'])) {
     errors.push('review-entry receipt task projection must equal the closed schema');
   } else {
     if (typeof task.id !== 'string' || !/^[1-9]\d*$/.test(task.id)) errors.push('review-entry receipt task id must be a positive integer identity');
-    if (!BODY_DIGEST_RE.test(String(task.bodyDigest ?? ''))) errors.push('review-entry receipt task bodyDigest is invalid');
     if (!CONTRACT_DIGEST_RE.test(String(task.contractDigest ?? ''))) errors.push('review-entry receipt task contractDigest is invalid');
     if (task.contractBaseline !== null && !isObject(task.contractBaseline)) errors.push('review-entry receipt task contractBaseline must be an object or null');
   }

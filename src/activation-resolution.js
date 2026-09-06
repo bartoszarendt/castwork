@@ -231,6 +231,15 @@ export function resolveCurrentTaskAuthorization(target, io, task) {
   });
   const local = readActivationRevocations(target);
   const revocationErrors = [...(external.errors ?? []), ...(local.errors ?? [])];
+  // A deny registry is external authority.  Do not treat an unreadable
+  // refetch as an empty registry: that would silently trust stale revocation
+  // state.  The caller can retry when it is available again.
+  if (!external.ok) {
+    return {
+      state: 'unavailable', binding, grant: grantRead.record, assurance: null,
+      errors: revocationErrors.map(error => `revocation inventory unavailable: ${error}`).sort(),
+    };
+  }
   const resolved = resolveTaskActivationBinding({
     grant: grantRead.record,
     binding,
@@ -281,7 +290,16 @@ export function resolvePacketActivationBinding(target, io, packet, options = {})
     operatorActivationRoot: io?.operatorActivationRoot ?? undefined,
   });
   if (!external.ok) {
-    return { ok: false, evidenceState: 'malformed', disposition: 'blocked', errors: external.errors.map(message => ({ message, evidenceState: 'malformed', code: 'activation.grant.revoked' })) };
+    return {
+      ok: false,
+      evidenceState: 'missing',
+      disposition: 'blocked',
+      errors: external.errors.map(message => ({
+        message: `external activation revocation inventory is unavailable: ${message}`,
+        evidenceState: 'missing',
+        code: 'activation.grant.revoked',
+      })),
+    };
   }
   const local = readActivationRevocations(target);
   const resolved = resolveTaskActivationBinding({

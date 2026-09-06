@@ -99,13 +99,6 @@ export function evaluateWorkUnitLease(input = {}) {
     );
   }
 
-  // Expiry still applies. A lease derived from expired intent is not intent.
-  const now = input.now ?? Date.now();
-  const expiresAt = Date.parse(grant.expiresAt ?? '');
-  if (Number.isFinite(expiresAt) && expiresAt <= now) {
-    return refuse(`the work-unit authorization expired at ${grant.expiresAt}`, 'activation.grant.expired');
-  }
-
   return Object.freeze({
     ok: true,
     derivable: true,

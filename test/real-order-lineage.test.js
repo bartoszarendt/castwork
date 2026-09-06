@@ -601,8 +601,8 @@ describe('acceptance answers to the Engineer return terminal', () => {
   });
 });
 
-describe('an expired grant still closes out the attempt it authorized', () => {
-  it('completes the consumed attempt, refuses a new packet, and keeps revocation separate', async () => {
+describe('an elapsed grant remains valid until a semantic invalidator', () => {
+  it('completes the consumed attempt, keeps standard authorization current, and keeps revocation separate', async () => {
     const projectMap = CLOSEOUT_PROJECT_MAP.replace('work_unit_audit: enabled', 'work_unit_audit: disabled');
     const fixture = await createDispatchFixture(temp, 'grant-closeout', {
       scaffold: true, workUnit: 'milestone:M00', parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'], projectMapContent: projectMap,
@@ -720,11 +720,11 @@ describe('an expired grant still closes out the attempt it authorized', () => {
     fixtureGit(root, ['add', '-f', '.agenticloop/returns/verifications']);
     fixtureGit(root, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
 
-    // Let the grant expire. Nothing about the consumed attempt changes: every
-    // step from here on runs on an authority that is no longer current.
+    // Let the historical grant expiry pass. Nothing about the protected
+    // authorization changes, so ordinary work stays authorized.
     const remaining = grantExpiresAt + 500 - Date.now();
     if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
-    assert.ok(Date.now() > grantExpiresAt, 'the grant must be expired before the lifecycle continues');
+    assert.ok(Date.now() > grantExpiresAt, 'the historical expiry must pass before the lifecycle continues');
 
     recordReview(root, productHead);
     const accepted = await runCliInProcess([
@@ -750,25 +750,22 @@ describe('an expired grant still closes out the attempt it authorized', () => {
     assert.equal(closeoutPacket.assurance.tasks[0].activation, 'operator_confirmed');
     assert.equal(closeoutPacket.assurance.tasks[0].activation_source, 'activation_grant');
 
-    // The same expired grant no longer authorizes new work. The operator-facing
-    // surface says so directly...
+    // The same elapsed grant remains current for standard authorization.
     const status = await runCliInProcess(['activation', 'status', 'T-001', '--json', '--target', root], cli);
     const row = JSON.parse(status.stdout).bindings.find(item => item.taskId === 'T-001');
-    assert.equal(row.usable, false, 'an expired binding is not usable for new work');
+    assert.equal(row.usable, true, 'elapsed wall time alone does not retire an unchanged binding');
     assert.equal(row.grantId, packet.activationBinding.grant.grantId);
-    assert.ok(row.reasons.some(reason => /expired/i.test(reason)), JSON.stringify(row.reasons));
+    assert.deepEqual(row.reasons, []);
 
-    // ...and the packet-level authority refuses at the current clock while the
-    // pinned consumption instant still resolves. That difference is the whole
-    // non-retroactive rule, checked at the seam that owns it.
+    // Packet authority likewise remains current at both the current and
+    // consumption clocks; actual invalidators remain independently checked.
     const io = { operatorTrustRoot: fixture.operatorTrustRoot, operatorActivationRoot: fixture.operatorActivationRoot };
     const atNow = resolvePacketActivationBinding(root, io, packet);
-    assert.equal(atNow.ok, false, 'the expired grant cannot authorize a new attempt');
-    assert.ok(atNow.errors.some(error => /expired/i.test(error.message)), JSON.stringify(atNow.errors));
+    assert.equal(atNow.ok, true, JSON.stringify(atNow.errors));
     const atConsumption = resolvePacketActivationBinding(root, io, packet, {
       now: Date.parse(consumption.consumedAt),
     });
-    assert.equal(atConsumption.ok, true, 'the attempt it authorized is still authorized');
+    assert.equal(atConsumption.ok, true, 'the attempt it authorized remains authorized');
     // A grant issued after the attempt started never authorizes it: pinning
     // only ever narrows.
     const beforeIssue = resolvePacketActivationBinding(root, io, packet, {

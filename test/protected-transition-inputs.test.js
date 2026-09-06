@@ -67,7 +67,10 @@ const EVALUATOR_FIELD_CONTRACTS = Object.freeze({
       assert.equal(outcome.ok, baseline.ok);
       assert.deepEqual(outcome.dimensions, baseline.dimensions);
     },
-    now: outcome => assert.equal(outcome.ok, false),
+    now: (outcome, baseline) => {
+      assert.equal(outcome.ok, baseline.ok);
+      assert.deepEqual(outcome.dimensions, baseline.dimensions);
+    },
   }),
   role_start: Object.freeze({
     transition: outcome => assertHandoffDiagnostic(outcome, 'handoff.transition.unsupported'),

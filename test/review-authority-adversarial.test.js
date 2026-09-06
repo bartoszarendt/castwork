@@ -328,19 +328,19 @@ describe('canonical review-marker writer fails before emitting', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Defect 4, 5 & 6: packet/receipt validation and the v3 digest domain
+// Defect 4, 5 & 6: packet/receipt validation and the v4 digest domain
 // ---------------------------------------------------------------------------
 
-describe('review-entry receipt v3 identity and static validation', () => {
-  it('uses the v3 digest domain derived from the schema version', () => {
+describe('review-entry receipt v4 identity and static validation', () => {
+  it('uses the v4 digest domain derived from the schema version', () => {
     const receipt = receiptFor();
-    assert.equal(REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION, 3);
-    assert.equal(REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN, 'agenticloop.review-entry-receipt.v3');
+    assert.equal(REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION, 4);
+    assert.equal(REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN, 'agenticloop.review-entry-receipt.v4');
     assert.ok(receipt.digest.startsWith(`sha256:${REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN}:`));
     assert.equal(validateReviewEntryReceiptShape(receipt).ok, true);
   });
 
-  it('rejects a v3 receipt digested in the legacy v2 domain and never reinterprets it', () => {
+  it('rejects a v4 receipt digested in the legacy v2 domain and never reinterprets it', () => {
     const receipt = structuredClone(receiptFor());
     const projection = { ...receipt };
     delete projection.digest;
