@@ -1,6 +1,7 @@
 /** Exact-head review-entry evidence and its resumable failure packet. */
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
+import { deriveFinishCandidate, finishCandidateIsCurrent } from './finish-candidate.js';
 import { taskContractDigest } from './task-contract-baseline.js';
 import { githubAttributionShape, resolveGitHubTaskIdentityStrict } from './github-task-identity.js';
 import {
@@ -16,15 +17,15 @@ import { evaluateCommitAttribution } from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 
 export const REVIEW_ENTRY_RECEIPT_KIND = 'agenticloop.review-entry-receipt';
-export const REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION = 4;
+export const REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION = 5;
 export const REVIEW_ENTRY_FAILURE_KIND = 'agenticloop.review-entry-resume';
 export const REVIEW_ENTRY_FAILURE_SCHEMA_VERSION = 1;
 
 /**
  * The receipt digest domain is derived from the schema version so the two can
- * never drift: a v4 receipt is only ever digested and verified in the v4
+ * never drift: a v5 receipt is only ever digested and verified in the v5
  * domain. An older digest is a legacy identity - it may be recognized for
- * diagnostics but is never reinterpreted as v4 and never authorizes the v4
+ * diagnostics but is never reinterpreted as v5 and never authorizes the v5
  * review-entry or dispatch boundary.
  */
 export const REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN =
@@ -37,7 +38,7 @@ const LEGACY_RECEIPT_DIGEST_RE =
 
 export const REVIEW_ENTRY_RECEIPT_FIELDS = Object.freeze([
   'kind', 'schemaVersion', 'backend', 'task', 'artifact', 'checks', 'attribution',
-  'review', 'observation', 'validation', 'lifecycle', 'workOwnerRoleId', 'digest',
+  'review', 'finishCandidate', 'observation', 'validation', 'lifecycle', 'workOwnerRoleId', 'digest',
 ]);
 
 const REVIEW_ENTRY_RECEIPT_MODES = Object.freeze(['host_subagent', 'independent_human']);
@@ -174,6 +175,74 @@ function checksSnapshot(checks, evidence) {
   };
 }
 
+function finishCandidateForReceipt({ prData, issueData, checks, head }) {
+  const base = String(prData?.baseRefOid ?? '');
+  if (!oid(base) || !sameGitObjectFormat([base, head])) {
+    throw new TypeError('review entry requires a complete same-format reachable PR base identity');
+  }
+  const commits = (prData?.commits ?? []).map(commit => String(commit?.oid ?? '')).sort();
+  const paths = (prData?.files ?? []).map(file => String(file?.path ?? '')).sort();
+  const checkIds = checks.map(check => String(check?.id ?? check?.matchKey ?? check?.text ?? '').trim());
+  return deriveFinishCandidate({
+    backend: 'github',
+    productRange: { base, head, commits },
+    productChangedPaths: paths,
+    workflowChangedPaths: [],
+    requiredChecks: checkIds.map(id => ({ id })),
+    returnIdentity: { taskId: String(issueData?.number), pr: Number(prData?.number), head },
+    candidateHead: head,
+  });
+}
+
+function canonicalCommitSet(commits) {
+  if (!Array.isArray(commits) || commits.some(commit => !oid(commit)) || new Set(commits).size !== commits.length) {
+    return null;
+  }
+  return [...commits].sort();
+}
+
+function validateReceiptFinishCandidate(receipt) {
+  const errors = [];
+  const finish = receipt?.finishCandidate;
+  try {
+    const expected = deriveFinishCandidate({
+      backend: 'github',
+      productRange: finish?.productRange,
+      productChangedPaths: finish?.changedPathVerdict?.productPaths,
+      workflowChangedPaths: finish?.changedPathVerdict?.workflowPaths,
+      requiredChecks: finish?.requiredCheckSet?.map(id => ({ id })),
+      returnIdentity: finish?.returnIdentity,
+      candidateHead: receipt?.artifact?.head,
+      observedCandidateHead: finish?.certificationInvalidation?.observedCandidateHead,
+    });
+    if (canonicalJson(finish) !== canonicalJson(expected)) {
+      errors.push('review-entry receipt finish candidate is not a canonical exact candidate');
+    }
+    if (finish?.returnIdentity?.taskId !== receipt?.task?.id ||
+        finish?.returnIdentity?.pr !== receipt?.artifact?.pr ||
+        finish?.returnIdentity?.head !== receipt?.artifact?.head ||
+        finish?.productRange?.head !== receipt?.artifact?.head) {
+      errors.push('review-entry receipt finish candidate does not bind its task and artifact identities');
+    }
+    const checkIds = receipt?.checks?.required?.map(check => check?.identity) ?? [];
+    if (canonicalJson(finish?.requiredCheckSet) !== canonicalJson(checkIds)) {
+      errors.push('review-entry receipt finish candidate does not bind its required-check set');
+    }
+    if (!Array.isArray(finish?.productRange?.commits) || finish.productRange.commits.length === 0) {
+      errors.push('review-entry receipt finish candidate requires a reachable commit range');
+    }
+    const finishCommitSet = canonicalCommitSet(finish?.productRange?.commits);
+    const attributionCommitSet = canonicalCommitSet(receipt?.attribution?.commits);
+    if (finishCommitSet === null || attributionCommitSet === null ||
+        canonicalJson(finishCommitSet) !== canonicalJson(attributionCommitSet)) {
+      errors.push('review-entry receipt finish candidate commit inventory does not match its attribution inventory');
+    }
+  } catch (error) {
+    errors.push(`review-entry receipt finish candidate is invalid: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return errors;
+}
+
 function receiptInputEvidenceState(loaded, result) {
   if (!loaded?.input || !result) return 'missing';
   if (!Array.isArray(result.requiredChecks) || result.requiredChecks.length === 0 ||
@@ -223,6 +292,10 @@ function receiptMaterial(loaded, result, observedAt) {
   if (checkIds.some(id => !String(id ?? '').trim()) || new Set(checkIds).size !== checkIds.length) {
     throw new TypeError('review entry required checks must have unique exact identities');
   }
+  // This is the one persisted GitHub finish result. Audit consumers receive it
+  // through this signed receipt; they must not mint a second candidate.
+  const finish = finishCandidateForReceipt({ prData, issueData, checks, head });
+  if (!finishCandidateIsCurrent(finish, head)) throw new TypeError('review entry cannot certify a moving candidate');
   const reviewHistory = loaded?.input?.reviewHistory;
   if (!reviewHistory || !Array.isArray(reviewHistory.events) || !Array.isArray(reviewHistory.errors) || reviewHistory.errors.length > 0) {
     throw new TypeError('review entry requires current durable review evidence');
@@ -247,6 +320,7 @@ function receiptMaterial(loaded, result, observedAt) {
     checks: checksSnapshot(checks, evidence),
     attribution: reviewAttribution(prData, issueData, head),
     review: { mode: reviewMode, independentReviewRequired, history: reviewHistorySnapshot(reviewHistory) },
+    finishCandidate: finish,
     observation: { observedAt, invalidatedBy: INVALIDATORS },
     validation: { result: validation.result, digest: validation.digest },
     lifecycle: { claim: 'implementation_ready_for_review', completion: false },
@@ -264,7 +338,7 @@ export function createReviewEntryReceipt(loaded, result, { observedAt = new Date
 /**
  * Static closed-schema and integrity validation for a review-entry receipt.
  *
- * This proves the receipt is a complete, self-consistent, digest-consistent v4
+ * This proves the receipt is a complete, self-consistent, digest-consistent v5
  * receipt. It deliberately requires no current repository state and therefore
  * proves nothing about whether the receipt is still *current*: only
  * {@link validateReviewEntryReceipt} - and, at the dispatch boundary,
@@ -402,6 +476,8 @@ export function validateReviewEntryReceiptShape(receipt) {
       }
     }
   }
+
+  errors.push(...validateReceiptFinishCandidate(receipt));
 
   if (!sameGitObjectFormat([artifact?.head, ...(Array.isArray(attribution?.commits) ? attribution.commits : [])])) {
     errors.push('review-entry receipt Git identities must all use one object format');

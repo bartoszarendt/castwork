@@ -997,7 +997,7 @@ async function cmdGithubReviewAudit(args, io) {
   const expectedArtifact = opts.expectArtifact ?? undefined;
   let result;
   try {
-    result = runGitHubReviewAudit({ pr: opts.pr, issue: opts.issue, repo: opts.repo, expectedStatus, expectedArtifact, workspace: opts.workspace });
+    result = runGitHubReviewAudit({ pr: opts.pr, issue: opts.issue, repo: opts.repo, expectedStatus, expectedArtifact, workspace: opts.workspace, reviewPacket: opts.reviewPacket });
   } catch (error) {
     if (!(error instanceof GitHubReviewAuditError)) throw error;
     if (asJson) emitValidationResult(io, commandFailure('github-review-audit', error, 'operational_error', {}, target));
@@ -1053,6 +1053,7 @@ async function cmdGithubReady(args, io) {
       pr: opts.pr,
       issue: opts.issue,
       repo: opts.repo,
+      reviewPacket: opts.reviewPacket,
       commandRunner: io.ghCommandRunner ?? defaultGhCommandRunner,
       target,
       taskIdRegex: projectConfig?.task_backend === 'github' ? projectConfig?.task_id_regex : undefined,

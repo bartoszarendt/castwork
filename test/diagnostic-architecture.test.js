@@ -599,7 +599,10 @@ describe('refusal classification ratchet', () => {
       const observed = await runF6ExecutableProbe(binding.probeId);
       const codes = observed.diagnostics.map(item => item?.code);
       const f6Codes = codes.filter(code => REFUSAL_CLASSES[code]?.family === 'F6');
-      assert.deepEqual([...new Set(f6Codes)], [binding.code], `${binding.probeId} must emit only its exact public F6 code`);
+      const expectedCodes = binding.probeId === 'review-audit-task-contract'
+        ? [binding.code, 'review_audit.failure']
+        : [binding.code];
+      assert.deepEqual([...new Set(f6Codes)].sort(), expectedCodes.sort(), `${binding.probeId} must emit its exact public F6 code plus any live-candidate drift refusal`);
       assert.equal(REFUSAL_CLASSES[binding.code].factOwner, binding.factOwner, `${binding.probeId} fact binding drifted`);
     }
   });

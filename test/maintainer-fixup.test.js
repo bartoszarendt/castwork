@@ -27,6 +27,8 @@ import { generateClaudeCodeArtifacts } from '../src/adapters/claude-code.js';
 import { generateCopilotArtifacts } from '../src/adapters/copilot.js';
 import { generateCursorArtifacts } from '../src/adapters/cursor.js';
 import { loadAgenticLoopConfig } from '../src/json.js';
+import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { seedTargetLayout } from './helpers/layout-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -707,10 +709,35 @@ function fixupCommit({ oid = HEAD, task = 'T-001', agent = 'maintainer' } = {}) 
   return { oid, messageHeadline: 'Fix duplicated guard', messageBody: `Task: ${task}\nAgent: ${agent}` };
 }
 
-function auditData({ comments, commits = [baseCommit(), fixupCommit()], issueBody = '---\ntask_id: T-001\n---', taskPrData = [] } = {}) {
+function auditIssueBody(taskId = 'T-001') {
+  return `---\ntask_id: ${taskId}\nindependent_review_required: false\n---\n# ${taskId}\n\n## Scope\nAudit fixture.\n\n## Out of Scope\nNone.\n\n## Acceptance Criteria\nAudit candidate.\n\n## Required Checks\n- [RC-1] \`npm test\``;
+}
+
+function auditReceipt({ head = HEAD, base = BASE, commits, issueBody = auditIssueBody() } = {}) {
+  const receiptBody = issueBody;
+  const contract = taskContractDigest(receiptBody);
+  return createReviewEntryReceipt({ input: {
+    prData: {
+      number: 42, baseRefOid: base, headRefOid: head, files: [{ path: 'src/fixup.js' }],
+      commits: commits.map(commit => ({
+        oid: commit.oid,
+        message: `implementation\n\nTask: T-001\nAgent: engineer`,
+      })),
+    },
+    issueData: { number: 7, body: receiptBody }, reviewHistory: { events: [], errors: [] },
+  } }, {
+    ok: true, errors: [], warnings: [],
+    requiredChecks: [{ id: 'RC-1', text: '[RC-1] `npm test`', matchKey: 'npm test' }],
+    evidenceMatches: [{ id: 'RC-1', check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'tests passed' }],
+    contractBaseline: { digest: contract.digest, baseline: null },
+  }, { observedAt: '2026-08-07T00:00:00.000Z' });
+}
+
+function auditData({ comments, commits = [baseCommit(), fixupCommit()], issueBody = auditIssueBody(), taskPrData = [] } = {}) {
   return {
-    prData: { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments, reviews: [], commits },
+    prData: { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/fixup.js' }], closingIssuesReferences: [{ number: 7 }], comments, reviews: [], commits },
     issueData: { number: 7, body: issueBody },
+    reviewEntryReceipt: auditReceipt({ commits: [baseCommit(), fixupCommit()], issueBody }),
     taskPrData,
     expectedAccount: LOOP_ACCOUNT,
   };
@@ -810,13 +837,21 @@ describe('GitHub review audit: Maintainer Review Fixup', () => {
     const sha256Data = {
       prData: {
         number: 42, headRefOid: head256, closingIssuesReferences: [{ number: 7 }], reviews: [],
+        baseRefOid: base256, files: [{ path: 'src/fixup.js' }],
         comments: [reviewMarker({ artifact: head256, fixup: fixupSubsection({ base: base256, resulting: head256 }) })],
         commits: [
           { oid: base256, messageHeadline: 'Engineer implementation', messageBody: '' },
           { oid: head256, messageHeadline: 'Fix duplicated guard', messageBody: 'Task: T-001\nAgent: maintainer' },
         ],
       },
-      issueData: { number: 7, body: '---\ntask_id: T-001\n---' },
+      issueData: { number: 7, body: auditIssueBody() },
+      reviewEntryReceipt: auditReceipt({
+        head: head256, base: base256,
+        commits: [
+          { oid: base256 },
+          { oid: head256 },
+        ],
+      }),
       taskPrData: [],
       expectedAccount: LOOP_ACCOUNT,
     };
@@ -967,7 +1002,7 @@ describe('GitHub review audit: Maintainer Review Fixup', () => {
   });
 
   it('rejects a wrong Task: trailer when the issue declares a canonical task identity (case 11)', () => {
-    const issueBody = ['---', 'task_id: T-001', '---', 'Task body'].join('\n');
+    const issueBody = auditIssueBody();
     const result = evaluateGitHubReviewAudit(auditData({
       comments: [reviewMarker({ fixup: ghFixup() })],
       commits: [baseCommit(), fixupCommit({ task: 'T-999' })],
@@ -977,7 +1012,7 @@ describe('GitHub review audit: Maintainer Review Fixup', () => {
   });
 
   it('accepts correct attribution against the canonical task identity (case 12)', () => {
-    const issueBody = ['---', 'task_id: T-001', '---', 'Task body'].join('\n');
+    const issueBody = auditIssueBody();
     const result = evaluateGitHubReviewAudit(auditData({
       comments: [reviewMarker({ fixup: ghFixup() })],
       issueBody,
@@ -985,13 +1020,15 @@ describe('GitHub review audit: Maintainer Review Fixup', () => {
     assert.equal(result.ok, true, result.errors.join('\n'));
   });
 
-  it('uses the linked issue number for legacy fixup attribution', () => {
-    const result = evaluateGitHubReviewAudit(auditData({
+  it('refuses a legacy issue body for fixup attribution because it cannot bind a live task contract', () => {
+    const fixture = auditData({
       comments: [reviewMarker({ fixup: ghFixup() })],
       commits: [baseCommit(), fixupCommit({ task: '#7' })],
-      issueBody: '# Legacy task',
-    }));
-    assert.equal(result.ok, true, result.errors.join('\n'));
+    });
+    fixture.issueData.body = '# Legacy task';
+    const result = evaluateGitHubReviewAudit(fixture);
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), /cannot establish the live task contract/);
   });
 
   it('rejects a fixup whose resulting artifact is the head but not a PR commit', () => {

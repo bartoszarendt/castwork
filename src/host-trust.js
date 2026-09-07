@@ -202,7 +202,7 @@ function exactReplayBinding(binding, adapter) {
     binding.targetRepositoryIdentity === adapter.repositoryIdentity &&
     typeof binding.replayId === 'string' && binding.replayId &&
     typeof binding.recordId === 'string' && binding.recordId &&
-    typeof binding.recordDigest === 'string' && /^sha256:agenticloop\.return-verification\.v4:[a-f0-9]{64}$/.test(binding.recordDigest);
+    typeof binding.recordDigest === 'string' && /^sha256:agenticloop\.return-verification\.v5:[a-f0-9]{64}$/.test(binding.recordDigest);
 }
 
 /**

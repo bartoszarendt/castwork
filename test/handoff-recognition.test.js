@@ -153,7 +153,7 @@ function reviewEntryMaterial() {
   const loaded = {
     input: {
       prData: {
-        number: 35, headRefOid: head,
+        number: 35, baseRefOid: 'b'.repeat(40), headRefOid: head, files: [{ path: 'src/receipt.js' }],
         commits: [{ oid: head, message: 'Implement receipt\n\nTask: T-035\nAgent: engineer' }],
       },
       issueData: { number: 35, body },

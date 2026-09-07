@@ -60,7 +60,7 @@ test('init and update refuse persisted incompatible lifecycle state without muta
 });
 
 test('lifecycle compatibility fails closed for absent, malformed, and future versions', () => {
-  for (const version of [undefined, '3', 5]) {
+  for (const version of [undefined, '3', 6]) {
     const result = classifyLifecycleCompatibility({ kind: 'agenticloop.return-verification', schemaVersion: version });
     assert.equal(result.state, 'incompatible');
     assert.equal(result.route, 'resume_with_current_evidence');

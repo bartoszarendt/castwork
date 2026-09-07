@@ -150,6 +150,7 @@ const PRODUCER_INVENTORY_ROWS = [
 // module-first for reviewability, then merge them; Object.fromEntries silently
 // overwrote earlier producer bindings for duplicate codes.
 const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
+  ['src/finish-candidate.js', ['role_return.invalid']],
   ['src/activation-grant.js', ['activation.grant.unauthenticated']],
   ['src/activation-identity-migration.js', ['activation.identity.conflict']],
   ['src/activation-resolution.js', ['activation.capture.missing', 'activation.grant.revoked', 'activation.grant.unauthenticated']],

@@ -31,6 +31,7 @@ const MANIFEST = {
     'test/command-result.test.js',
     'test/cross-platform-runner.test.js',
     'test/execution-evidence.test.js',
+    'test/finish-candidate.test.js',
     'test/github-backend.test.js',
     'test/github-preflight.test.js',
     'test/github-review-audit.test.js',

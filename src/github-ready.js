@@ -38,6 +38,8 @@ export class GitHubReadyError extends PublicCommandError {
  * @param {number|string} options.pr        PR number (required).
  * @param {number|string} [options.issue]   Linked task issue override.
  * @param {string} [options.repo]           owner/name repo override.
+ * @param {string} [options.reviewPacket]   Persisted github-review-prepare packet for audit admission.
+ * @param {any} [options.reviewEntryReceipt] Injectable receipt for in-process callers.
  * @param {Function} [options.commandRunner] Injectable `gh` runner for testing.
  * @param {string} [options.target] Local target root for verification facts and references.
  * @param {object} [options.verificationContext] Injectable local verification context.
@@ -60,6 +62,8 @@ export function runGitHubReady({
   pr,
   issue,
   repo,
+  reviewPacket,
+  reviewEntryReceipt,
   commandRunner = defaultGhCommandRunner,
   target = process.cwd(),
   verificationContext,
@@ -104,7 +108,7 @@ export function runGitHubReady({
   let reviewAudit = { ok: false, acceptanceReady: false, independentReviewRequired: false, errors: [], issue: null, headRefOid: '' };
   if (!preflight.taskRecordRootInvalid) {
     try {
-      const result = runGitHubReviewAudit({ pr: prNumber, issue, repo, expectedStatus: 'accepted', commandRunner });
+      const result = runGitHubReviewAudit({ pr: prNumber, issue, repo, expectedStatus: 'accepted', reviewPacket, reviewEntryReceipt, commandRunner });
       reviewAudit = {
         ok: Boolean(result.ok),
         acceptanceReady: Boolean(result.acceptanceReady),

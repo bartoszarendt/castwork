@@ -26,7 +26,7 @@ function material(head = HEAD, body = BODY) {
   const loaded = {
     input: {
       prData: {
-        number: 35, headRefOid: head,
+        number: 35, baseRefOid: 'c'.repeat(40), headRefOid: head, files: [{ path: 'src/receipt.js' }],
         commits: [{ oid: head, message: 'Implement receipt\n\nTask: T-035\nAgent: engineer' }],
       },
       issueData: { number: 35, body },
@@ -52,6 +52,18 @@ describe('review-entry receipt authority', () => {
     assert.equal(validateReviewEntryReceipt(receipt, loaded, result).ok, true);
     const changed = material(NEXT);
     assert.equal(validateReviewEntryReceipt(receipt, changed.loaded, changed.result).ok, false);
+  });
+
+  it('persists one authoritative GitHub finish candidate with range, paths, checks, identity, and invalidation', () => {
+    const { loaded, result } = material();
+    const receipt = createReviewEntryReceipt(loaded, result, { observedAt: '2026-08-07T00:00:00.000Z' });
+    assert.deepEqual(receipt.finishCandidate.productRange, {
+      base: 'c'.repeat(40), head: HEAD, commits: [HEAD],
+    });
+    assert.deepEqual(receipt.finishCandidate.changedPathVerdict.productPaths, ['src/receipt.js']);
+    assert.deepEqual(receipt.finishCandidate.requiredCheckSet, ['RC-1']);
+    assert.deepEqual(receipt.finishCandidate.returnIdentity, { taskId: '35', pr: 35, head: HEAD });
+    assert.equal(receipt.finishCandidate.certificationInvalidation.state, 'current');
   });
 
   it('rejects protected task/check drift while allowing mutable comments and preserving engineer ownership', () => {

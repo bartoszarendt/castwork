@@ -2,17 +2,18 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
-import { canonicalSha256 } from './canonical-json.js';
+import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { executeMutationBatch, readConfinedTargetFile, resolveTargetPath } from './fs-mutation-kernel.js';
 import { packetWorkUnitIdentity, repositoryEvidenceDigest, verifyHostExecutionReceipt, verifyHostHandoffReceipt } from './host-handoff.js';
 import { targetRepositoryIdentity } from './host-trust.js';
 import { receiveRoleReturn } from './dispatch-envelope.js';
 import { classifyLifecycleCompatibility, compatibilityMessage } from './lifecycle-compatibility.js';
 import { REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION, validateRequiredCheckEvidence } from './required-checks.js';
+import { deriveFinishCandidateForRoleReturn, finishCandidateIsCurrent } from './finish-candidate.js';
 
 export const RETURN_VERIFICATION_ROOT = '.agenticloop/returns/verifications';
 export const RETURN_VERIFICATION_KIND = 'agenticloop.return-verification';
-export const RETURN_VERIFICATION_SCHEMA_VERSION = 4;
+export const RETURN_VERIFICATION_SCHEMA_VERSION = 5;
 export const RETURN_VERIFICATION_CLOCK_SKEW_MS = 5 * 60 * 1000;
 export const CURRENT_REQUIRED_CHECK_EVIDENCE_ASSURANCE = 'unverified';
 export const REQUIRED_CHECK_EVIDENCE_ASSURANCE_GRADES = Object.freeze([
@@ -25,7 +26,7 @@ const FIELDS = Object.freeze([
   'kind', 'schemaVersion', 'recordId', 'repositoryIdentity', 'backend', 'taskId',
   'workUnitIdentity', 'taskContractDigest', 'dispatchCarrierDigest', 'currentCarrierDigest',
   'productBaseHead', 'productHead', 'workflowHead', 'candidateHead', 'packetId', 'packetDigest',
-  'dispatchAuthorityDigest', 'activationAuthorityDigest', 'returnGenerationDigest', 'roleReturnDigest',
+  'dispatchAuthorityDigest', 'activationAuthorityDigest', 'returnGenerationDigest', 'roleReturnDigest', 'finishCandidate',
   'repositoryEvidenceDigest', 'producerRole', 'requiredCheckEvidenceContract', 'requiredCheckEvidenceAssurance', 'observedReturnGrade',
   'producerAuthentication', 'verifiedAt', 'disposition', 'evidence', 'digest',
 ]);
@@ -141,6 +142,19 @@ export function validateReturnVerification(record, { path = null, now = Date.now
   if (record.dispatchAuthorityDigest !== dispatchAuthorityDigest(packet)) errors.push('return verification dispatch authority does not match the embedded packet');
   if (record.activationAuthorityDigest !== returnActivationAuthorityDigest(packet)) errors.push('return verification activation authority does not match the embedded packet');
   if (record.roleReturnDigest !== roleReturn?.digest) errors.push('return verification role-return digest does not match the embedded return');
+  try {
+    const finish = deriveFinishCandidateForRoleReturn({
+      backend: record.backend,
+      roleReturn,
+      observedCandidateHead: record.productHead,
+    });
+    if (!finishCandidateIsCurrent(record.finishCandidate, record.productHead) ||
+        canonicalJson(record.finishCandidate) !== canonicalJson(finish)) {
+      errors.push('return verification finish candidate does not exactly bind the persisted return evidence');
+    }
+  } catch (error) {
+    errors.push(`return verification finish candidate is invalid: ${error.message}`);
+  }
   if (record.producerRole !== packet?.assignment?.roleId || record.producerRole !== roleReturn?.producerRole) errors.push('return verification producer role does not match the packet assignment and embedded return');
   if (record.requiredCheckEvidenceContract !== packet?.task?.requiredCheckEvidenceContract ||
       record.requiredCheckEvidenceContract !== roleReturn?.requiredCheckEvidenceContract ||
@@ -208,6 +222,18 @@ export function createReturnVerification({
     throw new TypeError('createReturnVerification cannot issue authenticated execution assurance');
   }
   const grade = received.returnAssurance;
+  let finishCandidate = received?.finishCandidate ?? null;
+  if (finishCandidate === null) {
+    try {
+      finishCandidate = deriveFinishCandidateForRoleReturn({
+        backend: packet.backend,
+        roleReturn,
+        observedCandidateHead: repositoryEvidence?.productHead,
+      });
+    } catch (error) {
+      throw new TypeError(`return verification finish candidate is invalid: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   const record = {
     kind: RETURN_VERIFICATION_KIND,
     schemaVersion: RETURN_VERIFICATION_SCHEMA_VERSION,
@@ -229,6 +255,7 @@ export function createReturnVerification({
     activationAuthorityDigest: returnActivationAuthorityDigest(packet),
     returnGenerationDigest: null,
     roleReturnDigest: roleReturn.digest,
+    finishCandidate,
     repositoryEvidenceDigest: repositoryEvidenceDigest(repositoryEvidence),
     producerRole: roleReturn.producerRole,
     requiredCheckEvidenceContract: roleReturn.requiredCheckEvidenceContract ?? packet.task?.requiredCheckEvidenceContract ?? 2,
@@ -625,6 +652,9 @@ export function revalidateReturnVerification(record, {
       }, { capabilities, resolveActivationBinding, minimumReturnAssurance: minimumReturnAssurance ?? record.observedReturnGrade });
       if (!received.ok) errors.push(...(received.validation?.errors ?? ['authoritative role-return revalidation failed']));
       else if (received.returnAssurance !== record.observedReturnGrade) errors.push('fresh return assurance does not match the stored observed grade');
+      else if (canonicalJson(received.finishCandidate) !== canonicalJson(record.finishCandidate)) {
+        errors.push('fresh finish candidate does not match the persisted return-evidence candidate');
+      }
     }
     return errors;
   };

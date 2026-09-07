@@ -83,6 +83,11 @@ describe('observed return verification storage', () => {
       packet: { packetId, digest: packet.digest },
       task: { backend, id: taskId, taskContractDigest: contractDigest, dispatchCarrierDigest: taskDigest, currentCarrierDigest: taskDigest },
       productBaseHead: baseHead, productHead: head, workflowHead: head, candidateHead: null,
+      productChangedPaths: ['src/fixture.js'], workflowChangedPaths: [],
+      productAttribution: { range: { base: baseHead, head }, commits: [head] },
+      pr: backend === 'github'
+        ? { state: 'open', number: 42, url: 'https://example.test/pr/42' }
+        : { state: 'not_applicable', number: null, url: null },
     };
     const repositoryEvidence = {
       backend, worktree: root,
@@ -99,7 +104,7 @@ describe('observed return verification storage', () => {
 
   function redigest(record) {
     const { digest, ...projection } = record;
-    return { ...record, digest: `sha256:agenticloop.return-verification.v4:${canonicalSha256(projection)}` };
+    return { ...record, digest: `sha256:agenticloop.return-verification.v5:${canonicalSha256(projection)}` };
   }
 
   function authenticatedFixture(taskId, options = {}) {
@@ -145,6 +150,11 @@ describe('observed return verification storage', () => {
     assert.equal(record.producerAuthentication, null);
     assert.equal(record.evidence.producerIdentityAuthenticated, false);
     assert.equal(record.requiredCheckEvidenceAssurance, 'unverified');
+    assert.deepEqual(record.finishCandidate.returnIdentity, {
+      taskId: 'T-001',
+      packetId: 'dispatch:00000000-0000-4000-8000-000000000001',
+      returnId: 'return:00000000-0000-4000-8000-000000000002',
+    });
     assert.equal(validateReturnVerification(record).ok, true);
     const written = writeReturnVerification(root, record);
     assert.equal(written.ok, true, written.errors.join('; '));
@@ -153,6 +163,7 @@ describe('observed return verification storage', () => {
     assert.equal(listed.ok, true);
     assert.equal(listed.records.length, 1);
     assert.equal(listed.records[0].observedReturnGrade, 'session_reported');
+    assert.deepEqual(listed.records[0].finishCandidate, record.finishCandidate);
   });
 
   it('rejects all self-digested promotion of persisted CLI execution assurance', () => {
@@ -803,6 +814,40 @@ describe('observed return verification storage', () => {
       });
       assert.equal(revalidated.ok, true, revalidated.errors.join('\n'));
 
+        if (grade === 'session_reported') {
+          // A new scoped product commit after the return leaves its workflow
+          // records intact, but it must still invalidate the return's one-shot
+          // finish candidate rather than invite reconstruction of those records.
+          // Restore that mutation before closeout too: endpoint comparison then
+          // sees only the lifecycle record, while commit-range inspection must
+          // retain the fact that the candidate moved.
+          const originalProductSource = `export const grade = '${grade}';\n`;
+          writeFileSync(join(dispatch.root, 'src', 'existing.js'), `export const grade = '${grade}-later';\n`, 'utf8');
+          git(dispatch.root, ['add', 'src/existing.js']);
+          git(dispatch.root, ['commit', '-m', `advance product after ${grade}\n\nTask: T-001\nAgent: engineer`]);
+         const laterProductHead = git(dispatch.root, ['rev-parse', 'HEAD']);
+         const invalidated = receiveRoleReturn({
+           raw: JSON.stringify(roleReturn), packet: prepared.packet,
+           refetchTask: dispatch.refetchTask,
+           refetchRepositoryEvidence: () => ({
+             ...evidence,
+             productHead: laterProductHead,
+             workflowHead: laterProductHead,
+           }),
+           producerReceipt: binding.producerReceipt,
+           resolveTrustedAdapter: binding.resolveTrustedAdapter,
+           runGit: dispatch.runGit,
+         }, {
+           ...dispatch.options,
+           minimumReturnAssurance: grade,
+          });
+          assert.equal(invalidated.ok, false);
+          assert.match(invalidated.validation.errors.join('\n'), /finish candidate is invalidated by a later product candidate/);
+          writeFileSync(join(dispatch.root, 'src', 'existing.js'), originalProductSource, 'utf8');
+          git(dispatch.root, ['add', 'src/existing.js']);
+          git(dispatch.root, ['commit', '-m', `restore product after ${grade}\n\nTask: T-001\nAgent: engineer`]);
+        }
+
       const taskBody = readFileSync(dispatch.taskPath, 'utf8');
       writeFileSync(dispatch.taskPath, taskBody.replace('status: agent-ready', 'status: in-progress'), 'utf8');
       git(dispatch.root, ['add', '.agenticloop/tasks/T-001.md']);
@@ -817,8 +862,26 @@ describe('observed return verification storage', () => {
       });
       assert.ok(closeout, 'closeout assurance context should resolve');
        const observed = closeout.resolveReturns('T-001');
-        assert.equal(observed.usable, true, observed.reasons.join('\n'));
-        assert.equal(observed.records.length, 1);
+       const retainedWorkflowEvidence = readFileSync(join(dispatch.root, consumptionPath), 'utf8');
+       const headBeforeRetry = git(dispatch.root, ['rev-parse', 'HEAD']);
+       const retried = grade === 'session_reported'
+         ? closeout.resolveReturns('T-001')
+         : null;
+         if (grade === 'session_reported') {
+           assert.equal(observed.usable, false, observed.reasons.join('\n'));
+           assert.equal(observed.records.length, 0);
+           assert.equal(observed.failureCategory, 'return_evidence_stale');
+           assert.match(observed.reasons.join('\n'), /finish candidate is invalidated/);
+           assert.equal(retried.usable, false, retried.reasons.join('\n'));
+           assert.equal(retried.records.length, 0);
+           assert.equal(retried.failureCategory, 'return_evidence_stale');
+           assert.deepEqual(retried.reasons, observed.reasons, 'refusal retry must retain the same candidate invalidation');
+           assert.equal(git(dispatch.root, ['rev-parse', 'HEAD']), headBeforeRetry, 'refusal retry must not reconstruct workflow state');
+           assert.equal(readFileSync(join(dispatch.root, consumptionPath), 'utf8'), retainedWorkflowEvidence, 'unrelated workflow evidence must remain preserved');
+         } else {
+          assert.equal(observed.usable, true, observed.reasons.join('\n'));
+          assert.equal(observed.records.length, 1);
+        }
        if (grade === 'session_reported') {
         const wrongWorkUnit = resolveCloseoutAssuranceContext(dispatch.root, {
           operatorTrustRoot: dispatch.operatorTrustRoot,

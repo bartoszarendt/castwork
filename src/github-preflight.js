@@ -25,6 +25,7 @@
  */
 
 import { defaultGhCommandRunner, runGhJson } from './gh-helpers.js';
+import { githubPrSnapshotCompleteness } from './github-pr-snapshot.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { markdownSection, topLevelListItems, markdownLines } from './markdown.js';
 import { validateGitHubVerificationAttempts } from './verification-learning.js';
@@ -1963,6 +1964,10 @@ export function loadPreflightInput({
   const prArgs = ['pr', 'view', String(prNumber), '--json', PR_FIELDS];
   if (repo) prArgs.push('--repo', repo);
   const prData = runGhPreflightJson(commandRunner, prArgs);
+  const snapshotCompleteness = githubPrSnapshotCompleteness(prData);
+  if (!snapshotCompleteness.ok) {
+    throw new PreflightError(snapshotCompleteness.errors.join('; '));
+  }
   // `gh pr view --json` always returns the requested list fields as arrays;
   // normalize explicitly so the preparation-input completeness policy sees
   // every category rather than a silently omitted one.

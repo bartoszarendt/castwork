@@ -7,6 +7,8 @@ import { runGitHubReviewPrepare, verifyReviewPacket } from '../../src/github-rev
 import { runGitHubReady } from '../../src/github-ready.js';
 import { evaluateGitHubReviewAudit } from '../../src/github-review-audit.js';
 import { evaluatePreflight } from '../../src/github-preflight.js';
+import { createReviewEntryReceipt } from '../../src/review-entry-receipt.js';
+import { taskContractDigest } from '../../src/task-contract-baseline.js';
 import { reviewEntryPersistenceFailure, reviewEntryPreparationFailure } from '../../src/task-cli.js';
 
 const HEAD = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
@@ -23,8 +25,25 @@ function prBody(head = HEAD, { evidence = true } = {}) {
   ].join('\n');
 }
 
-function taskBody(extra = '') {
+function taskBody(extra = '\nindependent_review_required: false') {
   return `---\ntask_id: T-007${extra}\n---\n# T\n\n## Required Checks\n- [RC-1] \`npm test\`\n`;
+}
+
+function reviewEntryReceipt(head = HEAD) {
+  const body = taskBody('\nindependent_review_required: false');
+  const contract = taskContractDigest(body);
+  return createReviewEntryReceipt({ input: {
+    prData: {
+      number: 42, baseRefOid: 'c'.repeat(40), headRefOid: head, files: [{ path: 'src/x.js' }],
+      commits: [{ oid: head, message: 'implementation\n\nTask: T-007\nAgent: engineer' }],
+    },
+    issueData: { number: 7, body }, reviewHistory: { events: [], errors: [] },
+  } }, {
+    ok: true, errors: [], warnings: [],
+    requiredChecks: [{ id: 'RC-1', text: '[RC-1] `npm test`', matchKey: 'npm test' }],
+    evidenceMatches: [{ id: 'RC-1', check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'tests passed' }],
+    contractBaseline: { digest: contract.digest, baseline: null },
+  }, { observedAt: '2026-08-07T00:00:00.000Z' });
 }
 
 function marker(head = HEAD) {
@@ -68,10 +87,14 @@ function directPreflight({ reviewOutcomes = [], reviewHistory, head = HEAD, revi
   });
 }
 
-function auditData({ issue = '', comments = [marker()] } = {}) {
+function auditData({ issue = taskBody(), comments = [marker()] } = {}) {
   return {
-    prData: { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments, reviews: [] },
-    issueData: { number: 7, body: issue }, expectedAccount: LOOP_ACCOUNT,
+    prData: {
+      number: 42, baseRefOid: 'c'.repeat(40), headRefOid: HEAD, files: [{ path: 'src/x.js' }],
+      closingIssuesReferences: [{ number: 7 }], comments, reviews: [],
+      commits: [{ oid: HEAD, message: 'implementation\n\nTask: T-007\nAgent: engineer' }],
+    },
+    issueData: { number: 7, body: issue }, reviewEntryReceipt: reviewEntryReceipt(), expectedAccount: LOOP_ACCOUNT,
   };
 }
 
@@ -94,12 +117,12 @@ const PROBES = Object.freeze({
     }),
     verificationContext,
   }),
-  'github-ready-preflight': async () => runGitHubReady({ pr: 42, commandRunner: githubRunner({ body: '## Scope Completed\nNo evidence.\n\nCloses #7' }) }),
-  'github-ready-review-audit': async () => runGitHubReady({ pr: 42, commandRunner: githubRunner({ comments: [marker(OTHER_HEAD)] }) }),
-  'github-ready-task-identity': async () => runGitHubReady({ pr: 42, commandRunner: githubRunner({ issues: [{ number: 7, state: 'OPEN', title: 'T-007' }, { number: 21, state: 'CLOSED', body: '---\ntask_id: T-007\n---\n' }] }) }),
+  'github-ready-preflight': async () => runGitHubReady({ pr: 42, reviewEntryReceipt: reviewEntryReceipt(), commandRunner: githubRunner({ body: '## Scope Completed\nNo evidence.\n\nCloses #7' }) }),
+  'github-ready-review-audit': async () => runGitHubReady({ pr: 42, reviewEntryReceipt: reviewEntryReceipt(), commandRunner: githubRunner({ comments: [marker(OTHER_HEAD)] }) }),
+  'github-ready-task-identity': async () => runGitHubReady({ pr: 42, reviewEntryReceipt: reviewEntryReceipt(), commandRunner: githubRunner({ issues: [{ number: 7, state: 'OPEN', title: 'T-007' }, { number: 21, state: 'CLOSED', body: '---\ntask_id: T-007\n---\n' }] }) }),
   'github-ready-cross-gate': async () => {
     const runner = githubRunner();
-    return runGitHubReady({ pr: 42, commandRunner: (command, args) => {
+    return runGitHubReady({ pr: 42, reviewEntryReceipt: reviewEntryReceipt(OTHER_HEAD), commandRunner: (command, args) => {
       if (args[0] === 'pr' && args[1] === 'view') {
         const fields = args[args.indexOf('--json') + 1] ?? '';
         const head = fields.includes('statusCheckRollup') ? HEAD : OTHER_HEAD;

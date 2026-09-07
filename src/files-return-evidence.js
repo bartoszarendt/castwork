@@ -53,6 +53,26 @@ function requireAncestor(runGit, ancestor, descendant, label) {
   }
 }
 
+function laterScopedProductPath(runGit, workflowHead, currentHead, classifier, inTaskSurface) {
+  const commits = String(readGit(
+    runGit,
+    ['rev-list', '--reverse', `${workflowHead}..${currentHead}`],
+    'historical closeout candidate commit inventory'
+  )).split(/\r?\n/).filter(Boolean);
+  for (const commit of commits) {
+    const changedPaths = sortedPaths(readGit(
+      runGit,
+      ['diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', '-m', commit],
+      `historical closeout candidate commit '${commit}' inventory`
+    ));
+    const productPath = changedPaths.find(path =>
+      classifier.classify(path) === 'product' && inTaskSurface(path)
+    );
+    if (productPath) return productPath;
+  }
+  return null;
+}
+
 function exactWorkflowPaths(target, packet, signedEvidence, runGit, workflowHead, { historicalCloseout }) {
   // A historical closeout still has to prove that each workflow path belongs
   // to the same active carrier generation; ancestry alone cannot authorize an
@@ -316,6 +336,22 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
   }
   requireAncestor(runGit, productBaseHead, productHead, 'productBaseHead');
   requireAncestor(runGit, productHead, workflowHead, 'productHead');
+  // Historical closeout retains the return's workflow generation so ordinary
+  // review/closeout records need not be reconstructed.  It still observes the
+  // live repository for a later scoped product mutation: that mutation is a new
+  // candidate and invalidates the old certification rather than becoming an
+  // excuse to reuse it.
+  if (historicalCloseout) {
+    const laterProductPath = laterScopedProductPath(
+      runGit, workflowHead, currentHead, classifier, inTaskSurface
+    );
+    if (laterProductPath) {
+      throw new VerificationContextStaleError(
+        `finish candidate is invalidated by later scoped product path '${laterProductPath}'; ` +
+        'historical closeout does not reconstruct unrelated workflow evidence'
+      );
+    }
+  }
 
   const product = deriveCommitRange({
     runGit,

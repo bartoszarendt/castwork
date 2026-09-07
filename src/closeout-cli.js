@@ -128,6 +128,7 @@ function activationFailureCategory(reasons, absent = false) {
 
 function returnFailureCategory(reasons) {
   const text = reasons.join(' ').toLowerCase();
+  if (text.includes('finish candidate is invalidated')) return 'return_evidence_stale';
   if (text.includes('conflict') || text.includes('ambiguous')) return 'ambiguous_or_conflicting_evidence';
   if (text.includes('host') || text.includes('receipt') || text.includes('authentication')) return 'host_receipt_invalid';
   if (text.includes('adapter') || text.includes('key') || text.includes('trust')) return 'trust_key_adapter_mismatch';

@@ -33,7 +33,7 @@ function receiptFixture(commits) {
   return {
     loaded: {
       input: {
-        prData: { number: 35, headRefOid: HEAD, commits },
+        prData: { number: 35, baseRefOid: 'c'.repeat(40), headRefOid: HEAD, files: [{ path: 'src/receipt.js' }], commits },
         issueData: { number: 35, body },
         reviewHistory: { events: [], errors: [] },
       },

@@ -107,8 +107,8 @@ function reviewEntryReceipt({ head = HEAD, pr = 42, task = 7, reviewHistory = { 
   const contract = taskContractDigest(body);
   const loaded = {
     input: {
-      prData: {
-        number: pr, headRefOid: head,
+        prData: {
+          number: pr, baseRefOid: BASE, headRefOid: head, files: [{ path: 'src/review.js' }],
         commits: [{ oid: head, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
       },
       issueData: { number: task, body },
@@ -295,7 +295,7 @@ describe('review preparation contract - preparation-input parity', () => {
 
   it('applies the same completeness policy to the live preflight path', async () => {
     const { runPreflight } = await import('../src/github-preflight.js');
-    const prData = { number: 42, headRefOid: HEAD, baseRefOid: BASE, files: [], statusCheckRollup: [], comments: [], reviews: [], closingIssuesReferences: [{ number: 7 }] };
+    const prData = { number: 42, headRefOid: HEAD, baseRefOid: BASE, files: [], statusCheckRollup: [], commits: [], comments: [], reviews: [], closingIssuesReferences: [{ number: 7 }] };
     // The PR body is silently omitted from the live document.
     const issueData = { number: 7, body: canonicalTask(), comments: [] };
     const runner = (command, args) => {
@@ -1469,7 +1469,7 @@ describe('review preparation contract - review preparation and packet freshness'
     let issueReads = 0;
     const prData = body => ({
       number: 42, body, headRefOid: HEAD, baseRefOid: BASE,
-      closingIssuesReferences: [{ number: 7 }], statusCheckRollup: [],
+      closingIssuesReferences: [{ number: 7 }], files: [], statusCheckRollup: [],
       commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
     });
     return (command, args) => {
@@ -1808,7 +1808,7 @@ describe('review preparation contract - GitHub checkpoint render and repair plan
   function checkpointRunner(comments) {
     const prData = {
       number: 42, body: 'preparation', headRefOid: HEAD, baseRefOid: BASE,
-      closingIssuesReferences: [{ number: 7 }],
+      closingIssuesReferences: [{ number: 7 }], files: [], commits: [],
     };
     const issueData = { number: 7, body: '---\ntask_id: T-007\n---\n# T\n\n## Required Checks\n- [RC-1] `npm test`\n' };
     return (command, args) => {

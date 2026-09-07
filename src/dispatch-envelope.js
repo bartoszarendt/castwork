@@ -17,6 +17,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { CANCELLATION_PROVENANCE_KIND } from './cancellation-provenance.js';
 import { deriveCommitRange } from './commit-range.js';
+import { deriveFinishCandidateForRoleReturn, finishCandidateIsCurrent } from './finish-candidate.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { deepFreeze, frozenClone } from './immutable.js';
 import { createDiagnostic } from './repair-policy.js';
@@ -1747,6 +1748,7 @@ function validateReturnAgainstCurrent({
   wire, packet, snapshot, repositoryEvidence, producerEvidence, runGit,
   carrierLineage = null, returnAssurance = 'host_receipt', historicalCloseout = false,
 }, findings) {
+  let finishCandidate = null;
   validateRepositoryEvidence(repositoryEvidence, findings);
   const authoritative = authoritativePacketTaskBinding(snapshot);
   if (!authoritative.ok) {
@@ -1825,6 +1827,22 @@ function validateReturnAgainstCurrent({
   }
   if (wire.productHead !== repositoryEvidence?.productHead || wire.workflowHead !== repositoryEvidence?.workflowHead) {
     findings.changed('role return productHead or workflowHead does not equal repository evidence');
+  }
+  // Re-evaluate the complete finish projection here rather than letting each
+  // downstream consumer independently age a range, check set, and candidate.
+  // A later product candidate invalidates this return's certification evidence,
+  // while unrelated workflow evidence remains outside the candidate boundary.
+  try {
+    finishCandidate = deriveFinishCandidateForRoleReturn({
+      backend: packet.backend,
+      roleReturn: wire,
+      observedCandidateHead: repositoryEvidence?.productHead,
+    });
+    if (!finishCandidateIsCurrent(finishCandidate, repositoryEvidence?.productHead)) {
+      findings.changed('role return finish candidate is invalidated by a later product candidate');
+    }
+  } catch (error) {
+    findings.malformed(`role return finish candidate is invalid: ${error.message}`);
   }
   for (const key of ['productLineage', 'productChangedPaths', 'workflowChangedPaths', 'productAttribution', 'pr', 'carrierLineage']) {
     if (!sameCanonical(wire[key], repositoryEvidence?.[key])) findings.changed(`role return ${key} does not match refetched repository evidence`);
@@ -1934,6 +1952,7 @@ function validateReturnAgainstCurrent({
     }
     if (![...allowedPaths].some(pattern => fileMatchesScopePattern(path, pattern))) findings.negative(`role return product changed path '${path}' is outside packet-bound task scope`);
   }
+  return finishCandidate;
 }
 
 function compareReturnAssuranceGrade(left, right) {
@@ -2201,7 +2220,7 @@ export function receiveRoleReturn(input = {}, options = {}) {
     }
     const findings = findingSet(command);
     validateCurrentTask(snapshot, findings);
-    validateReturnAgainstCurrent({
+    const finishCandidate = validateReturnAgainstCurrent({
       wire, packet, snapshot, repositoryEvidence, producerEvidence, carrierLineage, runGit,
       returnAssurance, historicalCloseout,
     }, findings);
@@ -2371,6 +2390,7 @@ export function receiveRoleReturn(input = {}, options = {}) {
     return {
       ok: true,
       roleReturn: deepFreeze(wire),
+      finishCandidate,
       returnAssurance,
       producerAuthenticated: returnAssurance === 'host_receipt',
       assurance,

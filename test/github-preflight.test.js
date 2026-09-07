@@ -36,6 +36,8 @@ import {
   PreflightError,
 } from '../src/github-preflight.js';
 import { evaluateGitHubReviewAudit } from '../src/github-review-audit.js';
+import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { preflightDiagnosticCode, repairPolicyFor } from '../src/repair-policy.js';
 import { getProjectRoleCapabilities } from '../src/role-capabilities.js';
 
@@ -54,6 +56,30 @@ function issueBody(checks) {
     '## Acceptance Criteria',
     '- done',
   ].join('\n');
+}
+
+function auditIssueBody() {
+  return [
+    '---', 'task_id: T-001', 'independent_review_required: false', '---',
+    '# T-001', '', '## Scope', 'Audit fixture.', '', '## Out of Scope', 'None.', '',
+    '## Acceptance Criteria', 'Audit candidate.', '', '## Required Checks', '- [RC-1] `npm test`',
+  ].join('\n');
+}
+
+function auditReceipt(head = HEAD, body = auditIssueBody()) {
+  const contract = taskContractDigest(body);
+  return createReviewEntryReceipt({ input: {
+    prData: {
+      number: 42, baseRefOid: 'c'.repeat(40), headRefOid: head, files: [{ path: 'src/audit.js' }],
+      commits: [{ oid: head, message: 'implementation\n\nTask: T-001\nAgent: engineer' }],
+    },
+    issueData: { number: 7, body }, reviewHistory: { events: [], errors: [] },
+  } }, {
+    ok: true, errors: [], warnings: [],
+    requiredChecks: [{ id: 'RC-1', text: '[RC-1] `npm test`', matchKey: 'npm test' }],
+    evidenceMatches: [{ id: 'RC-1', check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'tests passed' }],
+    contractBaseline: { digest: contract.digest, baseline: null },
+  }, { observedAt: '2026-08-07T00:00:00.000Z' });
 }
 
 function prBody({ head = HEAD, entries = [], evidenceExtra = [] } = {}) {
@@ -296,7 +322,9 @@ describe('required-check declaration policy', () => {
     const result = evaluatePreflight({
       prData: {
         number: 42,
+        baseRefOid: 'c'.repeat(40),
         headRefOid: HEAD,
+        files: [{ path: 'src/audit.js' }],
         body: prBody(),
         statusCheckRollup: [{ name: 'npx agenticloop task explain T-001 --json', status: 'COMPLETED', conclusion: 'SUCCESS' }],
       },
@@ -498,7 +526,9 @@ describe('evaluatePreflight', () => {
     const result = evaluatePreflight({
       prData: {
         number: 42,
+        baseRefOid: 'c'.repeat(40),
         headRefOid: HEAD,
+        files: [{ path: 'src/audit.js' }],
         body: prBody({ entries: [{ check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'ok' }] }),
         statusCheckRollup: [],
       },
@@ -1032,11 +1062,29 @@ describe('runPreflight (injected gh runner)', () => {
       body: prBody({ entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
       closingIssuesReferences: [{ number: 7 }],
       statusCheckRollup: [],
+      files: [],
+      commits: [],
     };
     const issueData = { number: 7, body: issueBody(['`npm test`']) };
     const result = runPreflight({ pr: 42, commandRunner: makeRunner(prData, issueData) });
     assert.equal(result.ok, true, JSON.stringify(result.errors));
     assert.equal(result.issue, 7);
+  });
+
+  it('refuses a gh PR list snapshot at the unpaginated files limit before preparation can persist a candidate', () => {
+    const prData = {
+      number: 42,
+      headRefOid: HEAD,
+      body: prBody({ entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
+      closingIssuesReferences: [{ number: 7 }],
+      statusCheckRollup: [],
+      files: Array.from({ length: 100 }, (_, index) => ({ path: `src/file-${index + 1}.js` })),
+    };
+    const issueData = { number: 7, body: issueBody(['`npm test`']) };
+    assert.throws(
+      () => runPreflight({ pr: 42, commandRunner: makeRunner(prData, issueData) }),
+      error => error instanceof PreflightError && /files inventory has 100 entries.*cannot establish completeness/i.test(error.message)
+    );
   });
 
   it('requests issue comments along with the task record', () => {
@@ -1047,6 +1095,8 @@ describe('runPreflight (injected gh runner)', () => {
       body: prBody({ entries: [{ check: '`npm test`', verdict: 'passed', evidence: 'ok' }] }),
       closingIssuesReferences: [{ number: 7 }],
       statusCheckRollup: [],
+      files: [],
+      commits: [],
     };
     const issueData = { number: 7, body: issueBody(['`npm test`']), comments: [] };
     let issueArgs = [];
@@ -1126,6 +1176,7 @@ describe('runPreflight (injected gh runner)', () => {
       closingIssuesReferences: [{ number: 7 }],
       files: [{ path: 'package.json' }],
       statusCheckRollup: [],
+      commits: [],
     };
     const base = JSON.stringify({ scripts: { test: 'node --test' } });
     const head = JSON.stringify({ scripts: { test: 'node --test', safe: 'node safe.js' } });
@@ -1165,6 +1216,8 @@ describe('runPreflight (injected gh runner)', () => {
       body: prBody({ entries: [{ check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'ok' }] }),
       closingIssuesReferences: [{ number: 7 }],
       statusCheckRollup: [],
+      files: [],
+      commits: [],
     };
     const issueData = { number: 7, body: issueBody(['[RC-1] `npm test`']) };
     const runner = (command, args) => {
@@ -1499,6 +1552,7 @@ describe('runPreflight (injected gh runner)', () => {
         statusCheckRollup: [],
       },
       issueData: { number: 7, body: issueBody(['`npm test`']) },
+      reviewEntryReceipt: auditReceipt(),
       reviewHistory: {
         events: [
           { type: 'outcome', status: 'needs_revision', artifact: HEAD, findingIds: [], legacyMissingFindingIds: true, sourceOrder: 0 },
@@ -2752,7 +2806,9 @@ describe('Defect: dispatched artifact A, current head B not rejected', () => {
     const result = evaluateGitHubReviewAudit({
       prData: {
         number: 42,
+        baseRefOid: 'c'.repeat(40),
         headRefOid: HEAD,
+        files: [{ path: 'src/audit.js' }],
         closingIssuesReferences: [{ number: 7 }],
         comments: [{
           body: `AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_MODE: single_agent_fallback\nAGENT_REVIEW_ARTIFACT: ${HEAD}\n\n[[agent: maintainer]]`,
@@ -2761,7 +2817,8 @@ describe('Defect: dispatched artifact A, current head B not rejected', () => {
         reviews: [],
         commits: [{ oid: HEAD, messageHeadline: 'feat', messageBody: '', message: 'feat' }],
       },
-      issueData: { number: 7, body: issueBody(['`npm test`']) },
+      issueData: { number: 7, body: auditIssueBody() },
+      reviewEntryReceipt: auditReceipt(),
       expectedAccount: LOOP_ACCOUNT,
       expectedArtifact: HEAD,
     });
@@ -2773,7 +2830,9 @@ describe('Defect: dispatched artifact A, current head B not rejected', () => {
     const resultMismatch = evaluateGitHubReviewAudit({
       prData: {
         number: 42,
+        baseRefOid: 'c'.repeat(40),
         headRefOid: differentHead,
+        files: [{ path: 'src/audit.js' }],
         closingIssuesReferences: [{ number: 7 }],
         comments: [{
           body: `AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_MODE: single_agent_fallback\nAGENT_REVIEW_ARTIFACT: ${differentHead}\n\n[[agent: maintainer]]`,
@@ -2782,7 +2841,8 @@ describe('Defect: dispatched artifact A, current head B not rejected', () => {
         reviews: [],
         commits: [{ oid: differentHead, messageHeadline: 'feat', messageBody: '', message: 'feat' }],
       },
-      issueData: { number: 7, body: issueBody(['`npm test`']) },
+      issueData: { number: 7, body: auditIssueBody() },
+      reviewEntryReceipt: auditReceipt(),
       expectedAccount: LOOP_ACCOUNT,
       expectedArtifact: HEAD,
     });

@@ -20,6 +20,8 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runGitHubReady, formatGitHubReadyReport, GitHubReadyError } from '../src/github-ready.js';
+import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const BIN = join(REPO_ROOT, 'bin', 'agenticloop.js');
@@ -72,8 +74,12 @@ function evidenceBody(head = HEAD) {
   ].join('\n');
 }
 
-function issueBody() {
-  return ['## Required Checks', '- [RC-1] `npm test`', '', '## Acceptance Criteria', '- done'].join('\n');
+function issueBody({ independent = false } = {}) {
+  return [
+    '---', 'task_id: T-001', `independent_review_required: ${independent}`, '---',
+    '# T-001', '', '## Scope', 'Ready fixture.', '', '## Out of Scope', 'None.', '',
+    '## Acceptance Criteria', 'Ready.', '', '## Required Checks', '- [RC-1] `npm test`',
+  ].join('\n');
 }
 
 function verificationAttempt({ outcome = 'timed_out', candidate = 'one_off' } = {}) {
@@ -122,15 +128,16 @@ function verificationComment(entries) {
 }
 
 function makePr(overrides = {}) {
+  const head = overrides.headRefOid ?? HEAD;
   return {
     number: 42,
-    headRefOid: HEAD,
+    headRefOid: head,
     baseRefOid: 'c'.repeat(40),
     body: evidenceBody(HEAD),
     files: [{ path: 'src/x.js' }],
     closingIssuesReferences: [{ number: 7 }],
     statusCheckRollup: [],
-    commits: [],
+    commits: [{ oid: head, message: 'implementation\n\nTask: T-001\nAgent: engineer' }],
     comments: [reviewMarker(HEAD)],
     reviews: [],
     ...overrides,
@@ -141,6 +148,25 @@ function makeIssue(overrides = {}) {
   const issue = { number: 7, body: issueBody(), title: 'T-001', ...overrides };
   issue.comments = (issue.comments ?? []).map(comment => ({ author: LOOP_ACCOUNT, ...comment }));
   return issue;
+}
+
+function readyReceipt(head = HEAD, body = issueBody()) {
+  const issueData = { number: 7, body };
+  const prData = {
+    number: 42, baseRefOid: 'c'.repeat(40), headRefOid: head, files: [{ path: 'src/x.js' }],
+    commits: [{ oid: head, message: 'implementation\n\nTask: T-001\nAgent: engineer' }],
+  };
+  const contract = taskContractDigest(body);
+  return createReviewEntryReceipt({ input: { prData, issueData, reviewHistory: { events: [], errors: [] } } }, {
+    ok: true, errors: [], warnings: [],
+    requiredChecks: [{ id: 'RC-1', text: '[RC-1] `npm test`', matchKey: 'npm test' }],
+    evidenceMatches: [{ id: 'RC-1', check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'tests passed' }],
+    contractBaseline: { digest: contract.digest, baseline: null },
+  }, { observedAt: '2026-08-07T00:00:00.000Z' });
+}
+
+function runReady(options) {
+  return runGitHubReady({ reviewEntryReceipt: readyReceipt(), ...options });
 }
 
 /**
@@ -180,7 +206,7 @@ function makeRunner({ prData, issueData, prFor, record, issues } = {}) {
 describe('github-ready composite gate', () => {
   it('passes when both component checks pass and returns the documented JSON shape', () => {
     const runner = makeRunner({ prData: makePr(), issueData: makeIssue() });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.readyForMerge, true);
@@ -205,9 +231,9 @@ describe('github-ready composite gate', () => {
   });
 
   it('surfaces independent-review-required from the linked issue', () => {
-    const issue = makeIssue({ body: `---\nindependent_review_required: true\n---\n\n${issueBody()}` });
+    const issue = makeIssue({ body: issueBody({ independent: true }) });
     const runner = makeRunner({ prData: makePr(), issueData: issue });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, reviewEntryReceipt: readyReceipt(HEAD, issue.body), commandRunner: runner });
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.reviewAudit.independentReviewRequired, true);
   });
@@ -217,7 +243,7 @@ describe('github-ready composite gate', () => {
     // lives in comments, so the review audit still passes.
     const prData = makePr({ body: '## Scope Completed\nNo evidence section here.\n\nCloses #7' });
     const runner = makeRunner({ prData, issueData: makeIssue() });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, false);
     assert.equal(result.readyForMerge, false);
@@ -230,7 +256,7 @@ describe('github-ready composite gate', () => {
     // A stale review marker (old head) fails the audit; evidence still cites HEAD.
     const prData = makePr({ comments: [reviewMarker(OTHER_HEAD)] });
     const runner = makeRunner({ prData, issueData: makeIssue() });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, false);
     assert.equal(result.preflight.ok, true);
@@ -242,7 +268,7 @@ describe('github-ready composite gate', () => {
     const issue = makeIssue({
       comments: [{ body: verificationComment([verificationAttempt(), verificationTriage()]) }],
     });
-    const result = runGitHubReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
+    const result = runReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
 
     assert.equal(result.ok, false);
     assert.match(result.preflight.errors.join('\n'), /pending maintainer triage/);
@@ -250,7 +276,7 @@ describe('github-ready composite gate', () => {
     const missing = makeIssue({
       comments: [{ body: verificationComment([verificationAttempt()]) }],
     });
-    const missingResult = runGitHubReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: missing }) });
+    const missingResult = runReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: missing }) });
     assert.equal(missingResult.ok, false);
     assert.match(missingResult.preflight.errors.join('\n'), /lacks final maintainer triage/);
   });
@@ -264,7 +290,7 @@ describe('github-ready composite gate', () => {
         ]),
       }],
     });
-    const result = runGitHubReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
+    const result = runReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
 
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.headRefOid, HEAD);
@@ -278,7 +304,7 @@ describe('github-ready composite gate', () => {
         ]),
       }],
     });
-    const result = runGitHubReady({
+    const result = runReady({
       pr: 42,
       commandRunner: makeRunner({ prData: makePr(), issueData: issue }),
     });
@@ -296,7 +322,7 @@ describe('github-ready composite gate', () => {
         ]),
       }],
     });
-    const valid = runGitHubReady({
+    const valid = runReady({
       pr: 42,
       commandRunner: makeRunner({ prData: makePr(), issueData }),
       verificationContext: {
@@ -307,7 +333,7 @@ describe('github-ready composite gate', () => {
     });
     assert.equal(valid.ok, true, JSON.stringify(valid));
 
-    const missing = runGitHubReady({
+    const missing = runReady({
       pr: 42,
       commandRunner: makeRunner({ prData: makePr(), issueData }),
       verificationContext: { projectFacts: [], decisionExists: () => false, taskExists: () => false },
@@ -325,7 +351,7 @@ describe('github-ready composite gate', () => {
         ]),
       }],
     });
-    const result = runGitHubReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
+    const result = runReady({ pr: 42, commandRunner: makeRunner({ prData: makePr(), issueData: issue }) });
 
     assert.equal(result.ok, false);
     assert.match(result.preflight.errors.join('\n'), /requires a task or issue Reference/);
@@ -337,7 +363,7 @@ describe('github-ready composite gate', () => {
       comments: [reviewMarker(OTHER_HEAD)],
     });
     const runner = makeRunner({ prData, issueData: makeIssue() });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, false);
     assert.equal(result.preflight.ok, false);
@@ -347,14 +373,14 @@ describe('github-ready composite gate', () => {
   });
 
   it('throws GitHubReadyError when the PR argument is missing', () => {
-    assert.throws(() => runGitHubReady({}), GitHubReadyError);
-    assert.throws(() => runGitHubReady({ pr: 'abc' }), /positive integer/);
+    assert.throws(() => runReady({}), GitHubReadyError);
+    assert.throws(() => runReady({ pr: 'abc' }), /positive integer/);
   });
 
   it('propagates explicit issue and repository options to gh reads', () => {
     const record = [];
     const runner = makeRunner({ prData: makePr(), issueData: makeIssue(), record });
-    const result = runGitHubReady({ pr: 42, issue: 7, repo: 'explicit/repo', commandRunner: runner });
+    const result = runReady({ pr: 42, issue: 7, repo: 'explicit/repo', commandRunner: runner });
 
     assert.equal(result.ok, true, JSON.stringify(result));
     // --repo forwarded to every pr view, and the resolved issue 7 was viewed.
@@ -371,7 +397,7 @@ describe('github-ready composite gate', () => {
   it('rejects an explicit issue that is not a closing reference (issue option reaches the audit)', () => {
     const runner = makeRunner({ prData: makePr(), issueData: makeIssue() });
     // Issue 99 is not in closingIssuesReferences; the audit throws, captured as an error.
-    const result = runGitHubReady({ pr: 42, issue: 99, commandRunner: runner });
+    const result = runReady({ pr: 42, issue: 99, commandRunner: runner });
     assert.equal(result.ok, false);
     assert.match(result.reviewAudit.errors.join('\n'), /not one of the PR's closing issues/);
   });
@@ -384,7 +410,7 @@ describe('github-ready composite gate', () => {
       return makePr({ headRefOid: isPreflight ? HEAD : OTHER_HEAD });
     };
     const runner = makeRunner({ prFor, issueData: makeIssue() });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, false);
     assert.match(result.errors.join('\n'), /different PR heads/);
@@ -418,7 +444,7 @@ describe('github-ready composite gate', () => {
       }
       return { status: 1, stderr: `unexpected gh call: ${args.join(' ')}` };
     };
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
 
     assert.equal(result.ok, false);
     assert.match(result.errors.join('\n'), /different linked issues/);
@@ -427,7 +453,7 @@ describe('github-ready composite gate', () => {
   it('invokes only read-only gh commands (no merge/comment/review/edit)', () => {
     const record = [];
     const runner = makeRunner({ prData: makePr(), issueData: makeIssue(), record });
-    runGitHubReady({ pr: 42, commandRunner: runner });
+    runReady({ pr: 42, commandRunner: runner });
 
     const mutationVerbs = new Set(['merge', 'comment', 'review', 'edit', 'close', 'create', 'delete', 'lock', 'reopen']);
     assert.ok(record.length > 0);
@@ -442,13 +468,13 @@ describe('github-ready composite gate', () => {
 
   it('human-readable report contains the final ready-for-merge verdict', () => {
     const runner = makeRunner({ prData: makePr(), issueData: makeIssue() });
-    const passResult = runGitHubReady({ pr: 42, commandRunner: runner });
+    const passResult = runReady({ pr: 42, commandRunner: runner });
     const passReport = formatGitHubReadyReport(passResult).summary.join('\n');
     assert.match(passReport, /ready for merge: yes/);
     assert.match(passReport, /PR: #42/);
 
     const failRunner = makeRunner({ prData: makePr({ comments: [reviewMarker(OTHER_HEAD)] }), issueData: makeIssue() });
-    const failResult = runGitHubReady({ pr: 42, commandRunner: failRunner });
+    const failResult = runReady({ pr: 42, commandRunner: failRunner });
     const failReport = formatGitHubReadyReport(failResult);
     assert.match(failReport.summary.join('\n'), /ready for merge: no/);
     assert.ok(failReport.errors.length > 0);
@@ -469,7 +495,7 @@ describe('github-ready task identity gate', () => {
         issueSummary(21, { state: 'CLOSED', body: '---\ntask_id: T-001\n---\n' }),
       ],
     });
-    const result = runGitHubReady({ pr: 42, commandRunner: runner });
+    const result = runReady({ pr: 42, commandRunner: runner });
     assert.equal(result.readyForMerge, false);
     assert.equal(result.identity.ok, false);
     assert.ok(result.errors.some(message => /#7/.test(message) && /#21/.test(message) && /T-001/.test(message)),
@@ -486,7 +512,7 @@ describe('github-ready task identity gate', () => {
       }
       return runner(command, args);
     };
-    const result = runGitHubReady({ pr: 42, commandRunner: failing });
+    const result = runReady({ pr: 42, commandRunner: failing });
     assert.equal(result.readyForMerge, false);
     assert.ok(result.errors.some(message => /inventory|could not be fetched/i.test(message)),
       JSON.stringify(result.errors));
@@ -508,7 +534,7 @@ describe('github-ready task identity gate', () => {
       errors: [],
       issues: [],
     };
-    const result = runGitHubReady({ pr: 42, commandRunner: counting, taskInventory: snapshot });
+    const result = runReady({ pr: 42, commandRunner: counting, taskInventory: snapshot });
     assert.equal(result.readyForMerge, true, JSON.stringify(result.errors));
     assert.equal(calls.length, 0, 'the injected snapshot is reused; no second enumeration');
   });

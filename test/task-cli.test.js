@@ -2881,7 +2881,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
     }, /return adapter|host trust/i);
     const brokenReceipt = JSON.parse(persistedBytes);
     brokenReceipt.evidence.executionReceipt.authentication.signature = 'invalid-signature';
-    brokenReceipt.digest = `sha256:agenticloop.return-verification.v4:${canonicalSha256(Object.fromEntries(Object.entries(brokenReceipt).filter(([key]) => key !== 'digest')))}`;
+    brokenReceipt.digest = `sha256:agenticloop.return-verification.v5:${canonicalSha256(Object.fromEntries(Object.entries(brokenReceipt).filter(([key]) => key !== 'digest')))}`;
     writeFileSync(verificationPath, `${JSON.stringify(brokenReceipt, null, 2)}\n`, 'utf8');
     await assertPublicRefusal('review: invalid execution receipt signature', reviewArgs, options, /execution receipt|signature/i);
     writeFileSync(verificationPath, persistedBytes, 'utf8');

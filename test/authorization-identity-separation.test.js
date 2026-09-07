@@ -63,7 +63,9 @@ function reviewMaterial(head = HEAD, body = TASK_BODY, history = { events: [], e
     input: {
       prData: {
         number: 36,
+        baseRefOid: 'c'.repeat(40),
         headRefOid: head,
+        files: [{ path: 'src/identity.js' }],
         commits: [{ oid: head, message: 'Implement identity\n\nTask: T-036\nAgent: engineer' }],
       },
       issueData: { number: 36, body },
