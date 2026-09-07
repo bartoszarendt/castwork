@@ -344,7 +344,7 @@ const F6_RUNTIME_SITES = Object.freeze({
   'review_prepare.workspace': ['src/github-review-prepare.js'],
   'review_prepare.stale_head': ['src/github-review-prepare.js'],
   'review_prepare.preflight_failed': ['src/github-review-prepare.js'],
-  'review_prepare.independent_review_policy': ['src/github-review-prepare.js'],
+  'review_prepare.independent_review_policy': ['src/github-review-prepare.js', 'src/task-cli.js'],
   'review_prepare.head_unavailable': ['src/github-review-prepare.js'],
   'review_prepare.head_malformed': ['src/github-review-prepare.js'],
   'review_prepare.head_refetch_failed': ['src/github-review-prepare.js'],

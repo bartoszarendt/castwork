@@ -21,6 +21,9 @@ import { recognizeHandoff } from '../src/handoff-recognition.js';
 import { fixtureDispatchValidator } from './helpers/handoff-fixture.js';
 import { createCarrierMutationReceipt } from '../src/task-evidence-contract.js';
 import { carrierMutationRelativePath } from '../src/handoff-consumption.js';
+import { maintainerReviewOutcomeBinding, createMaintainerReviewOutcomeReceipt } from '../src/maintainer-review-receipt.js';
+import { parseFilesReviewHistory } from '../src/review-history.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { parseVerificationAttempts } from '../src/verification-learning.js';
 import { parseResolutionMatrix } from '../src/resolution-matrix.js';
 import { createCheckEvidenceSupersession } from '../src/check-evidence-supersession.js';
@@ -1473,8 +1476,24 @@ describe('task CLI', () => {
     assert.equal(attemptReport.attempts[0].reviewOutcome.artifact, `commit:${productHead}`);
     assert.equal(attemptReport.attemptBudget.reviewRevisions, 1);
 
+    const verification = listReturnVerifications(fixture.root, 'T-001').records[0];
+    const signedHistory = parseFilesReviewHistory(readFileSync(taskFile, 'utf8'));
+    const reviewOutcome = signedHistory.events.filter(event => event.type === 'outcome').at(-1);
+    const maintainerReceipt = createMaintainerReviewOutcomeReceipt({
+      receiptId: 'review-prepare-fixup-1', adapterId: fixture.trust.adapterId, keyId: fixture.trust.keyId,
+      targetRepository: fixture.trust.repositoryIdentity, invocationReference: 'review-prepare-fixup-1',
+      invocationMode: reviewOutcome.mode,
+      binding: maintainerReviewOutcomeBinding({
+        taskId: 'T-001', taskContractDigest: taskContractDigest(readFileSync(taskFile, 'utf8')).digest,
+        returnVerification: verification, candidate: verification.finishCandidate, reviewOutcome,
+      }),
+      issuedAt: new Date(Date.now() - 1_000).toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    }, fixture.trust.privateKey);
+    const maintainerReceiptPath = '.agenticloop/tmp/maintainer-review.json';
+    writeFileSync(join(fixture.root, maintainerReceiptPath), `${JSON.stringify(maintainerReceipt, null, 2)}\n`);
+
     const review = await runCliInProcess([
-      'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
+      'task', 'review-prepare', 'T-001', '--maintainer-receipt', maintainerReceiptPath, '--json', '--target', fixture.root,
     ], options);
     assert.equal(review.status, 0, `${review.stdout}\n${review.stderr}`);
     const reviewEntry = JSON.parse(review.stdout);

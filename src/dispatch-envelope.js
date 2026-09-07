@@ -17,6 +17,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { CANCELLATION_PROVENANCE_KIND } from './cancellation-provenance.js';
 import { deriveCommitRange } from './commit-range.js';
+import { validateCommitAdoptionRecord } from './commit-adoption.js';
 import { deriveFinishCandidateForRoleReturn, finishCandidateIsCurrent } from './finish-candidate.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { deepFreeze, frozenClone } from './immutable.js';
@@ -1690,6 +1691,24 @@ export function reconstructCommitAttribution(input = {}) {
   return { range: derived.range, commits: derived.commits, changedPaths: derived.changedPaths };
 }
 
+function adoptionAtWorkflowHead(runGit, packet, wire) {
+  const path = `.agenticloop/adoptions/commits/${packet?.task?.id}/${wire?.productHead}.json`;
+  const shown = runGit(['show', `${wire?.workflowHead}:${path}`]);
+  if (!shown || shown.status !== 0) return { ok: true, adoption: null };
+  let record;
+  try { record = JSON.parse(String(shown.stdout ?? '')); }
+  catch { return { ok: false, message: `commit adoption record '${path}' is corrupt at the return workflow head` }; }
+  const checked = validateCommitAdoptionRecord(record, {
+    taskId: packet?.task?.id,
+    taskContractDigest: packet?.task?.taskContractDigest,
+    baseHead: wire?.productBaseHead,
+    head: wire?.productHead,
+  });
+  return checked.ok
+    ? { ok: true, adoption: { range: record.adoption.range, commits: record.adoption.commits } }
+    : { ok: false, message: `commit adoption record '${path}' is invalid at the return workflow head: ${checked.errors[0]}` };
+}
+
 function validateRepositoryEvidence(value, findings) {
   const shapeOk = exactKeys(value, [
     'backend', 'task', 'worktree', 'branch', 'productBaseHead', 'productLineage', 'productHead', 'workflowHead', 'candidateHead',
@@ -1892,9 +1911,14 @@ function validateReturnAgainstCurrent({
             return;
           }
         }
+        const adoption = adoptionAtWorkflowHead(runGit, packet, wire);
+        if (!adoption.ok) {
+          findings.malformed(adoption.message);
+          return;
+        }
         const derived = deriveCommitRange({
           runGit, baseHead: wire.productBaseHead, head: wire.productHead, taskId: packet.task.id, roleId: packet.assignment.roleId,
-          allowedPaths: packet.task.allowedPaths,
+          allowedPaths: packet.task.allowedPaths, adoption: adoption.adoption,
         });
         if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
         else {

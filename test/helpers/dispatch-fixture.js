@@ -247,6 +247,12 @@ async function buildDispatchFixture(temp, name, options = {}) {
         options.requiredChecksText
       );
     }
+    if (typeof options.independentReviewRequired === 'boolean') {
+      body = body.replace(
+        'backend: files',
+        `backend: files\nindependent_review_required: ${options.independentReviewRequired}`
+      );
+    }
     if (parallel) {
       const lane = taskIds.indexOf(taskId) + 1;
       body = body.replace(

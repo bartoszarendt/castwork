@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { deriveCommitRange } from './commit-range.js';
+import { resolveCommitAdoption, validateCommitAdoptionRecord } from './commit-adoption.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
 import {
@@ -199,6 +200,22 @@ function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier
     }
     return 'workflow_evidence';
   }
+  const adoption = path.match(/^\.agenticloop\/adoptions\/commits\/([A-Za-z0-9._-]+)\/[0-9a-f]{40,64}\.json$/);
+  if (adoption) {
+    if (adoption[1] !== packet?.task?.id) {
+      throw new VerificationContextMalformedError(`commit adoption '${path}' belongs to a different task than the packet names`);
+    }
+    let record;
+    try { record = JSON.parse(readGit(runGit, ['show', `${workflowHead}:${path}`], `commit adoption '${path}'`)); }
+    catch { throw new VerificationContextMalformedError(`commit adoption '${path}' is not valid JSON`); }
+    const checked = validateCommitAdoptionRecord(record, {
+      taskId: packet.task.id, taskContractDigest: packet.task.taskContractDigest,
+    });
+    if (!checked.ok) {
+      throw new VerificationContextMalformedError(`commit adoption '${path}' is not a validated canonical adoption record: ${checked.errors[0]}`);
+    }
+    return 'workflow_evidence';
+  }
   // Proof that a required check ran is written to a tracked path by default, so
   // committing it is the intended end state rather than an anomaly - and until
   // this family was recognized, committing it aborted the next evidence refetch
@@ -353,6 +370,17 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     }
   }
 
+  const adoption = resolveCommitAdoption(target, {
+    taskId: packet?.task?.id,
+    taskContractDigest: packet?.task?.taskContractDigest,
+    baseHead: productBaseHead,
+    head: productHead,
+  });
+  if (!adoption.ok) {
+    throw new VerificationContextMalformedError(
+      `durable commit adoption attribution is invalid: ${adoption.errors.join('; ')}`
+    );
+  }
   const product = deriveCommitRange({
     runGit,
     baseHead: productBaseHead,
@@ -360,6 +388,7 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     taskId: packet?.task?.id,
     roleId: packet?.assignment?.roleId,
     allowedPaths: packet?.task?.allowedPaths,
+    adoption: adoption.attribution ?? null,
   });
   if (!product.ok) {
     throw product.evidenceState === 'malformed'

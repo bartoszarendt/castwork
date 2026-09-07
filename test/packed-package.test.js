@@ -335,11 +335,15 @@ async function populatedStatusTarget() {
 
 describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
   it('ships and imports every canonical handoff module', async () => {
+    const adoption = await import(pathToFileURL(join(packedRoot, 'src', 'commit-adoption.js')).href);
+    const remediation = await import(pathToFileURL(join(packedRoot, 'src', 'certification-remediation.js')).href);
     const recognition = await import(pathToFileURL(join(packedRoot, 'src', 'handoff-recognition.js')).href);
     const binding = await import(pathToFileURL(join(packedRoot, 'src', 'handoff-binding.js')).href);
     const consumption = await import(pathToFileURL(join(packedRoot, 'src', 'handoff-consumption.js')).href);
     const orientation = await import(pathToFileURL(join(packedRoot, 'src', 'lifecycle-orientation.js')).href);
     assert.equal(typeof recognition.recognizeHandoff, 'function');
+    assert.equal(typeof adoption.evaluateCommitAdoption, 'function');
+    assert.equal(typeof remediation.evaluateCertificationFreshness, 'function');
     assert.equal(typeof binding.recognizeRoleStart, 'function');
     assert.equal(typeof consumption.validateDispatchConsumption, 'function');
     assert.equal(typeof orientation.lifecycleOrientationSnapshot, 'function');

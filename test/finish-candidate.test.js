@@ -26,7 +26,7 @@ function finish(backend, overrides = {}) {
   });
 }
 
-describe('P36-04 atomic finish candidate matrices', () => {
+describe('atomic finish candidate matrices', () => {
   for (const backend of ['files', 'github']) {
     it(`${backend}: derives all five finish outputs as one retry-stable result`, () => {
       const first = finish(backend);

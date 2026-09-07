@@ -145,6 +145,7 @@ import {
   createReturnVerification,
   CURRENT_REQUIRED_CHECK_EVIDENCE_ASSURANCE,
   listReturnVerifications,
+  revalidateReturnVerification,
   returnVerificationPath,
   writeReturnVerification,
 } from './return-verification.js';
@@ -196,6 +197,11 @@ import {
   historicalAdoptionRelativePath,
   projectHistoricalAdoption,
 } from './historical-adoption.js';
+import { evaluateCommitAdoption } from './commit-adoption.js';
+import { evaluateCertificationFreshness, evaluateRemediationAuthority, resolveDurableCertificationEvidence } from './certification-remediation.js';
+import { normalizeAuditorInvocationProvenance } from './audit-provenance.js';
+import { parseAuditorWireReport, wireReportToAuditRun } from './audit-report-schema.js';
+import { verifyMaintainerReviewOutcomeReceipt } from './maintainer-review-receipt.js';
 import {
   EXECUTION_ATTEMPT_ABANDONMENT_KIND,
   EXECUTION_ATTEMPT_ABANDONMENT_SCHEMA_VERSION,
@@ -784,6 +790,8 @@ const TASK_SUBCOMMAND_BACKENDS = Object.freeze({
   'record-tooling-failure': Object.freeze(['files']),
   'prepare-product-commit': Object.freeze(['files']),
   'adopt-historical': Object.freeze(['files']),
+  'adopt-commit': Object.freeze(['files']),
+  'remediation-authority': Object.freeze(['files']),
   measure: Object.freeze(['files']),
   explain: Object.freeze(['files']),
   'readiness-plan': Object.freeze(['files']),
@@ -1598,6 +1606,113 @@ function resolveTrustedBlockedAuthority(target, io, assertedPath, expectedAuthor
     );
   }
   return authority;
+}
+
+function filesReviewHistoryBinding(history) {
+  return {
+    digest: `sha256:agenticloop.files-review-history.v1:${canonicalSha256(history.events)}`,
+    eventCount: history.events.length,
+  };
+}
+
+function revalidateCertificationReturn(target, io, hostTrustStore, taskId, record) {
+  const config = loadProjectMap(target)?.config ?? PROJECT_MAP_DEFAULTS;
+  const filePath = taskPathForId(target, config, taskId);
+  const refetchTask = () => {
+    if (!existsSync(filePath)) throw new VerificationContextError(`task record not found: ${relative(target, filePath).replace(/\\/g, '/')}`);
+    const body = readFileSync(filePath, 'utf8');
+    const history = loadFilesTaskContractRecords(target, taskId);
+    return {
+      backend: 'files', taskId, carrier: relative(target, filePath).replace(/\\/g, '/'), body,
+      digest: taskRecordDigest(body), trustedRecords: history.trustedRecords, trustedRecordErrors: history.errors,
+    };
+  };
+  const policy = resolveEffectiveActivationPolicy(target, io);
+  const resolveTrustedAdapter = adapterId => resolveTrustedHostAdapter(target, io, hostTrustStore, adapterId);
+  const executionReceiptReplayAuthority = record.requiredCheckEvidenceAssurance === 'authenticated_receipt'
+    ? createExecutionReceiptReplayAuthority({
+        target,
+        trustedAdapter: resolveTrustedAdapter(record.producerAuthentication?.adapterId),
+        protectedBoundary: io.hostAuthority,
+      })
+    : null;
+  return revalidateReturnVerification(record, {
+    target,
+    capabilities: resolveActivationCapabilities(target, io, hostTrustStore),
+    resolveActivationBinding: packet => resolvePacketActivationBinding(target, io, packet, { hostTrustStorePath: hostTrustStore }),
+    resolveTrustedAdapter,
+    expectedBackend: 'files',
+    expectedTaskId: taskId,
+    expectedTaskContractDigest: record.taskContractDigest,
+    expectedWorkUnitIdentity: record.workUnitIdentity,
+    refetchTask,
+    refetchRepositoryEvidence: () => refetchFilesReturnEvidence(
+      target, record.evidence.packet, record.evidence.repositoryEvidence, { historicalCloseout: true }
+    ),
+    runGit: targetGitRunner(target),
+    minimumReturnAssurance: policy.minimumReturn,
+    minimumRequiredCheckEvidenceAssurance: policy.mode === 'standard'
+      ? CURRENT_REQUIRED_CHECK_EVIDENCE_ASSURANCE
+      : 'authenticated_receipt',
+    executionReceiptReplayAuthority,
+  });
+}
+
+async function verifyAuthenticatedAuditRecord({ record, latest, taskId, candidate }, io) {
+  if (typeof io.auditProvenanceVerifier !== 'function') {
+    return { ok: false, errors: ['protected Auditor receipt verifier is unavailable'] };
+  }
+  const parsed = parseAuditorWireReport(latest.reportPayload);
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  const run = wireReportToAuditRun(parsed.report);
+  if (canonicalJson(parsed.report) !== canonicalJson(latest.reportPayload) ||
+      run.auditedArtifact !== record.candidateArtifact ||
+      run.auditedArtifact !== `commit:${candidate.productRange?.head}` ||
+      !run.coveredTasks.includes(taskId) ||
+      run.invocationReference !== latest.invocationReference ||
+      run.invocationMode !== latest.invocationMode) {
+    return { ok: false, errors: ['Auditor report payload does not bind the persisted audit run and requested candidate'] };
+  }
+  const authenticated = await normalizeAuditorInvocationProvenance(run, {
+    verifier: io.auditProvenanceVerifier,
+    workUnit: record.workUnit,
+    candidateArtifact: record.candidateArtifact,
+    coveredTasks: record.coveredTasks,
+    minimumReturnAssurance: 'host_receipt',
+  });
+  if (authenticated.errors.length > 0 || authenticated.run.auditorReturnAssurance !== 'host_receipt' ||
+      authenticated.run.producerAuthenticated !== true) {
+    return { ok: false, errors: authenticated.errors.length > 0 ? authenticated.errors : ['Auditor receipt did not authenticate the Auditor producer'] };
+  }
+  return { ok: true, errors: [] };
+}
+
+function verifyAuthenticatedMaintainerReviewOutcome({
+  receipt, taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome, independentReviewRequired,
+}, target, io, hostTrustStore) {
+  if (!receipt || typeof receipt !== 'object') {
+    return { ok: false, errors: ['protected Maintainer review outcome receipt is missing'] };
+  }
+  let trustedAdapter;
+  try {
+    trustedAdapter = resolveTrustedHostAdapter(target, io, hostTrustStore, receipt.adapterId);
+  } catch (error) {
+    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  const verified = verifyMaintainerReviewOutcomeReceipt(receipt, {
+    trustedAdapter, target, role: 'maintainer',
+    invocationReference: receipt?.invocation?.reference,
+    invocationMode: reviewOutcome?.mode,
+    taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome,
+    independentReviewRequired: independentReviewRequired === true,
+  });
+  return verified.verified === true
+    ? { ok: true, errors: [] }
+    : {
+        ok: false,
+        errors: [verified.error ?? 'protected Maintainer review outcome receipt did not verify'],
+        diagnosticType: verified.state === 'independence_required' ? 'maintainer_review_independence_required' : null,
+      };
 }
 
 function readActivationCaptureInput(target, relPath, capabilities, intendedTaskId) {
@@ -5085,6 +5200,7 @@ export async function cmdTask(args, io = createIo()) {
       // is correct — the matrix populates on revision rounds when
       // AGENT_REVIEW_FINDINGS exists.
       const reviewHistory = parseFilesReviewHistory(body);
+      const latestReview = reviewHistory.events.filter(event => event.type === 'outcome').at(-1) ?? null;
       const needsRevisionEvents = reviewHistory.events.filter(
         event => event.type === 'outcome' && event.status === 'needs_revision'
       );
@@ -5168,11 +5284,50 @@ export async function cmdTask(args, io = createIo()) {
         }, asJson, io);
       }
       const verifiedReturn = matchingReturns[0];
+      let maintainerOutcome = null;
+      if (latestReview || opts.maintainerReceipt) {
+        if (latestReview && !opts.maintainerReceipt) {
+          return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
+            'a protected Maintainer review outcome receipt is required to persist a review outcome', {
+              code: 'handoff.evidence.unauthenticated', evidenceState: 'missing', disposition: 'needs_context',
+              safeRepair: 'Provide a host-signed Maintainer review outcome receipt bound to the current review history and exact return.',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
+        try {
+          maintainerOutcome = readTargetJson(target, opts.maintainerReceipt, 'Maintainer review outcome receipt');
+        } catch (error) {
+          return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
+            error.message, { code: 'handoff.evidence.malformed', evidenceState: 'malformed', disposition: 'blocked' }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
+        const signedOutcome = latestReview ?? {
+          type: 'outcome',
+          ...(maintainerOutcome?.binding?.outcome ?? {}),
+        };
+        const authenticated = verifyAuthenticatedMaintainerReviewOutcome({
+          receipt: maintainerOutcome, taskId, taskContractDigest: contract.digest,
+          returnVerification: verifiedReturn, candidate: verifiedReturn.finishCandidate,
+          history: reviewHistory, reviewOutcome: signedOutcome,
+          independentReviewRequired: contract.projection.independent_review_required === 'true',
+        }, target, io, opts.hostTrustStore);
+        if (!authenticated.ok) {
+          const independenceRequired = authenticated.diagnosticType === 'maintainer_review_independence_required';
+          return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
+            `Maintainer review outcome authentication failed: ${authenticated.errors.join('; ')}`, {
+              code: independenceRequired ? 'review_prepare.independent_review_policy' : 'handoff.evidence.unauthenticated', evidenceState: 'malformed', disposition: 'blocked',
+              safeRepair: independenceRequired
+                ? 'Obtain a fresh host-signed Maintainer review outcome receipt produced through an independent review mode for the current exact candidate.'
+                : 'Obtain a fresh host-signed Maintainer review outcome receipt for the current exact candidate and review history.',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
+      }
       const terminalLineageDigest = verifiedReturn.evidence.roleReturn.carrierLineage
         .evidenceMutationReceiptDigests.at(-1) ??
         verifiedReturn.evidence.roleReturn.carrierLineage.dispatchConsumptionDigest;
       const receipt = {
-        kind: 'agenticloop.files-review-entry-receipt', schemaVersion: 2,
+        kind: 'agenticloop.files-review-entry-receipt', schemaVersion: 3,
         backend: 'files', taskId, taskContractDigest: contract.digest,
         dispatchCarrierDigest: recognition.boundIdentity.dispatchCarrierDigest,
         currentCarrierDigest, productHead: recognition.boundIdentity.productHead,
@@ -5185,13 +5340,21 @@ export async function cmdTask(args, io = createIo()) {
         },
         carrierLineageTerminalDigest: terminalLineageDigest,
         handoffRecognitionDigest: recognition.digest,
+        // The review-entry transition writes this binding atomically with the
+        // carrier drift check. A later remediation gate therefore cannot treat
+        // a free-form Review History paragraph as independent review evidence.
+        reviewHistory: filesReviewHistoryBinding(reviewHistory),
+        // A deterministic entry digest cannot authenticate a reviewer. This
+        // nested receipt is produced by the protected host boundary and binds
+        // the exact outcome, candidate, verified return, and history.
+        maintainerOutcome,
         // A review entry is an idempotent projection of one verified return.
         // Reuse its trusted verification instant rather than minting a new
         // identity on an otherwise exact retry.
         observedAt: verifiedReturn.verifiedAt, digest: null,
       };
       const { digest: _digest, ...receiptProjection } = receipt;
-      receipt.digest = `sha256:agenticloop.files-review-entry-receipt.v2:${canonicalSha256(receiptProjection)}`;
+      receipt.digest = `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(receiptProjection)}`;
       // The receipt's human-readable record is intentionally not a source of
       // authority. The recognized verified return remains the authority; this
       // file merely records entry after the command-local drift check.
@@ -5646,6 +5809,181 @@ export async function cmdTask(args, io = createIo()) {
     }
 
     if (sub === 'explain') return runTaskExplain({ target, positional, opts, io });
+
+    if (sub === 'adopt-commit') {
+      const taskId = positional[0];
+      const asJson = Boolean(opts.json);
+      if (!taskId || !opts.attempt || !opts.base || !opts.head || !opts.actorClass || !opts.actorId || !opts.reason) {
+        io.err('task adopt-commit requires <id>, --attempt, --base, --head, --actor-class, --actor-id, and --reason');
+        return EXIT_USAGE;
+      }
+      const filePath = taskPathForId(target, projectConfig, taskId);
+      if (!existsSync(filePath)) {
+        io.err(`Task record not found: ${relative(target, filePath).replace(/\\/g, '/')}`);
+        return 1;
+      }
+      const body = readFileSync(filePath, 'utf8');
+      const contract = taskContractDigest(body);
+      const [frontmatter] = parseFrontmatter(body);
+      const risk = String(frontmatter?.risk_class ?? '').trim();
+      const consumed = listDispatchConsumptions(target, taskId, { backend: 'files' });
+      if (!contract.ok || !consumed.ok) {
+        for (const error of consumed.errors ?? []) io.err(error);
+        io.err(contract.error ?? 'canonical dispatch consumption evidence is unavailable');
+        return 1;
+      }
+      const consumption = consumed.records.find(record => executionAttemptIdentity(record) === String(opts.attempt));
+      if (!consumption) {
+        io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}; adoption returns to the owner.`);
+        return 1;
+      }
+      const currentHead = String(targetGitRunner(target)(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
+      const evaluation = evaluateCommitAdoption({
+        runGit: targetGitRunner(target),
+        currentHead,
+        range: { base: String(opts.base), head: String(opts.head) },
+        originalBase: consumption.productBaseHead,
+        allowedPaths: contract.projection.allowed_paths,
+        protectedContract: { authorized: consumption.taskContractDigest, current: contract.digest },
+        // risk_class is itself part of the protected contract projection. A
+        // missing classification therefore fails closed instead of becoming an
+        // unrecorded assertion supplied by the command caller.
+        riskClass: { authorized: risk, current: risk },
+        attempt: { id: executionAttemptIdentity(consumption), authorization: consumption.taskContractDigest },
+        executor: 'supervisor',
+        actor: { class: String(opts.actorClass), id: String(opts.actorId) },
+        reason: String(opts.reason),
+      });
+      if (!evaluation.ok) {
+        const payload = { command: 'task adopt-commit', taskId, evaluation };
+        if (asJson) io.out(JSON.stringify(payload, null, 2));
+        else for (const reason of evaluation.reasons) io.err(`adoption refused: ${reason}`);
+        return 1;
+      }
+      const relPath = `.agenticloop/adoptions/commits/${taskId}/${evaluation.adoption.range.head}.json`;
+      const record = {
+        kind: 'agenticloop.commit-adoption', schemaVersion: 1, backend: 'files', taskId,
+        taskContractDigest: contract.digest, riskClass: risk, adoptedAt: new Date().toISOString(),
+        ...evaluation,
+      };
+      const applied = executeMutationBatch(target, [{
+        type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
+      }]);
+      if (!applied.ok) {
+        for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
+        return 1;
+      }
+      const payload = {
+        command: 'task adopt-commit', taskId, path: relPath, adoption: evaluation.adoption,
+        preserved: evaluation.preserved, certification: evaluation.certification,
+      };
+      if (asJson) io.out(JSON.stringify(payload, null, 2));
+      else io.out(`Adopted ${evaluation.adoption.range.head} for ${taskId}; required checks, Maintainer review, and audit must rerun.`);
+      return 0;
+    }
+
+    if (sub === 'remediation-authority') {
+      const taskId = positional[0];
+      const asJson = Boolean(opts.json);
+      const required = ['attempt', 'candidate', 'finding'];
+      if (!taskId || required.some(name => !opts[name])) {
+        io.err('task remediation-authority requires <id>, --attempt, --candidate, and --finding');
+        return EXIT_USAGE;
+      }
+      const filePath = taskPathForId(target, projectConfig, taskId);
+      if (!existsSync(filePath)) {
+        io.err(`Task record not found: ${relative(target, filePath).replace(/\\/g, '/')}`);
+        return 1;
+      }
+      const body = readFileSync(filePath, 'utf8');
+      const contract = taskContractDigest(body);
+      const [frontmatter] = parseFrontmatter(body);
+      const risk = String(frontmatter?.risk_class ?? '').trim();
+      const consumed = listDispatchConsumptions(target, taskId, { backend: 'files' });
+      if (!contract.ok || !consumed.ok) {
+        for (const error of consumed.errors ?? []) io.err(error);
+        io.err(contract.error ?? 'canonical dispatch consumption evidence is unavailable');
+        return 1;
+      }
+      const consumption = consumed.records.find(record => executionAttemptIdentity(record) === String(opts.attempt));
+      if (!consumption) {
+        io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}; remediation returns to the owner.`);
+        return 1;
+      }
+      let persistedCandidate;
+      let finding;
+      try {
+        persistedCandidate = readTargetJson(target, String(opts.candidate), 'persisted finish candidate');
+        finding = readTargetJson(target, String(opts.finding), 'remediation finding');
+      } catch (error) {
+        io.err(error.message);
+        return EXIT_USAGE;
+      }
+      // Protected return revalidation below re-derives the live Git topology
+      // and rejects a later scoped product mutation. The workflow head may
+      // legitimately advance as review/audit receipts are persisted, so it is
+      // not itself the candidate identity supplied to the canonical evaluator.
+      const candidate = persistedCandidate && typeof persistedCandidate === 'object'
+        ? {
+            ...persistedCandidate,
+            certificationInvalidation: {
+            ...persistedCandidate.certificationInvalidation,
+              observedCandidateHead: persistedCandidate.productRange?.head,
+            },
+          }
+        : persistedCandidate;
+      const durable = await resolveDurableCertificationEvidence({
+        target, taskId, taskRecord: body, candidate: persistedCandidate,
+        revalidateReturn: record => revalidateCertificationReturn(target, io, opts.hostTrustStore, taskId, record),
+        verifyMaintainerOutcome: input => verifyAuthenticatedMaintainerReviewOutcome(input, target, io, opts.hostTrustStore),
+        verifyAuditorRecord: input => verifyAuthenticatedAuditRecord(input, io),
+      });
+      const freshness = durable.ok
+        ? evaluateCertificationFreshness({
+            candidate,
+            persistedCandidate: durable.candidate,
+            producer: durable.producer,
+            review: durable.review,
+            audit: durable.audit,
+          })
+        : durable;
+      const authority = evaluateRemediationAuthority({
+        authorization: {
+          contract: consumption.taskContractDigest,
+          risk,
+          attempt: executionAttemptIdentity(consumption),
+        },
+        finding,
+      });
+      if (!freshness.ok || !authority.authorized || contract.digest !== consumption.taskContractDigest) {
+        const contractReasons = contract.digest === consumption.taskContractDigest
+          ? [] : ['current protected contract differs from the original bounded authorization'];
+        const payload = { command: 'task remediation-authority', taskId, freshness, authority, reasons: contractReasons };
+        if (asJson) io.out(JSON.stringify(payload, null, 2));
+        else for (const reason of [...freshness.reasons, ...authority.reasons, ...contractReasons]) io.err(`remediation refused: ${reason}`);
+        return 1;
+      }
+      const relPath = `.agenticloop/remediations/${taskId}/${canonicalSha256({ attempt: authority.cycle.attempt, candidate: persistedCandidate })}.json`;
+      const record = {
+        kind: 'agenticloop.certification-remediation', schemaVersion: 1, backend: 'files', taskId,
+        taskContractDigest: contract.digest, candidate: persistedCandidate,
+        producer: durable.producer,
+        review: { role: durable.review.role, id: durable.review.id, record: durable.records.review },
+        audit: { role: durable.audit.role, id: durable.audit.id, record: durable.records.audit },
+        finding, authority, openedAt: new Date().toISOString(),
+      };
+      const applied = executeMutationBatch(target, [{
+        type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
+      }]);
+      if (!applied.ok) {
+        for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
+        return 1;
+      }
+      const payload = { command: 'task remediation-authority', taskId, path: relPath, authority: authority.cycle };
+      if (asJson) io.out(JSON.stringify(payload, null, 2));
+      else io.out(`Opened remediation cycle for ${taskId}; Maintainer review and audit remain required for the next exact candidate.`);
+      return 0;
+    }
 
     if (sub === 'adopt-historical') {
       const taskId = positional[0];
