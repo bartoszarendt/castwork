@@ -239,6 +239,7 @@ const MANIFEST = {
     'test/setup-cli.test.js',
     'test/status-cli.test.js',
     'test/update-cli.test.js',
+    'test/update-generated-state-compatibility.test.js',
     'test/worktree-add-guard-list.test.js',
     'test/worktree-cleanup-bare.test.js',
     'test/worktree-cleanup-pr-state.test.js',

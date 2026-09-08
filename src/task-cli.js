@@ -163,6 +163,7 @@ import {
   dispatchConsumptionRelativePath,
   listCarrierMutationReceipts,
   listDispatchConsumptions,
+  migrateDispatchConsumptionAtProtectedBoundary,
   resolveCarrierLineage,
 } from './handoff-consumption.js';
 import { measureTaskWorkflow } from './workflow-measurement.js';
@@ -1064,6 +1065,7 @@ function executionEvidenceBinding(target, projectConfig, taskId, packet, current
     runGit: targetGitRunner(target),
     baseHead: packet?.repository?.head,
     head: repositoryHead,
+    classifier: createPathClassifier(target),
   });
   const productHead = current.productHead ?? implementationArtifactHead(body) ??
     (derivedProduct.ok ? derivedProduct.productHead : null) ??
@@ -4346,6 +4348,14 @@ export async function cmdTask(args, io = createIo()) {
         }
         if (packet.backend !== 'files') {
           throw new VerificationContextMalformedError('prepare-return supports the files backend only');
+        }
+        const migration = migrateDispatchConsumptionAtProtectedBoundary(target, taskId, packet.packetId, {
+          ...(io?.fsMutationOptions ?? {}),
+        });
+        if (!migration.ok) {
+          throw new VerificationContextMalformedError(
+            `active dispatch consumption could not be atomically migrated at the protected prepare-return boundary: ${migration.errors.join('; ')}`
+          );
         }
         const checks = readTargetJson(target, checkEvidencePath.relPath, 'check evidence');
         if (packet?.backend !== 'files' || packet?.task?.id !== taskId || !requiredCheckEvidenceMatchesInventory(

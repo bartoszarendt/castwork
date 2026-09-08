@@ -21,6 +21,7 @@ import { validateCommitAdoptionRecord } from './commit-adoption.js';
 import { deriveFinishCandidateForRoleReturn, finishCandidateIsCurrent } from './finish-candidate.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { deepFreeze, frozenClone } from './immutable.js';
+import { hasCurrentLayout } from './layout.js';
 import { createDiagnostic } from './repair-policy.js';
 import { receiveExceptionalVerification } from './exceptional-verification.js';
 import {
@@ -892,6 +893,8 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       intendedCreations: scopeContract.ok ? scopeContract.projection.intended_creations ?? [] : [],
       priorGateReceipts,
       readCarrierDigest,
+      legacyLayout: !hasCurrentLayout(repository.worktree),
+      target: repository.worktree,
     });
     const inventoryRecheck = scopeContract.ok && decomposition?.scan?.workUnit?.backend
       ? {

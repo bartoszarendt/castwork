@@ -628,9 +628,10 @@ async function cmdUpdate(args, io) {
   }
 
   io.warn('  DEPRECATED: plain update combines tracked repository refresh with generated adapter regeneration. Use update --repository-only, then hydrate --adapter <host>.');
-  const compatibility = diagnoseLifecycleCompatibility(target);
-  if (compatibility.length > 0) {
-    for (const finding of compatibility) io.err(`  ERROR: ${finding.path}: ${compatibilityMessage(finding)}`);
+  const incompatibleRecords = diagnoseLifecycleCompatibility(target)
+    .filter(finding => finding.state === 'incompatible');
+  if (incompatibleRecords.length > 0) {
+    for (const finding of incompatibleRecords) io.err(`  ERROR: ${finding.path}: ${compatibilityMessage(finding)}`);
     return 1;
   }
   const configResult = loadOptionalAlConfig(target);

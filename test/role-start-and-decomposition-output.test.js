@@ -50,6 +50,8 @@ function persistSchemaV3Consumption(root, taskId) {
   delete legacy.transitionKey;
   delete legacy.protectedInputDigest;
   delete legacy.acceptedResult;
+  delete legacy.toolkitPackageVersion;
+  delete legacy.lifecycleSchemaSetDigest;
   delete legacy.digest;
   legacy.digest = `sha256:agenticloop.dispatch-consumption.v3:${canonicalSha256(legacy)}`;
   const source = `${JSON.stringify(legacy, null, 2)}\n`;

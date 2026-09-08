@@ -208,6 +208,7 @@ export function runValidation(target, options = {}) {
   }
 
   const lifecycleCompatibilityErrors = diagnoseLifecycleCompatibility(target)
+    .filter(finding => finding.state === 'incompatible')
     .map(finding => `${finding.path}: ${compatibilityMessage(finding)}`);
   if (lifecycleCompatibilityErrors.length > 0) {
     writeLine(output, '='.repeat(70));

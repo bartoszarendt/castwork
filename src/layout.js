@@ -165,7 +165,6 @@ export const GENERATED_SHIM_RELATIVE_PATHS = Object.freeze([
   '.codex',
   '.agents',
   '.claude',
-  '.github',
   '.cursor',
   'plugins/agenticloop',
 ]);

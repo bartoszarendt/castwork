@@ -11,6 +11,7 @@ import {
   resolveCarrierLineage,
   validateDispatchConsumption,
 } from './handoff-consumption.js';
+import { classifyLifecycleCompatibility } from './lifecycle-compatibility.js';
 import {
   validateCarrierMutationReceipt,
 } from './task-evidence-contract.js';
@@ -129,12 +130,17 @@ function workflowRecordAtHead(runGit, workflowHead, path, expected) {
   } catch {
     throw new VerificationContextMalformedError(`workflow evidence '${path}' is not valid JSON`);
   }
+  const dispatchCompatibility = expected.kind === 'dispatch'
+    ? classifyLifecycleCompatibility(record, 'agenticloop.dispatch-consumption')
+    : null;
   const checked = expected.kind === 'dispatch'
-    ? validateDispatchConsumption(record, {
-        backend: expected.record.backend,
-        taskId: expected.record.taskId,
-        filename: path.split('/').at(-1),
-      })
+    ? (['current', 'readable'].includes(dispatchCompatibility.state)
+        ? validateDispatchConsumption(record, {
+          backend: expected.record.backend,
+          taskId: expected.record.taskId,
+          filename: path.split('/').at(-1),
+        }, record.schemaVersion)
+        : { ok: false })
     : expected.kind === 'abandonment'
       ? validateExecutionAttemptAbandonment(record, { taskId: expected.record.taskId })
       : validateCarrierMutationReceipt(record);

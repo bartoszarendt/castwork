@@ -40,6 +40,7 @@ import {
 import { parseDependencySnapshot, dependencyStatusMap } from './task-evidence-contract.js';
 import { isGitObjectId } from './git-oid.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
+import { hasCurrentLayout } from './layout.js';
 import { listAgenticLoopWorktrees, resolveGitRepositoryContext } from './worktree.js';
 import { resolveAdapterHost } from './adapter-discovery.js';
 import { loadAgenticLoopConfig } from './json.js';
@@ -61,7 +62,7 @@ import {
   executionAttemptIdentity,
 } from './execution-attempt.js';
 import { resolveCarrierLineage } from './handoff-consumption.js';
-import { deriveProductHead } from './product-lineage.js';
+import { createPathClassifier, deriveProductHead } from './product-lineage.js';
 import {
   parseRequiredCheckInventory,
   REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION,
@@ -928,6 +929,8 @@ export function evaluateHandoffPreflight(input) {
           runGit: args => runGit(resolvedTarget, args),
           scopePatterns: scopeContract?.ok ? scopeContract.projection.allowed_paths ?? [] : [],
           intendedCreations: scopeContract?.ok ? scopeContract.projection.intended_creations ?? [] : [],
+          legacyLayout: !hasCurrentLayout(resolvedTarget),
+          target: resolvedTarget,
         });
         cleanStateClassification = cleanStateObservation.clean?.ok === true ? 'clean' : 'dirty';
       } catch (error) {
@@ -1305,6 +1308,7 @@ export function evaluateHandoffPreflight(input) {
         runGit: args => runGit(resolvedTarget, args),
         baseHead: lineage.dispatchConsumption.productBaseHead,
         head: repositoryState.head,
+        classifier: createPathClassifier(resolvedTarget),
       });
       derivedProductHead = product.ok ? product.productHead : null;
       if (product.ok && product.productHead === lineage.dispatchConsumption.productBaseHead) {

@@ -227,7 +227,7 @@ async function persistDurableCertifications(fixture, attempt, head, {
   return verification.finishCandidate;
 }
 
-describe('P36-06/P36-07 production lifecycle commands', () => {
+describe('production lifecycle adoption and remediation commands', () => {
   it('records deliberate human-fix adoption and invalidates the exact certifications for rerun without consuming the attempt', async () => {
     const fixture = await createDispatchFixture(temp, 'adopt-success');
     const attempt = consumeAttempt(fixture);

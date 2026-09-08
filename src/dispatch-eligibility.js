@@ -1285,14 +1285,14 @@ function isCanonicalSerialDependencyEvidence(dependencies) {
  * Evaluate initial repository state and prior-gate receipts for one dispatch.
  * Returns the exact clean-state binding that is folded into the packet digest.
  */
-export function evaluateInitialState({ runGit, scopePatterns, intendedCreations, priorGateReceipts, readCarrierDigest }, findings) {
+export function evaluateInitialState({ runGit, scopePatterns, intendedCreations, priorGateReceipts, readCarrierDigest, legacyLayout = false, target = null }, findings) {
   if (typeof runGit !== 'function') {
     findings.missing('a Git reader is required to prove the initial repository state before dispatch');
     return null;
   }
   let clean;
   try {
-    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations });
+    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations, legacyLayout, target });
   } catch (error) {
     findings.missing(`initial repository state could not be evaluated: ${error.message}`);
     return null;
@@ -1665,7 +1665,7 @@ function shapeRefusal(factShape, message) {
  * differently is exactly the clean-state divergence defect.
  */
 export function observeDispatchInitialState({
-  runGit, scopePatterns, intendedCreations, priorGateReceipts = [], readCarrierDigest = null,
+  runGit, scopePatterns, intendedCreations, priorGateReceipts = [], readCarrierDigest = null, legacyLayout = false, target = null,
 }) {
   if (typeof runGit !== 'function') {
     return {
@@ -1675,7 +1675,7 @@ export function observeDispatchInitialState({
   }
   let clean;
   try {
-    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations });
+    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations, legacyLayout, target });
   } catch (error) {
     return { ok: false, clean: null, gates: null, reason: `initial repository state could not be evaluated: ${error.message}` };
   }

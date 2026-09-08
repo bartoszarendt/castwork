@@ -25,6 +25,9 @@
       ".agenticloop/logs",
       ".agenticloop/checks",
       ".agenticloop/tmp"
+    ],
+    "productPaths": [
+      ".github/workflows"
     ]
   },
   "generatedShims": [
@@ -32,7 +35,6 @@
     ".codex",
     ".agents",
     ".claude",
-    ".github",
     ".cursor",
     "plugins/agenticloop"
   ],

@@ -1,21 +1,27 @@
 /** Durable proof that a canonical dispatch packet was consumed at role start. */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { join, relative } from 'node:path';
 import { canonicalSha256 } from './canonical-json.js';
 import { listWorkflowEvidenceFiles } from './carrier-root.js';
 import { GIT_OBJECT_ID_RE } from './git-oid.js';
 import { validateHandoffRecognition } from './handoff-recognition.js';
-import { executeMutationBatch } from './fs-mutation-kernel.js';
+import { executeMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
 import { executionAttemptIdentity } from './execution-attempt-identity.js';
 import { protectedTransitionKey } from './protected-transition-key.js';
 import { ENGINEER_CARRIER_MUTATION_CLASSES, validateCarrierMutationReceipt } from './task-evidence-contract.js';
-import { classifyLifecycleCompatibility, compatibilityMessage } from './lifecycle-compatibility.js';
+import {
+  classifyLifecycleCompatibility,
+  compatibilityMessage,
+  currentLifecycleBinding,
+  validateLifecycleBinding,
+} from './lifecycle-compatibility.js';
 import { producerRefusal } from './public-error.js';
 
 export const DISPATCH_CONSUMPTION_KIND = 'agenticloop.dispatch-consumption';
-export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 4;
-const LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION = 3;
+export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 5;
+const LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSIONS = Object.freeze([3, 4]);
 export const DISPATCH_CONSUMPTION_CLOCK_SKEW_MS = 1000;
 export const TASK_CARRIER_MUTATION_ROOT = '.agenticloop/handoffs/task-mutations';
 
@@ -105,6 +111,7 @@ export function createDispatchConsumption({
       checkEvidenceOutput,
       nextStep: 'implementation_artifact_evidence',
     },
+    ...currentLifecycleBinding(),
     consumedAt,
     digest: null,
   };
@@ -120,14 +127,16 @@ export function dispatchConsumptionRelativePath(record) {
 
 export function validateDispatchConsumption(record, {
   backend = null, taskId = null, filename = null, now = Date.now(),
-} = {}, schemaVersion = DISPATCH_CONSUMPTION_SCHEMA_VERSION) {
-  const legacy = schemaVersion === LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION;
+} = {}, schemaVersion = DISPATCH_CONSUMPTION_SCHEMA_VERSION, { validateLifecycle = true } = {}) {
+  const legacy = schemaVersion === 3;
+  const preBinding = schemaVersion === 4;
   const required = [
     'kind', 'schemaVersion', 'backend', 'taskId', 'packetId', 'packetDigest', 'invocationId',
     'taskContractDigest', 'dispatchCarrierDigest', 'currentCarrierDigest', 'workUnitIdentity', 'repositoryIdentity',
     'worktreeRoot', 'productBaseHead', 'mutationClass', 'workflowRole', 'assuranceGrade',
     'recognitionDigest', 'recognition',
     ...(!legacy ? ['transitionKey', 'protectedInputDigest', 'acceptedResult'] : []),
+    ...(!legacy && !preBinding ? ['toolkitPackageVersion', 'lifecycleSchemaSetDigest'] : []),
     'consumedAt', 'digest',
   ];
   const errors = [];
@@ -202,6 +211,13 @@ export function validateDispatchConsumption(record, {
       if (accepted.checkEvidenceOutput !== null && (typeof accepted.checkEvidenceOutput !== 'string' || !accepted.checkEvidenceOutput)) errors.push('dispatch consumption acceptedResult checkEvidenceOutput is invalid');
       if (accepted.nextStep !== 'implementation_artifact_evidence') errors.push('dispatch consumption acceptedResult nextStep is invalid');
     }
+    if (!preBinding && validateLifecycle) {
+      const lifecycle = validateLifecycleBinding(record);
+      if (!lifecycle.ok) errors.push(...lifecycle.errors.map(error => `dispatch consumption ${error}`));
+      else if (lifecycle.schemaSet.records.find(entry => entry.kind === DISPATCH_CONSUMPTION_KIND)?.schemaVersion !== schemaVersion) {
+        errors.push('dispatch consumption lifecycle binding does not retain this dispatch-consumption schemaVersion');
+      }
+    }
   }
 
   const consumedMs = Date.parse(record.consumedAt);
@@ -217,7 +233,7 @@ export function validateDispatchConsumption(record, {
   return { ok: errors.length === 0, errors };
 }
 
-/** Resolve a complete v3 identity without rewriting the persisted evidence. */
+/** Resolve a complete v3/v4 identity without rewriting the persisted evidence. */
 function resolveLegacyDispatchConsumption(record) {
   const protectedInputDigest = canonicalSha256({
     actionId: 'role_start', preparedDispatch: record.recognition.boundIdentity,
@@ -237,7 +253,9 @@ function resolveLegacyDispatchConsumption(record) {
       transitionKey,
       protectedInputDigest,
       currentCarrierDigest: record.currentCarrierDigest,
-      checkEvidenceOutput: null,
+      checkEvidenceOutput: record.schemaVersion === 4
+        ? record.acceptedResult.checkEvidenceOutput
+        : null,
       nextStep: 'implementation_artifact_evidence',
     }),
   });
@@ -265,10 +283,12 @@ export function listDispatchConsumptions(target, taskId, options = {}) {
         const checked = validateDispatchConsumption(record, { ...options, taskId, filename: name });
         if (!checked.ok) errors.push(...checked.errors.map(error => `${name}: ${error}`));
         else records.push(record);
-      } else if (record.schemaVersion === LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION) {
-        const checked = validateDispatchConsumption(record, { ...options, taskId, filename: name }, LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSION);
+      } else if (compatibility.state === 'readable') {
+        const checked = validateDispatchConsumption(record, { ...options, taskId, filename: name }, record.schemaVersion);
         if (!checked.ok) errors.push(...checked.errors.map(error => `${name}: ${error}`));
-        else records.push(resolveLegacyDispatchConsumption(record));
+        else records.push(LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSIONS.includes(record.schemaVersion)
+          ? resolveLegacyDispatchConsumption(record)
+          : record);
       } else {
         errors.push(`${name}: ${compatibilityMessage(compatibility, 'dispatch consumption')}`);
       }
@@ -277,6 +297,134 @@ export function listDispatchConsumptions(target, taskId, options = {}) {
     }
   }
   return { ok: errors.length === 0, records, errors };
+}
+
+/**
+ * Explicit migration primitive for a supported legacy or unretained-binding
+ * dispatch record.
+ * It is never called by `update`: callers may use it only at a protected
+ * transition boundary. Candidate validation happens before the mutation kernel
+ * snapshots and writes, so a failed migration leaves the old record byte-for-
+ * byte intact and returns the incompatibility instead of guessing.
+ */
+export function migrateLegacyDispatchConsumption(target, relPath, { beforeWrite } = {}) {
+  let path;
+  let original;
+  let record;
+  try {
+    path = resolveTargetPath(target, relPath);
+    original = readFileSync(path, 'utf8');
+    record = JSON.parse(original);
+  } catch (error) {
+    return { ok: false, migrated: false, errors: [`dispatch consumption migration cannot read '${relPath}': ${error.message}`] };
+  }
+  const compatibility = classifyLifecycleCompatibility(record, DISPATCH_CONSUMPTION_KIND);
+  const lifecycle = record.schemaVersion === DISPATCH_CONSUMPTION_SCHEMA_VERSION
+    ? validateLifecycleBinding(record)
+    : null;
+  if (compatibility.state === 'current' && lifecycle?.ok !== false) return { ok: true, migrated: false, errors: [] };
+  const migratableLegacy = compatibility.state === 'readable' && LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSIONS.includes(record.schemaVersion);
+  const migratableBinding = compatibility.state === 'current' && lifecycle?.migrationRequired === true;
+  if (!migratableLegacy && !migratableBinding) {
+    return {
+      ok: false,
+      migrated: false,
+      errors: lifecycle?.errors?.length
+        ? lifecycle.errors.map(error => `dispatch consumption migration incompatible: ${error}`)
+        : [compatibilityMessage(compatibility, 'dispatch consumption')],
+    };
+  }
+  const oldChecked = validateDispatchConsumption(
+    record,
+    { taskId: record.taskId, filename: relPath.split('/').at(-1) },
+    record.schemaVersion,
+    { validateLifecycle: !migratableBinding },
+  );
+  if (!oldChecked.ok) return { ok: false, migrated: false, errors: oldChecked.errors.map(error => `dispatch consumption migration incompatible: ${error}`) };
+  const migrated = { ...record, schemaVersion: DISPATCH_CONSUMPTION_SCHEMA_VERSION, ...currentLifecycleBinding(), digest: null };
+  migrated.digest = dispatchConsumptionDigest(migrated);
+  const checked = validateDispatchConsumption(migrated, { taskId: record.taskId, filename: relPath.split('/').at(-1) });
+  if (!checked.ok) return { ok: false, migrated: false, errors: checked.errors.map(error => `dispatch consumption migration incompatible: ${error}`) };
+  const applied = executeMutationBatch(target, [{
+    type: 'write', path: relPath, content: `${JSON.stringify(migrated, null, 2)}\n`,
+    expectedDigest: createHash('sha256').update(original, 'utf8').digest('hex'), expectedKind: 'file',
+  }], beforeWrite ? { beforeWrite } : {});
+  return {
+    ok: applied.ok,
+    migrated: applied.ok,
+    errors: applied.ok ? [] : applied.errors,
+    rollbackErrors: applied.rollbackErrors,
+  };
+}
+
+/**
+ * Migrate one exact active dispatch consumption at a protected action boundary.
+ * The packet identity selects the attempt; arbitrary historical records are
+ * never rewritten. The mutation kernel makes the replacement conditional on
+ * the exact old bytes and rolls back on failure.
+ */
+export function migrateDispatchConsumptionAtProtectedBoundary(target, taskId, packetId, options = {}) {
+  const candidates = [];
+  const errors = [];
+  for (const { name, path } of listWorkflowEvidenceFiles(
+    target, ['.agenticloop', 'handoffs', 'dispatch', safeSegment(taskId)]
+  )) {
+    try {
+      const record = JSON.parse(readFileSync(path, 'utf8'));
+      if (record.taskId !== taskId || record.packetId !== packetId) continue;
+      const relPath = relative(target, path).replaceAll('\\', '/');
+      if (!relPath || relPath.startsWith('../')) {
+        // The carrier root can hold another worktree's evidence. It remains
+        // read-only from this protected target; ordinary lineage validation
+        // below will still diagnose it if it cannot be read under retained
+        // semantics.
+        continue;
+      }
+      candidates.push({ relPath, record });
+    } catch (error) {
+      errors.push(`${name}: dispatch consumption is unreadable: ${error.message}`);
+    }
+  }
+  if (errors.length > 0) return { ok: false, migrated: false, errors };
+  if (candidates.length === 0) return { ok: true, migrated: false, errors: [], path: null };
+  if (candidates.length !== 1) {
+    return {
+      ok: false,
+      migrated: false,
+      errors: [`protected transition requires exactly one active dispatch consumption for packet '${packetId}', found ${candidates.length}`],
+    };
+  }
+  const { relPath, record } = candidates[0];
+  const compatibility = classifyLifecycleCompatibility(record, DISPATCH_CONSUMPTION_KIND);
+  if (compatibility.state === 'incompatible') {
+    return {
+      ok: false,
+      migrated: false,
+      errors: [compatibilityMessage(compatibility, 'dispatch consumption')],
+      path: relPath,
+    };
+  }
+  if (compatibility.state === 'readable') {
+    const checked = validateDispatchConsumption(
+      record,
+      { taskId, filename: relPath.split('/').at(-1) },
+      record.schemaVersion,
+    );
+    return checked.ok
+      ? { ok: true, migrated: false, errors: [], path: relPath }
+      : {
+        ok: false,
+        migrated: false,
+        errors: checked.errors.map(error => `dispatch consumption migration incompatible: ${error}`),
+        path: relPath,
+      };
+  }
+  const lifecycle = validateLifecycleBinding(record);
+  if (lifecycle.ok) return { ok: true, migrated: false, errors: [], path: relPath };
+  if (!lifecycle.migrationRequired) {
+    return { ok: false, migrated: false, errors: lifecycle.errors.map(error => `dispatch consumption migration incompatible: ${error}`), path: relPath };
+  }
+  return { ...migrateLegacyDispatchConsumption(target, relPath, options), path: relPath };
 }
 
 export function currentDispatchConsumption(target, taskId, options = {}) {
