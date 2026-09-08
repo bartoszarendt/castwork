@@ -854,6 +854,19 @@ const F8 = [
 ];
 
 const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
+// P36-01-C2 accepted commit 0ee9732 superseded the two elapsed-time F1 rows.
+// The P36-00B 199-row count is historical; this exact live catalog has 197 rows.
+const EXPECTED_CATALOG_ROW_COUNT = 197;
+const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({
+  F1: 23,
+  F2: 50,
+  F3: 35,
+  F4: 27,
+  F5: 4,
+  F6: 26,
+  F7: 5,
+  F8: 27,
+});
 const byCode = new Map();
 for (const entry of catalog) {
   if (byCode.has(entry.code)) throw new Error(`duplicate refusal classification: ${entry.code}`);
@@ -1044,6 +1057,18 @@ export function assertRefusalClassCatalog({
 } = {}) {
   const policyCodes = Object.keys(policy).sort();
   const classificationCodes = Object.keys(classifications).sort();
+  if (classificationCodes.length !== EXPECTED_CATALOG_ROW_COUNT) {
+    throw new Error(`refusal catalog row count changed: expected ${EXPECTED_CATALOG_ROW_COUNT}, received ${classificationCodes.length}`);
+  }
+  const familyCounts = Object.fromEntries(
+    Object.entries(classifications).reduce((counts, [, entry]) => {
+      counts.set(entry.family, (counts.get(entry.family) ?? 0) + 1);
+      return counts;
+    }, new Map()).entries(),
+  );
+  if (JSON.stringify(familyCounts) !== JSON.stringify(EXPECTED_CATALOG_FAMILY_COUNTS)) {
+    throw new Error(`refusal catalog family counts changed: expected ${JSON.stringify(EXPECTED_CATALOG_FAMILY_COUNTS)}, received ${JSON.stringify(familyCounts)}`);
+  }
   if (JSON.stringify(policyCodes) !== JSON.stringify(classificationCodes)) {
     throw new Error('registered diagnostic codes and refusal classifications differ');
   }

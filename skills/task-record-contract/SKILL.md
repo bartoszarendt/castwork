@@ -59,8 +59,9 @@ out-of-scope boundaries, or required checks.
 ## Right-sizing before task creation
 
 Decide whether the source item is one implementation task or a task set. Broad
-authorization does not make a phase, group, milestone, or epic one task record;
-use the sizing and authorized-work-unit rules in `agenticloop/AGENTIC_LOOP.md`.
+authorization does not make a phase, group, milestone, or epic one task record.
+The rules below are canonical. Authorization is in **Authorized Work Units And
+Human Checkpoints** in `agenticloop/commands/lifecycle-protocol.md`.
 
 Decompose into multiple task records when any of these are true:
 
@@ -462,9 +463,9 @@ validator.
 
 ### effort bounds
 
-The optional `attempt_budget` and `review_budget` fields tune the process
-ceilings that already exist in `agenticloop/AGENTIC_LOOP.md`. They are process
-bounds, not scope reducers.
+The optional `attempt_budget` and `review_budget` fields tune **Attempt And
+Review Budgets** in `agenticloop/commands/lifecycle-protocol.md`; they do not
+reduce scope.
 
 - `attempt_budget`: hard stop for equivalent no-progress attempts. Precedence is
   task value, then project `default_attempt_budget`, then built-in `5`. New task

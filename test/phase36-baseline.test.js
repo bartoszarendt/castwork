@@ -36,11 +36,11 @@ const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
 const SYNTHETIC_BASELINE_TEST = 'test/phase36-baseline.test.js';
 const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
-  opencode: { generatedPayload: 16125, agentDefinitions: 15148, activationSurface: 977, referenceLibrary: 0 },
-  codex: { generatedPayload: 76890, agentDefinitions: 15487, activationSurface: 1260, referenceLibrary: 60143 },
-  'claude-code': { generatedPayload: 57508, agentDefinitions: 13969, activationSurface: 2157, referenceLibrary: 41382 },
-  copilot: { generatedPayload: 74919, agentDefinitions: 15215, activationSurface: 1314, referenceLibrary: 58390 },
-  cursor: { generatedPayload: 74671, agentDefinitions: 15213, activationSurface: 1068, referenceLibrary: 58390 },
+  opencode: { generatedPayload: 16128, agentDefinitions: 15120, activationSurface: 1008, referenceLibrary: 0 },
+  codex: { generatedPayload: 76822, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60073 },
+  'claude-code': { generatedPayload: 57465, agentDefinitions: 13941, activationSurface: 2219, referenceLibrary: 41305 },
+  copilot: { generatedPayload: 74857, agentDefinitions: 15187, activationSurface: 1345, referenceLibrary: 58325 },
+  cursor: { generatedPayload: 74609, agentDefinitions: 15185, activationSurface: 1099, referenceLibrary: 58325 },
 });
 
 function candidateRepositoryFiles() {
@@ -124,8 +124,8 @@ describe('P36-00A frozen baseline', () => {
     }
   });
 
-  it('records methodology baseline size without pretending it meets the later ceiling', () => {
-    assert.equal(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')), 26007);
+  it('keeps canonical methodology within the deferred P36-M6 ceiling', () => {
+    assert.ok(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')) <= 15000);
   });
 
   it('pins the stable transition key to real immutable dispatch consumption and the outside-attempt sentinel', async () => {

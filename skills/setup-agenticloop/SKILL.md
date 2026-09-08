@@ -97,7 +97,8 @@ these bounded candidates once:
 - `docs/context.md`
 
 Use `context` for target-owned domain context, product vocabulary, or task-start
-context. Agentic Loop's own glossary is in `agenticloop/AGENTIC_LOOP.md`.
+context. For Agentic Loop terms, use
+`agenticloop/commands/lifecycle-protocol.md`, the canonical lifecycle terminology source.
 
 ### history
 

@@ -525,10 +525,26 @@ describe('refusal classification ratchet', () => {
 
   it('derives the accepted-family tally from the canonical accepted-family set', () => {
     assert.deepEqual(ACCEPTED_REFUSAL_FAMILIES, ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8']);
+    assert.equal(Object.keys(REFUSAL_CLASSES).length, 197);
+    assert.deepEqual(Object.fromEntries(
+      Object.entries(REFUSAL_FAMILY_TALLY).map(([family, { total }]) => [family, total]),
+    ), { F1: 23, F2: 50, F3: 35, F4: 27, F5: 4, F6: 26, F7: 5, F8: 27 });
     assert.deepEqual(REFUSAL_FAMILY_TALLY.F5, { total: 4, pending: 0 });
     assert.deepEqual(REFUSAL_FAMILY_TALLY.F6, { total: 26, pending: 0 });
     assert.deepEqual(REFUSAL_FAMILY_TALLY.F7, { total: 5, pending: 0 });
     assert.deepEqual(REFUSAL_FAMILY_TALLY.F8, { total: 27, pending: 0 });
+  });
+
+  it('rejects a scratch one-row catalog removal even when the policy is removed with it', () => {
+    const removedCode = Object.keys(REFUSAL_CLASSES)[0];
+    const classifications = { ...REFUSAL_CLASSES };
+    const policy = { ...REPAIR_POLICY };
+    delete classifications[removedCode];
+    delete policy[removedCode];
+    assert.throws(
+      () => assertRefusalClassCatalog({ classifications, policy }),
+      /refusal catalog row count changed: expected 197, received 196/,
+    );
   });
 
   it('rejects non-registered, duplicate, and registry-removed allowlist entries', () => {

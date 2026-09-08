@@ -14,6 +14,7 @@ import {
 } from './handoff-binding.js';
 import { evaluateReadOnlyPrepareReturnProjection } from './dispatch-envelope.js';
 import { evaluateReadOnlyAuditProjection } from './audit-record.js';
+import { createReadOnlyLifecycleProjection } from './lifecycle-projection.js';
 
 export const TASK_EXPLAIN_ACTION_IDS = Object.freeze([
   'prepare_dispatch', 'role_start', 'prepare_return', 'review', 'audit',
@@ -85,10 +86,7 @@ export function explainTask(target, taskId, { action = null, io = null } = {}) {
     throw new Error(`Unknown task explain action '${action}'; expected one of: ${TASK_EXPLAIN_ACTION_IDS.join(', ')}`);
   }
   const context = factsForTask(target, taskId, io);
-  return Object.freeze({
-    derived: true,
-    persisted: false,
-    authority: 'none',
+  return createReadOnlyLifecycleProjection({
     task: context.task,
     actions: (action ? [action] : TASK_EXPLAIN_ACTION_IDS).map(id => canonicalAction(id, context)),
   });

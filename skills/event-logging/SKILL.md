@@ -12,10 +12,9 @@ metadata:
 
 Event logging is optional and disabled by default. It writes local
 workflow-gate events to `.agenticloop/logs/<TASK-ID>.jsonl` through the Node CLI.
-`agenticloop/AGENTIC_LOOP.md` owns why event logging exists, the event taxonomy,
-and which lifecycle gates emit which events. This skill owns the operational
-procedure: resolving the command, honoring the disabled and non-blocking rules,
-and keeping entries concise.
+`agenticloop/src/event-logging.js` owns the accepted event taxonomy and outcome
+mapping. This skill owns the operational procedure: resolving the command,
+honoring the disabled and non-blocking rules, and keeping entries concise.
 
 ## When event logging is off
 

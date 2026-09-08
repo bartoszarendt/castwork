@@ -325,8 +325,8 @@ text, even after redigesting.
 Count durable `needs_revision` outcomes per task. Before the revision that
 would exceed the task record's
 `review_budget` (default 5, so after five counted outcomes and before routing the
-next revision), run the Review Round Checkpoint in
-`agenticloop/AGENTIC_LOOP.md`.
+next revision), run the Review Round Checkpoint validated by
+`agenticloop/src/review-checkpoint.js`.
 
 At the boundary, record a checkpoint bound to current count and latest
 artifact:
@@ -574,22 +574,10 @@ Maintainer review delegation must include:
 
 ## Human Checkpoint Rules
 
-Authorization covers the work unit. Stop only at hard checkpoints in the
-Authorized Work Units boundary in `agenticloop/AGENTIC_LOOP.md`:
-
-- leaving the authorized work unit, including starting a task, group, or phase outside it
-  (task-record-only authorization does not include implementation),
-- merge, release, irreversible external publication, or destructive cleanup including
-  deleting branches,
-- changing a locked process, architecture, backend, or product decision, or invoking a
-  backend exception.
-
-In-scope commits, pushes, task-file updates, and lifecycle routing are routine.
-The task branch/PR path applies only to GitHub backend; with files backend, PR,
-publish, and merge remain human decisions.
-
-Backend mismatch or unresolved agent blockers route to [[blocked-state]], not a
-checkpoint.
+Follow **Authorized Work Units And Human Checkpoints** in
+`agenticloop/commands/lifecycle-protocol.md`. It is the single source for
+routine lifecycle authority, the closed hard-checkpoint list, and blocked-state
+routing; do not copy those rules into delegation packets.
 
 ### Checkpoint Presentation
 

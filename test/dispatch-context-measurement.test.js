@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -8,6 +8,16 @@ import { fileURLToPath } from 'node:url';
 
 import { canonicalJson } from '../src/canonical-json.js';
 import { measureCanonicalText } from '../src/canonical-word-count.js';
+import {
+  generateOpencodeArtifacts,
+  resolveOpencodeAgentPath,
+  resolveOpencodeCommandPath,
+} from '../src/adapters/opencode.js';
+import { loadAgenticLoopConfig } from '../src/json.js';
+import { createDispatchFixture } from './helpers/dispatch-fixture.js';
+import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
+import { seedTargetLayout } from './helpers/layout-fixture.js';
+import { runCliInProcess } from './helpers/run-cli.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCRIPT = join(REPO_ROOT, 'scripts', 'measure-dispatch-context.mjs');
@@ -60,5 +70,79 @@ describe('dispatch acting-context measurement', () => {
     const duplicate = run([...args, '--reference', role]);
     assert.equal(duplicate.status, 2);
     assert.match(duplicate.stderr, /same context component/);
+  });
+
+  it('measures actual OpenCode orientation and ordinary-role wrappers from generated artifacts', async t => {
+    const fixture = await createDispatchFixture(temp, 'generated-opencode-packet');
+    const prepared = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', '.agenticloop/tmp/packet.json', '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    assert.equal(prepared.status, 0, prepared.stderr);
+
+    const generatedTarget = join(temp, 'generated-opencode-target');
+    const output = join(temp, 'generated-opencode-output');
+    seedTargetLayout(REPO_ROOT, generatedTarget, { includeDocs: false, includeScratch: false });
+    generateOpencodeArtifacts(
+      loadAgenticLoopConfig(join(generatedTarget, 'agenticloop.json')),
+      generatedTarget,
+      output,
+    );
+
+    const packet = join(fixture.root, '.agenticloop', 'tmp', 'packet.json');
+    const activation = resolveOpencodeCommandPath(output);
+    const protocol = join(generatedTarget, 'agenticloop', 'commands', 'lifecycle-protocol.md');
+    const measure = role => {
+      const result = run([
+        '--packet', packet,
+        '--role-wrapper', resolveOpencodeAgentPath(output, role),
+        '--activation-wrapper', activation,
+        '--reference', protocol,
+      ]);
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout);
+    };
+
+    // M4 counts the concrete initial-supervisor bundle. M5 counts only each
+    // delegated role wrapper before packet/task evidence, while retaining the
+    // same generated component measurement for auditability.
+    const orientation = measure('orchestrator');
+    assert.ok(orientation.totalCanonicalWords <= 12000, JSON.stringify(orientation));
+    assert.equal(orientation.actualInputTokens, 'unavailable');
+    const delegated = {};
+    for (const role of ['maintainer', 'engineer', 'auditor']) {
+      const measurement = measure(role);
+      const wrapper = measurement.components.find(item => item.kind === 'generated_role_wrapper');
+      assert.ok(wrapper, `${role} must have a generated role wrapper component`);
+      assert.ok(wrapper.canonicalWords <= 6000, `${role} exceeds the P36-M5 word ceiling`);
+      assert.equal(measurement.actualInputTokens, 'unavailable');
+      delegated[role] = {
+        canonicalWords: wrapper.canonicalWords,
+        utf8Bytes: wrapper.utf8Bytes,
+        characters: wrapper.characters,
+      };
+    }
+    const canonicalPacket = orientation.components.find(item => item.kind === 'canonical_packet');
+    const rawPacket = readFileSync(packet, 'utf8');
+    t.diagnostic(JSON.stringify({
+      M4: {
+        canonicalWords: orientation.totalCanonicalWords,
+        utf8Bytes: orientation.totalUtf8Bytes,
+        characters: orientation.totalCharacters,
+        actualInputTokens: orientation.actualInputTokens,
+      },
+      M5: delegated,
+      packetConstruction: {
+        serialization: orientation.packetSerialization,
+        rawUtf8Bytes: Buffer.byteLength(rawPacket, 'utf8'),
+        canonicalUtf8Bytes: canonicalPacket.utf8Bytes,
+        rawEndsWithNewline: rawPacket.endsWith('\n'),
+        canonicalPacketEndsWithNewline: false,
+      },
+    }, null, 2));
   });
 });

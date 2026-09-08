@@ -15,8 +15,8 @@ durable evidence, and turns repeated process friction into follow-up work or
 skill improvements.
 
 If the remaining request is cleanup of an accepted, integrated worktree, follow
-the worktree cleanup lifecycle and human checkpoint in
-`agenticloop/AGENTIC_LOOP.md`.
+the guarded worktree command and human checkpoint in
+`agenticloop/docs/cli-reference.md`.
 Cleanup does not replace closeout evidence or reopen accepted implementation.
 
 Run closeout:

@@ -438,50 +438,47 @@ describe('installed and documented contract surface', () => {
     assert.ok(existsSync(join(REPO_ROOT, 'src', 'transition-contract.js')));
   });
 
-  it('keeps methodology inventories in exhaustive parity with the module', () => {
+  it('keeps one small methodology index and one protocol source instead of duplicated inventories', () => {
     const methodology = read('AGENTIC_LOOP.md');
-    const shared = methodology.slice(
-      methodology.indexOf('## Shared Transition Contract'),
-      methodology.indexOf('## Activation Boundary')
-    );
-    assert.deepEqual(
-      markdownTableIds(shared, '### Identity chain', '### Lifecycle and source of truth'),
-      TRANSITION_IDENTITY_CHAIN.map(item => item.boundaryId)
-    );
-    assert.deepEqual(
-      markdownTableIds(shared, '#### Lifecycle claims', '#### Source-of-truth facts'),
-      TRANSITION_LIFECYCLE_CLAIMS.map(item => item.claimId)
-    );
-    assert.deepEqual(
-      markdownTableIds(shared, '#### Source-of-truth facts', '### Authority boundaries'),
-      TRANSITION_FACTS.map(item => item.factId)
-    );
-    assert.deepEqual(
-      markdownTableIds(shared, '#### Authority actions', '### Terminal and Markdown rules'),
-      TRANSITION_AUTHORITIES.map(item => item.actionId)
-    );
-    assert.deepEqual(
-      markdownTableIds(shared, '#### Terminal variants', 'The canonical ordering'),
-      TRANSITION_TERMINAL_CONTRACT.decisionTable.map(item => item.caseId)
-    );
-    for (const value of [
-      ...TRANSITION_EVIDENCE_STATES,
-      ...TRANSITION_DISPOSITIONS,
-      ...TRANSITION_STATE_PROVENANCE,
-      TRANSITION_RETURN_SHAPES.blocked.constants.kind,
-      TRANSITION_RETURN_SHAPES.exceptionalVerification.constants.kind,
-      ...Object.keys(TRANSITION_LIVENESS_VOCABULARY),
-    ]) assert.ok(shared.includes(`\`${value}\``), `methodology missing '${value}'`);
-    for (const { roleId, defaultLabel, escalationPrecedence } of WORKFLOW_ROLE_REGISTRY) {
-      assert.ok(
-        shared.includes(`| \`${roleId}\` | \`${defaultLabel}\` | \`${escalationPrecedence}\` |`),
-        `methodology missing registry row '${roleId}'`
+    const protocol = read('commands/lifecycle-protocol.md');
+    assert.match(methodology, /commands\/lifecycle-protocol\.md/);
+    assert.match(protocol, /## Canonical Lifecycle/);
+    assert.match(protocol, /## Facts, Verdicts, And Refusals/);
+    assert.doesNotMatch(methodology, /^### Identity chain$/m);
+    for (const role of WORKFLOW_ROLES) assert.ok(methodology.includes(`\`${role}\``));
+  });
+
+  it('routes active gate and transition consumers to the extracted protocol', () => {
+    const protocol = read('commands/lifecycle-protocol.md');
+    const blockedState = read('skills/blocked-state/SKILL.md');
+    const orchestrator = read('agents/orchestrator.md');
+    const roleDelegation = read('skills/role-delegation/SKILL.md');
+    const filesBackend = read('backends/files.md');
+    const githubBackend = read('backends/github.md');
+
+    assert.match(protocol, /^## Gate Ownership And Dispatched Contract$/m);
+    assert.match(protocol, /^## Authorized Work Units And Human Checkpoints$/m);
+    for (const [name, consumer] of [
+      ['blocked-state', blockedState],
+      ['orchestrator', orchestrator],
+      ['role-delegation', roleDelegation],
+      ['files backend', filesBackend],
+      ['GitHub backend', githubBackend],
+    ]) {
+      assert.match(
+        consumer,
+        /agenticloop\/commands\/lifecycle-protocol\.md/,
+        `${name} must route to the canonical lifecycle protocol`
       );
     }
-    assert.match(shared, /Lower values take priority; ties are invalid\./);
-    assert.ok(shared.includes('| `semanticDigestExcludedField` | `defaultLabel` |'));
-    for (const value of Object.values(TRANSITION_CONTRACT_DEFINITION.ownership.roleIdentityPolicy)) {
-      assert.ok(shared.includes(`\`${value}\``), `methodology missing role identity policy '${value}'`);
+    for (const consumer of [blockedState, orchestrator, roleDelegation]) {
+      assert.doesNotMatch(
+        consumer,
+        /(Gate Ownership And Dispatched Contract|Authorized Work Units(?: boundary)?) in `agenticloop\/AGENTIC_LOOP\.md`/
+      );
+    }
+    for (const backend of [filesBackend, githubBackend]) {
+      assert.doesNotMatch(backend, /transition-contract`\s+defined in `agenticloop\/AGENTIC_LOOP\.md`/);
     }
   });
 

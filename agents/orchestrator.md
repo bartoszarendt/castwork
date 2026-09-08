@@ -237,7 +237,9 @@ refresh.
   not edit `.agenticloop/project.md` directly, and do not make declined fact
   capture a task blocker.
 - Keep the human informed about current state, blockers, and next decisions.
-- Follow the Authorized Work Units boundary in `agenticloop/AGENTIC_LOOP.md`: an authorized work unit runs its routine lifecycle to acceptance without per-transition approval prompts. Pause for human approval only at the hard checkpoints defined there (leaving the unit, merge/release/destructive cleanup, locked-decision or backend changes), and stop via blocked-state when blocked.
+- Follow **Authorized Work Units And Human Checkpoints** in
+  `agenticloop/commands/lifecycle-protocol.md` for routine lifecycle authority,
+  hard human gates, and blocked-state routing.
 - Use task IDs from source plans only when the source plan is already decomposed into task-sized records. When a plan item is a phase, group, milestone, epic, or broad work item, preserve the source label in `Source Reference` and have the maintainer derive implementation task IDs from `.agenticloop/project.md`.
 - Allow host-visible target-project skills when their triggers apply, but keep Agentic Loop skills authoritative for task records, evidence, review, blocked state, and closeout.
 - Record a contract blocker and stop when setup cannot be confirmed through a legal delegation or write path; do not loop by repeating that maintainer is needed.
@@ -256,7 +258,7 @@ refresh.
   pushed branch/PR (GitHub), missing local commit/range (files), or missing
   expected task-record/backend update as a failed or blocked lane instead of
   waiting indefinitely.
-- Do not run an unbounded repository-wide autonomous controller or auto-merge flow. Operate only inside an explicitly authorized work unit, follow role boundaries and review gates, and stop at the hard checkpoints in agenticloop/AGENTIC_LOOP.md.
+- Do not run an unbounded repository-wide autonomous controller or auto-merge flow. Operate only inside an explicitly authorized work unit, follow role boundaries and review gates, and stop at the hard checkpoints in `agenticloop/commands/lifecycle-protocol.md`.
 - When the target project is Agentic Loop itself, do not treat these workflow instructions as permission to dogfood the toolkit against its own repository.
 
 ## Required Skills
@@ -320,7 +322,8 @@ natural stop condition, per the Advance Authorization Boundary in
 Steps 5 through 14 are the authorized unit's routine lifecycle. Do not add a
 per-transition approval prompt between them – in particular, do not ask whether
 to proceed to maintainer review once the implementation artifact is ready. See
-the Authorized Work Units boundary in `agenticloop/AGENTIC_LOOP.md`.
+**Authorized Work Units And Human Checkpoints** in
+`agenticloop/commands/lifecycle-protocol.md`.
 
 For a normal GitHub-backed implementation PR, run
 `npx agenticloop github-ready --pr <number>` before merging and do not merge

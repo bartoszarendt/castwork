@@ -784,7 +784,7 @@ condition.
 
 Serial execution is the default safety floor, not a preference. Every authorized
 multi-task unit receives a current Parallel Opportunity Scan after decomposition
-(see `agenticloop/AGENTIC_LOOP.md`); fewer than two ready tasks still produce a
+(see `agenticloop/skills/parallel-delegation/SKILL.md`); fewer than two ready tasks still produce a
 truthful not-currently-eligible result and rescan trigger. Bounded eligible
 batches may use at most the target project's configured implementation-lane
 maximum (default five). It is a ceiling, not a target or total-agent budget, and

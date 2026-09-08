@@ -101,10 +101,11 @@ export function readRoleSource(repoRoot, sourceFile) {
  * Collect instruction-style paths for an adapter. This is the union of:
  *   - configured required documents that exist on disk
  *   - the process overlay document
- *   - one role file per configured role that exists
- *   - backends/README.md and the active backend projection from project.md
- *     (or both projections when no project map exists)
- *   - role-delegation skill (always present for the orchestrator workflow)
+ *   - the small lifecycle protocol index
+ *
+ * Role, backend, and skill payloads are selected at the action boundary rather
+ * than preloaded as an orientation bundle. This keeps orientation advisory and
+ * prevents generated host surfaces from making every role's protocol active.
  *
  * @param {object} alConfig   Parsed agenticloop.json.
  * @param {string} repoRoot   Absolute path to the repository root.
@@ -112,9 +113,6 @@ export function readRoleSource(repoRoot, sourceFile) {
  */
 export function collectInstructionPaths(alConfig, repoRoot) {
   const assetLayout = resolveToolkitAssetLayout(repoRoot);
-  const agentsSrc = alConfig.agents?.sourceDirectory ?? AGENTS_SOURCE_DIRECTORY;
-  const backendsSrc = alConfig.backends?.sourceDirectory ?? BACKENDS_SOURCE_DIRECTORY;
-  const skillsSrc = alConfig.skills?.sourceDirectory ?? SKILLS_SOURCE_DIRECTORY;
   const paths = [];
   const projectMap = loadProjectMap(repoRoot);
   const documentSelections = resolveDocumentSelections(
@@ -127,24 +125,8 @@ export function collectInstructionPaths(alConfig, repoRoot) {
     if (existsSync(resolveToolkitAssetPath(repoRoot, docPath, assetLayout))) paths.push(docPath);
   }
 
-  for (const roleName of WORKFLOW_ROLE_IDS) {
-    const roleFile = `${agentsSrc}/${roleName}.md`;
-    if (existsSync(resolveToolkitAssetPath(repoRoot, roleFile, assetLayout))) paths.push(roleFile);
-  }
-
-  const backendsReadme = `${backendsSrc}/README.md`;
-  if (existsSync(resolveToolkitAssetPath(repoRoot, backendsReadme, assetLayout))) paths.push(backendsReadme);
-  const activeBackend = projectMap?.config?.task_backend;
-  const backendKeys = activeBackend === 'github' || activeBackend === 'files'
-    ? [activeBackend]
-    : ['github', 'files'];
-  for (const key of backendKeys) {
-    const proj = alConfig.backends?.[key]?.projection;
-    if (proj && existsSync(resolveToolkitAssetPath(repoRoot, proj, assetLayout))) paths.push(proj);
-  }
-
-  const rdSkill = `${skillsSrc}/role-delegation/SKILL.md`;
-  if (existsSync(resolveToolkitAssetPath(repoRoot, rdSkill, assetLayout))) paths.push(rdSkill);
+  const protocol = 'agenticloop/commands/lifecycle-protocol.md';
+  if (existsSync(resolveToolkitAssetPath(repoRoot, protocol, assetLayout))) paths.push(protocol);
 
   const seen = new Set();
   return paths.filter(p => {

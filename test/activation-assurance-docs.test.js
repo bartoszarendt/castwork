@@ -9,7 +9,7 @@ function source(path) {
 describe('activation-assurance documentation', () => {
   it('has no active v5-current dispatch claim', () => {
     const methodology = source('AGENTIC_LOOP.md');
-    assert.match(methodology, /Dispatch packet schema version 6 is current/);
+    assert.match(methodology, /src\/transition-contract\.js/);
     assert.doesNotMatch(methodology, /Dispatch packet schema version 5 is current/i);
   });
 
