@@ -541,7 +541,7 @@ export const COMMAND_REGISTRY = {
   },
   task: {
     summary: 'Manage files-backed task records and canonical handoff preparation.',
-    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|adopt-commit|remediation-authority|readiness-plan|readiness-apply|measure|explain|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|status> [options]',
+    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|adopt-commit|remediation-authority|readiness-plan|readiness-apply|measure|explain|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|review-attach-outcome|status> [options]',
     subcommands: {
       list: {
         summary: 'List task records.',
@@ -935,6 +935,12 @@ export const COMMAND_REGISTRY = {
         usage: 'agenticloop task review-prepare <id> [--maintainer-receipt <receipt.json>] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
         options: [targetOption(), opt('maintainer-receipt', 'string', 'Host-signed Maintainer outcome receipt required when the current review history contains an outcome.'), hostTrustStoreOption, jsonOption],
+      },
+      'review-attach-outcome': {
+        summary: 'Atomically attach one later host-authenticated Maintainer outcome to an already prepared files review entry.',
+        usage: 'agenticloop task review-attach-outcome <id> --return-verification <record-id> --maintainer-receipt <receipt.json> [--host-trust-store <expected-path>] [--json] [--target <dir>]',
+        positionals: [{ name: 'id', required: true }],
+        options: [targetOption(), opt('return-verification', 'string', 'Exact verified-return record id bound to the prepared review entry. Required.'), opt('maintainer-receipt', 'string', 'Fresh host-signed Maintainer outcome receipt for the exact return and current review history. Required.'), hostTrustStoreOption, jsonOption],
       },
       status: {
         summary: 'Update task status.',

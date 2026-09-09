@@ -204,7 +204,10 @@ import { evaluateDispatchableLifecycle, taskStatusFromBody } from './dispatchabi
 import { evaluateCertificationFreshness, evaluateRemediationAuthority, resolveDurableCertificationEvidence } from './certification-remediation.js';
 import { normalizeAuditorInvocationProvenance } from './audit-provenance.js';
 import { parseAuditorWireReport, wireReportToAuditRun } from './audit-report-schema.js';
-import { verifyMaintainerReviewOutcomeReceipt } from './maintainer-review-receipt.js';
+import {
+  authenticateFreshMaintainerReviewOutcomeReceipt,
+  verifyRecordedMaintainerReviewOutcomeReceipt,
+} from './maintainer-review-receipt.js';
 import {
   EXECUTION_ATTEMPT_ABANDONMENT_KIND,
   EXECUTION_ATTEMPT_ABANDONMENT_SCHEMA_VERSION,
@@ -822,6 +825,7 @@ const TASK_SUBCOMMAND_BACKENDS = Object.freeze({
   'check-evidence-update': Object.freeze(['files', 'github']),
   evidence: Object.freeze(['files']),
   'review-prepare': Object.freeze(['files']),
+  'review-attach-outcome': Object.freeze(['files']),
   status: Object.freeze(['files']),
 });
 
@@ -1693,6 +1697,7 @@ async function verifyAuthenticatedAuditRecord({ record, latest, taskId, candidat
 
 function verifyAuthenticatedMaintainerReviewOutcome({
   receipt, taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome, independentReviewRequired,
+  initialAuthentication = null,
 }, target, io, hostTrustStore) {
   if (!receipt || typeof receipt !== 'object') {
     return { ok: false, errors: ['protected Maintainer review outcome receipt is missing'] };
@@ -1703,15 +1708,24 @@ function verifyAuthenticatedMaintainerReviewOutcome({
   } catch (error) {
     return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
   }
-  const verified = verifyMaintainerReviewOutcomeReceipt(receipt, {
+  const context = {
     trustedAdapter, target, role: 'maintainer',
     invocationReference: receipt?.invocation?.reference,
     invocationMode: reviewOutcome?.mode,
     taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome,
     independentReviewRequired: independentReviewRequired === true,
-  });
+    now: io.maintainerReviewNow ?? undefined,
+    hostAuthority: io.hostAuthority,
+  };
+  const verified = initialAuthentication === null
+    ? authenticateFreshMaintainerReviewOutcomeReceipt(receipt, context)
+    : verifyRecordedMaintainerReviewOutcomeReceipt(receipt, { ...context, initialAuthentication });
   return verified.verified === true
-    ? { ok: true, errors: [] }
+    ? {
+        ok: true,
+        errors: [],
+        initialAuthentication: initialAuthentication ?? verified.initialAuthentication,
+      }
     : {
         ok: false,
         errors: [verified.error ?? 'protected Maintainer review outcome receipt did not verify'],
@@ -2443,7 +2457,7 @@ export async function cmdTask(args, io = createIo()) {
     const suggestion = sub ? suggestName(sub, Object.keys(TASK_SUBCOMMANDS)) : null;
     throw new CliUsageError(suggestion
       ? `task: unknown subcommand '${sub}'. Did you mean '${suggestion}'?`
-      : 'task requires a subcommand: list, show, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, attempt-status, abandon-attempt, record-tooling-failure, prepare-product-commit, adopt-historical, readiness-plan, readiness-apply, measure, explain, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, status.');
+      : 'task requires a subcommand: list, show, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, attempt-status, abandon-attempt, record-tooling-failure, prepare-product-commit, adopt-historical, readiness-plan, readiness-apply, measure, explain, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, review-attach-outcome, status.');
   }
   const { opts, positional } = parseCommandArgs(`task ${sub}`, TASK_SUBCOMMANDS[sub], args.slice(1));
   const target = resolveCliTarget(io, opts.target);
@@ -5295,6 +5309,7 @@ export async function cmdTask(args, io = createIo()) {
       }
       const verifiedReturn = matchingReturns[0];
       let maintainerOutcome = null;
+      let initialAuthentication = null;
       if (latestReview || opts.maintainerReceipt) {
         if (latestReview && !opts.maintainerReceipt) {
           return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
@@ -5332,12 +5347,13 @@ export async function cmdTask(args, io = createIo()) {
             }
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
         }
+        initialAuthentication = authenticated.initialAuthentication;
       }
       const terminalLineageDigest = verifiedReturn.evidence.roleReturn.carrierLineage
         .evidenceMutationReceiptDigests.at(-1) ??
         verifiedReturn.evidence.roleReturn.carrierLineage.dispatchConsumptionDigest;
       const receipt = {
-        kind: 'agenticloop.files-review-entry-receipt', schemaVersion: 3,
+        kind: 'agenticloop.files-review-entry-receipt', schemaVersion: 5,
         backend: 'files', taskId, taskContractDigest: contract.digest,
         dispatchCarrierDigest: recognition.boundIdentity.dispatchCarrierDigest,
         currentCarrierDigest, productHead: recognition.boundIdentity.productHead,
@@ -5358,13 +5374,17 @@ export async function cmdTask(args, io = createIo()) {
         // nested receipt is produced by the protected host boundary and binds
         // the exact outcome, candidate, verified return, and history.
         maintainerOutcome,
+        // Written only by the successful fresh-authentication path. It binds
+        // exact signed receipt material and the full candidate/outcome/return
+        // projection, so durable remediation cannot select an expiry bypass.
+        initialAuthentication,
         // A review entry is an idempotent projection of one verified return.
         // Reuse its trusted verification instant rather than minting a new
         // identity on an otherwise exact retry.
         observedAt: verifiedReturn.verifiedAt, digest: null,
       };
       const { digest: _digest, ...receiptProjection } = receipt;
-      receipt.digest = `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(receiptProjection)}`;
+      receipt.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(receiptProjection)}`;
       // The receipt's human-readable record is intentionally not a source of
       // authority. The recognized verified return remains the authority; this
       // file merely records entry after the command-local drift check.
@@ -5426,6 +5446,159 @@ export async function cmdTask(args, io = createIo()) {
       };
       if (asJson) io.out(JSON.stringify(result, null, 2));
       else io.out(`Prepared files review entry for ${taskId}: ${reviewPath}`);
+      return 0;
+    }
+
+    if (sub === 'review-attach-outcome') {
+      const taskId = positional[0];
+      const asJson = Boolean(opts.json);
+      if (!taskId || !opts.maintainerReceipt || !opts.returnVerification) {
+        io.err('task review-attach-outcome requires <id>, --maintainer-receipt, and --return-verification');
+        return EXIT_USAGE;
+      }
+      const filePath = taskPathForId(target, projectConfig, taskId);
+      const carrier = relative(target, filePath).replace(/\\/g, '/');
+      if (!existsSync(filePath)) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new VerificationContextError(
+          `task record not found: ${carrier}`
+        ), 'operational_error', {}, target), asJson, io);
+      }
+      const body = readFileSync(filePath, 'utf8');
+      const currentCarrierDigest = taskRecordDigest(body);
+      const contract = taskContractDigest(body);
+      let maintainerOutcome;
+      try {
+        maintainerOutcome = readTargetJson(target, opts.maintainerReceipt, 'Maintainer review outcome receipt');
+      } catch (error) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          error.message, { code: 'handoff.evidence.malformed', evidenceState: 'malformed', disposition: 'blocked' }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const verified = listReturnVerifications(target, taskId, {
+        taskContractDigest: contract.digest,
+        resolveTrustedAdapter: adapterId => resolveTrustedHostAdapter(target, io, opts.hostTrustStore, adapterId),
+        resolveExecutionReceiptReplayAuthority: record => {
+          const trustedAdapter = resolveTrustedHostAdapter(
+            target, io, opts.hostTrustStore, record.producerAuthentication?.adapterId
+          );
+          return createExecutionReceiptReplayAuthority({ target, trustedAdapter, protectedBoundary: io.hostAuthority });
+        },
+      });
+      const verifiedReturn = verified.records?.find(record => record.recordId === String(opts.returnVerification));
+      if (!verified.ok || !verifiedReturn) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'the requested verified return is unavailable for review-outcome attachment', {
+            code: 'handoff.evidence.unauthenticated', evidenceState: 'missing', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const returnToken = verifiedReturn.recordId.replace(/^return-verification:/, '');
+      const reviewPath = `.agenticloop/reviews/entries/${taskId}/${returnToken}.json`;
+      const reviewAbsolute = resolve(target, reviewPath);
+      let entry;
+      let entryText;
+      try {
+        entryText = readFileSync(reviewAbsolute, 'utf8');
+        entry = JSON.parse(entryText);
+      } catch {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          `review entry is missing or malformed at ${reviewPath}`, {
+            code: 'review.entry.persistence_conflict', evidenceState: 'malformed', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const { digest, ...entryProjection } = entry;
+      const entryFields = [
+        'kind', 'schemaVersion', 'backend', 'taskId', 'taskContractDigest',
+        'dispatchCarrierDigest', 'currentCarrierDigest', 'productHead', 'workflowHead',
+        'candidateHead', 'verifiedReturn', 'carrierLineageTerminalDigest',
+        'handoffRecognitionDigest', 'reviewHistory', 'maintainerOutcome',
+        'initialAuthentication', 'observedAt', 'digest',
+      ];
+      const entryMatches = Object.keys(entry).length === entryFields.length &&
+        Object.keys(entry).every(key => entryFields.includes(key)) &&
+        entry.kind === 'agenticloop.files-review-entry-receipt' && entry.schemaVersion === 5 && entry.backend === 'files' &&
+        entry.taskId === taskId && entry.taskContractDigest === contract.digest &&
+        entry.verifiedReturn?.recordId === verifiedReturn.recordId &&
+        entry.verifiedReturn?.digest === verifiedReturn.digest &&
+        entry.verifiedReturn?.returnGenerationDigest === verifiedReturn.returnGenerationDigest &&
+        entry.productHead === verifiedReturn.productHead && entry.workflowHead === verifiedReturn.workflowHead &&
+        entry.candidateHead === verifiedReturn.candidateHead &&
+        digest === `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(entryProjection)}`;
+      if (!entryMatches) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'review entry does not bind the requested exact verified return and candidate', {
+            code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      if (entry.maintainerOutcome !== null) {
+        if (canonicalJson(entry.maintainerOutcome) === canonicalJson(maintainerOutcome)) {
+          const result = { ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'already_current' };
+          if (asJson) io.out(JSON.stringify(result, null, 2));
+          else io.out(`Maintainer review outcome is already attached for ${taskId}: ${reviewPath}`);
+          return 0;
+        }
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'a different Maintainer review outcome is already attached to the exact review entry', {
+            code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const reviewHistory = parseFilesReviewHistory(body);
+      const latestReview = reviewHistory.events.filter(event => event.type === 'outcome').at(-1) ?? null;
+      if (!latestReview || String(latestReview.artifact).replace(/^commit:/, '') !== verifiedReturn.finishCandidate.productRange.head) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'a current Maintainer review outcome for the exact candidate is required before attachment', {
+            code: 'handoff.evidence.unauthenticated', evidenceState: 'missing', disposition: 'needs_context',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const authenticated = verifyAuthenticatedMaintainerReviewOutcome({
+        receipt: maintainerOutcome, taskId, taskContractDigest: contract.digest,
+        returnVerification: verifiedReturn, candidate: verifiedReturn.finishCandidate,
+        history: reviewHistory, reviewOutcome: latestReview,
+        independentReviewRequired: contract.projection.independent_review_required === 'true',
+      }, target, io, opts.hostTrustStore);
+      if (!authenticated.ok) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          `Maintainer review outcome authentication failed: ${authenticated.errors.join('; ')}`, {
+            code: authenticated.diagnosticType === 'maintainer_review_independence_required'
+              ? 'review_prepare.independent_review_policy' : 'handoff.evidence.unauthenticated',
+            evidenceState: 'malformed', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const updated = {
+        ...entry,
+        maintainerOutcome,
+        initialAuthentication: authenticated.initialAuthentication,
+        digest: null,
+      };
+      const { digest: _updatedDigest, ...updatedProjection } = updated;
+      updated.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(updatedProjection)}`;
+      const updatedText = `${JSON.stringify(updated, null, 2)}\n`;
+      const applied = executeMutationBatch(target, [
+        { type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file' },
+        { type: 'write', path: reviewPath, content: updatedText, expectedDigest: taskRecordDigest(entryText), expectedKind: 'file' },
+      ]);
+      if (!applied.ok) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          `review-outcome attachment failed: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`, {
+            ...reviewEntryPersistenceFailure('write', { stale: applied.stale === true }),
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      if (readFileSync(filePath, 'utf8') !== body || readFileSync(reviewAbsolute, 'utf8') !== updatedText) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'review-outcome attachment did not refetch to the exact intended carrier and receipt bytes', {
+            ...reviewEntryPersistenceFailure('refetch'),
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      const result = { ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'attached' };
+      if (asJson) io.out(JSON.stringify(result, null, 2));
+      else io.out(`Attached Maintainer review outcome for ${taskId}: ${reviewPath}`);
       return 0;
     }
 
@@ -7154,7 +7327,7 @@ export async function cmdTask(args, io = createIo()) {
       }));
     }
 
-    io.err(`Unknown task subcommand '${sub}'. Expected: list, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, status.`);
+    io.err(`Unknown task subcommand '${sub}'. Expected: list, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, review-attach-outcome, status.`);
     return EXIT_USAGE;
   } catch (error) {
     if (error instanceof CliUsageError) throw error;

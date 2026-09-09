@@ -17,7 +17,12 @@ import { writeActivationRevocation } from '../src/activation-store.js';
 import { createReturnVerification, listReturnVerifications, writeReturnVerification } from '../src/return-verification.js';
 import { refetchFilesReturnEvidence } from '../src/files-return-evidence.js';
 import { executionAttemptAbandonmentRelativePath, executionAttemptIdentity } from '../src/execution-attempt.js';
-import { maintainerReviewOutcomeBinding, createMaintainerReviewOutcomeReceipt } from '../src/maintainer-review-receipt.js';
+import {
+  maintainerReviewOutcomeBinding,
+  authenticateFreshMaintainerReviewOutcomeReceipt,
+  createMaintainerReviewOutcomeReceipt,
+  verifyMaintainerReviewOutcomeReceipt,
+} from '../src/maintainer-review-receipt.js';
 import { parseFilesReviewHistory } from '../src/review-history.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createDispatchFixture, git, prepare, readyReturn, repositoryEvidence } from './helpers/dispatch-fixture.js';
@@ -181,7 +186,7 @@ async function persistAuthenticatedAudit(fixture, head) {
   assert.equal(reported.status, 0, `${reported.stderr}\n${reported.stdout}`);
 }
 
-function signedMaintainerReviewOutcome(fixture, verification, body, reviewOutcome, receiptId = 'maintainer-remediation-1') {
+function signedMaintainerReviewOutcome(fixture, verification, body, reviewOutcome, receiptId = 'maintainer-remediation-1', now = Date.now()) {
   const binding = maintainerReviewOutcomeBinding({
     taskId: 'T-001', taskContractDigest: taskContractDigest(body).digest,
     returnVerification: verification, candidate: verification.finishCandidate, reviewOutcome,
@@ -190,17 +195,29 @@ function signedMaintainerReviewOutcome(fixture, verification, body, reviewOutcom
     receiptId, adapterId: fixture.trust.adapterId, keyId: fixture.trust.keyId,
     targetRepository: fixture.trust.repositoryIdentity, invocationReference: receiptId,
     invocationMode: reviewOutcome.mode, binding,
-    issuedAt: new Date(Date.now() - 1_000).toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    issuedAt: new Date(now - 1_000).toISOString(), expiresAt: new Date(now + 60_000).toISOString(),
   }, fixture.trust.privateKey);
 }
 
-function persistAuthenticatedMaintainerReview(fixture, verification, head, reviewer, mode = 'host_subagent') {
+function initialAuthentication(fixture, verification, body, reviewOutcome, receipt, now = Date.now()) {
+  const authenticated = authenticateFreshMaintainerReviewOutcomeReceipt(receipt, {
+    taskId: 'T-001', taskContractDigest: taskContractDigest(body).digest,
+    returnVerification: verification, candidate: verification.finishCandidate, reviewOutcome,
+    trustedAdapter: fixture.trust.adapter, target: fixture.root, role: 'maintainer',
+    invocationReference: receipt.invocation.reference, invocationMode: reviewOutcome.mode, now,
+    hostAuthority: protectedHostBoundary(fixture.trust),
+  });
+  assert.equal(authenticated.verified, true, authenticated.error);
+  return authenticated.initialAuthentication;
+}
+
+function persistAuthenticatedMaintainerReview(fixture, verification, head, reviewer, mode = 'host_subagent', receiptId = 'maintainer-remediation-1', now = Date.now()) {
   const taskPath = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
   const body = readFileSync(taskPath, 'utf8');
   const history = parseFilesReviewHistory(`${body}${reviewHistory(head, reviewer, mode)}`);
   const reviewOutcome = history.events.filter(event => event.type === 'outcome').at(-1);
   assert.ok(reviewOutcome, 'fixture must contain a Maintainer outcome before signing it');
-  const receipt = signedMaintainerReviewOutcome(fixture, verification, body, reviewOutcome);
+  const receipt = signedMaintainerReviewOutcome(fixture, verification, body, reviewOutcome, receiptId, now);
   const receiptPath = '.agenticloop/tmp/maintainer-review.json';
   mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
   writeFileSync(join(fixture.root, receiptPath), `${JSON.stringify(receipt, null, 2)}\n`);
@@ -227,9 +244,7 @@ function directClaimedAudit(head) {
   return appended.content;
 }
 
-async function persistDurableCertifications(fixture, attempt, head, {
-  reviewer = 'maintainer-1', audit = true, reviewMode = 'host_subagent', expectedReviewStatus = 0,
-} = {}) {
+function persistVerifiedReturn(fixture, attempt, head) {
   git(fixture.root, ['add', '.agenticloop/handoffs']);
   git(fixture.root, ['commit', '-m', 'record consumed dispatch\n\nTask: T-001\nAgent: maintainer']);
   const evidence = refetchFilesReturnEvidence(fixture.root, attempt.packet, {
@@ -247,6 +262,13 @@ async function persistDurableCertifications(fixture, attempt, head, {
   });
   const written = writeReturnVerification(fixture.root, verification);
   assert.equal(written.ok, true, written.errors?.join('\n'));
+  return verification;
+}
+
+async function persistDurableCertifications(fixture, attempt, head, {
+  reviewer = 'maintainer-1', audit = true, reviewMode = 'host_subagent', expectedReviewStatus = 0,
+} = {}) {
+  const verification = persistVerifiedReturn(fixture, attempt, head);
   const maintainerReceipt = persistAuthenticatedMaintainerReview(fixture, verification, head, reviewer, reviewMode);
   const review = await runCliInProcess([
     'task', 'review-prepare', 'T-001', '--maintainer-receipt', maintainerReceipt, '--json', '--target', fixture.root,
@@ -544,6 +566,98 @@ describe('production lifecycle adoption and remediation commands', () => {
     assert.equal(JSON.parse(result.stdout).authority.attempt, attempt.attemptId);
   });
 
+  it('prepares before review, then atomically attaches the later authenticated outcome for remediation', async () => {
+    const fixture = await createDispatchFixture(temp, 'review-prepare-then-attach');
+    const attempt = consumeAttempt(fixture);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const verification = persistVerifiedReturn(fixture, attempt, head);
+    const prepared = await runCliInProcess([
+      'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(prepared.status, 0, `${prepared.stderr}\n${prepared.stdout}`);
+    const preparedEntry = JSON.parse(readFileSync(join(
+      fixture.root, JSON.parse(prepared.stdout).reviewEntryPath
+    ), 'utf8'));
+    assert.equal(preparedEntry.maintainerOutcome, null);
+    assert.equal(preparedEntry.initialAuthentication, null);
+
+    const taskPath = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    writeFileSync(taskPath, `${readFileSync(taskPath, 'utf8')}${reviewHistory(head)}`);
+    const receiptPath = persistAuthenticatedMaintainerReview(fixture, verification, head, 'maintainer-attach');
+    const attached = await runCliInProcess([
+      'task', 'review-attach-outcome', 'T-001', '--return-verification', verification.recordId,
+      '--maintainer-receipt', receiptPath, '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(attached.status, 0, `${attached.stderr}\n${attached.stdout}`);
+    assert.equal(JSON.parse(attached.stdout).mutationDisposition, 'attached');
+    await persistAuthenticatedAudit(fixture, head);
+
+    const result = await remediation(fixture, attempt, verification.finishCandidate, {
+      contract: attempt.consumption.taskContractDigest, risk: 'standard', widensIntent: false,
+    });
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  });
+
+  it('accepts an aged recorded outcome for remediation but refuses a stale new receipt submission', async () => {
+    const fixture = await createDispatchFixture(temp, 'aged-recorded-maintainer-outcome');
+    const attempt = consumeAttempt(fixture);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const verification = persistVerifiedReturn(fixture, attempt, head);
+    const prepared = await runCliInProcess([
+      'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(prepared.status, 0, `${prepared.stderr}\n${prepared.stdout}`);
+    const taskPath = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    writeFileSync(taskPath, `${readFileSync(taskPath, 'utf8')}${reviewHistory(head)}`);
+
+    const recordedNow = Date.now() - 900_001;
+    const staleReceiptPath = persistAuthenticatedMaintainerReview(
+      fixture, verification, head, 'maintainer-aged', 'host_subagent', 'maintainer-stale-new', recordedNow
+    );
+    const stale = await runCliInProcess([
+      'task', 'review-attach-outcome', 'T-001', '--return-verification', verification.recordId,
+      '--maintainer-receipt', staleReceiptPath, '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(stale.status, 1, `${stale.stderr}\n${stale.stdout}`);
+    assert.equal(JSON.parse(stale.stdout).diagnostics[0].code, 'handoff.evidence.unauthenticated');
+
+    const staleReceipt = JSON.parse(readFileSync(join(fixture.root, staleReceiptPath), 'utf8'));
+    const staleOutcome = parseFilesReviewHistory(readFileSync(taskPath, 'utf8')).events
+      .filter(event => event.type === 'outcome').at(-1);
+    const legacyBypass = verifyMaintainerReviewOutcomeReceipt(staleReceipt, {
+      trustedAdapter: fixture.trust.adapter, target: fixture.root, role: 'maintainer',
+      invocationReference: staleReceipt.invocation.reference, invocationMode: staleOutcome.mode,
+      taskId: 'T-001', taskContractDigest: taskContractDigest(readFileSync(taskPath, 'utf8')).digest,
+      returnVerification: verification, candidate: verification.finishCandidate,
+      history: parseFilesReviewHistory(readFileSync(taskPath, 'utf8')), reviewOutcome: staleOutcome,
+      receiptUse: 'durable_recorded', now: Date.now(),
+    });
+    assert.equal(legacyBypass.verified, false);
+    assert.equal(legacyBypass.state, 'stale');
+
+    const currentAtRecordTime = persistAuthenticatedMaintainerReview(
+      fixture, verification, head, 'maintainer-aged', 'host_subagent', 'maintainer-recorded-aged', recordedNow
+    );
+    const attached = await runCliInProcess([
+      'task', 'review-attach-outcome', 'T-001', '--return-verification', verification.recordId,
+      '--maintainer-receipt', currentAtRecordTime, '--json', '--target', fixture.root,
+    ], { ...protectedOptions(fixture), maintainerReviewNow: recordedNow });
+    assert.equal(attached.status, 0, `${attached.stderr}\n${attached.stdout}`);
+    const entryPath = join(fixture.root, JSON.parse(attached.stdout).reviewEntryPath);
+    const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
+    const recordedReceipt = JSON.parse(readFileSync(join(fixture.root, currentAtRecordTime), 'utf8'));
+    assert.deepEqual(entry.maintainerOutcome, recordedReceipt);
+    assert.deepEqual(entry.initialAuthentication, initialAuthentication(
+      fixture, verification, readFileSync(taskPath, 'utf8'), staleOutcome, recordedReceipt, recordedNow
+    ));
+    await persistAuthenticatedAudit(fixture, head);
+
+    const result = await remediation(fixture, attempt, verification.finishCandidate, {
+      contract: attempt.consumption.taskContractDigest, risk: 'standard', widensIntent: false,
+    });
+    assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  });
+
   it('refuses a signed single-agent fallback at files review preparation when independent review is required', async () => {
     const fixture = await createDispatchFixture(temp, 'independent-review-fallback-refusal', {
       independentReviewRequired: true,
@@ -588,8 +702,11 @@ describe('production lifecycle adoption and remediation commands', () => {
     entry.maintainerOutcome = signedMaintainerReviewOutcome(
       fixture, verification, taskBody, reviewOutcome, 'maintainer-remediation-fallback-1'
     );
+    entry.initialAuthentication = initialAuthentication(
+      fixture, verification, taskBody, reviewOutcome, entry.maintainerOutcome
+    );
     const { digest, ...projection } = entry;
-    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(projection)}`;
+    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(projection)}`;
     writeFileSync(entryPath, `${JSON.stringify(entry, null, 2)}\n`);
 
     const result = await remediation(fixture, attempt, candidate, {
@@ -639,8 +756,9 @@ describe('production lifecycle adoption and remediation commands', () => {
     const entryPath = join(entryDir, readdirSync(entryDir).find(name => name.endsWith('.json')));
     const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
     entry.maintainerOutcome = null;
+    entry.initialAuthentication = null;
     const { digest, ...projection } = entry;
-    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(projection)}`;
+    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(projection)}`;
     writeFileSync(entryPath, `${JSON.stringify(entry, null, 2)}\n`);
 
     const result = await remediation(fixture, attempt, candidate, {
@@ -649,6 +767,71 @@ describe('production lifecycle adoption and remediation commands', () => {
     assert.equal(result.status, 1);
     const diagnostics = JSON.parse(result.stdout).freshness.diagnostics.map(item => item.type);
     assert.ok(diagnostics.includes('maintainer_review_authentication_failed'));
+  });
+
+  it('refuses a tampered initial-authentication record even when the entry digest is recomputed', async () => {
+    const fixture = await createDispatchFixture(temp, 'remediation-tampered-initial-authentication');
+    const attempt = consumeAttempt(fixture);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const candidate = await persistDurableCertifications(fixture, attempt, head);
+    const entryDir = join(fixture.root, '.agenticloop', 'reviews', 'entries', 'T-001');
+    const entryPath = join(entryDir, readdirSync(entryDir).find(name => name.endsWith('.json')));
+    const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
+    entry.initialAuthentication.receiptDigest = 'sha256:agenticloop.maintainer-review-outcome-receipt.v1:forged';
+    const { digest, ...projection } = entry;
+    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(projection)}`;
+    writeFileSync(entryPath, `${JSON.stringify(entry, null, 2)}\n`);
+
+    const result = await remediation(fixture, attempt, candidate, {
+      contract: attempt.consumption.taskContractDigest, risk: 'standard', widensIntent: false,
+    });
+    assert.equal(result.status, 1);
+    const diagnostics = JSON.parse(result.stdout).freshness.diagnostics.map(item => item.type);
+    assert.ok(diagnostics.includes('maintainer_review_authentication_failed'));
+  });
+
+  it('refuses a fully reconstructed forged initial-authentication record without changing remediation state', async () => {
+    const fixture = await createDispatchFixture(temp, 'remediation-forged-reconstructed-initial-authentication');
+    const attempt = consumeAttempt(fixture);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const candidate = await persistDurableCertifications(fixture, attempt, head);
+    const entryDir = join(fixture.root, '.agenticloop', 'reviews', 'entries', 'T-001');
+    const entryPath = join(entryDir, readdirSync(entryDir).find(name => name.endsWith('.json')));
+    const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
+    const signedReceipt = entry.maintainerOutcome;
+    const signedBinding = signedReceipt.binding;
+    entry.initialAuthentication = {
+      kind: 'agenticloop.maintainer-review-outcome-initial-authentication.v1',
+      receiptDigest: `sha256:agenticloop.maintainer-review-outcome-receipt.v1:${canonicalSha256(signedReceipt)}`,
+      receiptId: signedReceipt.receiptId,
+      bindingDigest: signedBinding.digest,
+      taskId: signedBinding.taskId,
+      taskContractDigest: signedBinding.taskContractDigest,
+      returnVerification: signedBinding.returnVerification,
+      candidate: signedBinding.candidate,
+      outcome: signedBinding.outcome,
+      authenticatedAt: new Date(Date.now() - 1_000).toISOString(),
+      authentication: {
+        algorithm: fixture.trust.adapter.algorithm,
+        keyId: fixture.trust.keyId,
+        value: entry.maintainerOutcome.authentication.value,
+      },
+    };
+    const { digest, ...projection } = entry;
+    entry.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(projection)}`;
+    writeFileSync(entryPath, `${JSON.stringify(entry, null, 2)}\n`);
+    const before = readFileSync(entryPath, 'utf8');
+    const taskPath = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    const beforeTask = readFileSync(taskPath, 'utf8');
+
+    const result = await remediation(fixture, attempt, candidate, {
+      contract: attempt.consumption.taskContractDigest, risk: 'standard', widensIntent: false,
+    });
+    assert.equal(result.status, 1);
+    const diagnostics = JSON.parse(result.stdout).freshness.diagnostics.map(item => item.type);
+    assert.ok(diagnostics.includes('maintainer_review_authentication_failed'));
+    assert.equal(readFileSync(entryPath, 'utf8'), before);
+    assert.equal(readFileSync(taskPath, 'utf8'), beforeTask);
   });
 
   it('refuses hand-written review and claimed-audit records without protected bindings', async () => {

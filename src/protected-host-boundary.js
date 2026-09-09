@@ -16,6 +16,11 @@ import { isAbsolute } from 'node:path';
 
 import { loadAuditorReturnReceiptVerifier } from './auditor-return-receipt.js';
 import {
+  MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND,
+  MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION,
+  maintainerReviewInitialAuthenticationSignaturePayload,
+} from './maintainer-review-receipt.js';
+import {
   HOST_TRUST_BOUNDARY_CHALLENGE_KIND,
   HOST_TRUST_BOUNDARY_RESPONSE_KIND,
   HOST_TRUST_BOUNDARY_SCHEMA_VERSION,
@@ -123,6 +128,21 @@ function readProtectedHostConfig(target) {
 
 function createProtectedHostBoundary({ adapterId, keyId, privateKey }) {
   return challenge => {
+    if (challenge?.kind === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND &&
+        challenge.schemaVersion === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION &&
+        exactKeys(challenge, ['kind', 'schemaVersion', 'attestation']) &&
+        challenge.attestation?.authentication?.algorithm === HOST_SIGNATURE_ALGORITHM &&
+        challenge.attestation?.authentication?.keyId === keyId) {
+      return {
+        kind: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND,
+        schemaVersion: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION,
+        attestation: challenge.attestation,
+        signature: signHostPayload(
+          maintainerReviewInitialAuthenticationSignaturePayload(challenge.attestation),
+          privateKey
+        ),
+      };
+    }
     if (!challenge || typeof challenge !== 'object' ||
         challenge.kind !== HOST_TRUST_BOUNDARY_CHALLENGE_KIND ||
         challenge.schemaVersion !== HOST_TRUST_BOUNDARY_SCHEMA_VERSION ||

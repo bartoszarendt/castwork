@@ -48,6 +48,7 @@ class MemoryStream {
  * @param {Function|null} [options.auditProvenanceVerifier] Protected test-only Auditor receipt verifier.
  * @param {Function} [options.protectedTransitionObserver] Characterization-only protected-evaluator observer.
  * @param {object} [options.fsMutationOptions]  Injectable filesystem mutation hooks.
+ * @param {number} [options.maintainerReviewNow] Test-only clock for Maintainer outcome receipt authentication.
  * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
  */
 export async function runCliInProcess(argv, options = {}) {
@@ -76,6 +77,7 @@ export async function runCliInProcess(argv, options = {}) {
        : ({ reportDigest }) => ({ verified: true, reportDigest }),
     protectedTransitionObserver: options.protectedTransitionObserver,
     fsMutationOptions: options.fsMutationOptions,
+    maintainerReviewNow: options.maintainerReviewNow,
   });
   return {
     status,

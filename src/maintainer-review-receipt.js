@@ -12,6 +12,8 @@ import { satisfiesIndependentReview } from './review-provenance.js';
 export const MAINTAINER_REVIEW_OUTCOME_RECEIPT_KIND = 'agenticloop.maintainer-review-outcome-receipt';
 export const MAINTAINER_REVIEW_OUTCOME_RECEIPT_SCHEMA_VERSION = 1;
 export const MAINTAINER_REVIEW_OUTCOME_RECEIPT_MAX_VALIDITY_MS = 900_000;
+export const MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND = 'agenticloop.maintainer-review-outcome-initial-authentication-boundary';
+export const MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION = 1;
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SHA256_RE = /^sha256:[a-f0-9]{64}$/;
@@ -82,6 +84,97 @@ export function maintainerReviewOutcomeBinding(input = {}) {
     outcome: reviewOutcomeProjection(reviewOutcome),
   };
   return Object.freeze({ ...projection, digest: bindingDigest(projection) });
+}
+
+function receiptDigest(receipt) {
+  return `sha256:agenticloop.maintainer-review-outcome-receipt.v1:${canonicalSha256(receipt)}`;
+}
+
+function initialAuthenticationProjection(receipt, context, authenticatedAt) {
+  const binding = maintainerReviewOutcomeBinding(context);
+  return {
+    kind: 'agenticloop.maintainer-review-outcome-initial-authentication.v1',
+    receiptDigest: receiptDigest(receipt),
+    receiptId: receipt.receiptId,
+    bindingDigest: binding.digest,
+    taskId: binding.taskId,
+    taskContractDigest: binding.taskContractDigest,
+    returnVerification: binding.returnVerification,
+    candidate: binding.candidate,
+    outcome: binding.outcome,
+    authenticatedAt,
+  };
+}
+
+/** Exact payload the protected host signs after successful fresh ingestion. */
+export function maintainerReviewInitialAuthenticationSignaturePayload(attestation) {
+  return {
+    ...attestation,
+    authentication: {
+      algorithm: attestation?.authentication?.algorithm,
+      keyId: attestation?.authentication?.keyId,
+    },
+  };
+}
+
+/**
+ * Create the auditable record persisted only after a fresh authenticated
+ * ingestion. Its receipt digest makes a later re-presentation of altered wire
+ * material fail even when the signed binding itself happens to be unchanged.
+ */
+function createMaintainerReviewOutcomeInitialAuthentication(receipt, context, authenticatedAt) {
+  if (instant(authenticatedAt) === null) {
+    throw new TypeError('Maintainer review initial authentication time is invalid');
+  }
+  const adapter = context.trustedAdapter;
+  if (!adapter || typeof context.hostAuthority !== 'function') {
+    throw new TypeError('protected host signer for Maintainer review initial authentication is unavailable');
+  }
+  const unsigned = {
+    ...initialAuthenticationProjection(receipt, context, authenticatedAt),
+    authentication: {
+      algorithm: adapter.algorithm,
+      keyId: adapter.keyId,
+    },
+  };
+  let response;
+  try {
+    response = context.hostAuthority({
+      kind: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND,
+      schemaVersion: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION,
+      attestation: unsigned,
+    });
+  } catch {
+    throw new TypeError('protected host signer for Maintainer review initial authentication is unavailable');
+  }
+  if (!exactKeys(response, ['kind', 'schemaVersion', 'attestation', 'signature']) ||
+      response.kind !== MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND ||
+      response.schemaVersion !== MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION ||
+      canonicalJson(response.attestation) !== canonicalJson(unsigned) ||
+      !verifyHostPayload(maintainerReviewInitialAuthenticationSignaturePayload(unsigned), response.signature, adapter.publicKey)) {
+    throw new TypeError('protected host signer returned an invalid Maintainer review initial-authentication attestation');
+  }
+  return Object.freeze({ ...unsigned, authentication: { ...unsigned.authentication, value: response.signature } });
+}
+
+function initialAuthenticationMatches(receipt, context, initialAuthentication) {
+  if (!exactKeys(initialAuthentication, [
+    'kind', 'receiptDigest', 'receiptId', 'bindingDigest', 'taskId', 'taskContractDigest',
+    'returnVerification', 'candidate', 'outcome', 'authenticatedAt', 'authentication',
+  ]) || instant(initialAuthentication.authenticatedAt) === null) return false;
+  const adapter = context.trustedAdapter;
+  if (!adapter || initialAuthentication.authentication?.algorithm !== adapter.algorithm ||
+      initialAuthentication.authentication?.keyId !== adapter.keyId ||
+      typeof initialAuthentication.authentication?.value !== 'string') return false;
+  let expected;
+  try {
+    expected = initialAuthenticationProjection(receipt, context, initialAuthentication.authenticatedAt);
+  } catch {
+    return false;
+  }
+  const { authentication, ...projection } = initialAuthentication;
+  return canonicalJson(projection) === canonicalJson(expected) &&
+    verifyHostPayload(maintainerReviewInitialAuthenticationSignaturePayload(initialAuthentication), authentication.value, adapter.publicKey);
 }
 
 function validateBinding(binding) {
@@ -192,5 +285,48 @@ export function verifyMaintainerReviewOutcomeReceipt(receiptWire, context = {}) 
   if (!Number.isFinite(now) || issuedAt >= expiresAt || issuedAt > now + 5_000 || expiresAt <= now || expiresAt - issuedAt > MAINTAINER_REVIEW_OUTCOME_RECEIPT_MAX_VALIDITY_MS || now - issuedAt > MAINTAINER_REVIEW_OUTCOME_RECEIPT_MAX_VALIDITY_MS) {
     return { verified: false, state: 'stale', error: 'Maintainer review outcome receipt is expired or outside its liveness window' };
   }
-  return { verified: true, state: 'current', receiptId: receipt.receiptId, bindingDigest: receipt.binding.digest };
+  return {
+    verified: true,
+    state: 'current',
+    receiptId: receipt.receiptId,
+    bindingDigest: receipt.binding.digest,
+    authenticatedAt: new Date(now).toISOString(),
+  };
+}
+
+/**
+ * Fresh ingestion is the sole producer of an initial-authentication record.
+ * The record is never accepted from caller input during initial submission.
+ */
+export function authenticateFreshMaintainerReviewOutcomeReceipt(receiptWire, context = {}) {
+  const verified = verifyMaintainerReviewOutcomeReceipt(receiptWire, context);
+  if (verified.verified !== true) return verified;
+  let receipt;
+  try { receipt = typeof receiptWire === 'string' ? JSON.parse(receiptWire) : receiptWire; } catch { return { verified: false, state: 'untrusted', error: 'Maintainer review outcome receipt is not valid JSON' }; }
+  try {
+    return {
+      ...verified,
+      initialAuthentication: createMaintainerReviewOutcomeInitialAuthentication(receipt, context, verified.authenticatedAt),
+    };
+  } catch (error) {
+    return { verified: false, state: 'untrusted', error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Reauthenticate an already persisted outcome. This is deliberately a
+ * separate entry point: expiry may be bypassed only by an exact protected
+ * initial-authentication record, never by a caller-selected receipt mode.
+ */
+export function verifyRecordedMaintainerReviewOutcomeReceipt(receiptWire, context = {}) {
+  let receipt;
+  try { receipt = typeof receiptWire === 'string' ? JSON.parse(receiptWire) : receiptWire; } catch { return { verified: false, state: 'untrusted', error: 'Maintainer review outcome receipt is not valid JSON' }; }
+  if (!initialAuthenticationMatches(receipt, context, context.initialAuthentication)) {
+    return { verified: false, state: 'untrusted', error: 'Maintainer review initial-authentication record is missing, altered, or not bound to this exact receipt' };
+  }
+  const authenticatedAt = /** @type {number} */ (instant(context.initialAuthentication.authenticatedAt));
+  const verified = verifyMaintainerReviewOutcomeReceipt(receipt, { ...context, now: authenticatedAt });
+  return verified.verified === true
+    ? { ...verified, state: 'recorded' }
+    : verified;
 }

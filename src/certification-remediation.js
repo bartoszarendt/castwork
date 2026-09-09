@@ -62,6 +62,11 @@ const FILES_REVIEW_ENTRY_FIELDS = Object.freeze([
   'maintainerOutcome',
 ]);
 
+const FILES_REVIEW_ENTRY_V5_FIELDS = Object.freeze([
+  ...FILES_REVIEW_ENTRY_FIELDS,
+  'initialAuthentication',
+]);
+
 function reviewHistoryBinding(history) {
   return {
     digest: `sha256:agenticloop.files-review-history.v1:${canonicalSha256(history.events)}`,
@@ -81,9 +86,16 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
     try {
       const entry = JSON.parse(readFileSync(join(directory, name), 'utf8'));
       const { digest, ...projection } = entry ?? {};
-      const structurallyMatches = Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_FIELDS.length &&
-        Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_FIELDS.includes(key)) &&
-        entry.kind === 'agenticloop.files-review-entry-receipt' && entry.schemaVersion === 3 &&
+      const isV3 = entry?.schemaVersion === 3 &&
+        Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_FIELDS.length &&
+        Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_FIELDS.includes(key));
+      const isV5 = entry?.schemaVersion === 5 &&
+        Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_V5_FIELDS.length &&
+        Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_V5_FIELDS.includes(key)) &&
+        ((entry.maintainerOutcome === null && entry.initialAuthentication === null) ||
+          (entry.maintainerOutcome !== null && entry.initialAuthentication !== null));
+      const structurallyMatches = (isV3 || isV5) &&
+        entry.kind === 'agenticloop.files-review-entry-receipt' &&
         entry.backend === 'files' && entry.taskId === taskId &&
         name === `${returnToken}.json` &&
         entry.productHead === returnVerification.productHead &&
@@ -95,7 +107,7 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
         Number.isSafeInteger(entry.reviewHistory?.eventCount) && entry.reviewHistory.eventCount >= 0 &&
         entry.reviewHistory.eventCount <= history.events.length &&
         entry.reviewHistory.digest === reviewHistoryBinding({ events: history.events.slice(0, entry.reviewHistory.eventCount) }).digest &&
-        digest === `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(projection)}`;
+        digest === `sha256:agenticloop.files-review-entry-receipt.v${isV3 ? 3 : 4}:${canonicalSha256(projection)}`;
       if (!structurallyMatches) continue;
       matched = true;
       if (typeof verifyMaintainerOutcome !== 'function' || !latestReview) {
@@ -111,6 +123,7 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
         history,
         reviewOutcome: latestReview,
         independentReviewRequired,
+        initialAuthentication: isV5 ? entry.initialAuthentication : null,
       });
       if (authenticated?.ok === true) return { matched: true, authenticated: true };
       authenticationFailed = true;
