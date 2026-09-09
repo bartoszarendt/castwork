@@ -13,6 +13,9 @@
   a repeated-refusal validator-diagnosis stop rule.
 
 ### Fixed
+- P36 remediation now documents the complete shipped task-command surface,
+  resolves installed methodology routes to copied destinations, and aligns
+  refusal-catalog terminology with installed warning-only accounting.
 - **Breaking:** mutable check aggregate paths are now confined to
   `.agenticloop/tmp/<id>-checks.json`; callers that supplied a path outside the
   task's scratch directory must remove any tracked aggregate and use the

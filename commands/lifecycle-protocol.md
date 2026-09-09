@@ -58,17 +58,19 @@ may invoke it as mutation evidence.
 
 ## Gate Ownership And Dispatched Contract
 
-A failing protected gate routes work to its declared owner; it never transfers
-another role's mutation authority. The Orchestrator may re-delegate, escalate to
-the required human authority, or stop through blocked-state, but must not repair
-Engineer-owned implementation artifacts or Maintainer-owned task records while a
-valid route exists.
+A failed protected gate routes work to its declared owner; it never
+transfers mutation authority. Before dispatch, the Maintainer records accepted
+scope, boundaries, paths, creations, criteria, checks, review requirements, and
+locked decisions. That durable contract binds work; diagnostics, inferred branch
+state, and later prose cannot widen it.
 
-Before dispatch, the Maintainer records the task's accepted scope and out of
-scope, allowed paths and intended creations, acceptance criteria, required
-checks, independent-review requirement, and relevant locked decisions. That
-durable baseline binds the dispatched work; an advisory diagnostic, an inferred
-branch state, or a later prose summary cannot widen it.
+## Attempt And Review Budgets
+
+`attempt_budget` and `review_budget` resolve task, project
+default, then `5`. They bound attempts and
+`needs_revision` rounds. A bound stops and routes work; it never waives scope,
+evidence, verification, review, or human checkpoints. The Review Round
+Checkpoint binds one artifact; it cannot accept, merge, or replay authority.
 
 ## Authorized Work Units And Human Checkpoints
 

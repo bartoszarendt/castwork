@@ -235,14 +235,14 @@ const CLOSED_PUBLIC_SURFACE_BLOCKERS = Object.freeze([
     status: 'blocked-by-public-surface',
     supportedPublicTrigger: false,
     proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:attribution.work_unit',
-    obstacle: 'the attribution producer verifies only host-issued material that the installed surface cannot generate; no supported public trigger exposes attribution.work_unit, and this does not claim its typed producer was reached.',
+    obstacle: 'the installed public surface has no work-unit-attribution trigger, so no supported public trigger exposes attribution.work_unit; this does not claim its typed producer was reached.',
   },
   {
     code: 'attribution.role',
     status: 'blocked-by-public-surface',
     supportedPublicTrigger: false,
     proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:attribution.role',
-    obstacle: 'the attribution producer verifies only host-issued material that the installed surface cannot generate; no supported public trigger exposes attribution.role, and this does not claim its typed producer was reached.',
+    obstacle: 'the requested role is constrained to the installed canonical role enum, so no supported public trigger exposes attribution.role; this does not claim its typed producer was reached.',
   },
   {
     code: 'review.entry.fixup_invalid',
@@ -477,20 +477,6 @@ async function makeCommitAttributionFixture() {
       'commit-attribution', 'check', '--task', 'T-001', '--message-file', message, '--json', '--target', fixture.root,
     ],
     codes: ['attribution.trailer'],
-  };
-}
-
-async function makeCommitAttributionRoleFixture() {
-  const fixture = await createDispatchFixture(temp, 'installed-refusal-attribution-role');
-  const message = join(fixture.root, 'message-role.txt');
-  writeFileSync(message, 'subject\n\nTask: T-001\nAgent: maintainer\n', 'utf8');
-  commit(fixture.root, 'add role attribution message');
-  return {
-    fixture,
-    args: [
-      'commit-attribution', 'check', '--task', 'T-001', '--role', 'engineer', '--message-file', message, '--json', '--target', fixture.root,
-    ],
-    codes: ['attribution.role'],
   };
 }
 

@@ -11,7 +11,7 @@ metadata:
 # Parallel Delegation
 
 This is the trigger-loaded parallel-lane law. Guarded worktree commands and
-cleanup behavior are in `agenticloop/docs/cli-reference.md`.
+cleanup behavior are available through `agenticloop help worktree`.
 
 ## Parallel Opportunity Scan
 
@@ -109,7 +109,8 @@ The durable scan result contains:
 ```
 
 The executable contract for this shape is `agenticloop.parallel-scan` schema
-version `3`; `agenticloop/src/parallel-scan.js` owns its provenance schema.
+version `3`; this installed skill documents its provenance shape and the
+shipped `task prepare-decomposition` command evaluates it.
 Every discovered inventory member is accounted
 for exactly once, as ready or as an explicit exclusion with a stable reason
 code. Exclusion reason codes are `record_unreadable`, `record_malformed`,

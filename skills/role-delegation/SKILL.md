@@ -325,8 +325,8 @@ text, even after redigesting.
 Count durable `needs_revision` outcomes per task. Before the revision that
 would exceed the task record's
 `review_budget` (default 5, so after five counted outcomes and before routing the
-next revision), run the Review Round Checkpoint validated by
-`agenticloop/src/review-checkpoint.js`.
+next revision), run the Review Round Checkpoint described in
+`agenticloop/commands/lifecycle-protocol.md` under **Attempt And Review Budgets**.
 
 At the boundary, record a checkpoint bound to current count and latest
 artifact:

@@ -42,10 +42,10 @@ const PHASE_EVIDENCE_PATHS = new Set([
 ]);
 const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
   opencode: { generatedPayload: 16128, agentDefinitions: 15120, activationSurface: 1008, referenceLibrary: 0 },
-  codex: { generatedPayload: 76822, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60073 },
-  'claude-code': { generatedPayload: 57465, agentDefinitions: 13941, activationSurface: 2219, referenceLibrary: 41305 },
-  copilot: { generatedPayload: 74857, agentDefinitions: 15187, activationSurface: 1345, referenceLibrary: 58325 },
-  cursor: { generatedPayload: 74609, agentDefinitions: 15185, activationSurface: 1099, referenceLibrary: 58325 },
+  codex: { generatedPayload: 76849, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60100 },
+  'claude-code': { generatedPayload: 57492, agentDefinitions: 13941, activationSurface: 2219, referenceLibrary: 41332 },
+  copilot: { generatedPayload: 74884, agentDefinitions: 15187, activationSurface: 1345, referenceLibrary: 58352 },
+  cursor: { generatedPayload: 74636, agentDefinitions: 15185, activationSurface: 1099, referenceLibrary: 58352 },
 });
 
 function candidateRepositoryFiles() {
@@ -210,9 +210,23 @@ describe('P36-00A frozen baseline', () => {
       'long-pause': { counts: [2, 1, 4] },
       update: { counts: [2, 1, 4], step: 'prepare-return-after-generated-update' },
       'operator-edit': { counts: [2, 2, 5] },
-      'eight-step-chain': { counts: [2, 1, 4] },
+      'eight-step-chain': { executed: true },
     };
     for (const result of results) {
+      const pinned = pinnedScenarios[result.scenario];
+      if (pinned.executed) {
+        assert.equal(result.availability, 'measured');
+        assert.equal(result.refusal, null);
+        assert.deepEqual(result.stages.map(stage => stage.id), [
+          'activation-expiry', 'wrong-product-head', 'artifact-class-mismatch', 'packet-liveness',
+          'recovery-supersession', 'generated-clean-gate', 'decomposition-schema', 'member-dependency-evidence',
+        ]);
+        for (const stage of result.stages) {
+          assert.equal(stage.observedResults.length, 1, `${stage.id} must retain one observed result`);
+          assert.equal(stage.invariants.attempts, stage.invariants.dispatchConsumptions);
+        }
+        continue;
+      }
       assert.equal(assertPrivacyClean({ counters: result.counters, scenario: result.scenario }).ok, true);
       assert.deepEqual(result.delegations, {
         status: 'partial',
@@ -221,7 +235,6 @@ describe('P36-00A frozen baseline', () => {
         repairOnly: 'unavailable',
         limitation: 'the current route stops before candidate, independent review, and audit; it cannot measure the complete three-role reference or repair-only delegations',
       });
-      const pinned = pinnedScenarios[result.scenario];
       assert.deepEqual(
         [result.counters.workflowCommits, result.counters.productCommits, result.counters.totalCommits],
         pinned.counts,

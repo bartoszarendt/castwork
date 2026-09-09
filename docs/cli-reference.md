@@ -35,7 +35,7 @@ All commands:
 | `generate` | Generate adapter artifacts (`opencode`, `codex`, `claude-code`, `copilot`, `cursor`, `all`) |
 | `configure models` | Set per-host role model settings in `agenticloop.json` |
 | `configure import-generated-models` | Explicitly preview or import missing tracked model settings from one generated host |
-| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `status`) |
+| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `measure`, `explain`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `review-attach-outcome`, `adopt-historical`, `adopt-commit`, `remediation-authority`, `abandon-attempt`, `record-tooling-failure`, `commit-message`, `prepare-product-commit`, `attempt-status`, `status`) |
 | `audit` | Work-unit audit certificates (`new`, `baseline`, `report`, `status`, `gate`, `lint`, `repair-structure`, `disposition`, `override`, `resolve`) |
 | `closeout` | Composite closeout packets (`prepare`, `status`, `record`) |
 | `improvement` | Bounded improvement proposals (`new`, `lint`, `status`) |
@@ -51,6 +51,33 @@ All commands:
 | `github-checkpoint render` / `repair-plan` | Render a checkpoint or one bounded append-only repair carrier without posting |
 | `github-review-prepare` | Fail-closed exact-head Maintainer delegation packet |
 | `bootstrap-labels` | Create required GitHub labels |
+
+### Task lifecycle additions
+
+- `task explain <id>` derives bounded current task facts and action verdicts;
+  it is read-only and grants no authority.
+- `task measure <id>` reports bounded derived operational measurement without
+  storing it.
+- `task adopt-historical` records a reduced-assurance terminal adoption for
+  work that genuinely predates canonical lifecycle evidence; `task adopt-commit`
+  adopts one attributable, in-scope commit range into an existing attempt and
+  requires fresh certification.
+- `task remediation-authority` opens one in-contract remediation cycle only
+  after exact-candidate independent certification checks.
+- `task abandon-attempt`, `task attempt-status`, and
+  `task record-tooling-failure` respectively discard a named live attempt under
+  durable authority, report whether a new packet may be minted, and persist one
+  bounded tooling-failure observation with its retry bound.
+- `task commit-message` writes a canonically trailered workflow commit message
+  without committing. `task prepare-product-commit` derives the exact task-owned
+  product paths after work and writes the corresponding product commit message.
+- `task refresh-handoff-receipt` refreshes only stale derived handoff evidence
+  under its guarded plan; it cannot change the task contract, activation,
+  review decision, or product files.
+- `task review-attach-outcome <id> --return-verification <record-id>
+  --maintainer-receipt <receipt.json>` atomically attaches one later
+  host-authenticated Maintainer outcome to the already prepared files-backed
+  review entry for that exact verified return and current review history.
 
 Help conventions:
 

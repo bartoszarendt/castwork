@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from 'node:test';
+import { after, describe, it } from 'node:test';
 
 import { HARD_REFUSAL_ALLOWLIST, REFUSAL_CLASSES } from '../src/refusal-classes.js';
+import { runExecutedEightStepChain } from './helpers/lifecycle-scenario-harness.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', `phase${36}-eight-step-chain`, 'fixture.json'), 'utf8'));
@@ -19,9 +21,11 @@ const SERIAL_FIXTURE_MEASUREMENTS = Object.freeze({
   M6: 2071,
   M7: [77, 18, 95],
 });
+const syntheticRoot = mkdtempSync(join(tmpdir(), 'agenticloop-eight-step-proof-'));
+after(() => rmSync(syntheticRoot, { recursive: true, force: true }));
 
 describe('integrated lifecycle proof', () => {
-  it('keeps the synthetic eight-step refusal chain complete, ordered, and target-free', () => {
+  it('executes the synthetic eight-step field-shape chain through real commands and preserves lineage invariants', async () => {
     assert.equal(fixture.kind, 'agenticloop.synthetic-refusal-chain');
     assert.equal(fixture.privacy, 'synthetic-only');
     assert.equal(fixture.steps.length, 8);
@@ -32,7 +36,19 @@ describe('integrated lifecycle proof', () => {
     for (const step of fixture.steps) {
       assert.match(step.observedShape, /\S/);
       assert.match(step.syntheticResult, /\S/);
+      assert.match(step.execution.command, /\S/);
+      assert.equal(typeof step.execution.result.status, 'number');
+      assert.match(step.execution.result.code, /\S/);
       assert.doesNotMatch(JSON.stringify(step), /target\s*(source|path|checkout)|raw\s*(session|prompt|transcript)/i);
+    }
+    const result = await runExecutedEightStepChain(syntheticRoot);
+    assert.deepEqual(result.stages.map(step => step.id), fixture.steps.map(step => step.id));
+    for (const stage of result.stages) {
+      const expected = fixture.steps.find(step => step.id === stage.id).execution;
+      assert.ok(stage.commands.some(command => command.command.startsWith(expected.command)), `${stage.id} must execute ${expected.command}`);
+      assert.deepEqual(stage.observedResults, [expected.result], `${stage.id} result changed`);
+      assert.deepEqual(stage.invariants, expected.invariants, `${stage.id} lineage invariants changed`);
+      if (expected.authorization) assert.deepEqual(stage.authorization, expected.authorization, `${stage.id} authorization demonstration changed`);
     }
   });
 

@@ -686,7 +686,10 @@ const F2 = [
   classified('evidence.missing', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-missing', 'supply evidence'),
   classified('evidence.malformed', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-malformed', 'repair evidence'),
   classified('evidence.stale', 'F2', 'migration_recompute', 'evidence_record', 'derived-freshness', 'recompute evidence'),
-  classified('evidence.negative', 'F2', 'retained_hard_refusal', 'required_check', 'checks-failed', 'repair failed condition'),
+  // This shared negative-evidence guard covers both failed required checks and
+  // closeout packet-output violations. It does not assert that a check ran
+  // when the closeout command rejects an unsafe output path.
+  classified('evidence.negative', 'F2', 'retained_hard_refusal', 'evidence_guard', 'negative-evidence-or-output-guard', 'repair failed condition'),
   classified('required_check.explain_forbidden', 'F2', 'single_action_mechanical_repair', 'required_check', 'diagnostic-output-not-evidence', 'replace explain with a real required check'),
   classified('evidence.changed', 'F2', 'migration_recompute', 'evidence_record', 'derived-record-changed', 'recompute evidence'),
   classified('task.evidence.not_in_progress', 'F2', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use current lifecycle state'),
@@ -754,7 +757,9 @@ const F4 = [
   classified('readiness.candidate.internal_failure', 'F4', 'advisory_diagnostic', 'candidate_builder', 'candidate-stage-observation', 'inspect stage diagnostic'),
   classified('return.assurance.insufficient', 'F4', 'material_human_decision', 'return_assurance', 'assurance-not-authorized', 'obtain authorized assurance'),
   classified('return.assurance.ambiguous', 'F4', 'single_action_mechanical_repair', 'return_adapter', 'adapter-selection-required', 'select adapter'),
-  classified('return.assurance.session_reported', 'F4', 'retained_hard_refusal', 'return_assurance', 'producer-not-authenticated', 'supply authenticated return'),
+  // Catalog membership remains in the retained-hard-refusal family; installed
+  // accounting deliberately records this one emitted diagnostic as warning-only.
+  classified('return.assurance.session_reported', 'F4', 'retained_hard_refusal', 'return_assurance', 'producer-not-authenticated-warning', 'supply authenticated return'),
   classified('return.lane.implementation_absent', 'F4', 'retained_hard_refusal', 'product_lineage', 'product-lineage-unreachable', 'reapply implementation'),
   classified('handoff.evidence.freshness_expired', 'F4', 'migration_recompute', 'handoff_boundary', 'return-receipt-age', 'recompute return receipt'),
   classified('handoff.evidence.schema_retired', 'F4', 'migration_recompute', 'handoff_boundary', 'prepared-dispatch-schema-retired', 'regenerate prepared dispatch'),
@@ -967,7 +972,7 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'task.body.identity': 'Material fact: task record identity differs from its carrier. scenario: task-body-identity-mismatch-blocks-use.',
   'task.body.invalid': 'Material fact: task record integrity is unproven. scenario: invalid-task-body-cannot-authorize.',
   'task.body.attribution': 'Material fact: task attribution is invalid. scenario: invalid-attribution-blocks-protected-work.',
-  'evidence.negative': 'Material fact: a required check has failed. scenario: negative-required-check-remains-a-guard.',
+  'evidence.negative': 'Material fact: a required-evidence guard is negative: a required check failed or closeout rejected an unsafe packet-output path. scenario: negative-required-check-or-output-guard-remains-a-guard.',
   'task.evidence.not_in_progress': 'Material fact: evidence belongs to the wrong lifecycle state. scenario: non-progress-evidence-cannot-mutate.',
   'task.evidence.lineage': 'Material fact: carrier lineage is ambiguous. scenario: ambiguous-lineage-blocks-evidence-use.',
   'task.carrier.armed': 'Material fact: another protected mutation remains unresolved. scenario: armed-carrier-prevents-concurrent-write.',
@@ -991,7 +996,7 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'handoff.evidence.mismatched': 'Material fact: handoff evidence binds different identities. scenario: mismatched-handoff-cannot-authorize-transition.',
   'handoff.evidence.unauthenticated': 'Material fact: handoff evidence lacks authenticated provenance. scenario: unauthenticated-handoff-is-refused.',
   'return.assurance.insufficient': 'Material fact: return assurance is below the authorized minimum. scenario: insufficient-return-assurance-needs-decision.',
-  'return.assurance.session_reported': 'Material fact: return producer is not authenticated. scenario: session-reported-return-cannot-authorize.',
+  'return.assurance.session_reported': 'Material fact: the return producer is not authenticated. Catalog classification: retained-hard-refusal family. Installed accounting exception: the emitted session-reported diagnostic is warning-only/non-refusal and grants no authority. scenario: session-reported-return-cannot-authorize.',
   'return.lane.implementation_absent': 'Material fact: return lane lacks reachable implementation. scenario: absent-lane-artifact-blocks-return.',
   'handoff.evidence.revalidation_failed': 'Material fact: exact stored return fails current external verification. scenario: failed-return-revalidation-remains-refused.',
   'handoff.evidence.ambiguous_return': 'Material fact: current return selection is ambiguous. scenario: competing-return-records-cannot-authorize.',

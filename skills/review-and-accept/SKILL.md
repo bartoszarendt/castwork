@@ -962,7 +962,7 @@ revisions consume `review_budget`, not the engineering/no-progress
 `reviewed_needs_revision`, not abandoned, and may receive a fresh revision packet.
 Use [[blocked-state]] when the applicable review bound is exhausted.
 
-Distinct from a single sustained-and-disputed item: once `needs_revision` rounds on one task reach the task record's `review_budget` (default 5 unless the project or task materialized another value) – regardless of whether the findings repeat – the orchestrator runs the Review Round Checkpoint under `agenticloop/src/review-checkpoint.js` before routing any further revision. Acceptance does not itself update a source plan; [[task-closeout]] owns that conditional mutation before final certification.
+Distinct from a single sustained-and-disputed item: once `needs_revision` rounds on one task reach the task record's `review_budget` (default 5 unless the project or task materialized another value) – regardless of whether the findings repeat – the orchestrator runs the Review Round Checkpoint described in `agenticloop/commands/lifecycle-protocol.md` under **Attempt And Review Budgets** before routing any further revision. Acceptance does not itself update a source plan; [[task-closeout]] owns that conditional mutation before final certification.
 
 ## Mandatory triage before accepting
 

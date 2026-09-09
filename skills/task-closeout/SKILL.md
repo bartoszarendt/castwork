@@ -14,9 +14,9 @@ Closeout confirms that the relevant task set is actually complete, records
 durable evidence, and turns repeated process friction into follow-up work or
 skill improvements.
 
-If the remaining request is cleanup of an accepted, integrated worktree, follow
-the guarded worktree command and human checkpoint in
-`agenticloop/docs/cli-reference.md`.
+If the remaining request is cleanup of an accepted, integrated worktree, use
+`agenticloop help worktree` for the guarded worktree command and human
+checkpoint.
 Cleanup does not replace closeout evidence or reopen accepted implementation.
 
 Run closeout:

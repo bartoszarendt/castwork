@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,13 @@ const GENERATED_OPEN_CODE_REFERENCES = new Map([
   ['.opencode/agents/maintainer.md', 2],
   ['.opencode/agents/orchestrator.md', 6],
   ['.opencode/commands/agenticloop.md', 2],
+]);
+const INSTALLED_ROUTE_ASSERTIONS = Object.freeze([
+  ['skills/debugging-before-fixes/SKILL.md', 'agenticloop/commands/lifecycle-protocol.md', 'Attempt And Review Budgets'],
+  ['skills/task-record-contract/SKILL.md', 'agenticloop/commands/lifecycle-protocol.md', 'Attempt And Review Budgets'],
+  ['skills/work-unit-audit/SKILL.md', 'agenticloop/commands/lifecycle-protocol.md', 'Attempt And Review Budgets'],
+  ['skills/role-delegation/SKILL.md', 'agenticloop/commands/lifecycle-protocol.md', 'Attempt And Review Budgets'],
+  ['skills/review-and-accept/SKILL.md', 'agenticloop/commands/lifecycle-protocol.md', 'Attempt And Review Budgets'],
 ]);
 const EXPECTED_REFERENCES = new Map([
   ['agents/auditor.md', { count: 1, owner: 'path convention' }],
@@ -54,6 +61,7 @@ const EXPECTED_REFERENCES = new Map([
 ]);
 
 const STALE_ROUTE = /AGENTIC_LOOP\.md[^\n]*(?:\bglossary\b|\bworktree(?: cleanup)? lifecycle\b|\bGit rules\b|\bevent taxonomy\b|\blifecycle gates emit\b|\bsizing\b|\bauthorized-work-unit\b|\bReview Round Checkpoint\b|\bthree-lens review\b|\bparallel-scan provenance\b|\bAttempt Budget\b)/i;
+const UNAVAILABLE_INSTALLED_ROUTE = /agenticloop\/(?:src|docs)\//;
 
 function activeFiles(root, {
   directories = ACTIVE_CONSUMER_DIRECTORIES,
@@ -75,6 +83,7 @@ function activeFiles(root, {
 function inspectRoutes(root, surfaces) {
   const references = new Map();
   const stale = [];
+  const unavailable = [];
   for (const file of activeFiles(root, surfaces)) {
     const rel = relative(root, file).replaceAll('\\', '/');
     const body = readFileSync(file, 'utf8');
@@ -82,14 +91,23 @@ function inspectRoutes(root, surfaces) {
     if (count) references.set(rel, count);
     for (const [index, line] of body.split(/\r?\n/).entries()) {
       if (STALE_ROUTE.test(line)) stale.push(`${rel}:${index + 1}: ${line.trim()}`);
+      if (!rel.startsWith('docs/') && UNAVAILABLE_INSTALLED_ROUTE.test(line)) unavailable.push(`${rel}:${index + 1}: ${line.trim()}`);
     }
   }
-  return { references, stale };
+  return { references, stale, unavailable };
+}
+
+function installedRouteTarget(root, target, heading) {
+  const resolved = join(root, target);
+  if (!existsSync(resolved) || !statSync(resolved).isFile()) return { ok: false, reason: `missing installed target ${target}` };
+  const source = readFileSync(resolved, 'utf8');
+  if (!source.includes(`## ${heading}`)) return { ok: false, reason: `missing section '${heading}' in ${target}` };
+  return { ok: true };
 }
 
 describe('methodology route integrity', () => {
   it('routes every active AGENTIC_LOOP.md reference to a current canonical owner', () => {
-    const { references, stale } = inspectRoutes(REPO_ROOT);
+    const { references, stale, unavailable } = inspectRoutes(REPO_ROOT);
     assert.deepEqual(
       [...references.entries()].sort(([left], [right]) => left.localeCompare(right)),
       [...EXPECTED_REFERENCES.entries()]
@@ -99,6 +117,7 @@ describe('methodology route integrity', () => {
       'update the inventory and declare the canonical owner for every new active methodology reference'
     );
     assert.deepEqual(stale, [], `stale methodology routes:\n${stale.join('\n')}`);
+    assert.deepEqual(unavailable, [], `routes unavailable in the installed layout:\n${unavailable.join('\n')}`);
   });
 
   it('routes every generated OpenCode consumer to a current canonical owner', () => {
@@ -108,7 +127,7 @@ describe('methodology route integrity', () => {
       const output = join(scratch, 'generated');
       seedTargetLayout(REPO_ROOT, target, { includeDocs: false, includeScratch: false });
       generateOpencodeArtifacts(loadAgenticLoopConfig(join(target, 'agenticloop.json')), target, output);
-      const { references, stale } = inspectRoutes(output, {
+      const { references, stale, unavailable } = inspectRoutes(output, {
         directories: GENERATED_CONSUMER_DIRECTORIES,
         files: [],
       });
@@ -118,6 +137,29 @@ describe('methodology route integrity', () => {
         'update the generated inventory when a canonical source changes its methodology references',
       );
       assert.deepEqual(stale, [], `stale generated methodology routes:\n${stale.join('\n')}`);
+      assert.deepEqual(unavailable, [], `generated routes unavailable in the installed layout:\n${unavailable.join('\n')}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves every declared installed methodology destination and its named section', () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'agenticloop-installed-route-ratchet-'));
+    try {
+      const target = join(scratch, 'target');
+      seedTargetLayout(REPO_ROOT, target, { includeDocs: false, includeScratch: false });
+      for (const [consumer, destination, heading] of INSTALLED_ROUTE_ASSERTIONS) {
+        const consumerSource = readFileSync(join(REPO_ROOT, consumer), 'utf8');
+        assert.match(consumerSource, new RegExp(`${destination.replaceAll('.', '\\.')}`));
+        assert.match(consumerSource, new RegExp(`\\*\\*${heading.replaceAll(' ', '\\s+')}\\*\\*`));
+        assert.deepEqual(installedRouteTarget(target, destination, heading), { ok: true });
+      }
+      // In-memory probe: a typo cannot be accepted merely because the route
+      // inventory counted a reference. No target file is written or retained.
+      assert.deepEqual(
+        installedRouteTarget(target, 'agenticloop/commands/not-a-lifecycle-protocol.md', 'Attempt And Review Budgets'),
+        { ok: false, reason: 'missing installed target agenticloop/commands/not-a-lifecycle-protocol.md' },
+      );
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
