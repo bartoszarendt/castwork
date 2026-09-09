@@ -10,8 +10,10 @@ import { appendAuditReport, createAuditRecordContent } from '../src/audit-record
 import { createAuditorReturnReceipt } from '../src/auditor-return-receipt.js';
 import { loadAuditorReturnReceiptVerifier } from '../src/auditor-return-receipt.js';
 import { parseAuditorWireReport, prepareAuditorReturnReportForSigning, wireReportToAuditRun } from '../src/audit-report-schema.js';
-import { createDispatchConsumption, dispatchConsumptionRelativePath } from '../src/handoff-consumption.js';
+import { createDispatchConsumption, dispatchConsumptionRelativePath, listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { recognizeHandoff } from '../src/handoff-recognition.js';
+import { createActivationRevocation } from '../src/activation-grant.js';
+import { writeActivationRevocation } from '../src/activation-store.js';
 import { createReturnVerification, listReturnVerifications, writeReturnVerification } from '../src/return-verification.js';
 import { refetchFilesReturnEvidence } from '../src/files-return-evidence.js';
 import { executionAttemptAbandonmentRelativePath, executionAttemptIdentity } from '../src/execution-attempt.js';
@@ -21,6 +23,7 @@ import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createDispatchFixture, git, prepare, readyReturn, repositoryEvidence } from './helpers/dispatch-fixture.js';
 import { fixtureDispatchValidator } from './helpers/handoff-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
+import { interactiveOptions, prepareThroughCli, scaffoldFixture } from './helpers/activation-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
 
 let temp;
@@ -82,6 +85,35 @@ function adoptionArgs(fixture, attempt, head) {
     '--reason', 'A human applied the bounded correction before the supervisor resumed.',
     '--json', '--target', fixture.root,
   ];
+}
+
+async function startedGrantAttempt(name) {
+  const fixture = await scaffoldFixture(temp, name);
+  const activated = await runCliInProcess(['activate', 'T-001', '--target', fixture.root], interactiveOptions(fixture));
+  assert.equal(activated.status, 0, `${activated.stdout}\n${activated.stderr}`);
+  const packet = await prepareThroughCli(fixture);
+  const packetPath = '.agenticloop/tmp/adoption-packet.json';
+  mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+  writeFileSync(join(fixture.root, packetPath), `${JSON.stringify(packet, null, 2)}\n`);
+  const options = {
+    operatorTrustRoot: fixture.operatorTrustRoot,
+    operatorActivationRoot: fixture.operatorActivationRoot,
+  };
+  const started = await runCliInProcess([
+    'task', 'role-start', 'T-001', '--packet', packetPath, '--json', '--target', fixture.root,
+  ], options);
+  assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
+  const consumption = listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' }).records[0];
+  const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+  return { fixture, packet, consumption, attemptId: executionAttemptIdentity(consumption), head, options };
+}
+
+function assertAdoptionRefusalWithoutMutation(fixture, head, beforeCarrier, result, code) {
+  assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.evaluation.diagnostics[0].code, code);
+  assert.equal(readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8'), beforeCarrier);
+  assert.equal(existsSync(join(fixture.root, '.agenticloop', 'adoptions', 'commits', 'T-001', `${head}.json`)), false);
 }
 
 function protectedOptions(fixture) {
@@ -228,6 +260,56 @@ async function persistDurableCertifications(fixture, attempt, head, {
 }
 
 describe('production lifecycle adoption and remediation commands', () => {
+  it('refuses commit adoption when the consumed grant is revoked without creating an adoption record', async () => {
+    const attempt = await startedGrantAttempt('adopt-revoked-grant');
+    const revoked = writeActivationRevocation(attempt.fixture.root, createActivationRevocation({
+      grant: attempt.packet.activationBinding.grant,
+      reason: 'operator withdrew adoption authority',
+    }));
+    assert.equal(revoked.ok, true, revoked.receipt.errors?.join('\n'));
+    const beforeCarrier = readFileSync(join(attempt.fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+    const result = await runCliInProcess(adoptionArgs(attempt.fixture, {
+      attemptId: attempt.attemptId, consumption: attempt.consumption,
+    }, attempt.head), attempt.options);
+    assertAdoptionRefusalWithoutMutation(
+      attempt.fixture, attempt.head, beforeCarrier, result, 'activation.grant.revoked'
+    );
+  });
+
+  it('refuses commit adoption for a terminal task without creating an adoption record', async () => {
+    const attempt = await startedGrantAttempt('adopt-terminal-task');
+    const taskPath = join(attempt.fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    writeFileSync(taskPath, readFileSync(taskPath, 'utf8').replace('status: in-progress', 'status: closed'));
+    const beforeCarrier = readFileSync(taskPath, 'utf8');
+    const result = await runCliInProcess(adoptionArgs(attempt.fixture, {
+      attemptId: attempt.attemptId, consumption: attempt.consumption,
+    }, attempt.head), attempt.options);
+    assertAdoptionRefusalWithoutMutation(
+      attempt.fixture, attempt.head, beforeCarrier, result, 'task.lifecycle.not_dispatchable'
+    );
+  });
+
+  it('refuses commit adoption for a retired attempt without creating an adoption record', async () => {
+    const fixture = await createDispatchFixture(temp, 'adopt-retired-attempt');
+    const attempt = consumeAttempt(fixture);
+    const retired = {
+      kind: 'agenticloop.execution-attempt-abandonment', schemaVersion: 2,
+      backend: 'files', taskId: 'T-001', attemptId: attempt.attemptId,
+      packetId: attempt.packet.packetId, reason: 'The attempt was explicitly retired.',
+      disposition: 'tooling_failed', authority: 'maintainer:retire-adoption-attempt',
+      productMutationOccurred: false, carrierMutationOccurred: true, abandonedAt: new Date().toISOString(),
+    };
+    const retiredPath = join(fixture.root, executionAttemptAbandonmentRelativePath(retired));
+    mkdirSync(join(retiredPath, '..'), { recursive: true });
+    writeFileSync(retiredPath, `${JSON.stringify(retired, null, 2)}\n`);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const beforeCarrier = readFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+    const result = await runCliInProcess(adoptionArgs(fixture, attempt, head));
+    assertAdoptionRefusalWithoutMutation(
+      fixture, head, beforeCarrier, result, 'dispatch.packet.conserved'
+    );
+  });
+
   it('records deliberate human-fix adoption and invalidates the exact certifications for rerun without consuming the attempt', async () => {
     const fixture = await createDispatchFixture(temp, 'adopt-success');
     const failedAttempt = consumeAttempt(fixture);

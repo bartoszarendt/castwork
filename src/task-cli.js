@@ -119,6 +119,7 @@ import {
   loadTaskActivationEvidence,
   resolveActivationVerification,
   resolveEffectiveActivationPolicy,
+  resolveCurrentTaskAuthorization,
   resolvePacketActivationBinding,
   unactivatedTaskError,
 } from './activation-resolution.js';
@@ -199,6 +200,7 @@ import {
   projectHistoricalAdoption,
 } from './historical-adoption.js';
 import { evaluateCommitAdoption } from './commit-adoption.js';
+import { evaluateDispatchableLifecycle, taskStatusFromBody } from './dispatchability.js';
 import { evaluateCertificationFreshness, evaluateRemediationAuthority, resolveDurableCertificationEvidence } from './certification-remediation.js';
 import { normalizeAuditorInvocationProvenance } from './audit-provenance.js';
 import { parseAuditorWireReport, wireReportToAuditRun } from './audit-report-schema.js';
@@ -3492,17 +3494,15 @@ export async function cmdTask(args, io = createIo()) {
       // Serial starts retain their direct dependency safety proof. The current
       // evaluator rejects a changed head or unresolved dependency by its own
       // typed invariant; it no longer uses packet-wide rendering equality.
-      const currentDispatch = dispatchPacket.decomposition === null
-        ? await verifyCurrentDispatchPacket({
-            target,
-            io,
-            taskId,
-            packetPath: packetPathStr,
-            hostTrustStore: opts.hostTrustStore,
-            includeGateResult: true,
-            now: evaluationNow,
-          })
-        : null;
+      const currentDispatch = await verifyCurrentDispatchPacket({
+        target,
+        io,
+        taskId,
+        packetPath: packetPathStr,
+        hostTrustStore: opts.hostTrustStore,
+        includeGateResult: true,
+        now: evaluationNow,
+      });
       if (currentDispatch && !currentDispatch.validation.ok && currentDispatch.gateResult) {
         if (asJson) io.out(JSON.stringify(currentDispatch.gateResult));
         else for (const error of currentDispatch.gateResult.errors ?? []) io.err(`ERROR: ${error}`);
@@ -3598,9 +3598,9 @@ export async function cmdTask(args, io = createIo()) {
           task_id: taskId, file: carrier,
         }, asJson, io);
       }
-      // Parallel starts retain their dedicated decomposition, scan, inventory,
-      // dependency, and route validation above. They also need the same live
-      // repository-base invalidator that protects the serial revalidation path.
+      // The current dispatcher above revalidated the live repository, clean
+      // state, decomposition, sibling inventory, dependencies, and ownership
+      // for either route. Retain the base-head guard as a narrow final check.
       if (dispatchPacket.decomposition !== null) {
         const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, dispatchPacket.repository?.head ?? null);
         if (baseHeadInvalidator) {
@@ -5832,6 +5832,7 @@ export async function cmdTask(args, io = createIo()) {
         io.err(`Task record not found: ${relative(target, filePath).replace(/\\/g, '/')}`);
         return 1;
       }
+      const carrier = relative(target, filePath).replace(/\\/g, '/');
       const body = readFileSync(filePath, 'utf8');
       const contract = taskContractDigest(body);
       const [frontmatter] = parseFrontmatter(body);
@@ -5847,6 +5848,89 @@ export async function cmdTask(args, io = createIo()) {
         io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}; adoption returns to the owner.`);
         return 1;
       }
+      const adoptionRefusal = ({ diagnostic, reason }) => {
+        const evaluation = {
+          ok: false,
+          nextOwner: 'owner',
+          reasons: [reason],
+          diagnostics: [diagnostic],
+        };
+        const payload = { command: 'task adopt-commit', taskId, evaluation };
+        if (asJson) io.out(JSON.stringify(payload, null, 2));
+        else io.err(`adoption refused: ${reason}`);
+        return 1;
+      };
+      // Commit adoption preserves an existing attempt, but it must never
+      // preserve authority that has since been withdrawn, terminally closed,
+      // or retired. Re-read these facts through their canonical readers before
+      // evaluating the Git range and again in the guarded mutation batch.
+      const resolveLiveAdoptionState = currentBody => {
+        const currentContract = taskContractDigest(currentBody);
+        if (!currentContract.ok) {
+          return {
+            ok: false, diagnostic: { type: 'live_authorization', code: 'verification.context.malformed', evidenceState: 'malformed' },
+            reason: currentContract.error,
+          };
+        }
+        const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(currentBody));
+        if (!lifecycle.ok) {
+          return {
+            ok: false,
+            diagnostic: {
+              type: 'live_authorization', code: 'task.lifecycle.not_dispatchable', evidenceState: lifecycle.evidenceState,
+            },
+            reason: lifecycle.reason,
+          };
+        }
+        // Legacy host-signed captures have no revocable grant inventory. Grant
+        // authority is always resolved live, including external deny state.
+        if (!currentContract.projection.activation_capture_ref) {
+          const authorization = resolveCurrentTaskAuthorization(target, io, {
+            backend: 'files', taskId, carrier, taskContractDigest: currentContract.digest,
+          });
+          if (authorization.state !== 'present') {
+            return {
+              ok: false,
+              diagnostic: {
+                type: 'live_authorization', code: 'activation.grant.revoked',
+                evidenceState: authorization.state === 'unavailable' ? 'missing' : 'negative',
+              },
+              reason: authorization.errors.join('; ') ||
+                `current activation authorization is ${authorization.state}`,
+            };
+          }
+        }
+        const conservation = evaluateTaskPacketConservation(target, taskId, { backend: 'files' });
+        const attemptId = executionAttemptIdentity(consumption);
+        const attempt = conservation.attempts?.find(item => item.attemptId === attemptId) ?? null;
+        if (!attempt) {
+          return {
+            ok: false, diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'malformed' },
+            reason: conservation.reason,
+          };
+        }
+        if (attempt.state !== 'live') {
+          return {
+            ok: false, diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'negative' },
+            reason: attempt
+              ? `execution attempt '${attemptId}' is ${attempt.state}, not live`
+              : `execution attempt '${attemptId}' is not present in the current attempt ledger`,
+          };
+        }
+        // Packet conservation prevents minting a replacement packet after
+        // Engineer work exists. Adoption is the explicit path that preserves
+        // that same live attempt, so that particular refusal is expected here.
+        // Any other unreadable or contradictory attempt ledger fails closed.
+        if (!conservation.ok && conservation.code !== PACKET_CONSERVATION_DIAGNOSTIC_CODE) {
+          return {
+            ok: false, diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'malformed' },
+            reason: conservation.reason,
+          };
+        }
+        return { ok: true, contract: currentContract, attempt };
+      };
+      const live = resolveLiveAdoptionState(body);
+      if (!live.ok) return adoptionRefusal(live);
       const currentHead = String(targetGitRunner(target)(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
       const evaluation = evaluateCommitAdoption({
         runGit: targetGitRunner(target),
@@ -5854,7 +5938,7 @@ export async function cmdTask(args, io = createIo()) {
         range: { base: String(opts.base), head: String(opts.head) },
         originalBase: consumption.productBaseHead,
         allowedPaths: contract.projection.allowed_paths,
-        protectedContract: { authorized: consumption.taskContractDigest, current: contract.digest },
+        protectedContract: { authorized: consumption.taskContractDigest, current: live.contract.digest },
         // risk_class is itself part of the protected contract projection. A
         // missing classification therefore fails closed instead of becoming an
         // unrecorded assertion supplied by the command caller.
@@ -5877,6 +5961,19 @@ export async function cmdTask(args, io = createIo()) {
         ...evaluation,
       };
       const applied = executeMutationBatch(target, [{
+        // This no-op carrier write is the transaction guard for the live
+        // lifecycle/authorization/attempt facts above. The kernel rechecks it
+        // immediately before creating the durable adoption record, so a task
+        // change cannot race the authority claim into storage.
+        type: 'write', path: carrier, content: body,
+        expectedDigest: taskRecordDigest(body), expectedKind: 'file',
+        validateCurrent: bytes => {
+          const current = resolveLiveAdoptionState(bytes.toString('utf8'));
+          return current.ok
+            ? { ok: true }
+            : { ok: false, error: `${current.diagnostic.code}: ${current.reason}` };
+        },
+      }, {
         type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
       }]);
       if (!applied.ok) {

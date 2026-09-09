@@ -53,7 +53,9 @@ const PRODUCER_INVENTORY_ROWS = [
     'review.entry.fixup_invalid', 'review.entry.matrix_stale',
     'review.entry.persistence_conflict', 'review.entry.persistence_carrier_changed',
     'review.entry.persistence_write_changed', 'review.entry.persistence_refetch_changed',
-    'check.aggregate.git_probe_failed',
+    'check.aggregate.git_probe_failed', 'activation.grant.revoked',
+    'task.lifecycle.not_dispatchable', 'dispatch.packet.conserved',
+    'verification.context.malformed',
   ]],
   ['src/required-checks.js', ['required_check.explain_forbidden']],
   ['src/task-readiness.js', [

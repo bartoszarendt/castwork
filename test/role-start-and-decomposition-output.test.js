@@ -61,6 +61,12 @@ function persistSchemaV3Consumption(root, taskId) {
   return { legacy, path, source, resolved: resolved.records[0] };
 }
 
+// The former parallel role-start branch made only this final HEAD comparison
+// after validating a packet. It did not invoke the live dispatch revalidation.
+function formerParallelHeadOnlyGuard(packet, currentHead) {
+  return packet.decomposition !== null && packet.repository?.head === currentHead;
+}
+
 // ── N1: role-start is NOT receipt-revalidation safe ────────────────────────
 
 describe('N1: role-start receipt revalidation', () => {
@@ -721,6 +727,68 @@ describe('N7: role-start behavioral tests', () => {
     assert.deepEqual(JSON.parse(attemptsAfter.stdout).attempts, JSON.parse(attemptsBefore.stdout).attempts,
       'refusals must not create attempts');
     assert.equal(existsSync(checksPath), false, 'refusals must not initialize check evidence');
+  });
+
+  it('refuses a parallel role start when an in-scope tracked file becomes dirty without moving HEAD', async () => {
+    const fixture = await createDispatchFixture(temp, 'parallel-initial-dirty-worktree', {
+      taskIds: ['T-001', 'T-002'], parallel: true, initialStatus: 'agent-ready',
+    });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch({ ...fixture, parallelRequested: true }, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const headBefore = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const carrierBefore = readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+    writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "dirty";\n', 'utf8');
+    assert.equal(
+      formerParallelHeadOnlyGuard(prepared.packet, headBefore),
+      true,
+      'the former parallel HEAD-only guard would have allowed this unchanged-HEAD dirty worktree',
+    );
+
+    const result = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
+    assert.equal(result.status, 1, result.stdout);
+    const refusal = JSON.parse(result.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'worktree.clean_gate.failed');
+    assert.equal(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim(), headBefore);
+    assert.equal(readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8'), carrierBefore);
+    assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 0);
+    assert.equal(existsSync(join(root, '.agenticloop', 'tmp', 'checks.json')), false);
+  });
+
+  it('refuses a parallel role start when a sibling carrier changes after packet preparation', async () => {
+    const fixture = await createDispatchFixture(temp, 'parallel-stale-sibling-carrier', {
+      taskIds: ['T-001', 'T-002'], parallel: true, initialStatus: 'agent-ready',
+    });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch({ ...fixture, parallelRequested: true }, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const carrierBefore = readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+    const siblingPath = join(root, '.agenticloop', 'tasks', 'T-002.md');
+    writeFileSync(siblingPath, readFileSync(siblingPath, 'utf8').replace('status: agent-ready', 'status: blocked'));
+    const add = spawnSync('git', ['add', '.agenticloop/tasks/T-002.md'], { cwd: root, encoding: 'utf8' });
+    assert.equal(add.status, 0, add.stderr);
+    const commit = spawnSync('git', ['commit', '-m', 'change sibling carrier'], { cwd: root, encoding: 'utf8' });
+    assert.equal(commit.status, 0, commit.stderr);
+
+    const result = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ], { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) });
+    assert.equal(result.status, 1, result.stdout);
+    const refusal = JSON.parse(result.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'dispatch.packet.stale');
+    assert.equal(readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8'), carrierBefore);
+    assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 0);
+    assert.equal(existsSync(join(root, '.agenticloop', 'tmp', 'checks.json')), false);
   });
 
   it('starts a current parallel packet and matches the status route when its moved-head retry is refused', async () => {
