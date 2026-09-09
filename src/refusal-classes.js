@@ -154,6 +154,7 @@ const PRODUCER_INVENTORY_ROWS = [
 // overwrote earlier producer bindings for duplicate codes.
 const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
   ['src/finish-candidate.js', ['role_return.invalid']],
+  ['src/fs-mutation-kernel.js', ['verification.context.malformed']],
   ['src/activation-grant.js', ['activation.grant.unauthenticated']],
   ['src/activation-identity-migration.js', ['activation.identity.conflict']],
   ['src/activation-resolution.js', ['activation.capture.missing', 'activation.grant.revoked', 'activation.grant.unauthenticated']],

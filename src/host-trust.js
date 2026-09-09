@@ -32,6 +32,11 @@ export const OPERATOR_TRUST_DIRECTORY = '.agenticloop/host-trust';
 export const HOST_TRUST_BOUNDARY_CHALLENGE_KIND = 'agenticloop.protected-host-trust-challenge';
 export const HOST_TRUST_BOUNDARY_RESPONSE_KIND = 'agenticloop.protected-host-trust-response';
 export const HOST_TRUST_BOUNDARY_SCHEMA_VERSION = 1;
+export const DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND =
+  'agenticloop.durable-mutation-intent-authentication-challenge';
+export const DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND =
+  'agenticloop.durable-mutation-intent-authentication-response';
+export const DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION = 1;
 /**
  * Lifetime of one protected loader challenge.
  *
@@ -168,6 +173,62 @@ export function verifyHostPayload(payload, signatureText, publicKey) {
   } catch {
     return false;
   }
+}
+
+/**
+ * The protected host signs every durable recovery image, including its digest
+ * and all pre/post images. The signature value is excluded only to avoid a
+ * circular payload.
+ */
+export function durableMutationIntentSignaturePayload(intent) {
+  return {
+    kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND,
+    schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
+    intent: {
+      ...intent,
+      authentication: {
+        algorithm: intent?.authentication?.algorithm,
+        adapterId: intent?.authentication?.adapterId,
+        keyId: intent?.authentication?.keyId,
+        value: null,
+      },
+    },
+  };
+}
+
+/**
+ * Create the narrowly-scoped protected signer used by a durable filesystem
+ * transaction. The CLI never receives the private key; the protected boundary
+ * returns a signature that is immediately verified against the pinned adapter.
+ */
+export function createDurableMutationIntentAuthenticator({ target, trustedAdapter, protectedBoundary } = {}) {
+  if (!trustedAdapter || typeof protectedBoundary !== 'function' ||
+      trustedAdapter.repositoryIdentity !== targetRepositoryIdentity(target) ||
+      trustedAdapter.capabilities?.returnReceipt !== 'supported') return null;
+  return Object.freeze({
+    adapterId: trustedAdapter.adapterId,
+    keyId: trustedAdapter.keyId,
+    publicKey: trustedAdapter.publicKey,
+    authenticate(intent) {
+      const payload = durableMutationIntentSignaturePayload(intent);
+      const challenge = Object.freeze({
+        kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND,
+        schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
+        adapterId: trustedAdapter.adapterId,
+        keyId: trustedAdapter.keyId,
+        targetRepositoryIdentity: trustedAdapter.repositoryIdentity,
+        payload,
+      });
+      let response;
+      try { response = protectedBoundary(challenge); } catch { return null; }
+      if (!exactKeys(response, ['kind', 'schemaVersion', 'adapterId', 'keyId', 'signature']) ||
+          response.kind !== DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND ||
+          response.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION ||
+          response.adapterId !== trustedAdapter.adapterId || response.keyId !== trustedAdapter.keyId ||
+          !verifyHostPayload(payload, response.signature, trustedAdapter.publicKey)) return null;
+      return response.signature;
+    },
+  });
 }
 
 export const EXECUTION_RECEIPT_REPLAY_BOUNDARY_KIND = 'agenticloop.execution-receipt-replay-boundary';

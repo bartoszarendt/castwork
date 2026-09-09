@@ -80,7 +80,7 @@ import { createDiagnostic } from './repair-policy.js';
 import { COMMAND_REGISTRY, parseCommandArgs, suggestName } from './cli-registry.js';
 import { evaluateTaskReadiness } from './task-readiness.js';
 import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
-import { executeMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
+import { executeMutationBatch, recoverDurableMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
 import { createTaskContractBaselineRecord, createTaskContractCorrectionRecord, taskContractDigest, trustedChainTerminal, validActivationCaptureRef, validateTaskContractBaseline } from './task-contract-baseline.js';
 import { appendFilesTaskContractRecord, loadFilesTaskContractRecords } from './files-task-contract.js';
 import { genericTerminalRefusalMessage, resolveCanonicalTerminalScope } from './terminal-scope.js';
@@ -99,7 +99,7 @@ import {
   validateDispatchPreparation,
   verifyDispatchBeforeMutation,
 } from './dispatch-envelope.js';
-import { createExecutionReceiptReplayAuthority, loadHostTrustStore, operatorTrustStorePath, parseHostTrustStore, targetRepositoryIdentity } from './host-trust.js';
+import { createDurableMutationIntentAuthenticator, createExecutionReceiptReplayAuthority, loadHostTrustStore, operatorTrustStorePath, parseHostTrustStore, targetRepositoryIdentity } from './host-trust.js';
 import { CommitRangeError, deriveCommitRange } from './commit-range.js';
 import { gitTreeObjectId, isGitObjectId } from './git-oid.js';
 import { DISPATCH_LIVENESS_WINDOW_SECONDS } from './dispatch-eligibility.js';
@@ -165,6 +165,7 @@ import {
   listCarrierMutationReceipts,
   listDispatchConsumptions,
   migrateDispatchConsumptionAtProtectedBoundary,
+  roleStartTransactionRelativePath,
   resolveCarrierLineage,
 } from './handoff-consumption.js';
 import { measureTaskWorkflow } from './workflow-measurement.js';
@@ -3375,6 +3376,50 @@ export async function cmdTask(args, io = createIo()) {
           `task record not found: ${carrier}`
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
+      // A role-start spans carrier replacement, mutable check scaffolding,
+      // supersessions, and an exclusive consumption record. Recover a prior
+      // interrupted attempt before inspecting its carrier state, because that
+      // state may otherwise no longer match the packet's pre-start digest.
+      const roleStartTransactionPath = roleStartTransactionRelativePath(taskId, dispatchPacket.packetId);
+      const roleStartTransactionBinding = {
+        taskId,
+        packetId: dispatchPacket.packetId,
+        packetDigest: dispatchPacket.digest,
+      };
+      let intentAuthenticator;
+      try {
+        // Standard-assurance packets deliberately omit a return adapter. Their
+        // host-signed activation capture remains the packet-bound protected
+        // signer identity for this recovery-only transaction.
+        const intentAdapterId = dispatchPacket.returnAdapter?.adapterId ?? dispatchPacket.activation?.adapter;
+        const intentAdapterKeyId = dispatchPacket.returnAdapter?.keyId ?? dispatchPacket.activation?.signature?.keyId;
+        const trustedIntentAdapter = resolveTrustedHostAdapter(target, io, opts.hostTrustStore, intentAdapterId);
+        if (trustedIntentAdapter.keyId !== intentAdapterKeyId) {
+          throw new VerificationContextMalformedError('packet-bound durable transaction signer key does not match the pinned host adapter');
+        }
+        intentAuthenticator = createDurableMutationIntentAuthenticator({
+          target,
+          trustedAdapter: trustedIntentAdapter,
+          protectedBoundary: io.hostAuthority,
+        });
+      } catch {
+        // Standard local role starts historically have no protected adapter.
+        // They never write a recoverable intent; if an attacker supplies one,
+        // the kernel still refuses it below because no verifier is available.
+        intentAuthenticator = null;
+      }
+      const recoveredTransaction = recoverDurableMutationBatch(target, {
+        intentPath: roleStartTransactionPath,
+        binding: roleStartTransactionBinding,
+        intentAuthenticator,
+      });
+      if (!recoveredTransaction.ok) {
+        return printGateResult('task role-start', commandFailure('task role-start',
+          new VerificationContextMalformedError(
+            `recoverable role-start transaction could not be resolved: ${recoveredTransaction.errors.join('; ')}`
+          ),
+          'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
+      }
       const requestedChecksPath = opts.checkEvidenceOutput ?? defaultCheckAggregateOutput(taskId);
       let checkEvidencePath;
       try {
@@ -3679,14 +3724,27 @@ export async function cmdTask(args, io = createIo()) {
       const consumptionPath = dispatchConsumptionRelativePath(roleStartConsumption);
       const mutationActions = [
         { type: 'write', path: carrier, content: candidate, expectedDigest: currentDigest, expectedKind: 'file' },
-        { type: 'create', path: consumptionPath, content: `${JSON.stringify(roleStartConsumption, null, 2)}\n` },
         ...supersessionMutations(attemptSupersessions),
         { type: 'write', path: checkEvidencePath.relPath, content: `${JSON.stringify(initialChecks, null, 2)}\n`,
           ...(checksPreExists
             ? { expectedDigest: taskRecordDigest(preExistingChecksBytes), expectedKind: 'file' }
             : { expectedKind: 'absent' }) },
+        // This exclusive record is the durable commit point. The kernel writes
+        // it only after every replacement and non-commit create has succeeded.
+        { type: 'create', path: consumptionPath, content: `${JSON.stringify(roleStartConsumption, null, 2)}\n` },
       ];
-      const committed = executeMutationBatch(target, mutationActions, io?.fsMutationOptions ?? {});
+      const committed = executeMutationBatch(target, mutationActions, {
+        ...(io?.fsMutationOptions ?? {}),
+        ...(intentAuthenticator ? {
+          recoverableTransaction: {
+            intentPath: roleStartTransactionPath,
+            binding: roleStartTransactionBinding,
+            transition: { transitionKey, protectedInputDigest: roleStartBinding.digest },
+            commitPath: consumptionPath,
+            intentAuthenticator,
+          },
+        } : {}),
+      });
       if (!committed.ok) {
         const rolledBack = committed.rollbackErrors.length === 0;
         const result = createValidationResult({

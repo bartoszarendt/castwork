@@ -895,12 +895,16 @@ describe('packed public handoff lifecycle', () => {
     if (!existsSync(wrapper)) {
       writeFileSync(wrapper, [
         `import { runCli } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'cli-main.js')).href)};`,
-        `import { HOST_TRUST_BOUNDARY_RESPONSE_KIND, HOST_TRUST_BOUNDARY_SCHEMA_VERSION, hostTrustBoundarySignaturePayload, signHostPayload } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'host-trust.js')).href)};`,
+        `import { DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND, DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND, DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION, HOST_TRUST_BOUNDARY_RESPONSE_KIND, HOST_TRUST_BOUNDARY_SCHEMA_VERSION, hostTrustBoundarySignaturePayload, signHostPayload } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'host-trust.js')).href)};`,
         `import { loadAuditorReturnReceiptVerifier } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'auditor-return-receipt.js')).href)};`,
         'import { createPrivateKey } from "node:crypto";',
         'import { readFileSync } from "node:fs";',
         'const boundaryKey = createPrivateKey({ key: readFileSync(3), format: "der", type: "pkcs8" });',
         'const hostAuthority = challenge => {',
+        '  if (challenge?.kind === DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND) {',
+        '    if (challenge.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION || challenge.adapterId !== process.env.AGENTICLOOP_TEST_ADAPTER || challenge.keyId !== process.env.AGENTICLOOP_TEST_KEY_ID) throw new Error("invalid durable mutation intent challenge");',
+        '    return { kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND, schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION, adapterId: challenge.adapterId, keyId: challenge.keyId, signature: signHostPayload(challenge.payload, boundaryKey) };',
+        '  }',
         '    const response = {',
         '      kind: HOST_TRUST_BOUNDARY_RESPONSE_KIND,',
         '      schemaVersion: HOST_TRUST_BOUNDARY_SCHEMA_VERSION,',

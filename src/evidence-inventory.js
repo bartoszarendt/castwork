@@ -133,6 +133,16 @@ export const EVIDENCE_INVENTORY = Object.freeze({
     storageClass: 'durable_project_evidence',
     visibleTo: Object.freeze(['orchestrator', 'maintainer', 'engineer']),
   }),
+  role_start_recovery_intent: entry({
+    root: '.agenticloop/handoffs/role-start-transactions',
+    producer: 'role start mutation kernel',
+    consumer: 'the next role-start invocation for the exact packet',
+    decision: 'whether an interrupted role start must restore its pre-images or may retain its committed post-state',
+    derivable: false,
+    retention: 'only until the transaction reaches its exclusive consumption-record commit point or recovery restores the pre-state',
+    storageClass: 'durable_project_evidence',
+    visibleTo: Object.freeze(['engineer']),
+  }),
   carrier_mutation_receipt: entry({
     root: '.agenticloop/handoffs/task-mutations',
     producer: 'engineer',

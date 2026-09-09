@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -15,6 +15,7 @@ import { receiveRoleReturn } from '../src/dispatch-envelope.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
 import {
   createDispatchFixture,
+  git,
   prepare,
   producerBinding,
   readyReturn,
@@ -163,5 +164,50 @@ describe('canonical required-check model', () => {
     }, fixture.options);
     assert.equal(received.ok, false);
     assert.deepEqual(received.validation.errors, ['role return checks must use canonical RC identity order']);
+  });
+
+  it('accepts RC-1 through RC-10 through the return receiver finish projection', async () => {
+    const requiredChecksText = Array.from({ length: 10 }, (_, index) =>
+      `- [RC-${index + 1}] command: \`npm run check-${index + 1}\``
+    ).join('\n');
+    const fixture = await createDispatchFixture(temp, 'two-digit-finish-candidate', { requiredChecksText });
+    const prepared = prepare(fixture);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    assert.deepEqual(prepared.packet.task.requiredChecks.map(check => check.id),
+      Array.from({ length: 10 }, (_, index) => `RC-${index + 1}`));
+
+    const checks = prepared.packet.task.requiredChecks.map(check => ({
+      id: check.id,
+      kind: 'command',
+      command: check.command,
+      outcome: 'passed',
+      exitCode: 0,
+      evidence: `${check.id} passed`,
+    }));
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const verified = true;\n', 'utf8');
+    git(fixture.root, ['add', 'src/existing.js']);
+    git(fixture.root, ['commit', '-m', 'verify ten required checks\n\nTask: T-001\nAgent: engineer']);
+    const productHead = git(fixture.root, ['rev-parse', 'HEAD']);
+    const evidence = repositoryEvidence(prepared.packet, {
+      head: productHead,
+      changedPaths: ['src/existing.js'],
+      checks,
+    });
+    evidence.productAttribution = {
+      range: { base: prepared.packet.repository.head, head: productHead },
+      commits: [productHead],
+    };
+    const roleReturn = readyReturn(prepared.packet, evidence);
+    const received = receiveRoleReturn({
+      raw: JSON.stringify(roleReturn),
+      packet: prepared.packet,
+      refetchTask: fixture.refetchTask,
+      refetchRepositoryEvidence: () => evidence,
+      runGit: fixture.runGit,
+      ...producerBinding(fixture.trust, prepared.packet, roleReturn, evidence),
+    }, fixture.options);
+    assert.equal(received.ok, true, received.validation.errors?.join('\n'));
+    assert.deepEqual(received.finishCandidate.requiredCheckSet,
+      Array.from({ length: 10 }, (_, index) => `RC-${index + 1}`));
   });
 });

@@ -13,6 +13,7 @@ import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { finishCandidateCurrentnessMismatch } from './finish-candidate.js';
 import { validateReviewEntryReceiptShape } from './review-entry-receipt.js';
 import { taskContractDigest } from './task-contract-baseline.js';
+import { compareRequiredCheckIds } from './required-checks.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
 import {
   extractReviewAuthor,
@@ -683,7 +684,7 @@ export function evaluateGitHubReviewAudit({
       }
       const liveRequiredCheckSet = parseRequiredChecks(issueData?.body)
         .map(check => String(check.id ?? check.matchKey ?? check.text ?? '').trim())
-        .sort();
+        .sort(compareRequiredCheckIds);
       const persistedRequiredCheckSet = reviewEntryReceipt.finishCandidate.requiredCheckSet;
       if (liveRequiredCheckSet.length !== persistedRequiredCheckSet.length ||
           liveRequiredCheckSet.some((check, index) => check !== persistedRequiredCheckSet[index])) {

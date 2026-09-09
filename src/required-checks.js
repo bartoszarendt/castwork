@@ -40,12 +40,17 @@ function explainForbiddenMessage(id) {
  */
 export const REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION = 2;
 
-function compareChecks(left, right) {
-  const leftId = typeof left?.id === 'string' ? left.id : '';
-  const rightId = typeof right?.id === 'string' ? right.id : '';
+/** Canonical numeric-aware identity ordering shared by every RC consumer. */
+export function compareRequiredCheckIds(leftId, rightId) {
+  leftId = typeof leftId === 'string' ? leftId : '';
+  rightId = typeof rightId === 'string' ? rightId : '';
   const leftNumber = CHECK_ID_RE.test(leftId) ? Number(leftId.slice(3)) : Number.MAX_SAFE_INTEGER;
   const rightNumber = CHECK_ID_RE.test(rightId) ? Number(rightId.slice(3)) : Number.MAX_SAFE_INTEGER;
   return leftNumber - rightNumber || leftId.localeCompare(rightId);
+}
+
+function compareChecks(left, right) {
+  return compareRequiredCheckIds(left?.id, right?.id);
 }
 
 /** Parse a complete Required Checks section into its closed canonical model. */

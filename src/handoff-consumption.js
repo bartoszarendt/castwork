@@ -24,6 +24,7 @@ export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 5;
 const LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSIONS = Object.freeze([3, 4]);
 export const DISPATCH_CONSUMPTION_CLOCK_SKEW_MS = 1000;
 export const TASK_CARRIER_MUTATION_ROOT = '.agenticloop/handoffs/task-mutations';
+export const ROLE_START_TRANSACTION_ROOT = '.agenticloop/handoffs/role-start-transactions';
 
 const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const PACKET_ID_RE = /^dispatch:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -123,6 +124,11 @@ export function createDispatchConsumption({
 
 export function dispatchConsumptionRelativePath(record) {
   return `.agenticloop/handoffs/dispatch/${safeSegment(record.taskId)}/${safeSegment(record.packetId)}.json`;
+}
+
+/** Durable recovery-intent path for one exact files role-start packet. */
+export function roleStartTransactionRelativePath(taskId, packetId) {
+  return `${ROLE_START_TRANSACTION_ROOT}/${safeSegment(taskId)}/${safeSegment(packetId)}.json`;
 }
 
 export function validateDispatchConsumption(record, {

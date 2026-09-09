@@ -5,6 +5,7 @@ import { evaluateGitHubReviewAudit, runGitHubReviewAudit, GitHubReviewAuditError
 import { collectGitHubReviewHistory, parseReviewMarker } from '../src/review-history.js';
 import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
+import { parseRequiredChecks } from '../src/github-preflight.js';
 
 const HEAD = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
 const OLD_HEAD = 'b1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
@@ -28,13 +29,13 @@ function markerString(markerObj) {
   return typeof markerObj === 'string' ? markerObj : markerObj.body;
 }
 
-function auditIssueData({ task = 7, independent = false } = {}) {
+function auditIssueData({ task = 7, independent = false, requiredChecks = ['- [RC-1] `npm test`'] } = {}) {
   return {
     number: task,
     body: [
       '---', 'task_id: T-007', `independent_review_required: ${independent}`, '---',
       '# T-007', '', '## Scope', 'Audit fixture.', '', '## Out of Scope', 'None.', '',
-      '## Acceptance Criteria', 'Audit candidate.', '', '## Required Checks', '- [RC-1] `npm test`',
+      '## Acceptance Criteria', 'Audit candidate.', '', '## Required Checks', ...requiredChecks,
     ].join('\n'),
   };
 }
@@ -45,12 +46,15 @@ function auditReceipt({ pr = 42, task = 7, head = HEAD, issueData = auditIssueDa
     commits: [{ oid: head, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
   };
   const contract = taskContractDigest(issueData.body);
+  const requiredChecks = parseRequiredChecks(issueData.body);
   return createReviewEntryReceipt({ input: {
     prData, issueData, reviewHistory: { events: [], errors: [] },
   } }, {
     ok: true, errors: [], warnings: [],
-    requiredChecks: [{ id: 'RC-1', text: '[RC-1] `npm test`', matchKey: 'npm test' }],
-    evidenceMatches: [{ id: 'RC-1', check: '[RC-1] `npm test`', verdict: 'passed', evidence: 'tests passed' }],
+    requiredChecks,
+    evidenceMatches: requiredChecks.map(check => ({
+      id: check.id, check: check.text, verdict: 'passed', evidence: `${check.id} passed`,
+    })),
     contractBaseline: { digest: contract.digest, baseline: null },
   }, { observedAt: '2026-08-07T00:00:00.000Z' });
 }
@@ -85,6 +89,19 @@ function oidAt(index) {
 }
 
 describe('GitHub review provenance audit', () => {
+  it('accepts a numeric RC-1 through RC-10 inventory against the persisted candidate', () => {
+    const issueData = auditIssueData({
+      requiredChecks: Array.from({ length: 10 }, (_, index) => `- [RC-${index + 1}] \`npm run check-${index + 1}\``),
+    });
+    const fixture = data();
+    const result = evaluateGitHubReviewAudit({
+      ...fixture,
+      issueData,
+      reviewEntryReceipt: auditReceipt({ issueData }),
+    });
+    assert.equal(result.ok, true, result.errors.join('\n'));
+  });
+
   it('fails closed when the gh PR file snapshot reaches the unpaginated limit, including a changed 101st path', () => {
     const fixture = data();
     const files = Array.from({ length: 101 }, (_, index) => ({ path: `src/file-${index + 1}.js` }));

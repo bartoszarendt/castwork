@@ -25,6 +25,9 @@ import {
   HOST_TRUST_BOUNDARY_RESPONSE_KIND,
   HOST_TRUST_BOUNDARY_SCHEMA_VERSION,
   HOST_SIGNATURE_ALGORITHM,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
   hostTrustBoundarySignaturePayload,
   signHostPayload,
   targetRepositoryIdentity,
@@ -120,14 +123,32 @@ function readProtectedHostConfig(target) {
   return Object.freeze({
     adapterId: config.adapterId,
     keyId: config.keyId,
+    targetRepositoryIdentity: config.targetRepositoryIdentity,
     operatorTrustRoot: config.operatorTrustRoot,
     assertedPath: config.assertedPath,
     privateKey,
   });
 }
 
-function createProtectedHostBoundary({ adapterId, keyId, privateKey }) {
+function createProtectedHostBoundary({ adapterId, keyId, targetRepositoryIdentity: expectedTargetRepositoryIdentity, privateKey }) {
   return challenge => {
+    if (challenge?.kind === DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND) {
+      if (challenge.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION ||
+          challenge.adapterId !== adapterId || challenge.keyId !== keyId ||
+          challenge.targetRepositoryIdentity !== expectedTargetRepositoryIdentity || !challenge.payload ||
+          challenge.payload.kind !== DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND ||
+          challenge.payload.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION ||
+          challenge.payload.intent?.targetRepositoryIdentity !== expectedTargetRepositoryIdentity) {
+        throw new Error('protected host boundary refused an invalid durable mutation intent authentication challenge');
+      }
+      return {
+        kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND,
+        schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
+        adapterId,
+        keyId,
+        signature: signHostPayload(challenge.payload, privateKey),
+      };
+    }
     if (challenge?.kind === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND &&
         challenge.schemaVersion === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION &&
         exactKeys(challenge, ['kind', 'schemaVersion', 'attestation']) &&

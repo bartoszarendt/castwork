@@ -2,6 +2,7 @@
 
 import { canonicalJson } from './canonical-json.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
+import { compareRequiredCheckIds } from './required-checks.js';
 
 const CERTIFICATION_EVIDENCE = Object.freeze([
   'required_checks', 'return', 'review', 'audit', 'closeout',
@@ -17,12 +18,12 @@ export class FinishCandidateIdentityError extends TypeError {
   }
 }
 
-function sortedUnique(values, label, { allowEmpty = false } = {}) {
+function sortedUnique(values, label, { allowEmpty = false, compare = undefined } = {}) {
   if (!Array.isArray(values) || values.some(value => typeof value !== 'string' || !value)) {
     throw new TypeError(`${label} must be non-empty strings`);
   }
   if (!allowEmpty && values.length === 0) throw new TypeError(`${label} must not be empty`);
-  const sorted = [...new Set(values)].sort();
+  const sorted = [...new Set(values)].sort(compare);
   if (canonicalJson(sorted) !== canonicalJson(values)) {
     throw new TypeError(`${label} must be canonical sorted unique strings`);
   }
@@ -86,7 +87,10 @@ export function deriveFinishCandidate(input = {}) {
   if (productPaths.some(path => workflowPaths.includes(path))) {
     throw new TypeError('finish changed-path verdict cannot classify one path as both product and workflow');
   }
-  const checkIds = sortedUnique((requiredChecks ?? []).map(check => String(check?.id ?? '').trim()), 'finish required checks', { allowEmpty: true });
+  const checkIds = sortedUnique((requiredChecks ?? []).map(check => String(check?.id ?? '').trim()), 'finish required checks', {
+    allowEmpty: true,
+    compare: compareRequiredCheckIds,
+  });
   if (!isGitObjectId(candidateHead) || !isGitObjectId(observedCandidateHead) ||
       !sameGitObjectFormat([productRange.base, candidateHead, observedCandidateHead]) || candidateHead !== productRange.head) {
     throw new TypeError('finish candidate must equal the full product-range head in one Git object format');

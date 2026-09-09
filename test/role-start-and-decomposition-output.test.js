@@ -27,11 +27,12 @@ import { evaluateDispatchableLifecycle, DISPATCHABLE_TASK_STATUSES } from '../sr
 import { prepareRoleDispatch, dispatchPreparationDigest } from '../src/dispatch-envelope.js';
 import { createDispatchFixture, sha256 } from './helpers/dispatch-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
-import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
+import { createTestHostTrust, protectedHostBoundary, writeHostTrustStore } from './helpers/host-trust-fixture.js';
 import { shellQuoteArgument } from '../src/task-evidence-contract.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { validationResultDigest } from '../src/result-envelope.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
+import { durableMutationIntentSignaturePayload, signHostPayload, targetRepositoryIdentity } from '../src/host-trust.js';
 
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'role-start-')); });
@@ -65,6 +66,13 @@ function persistSchemaV3Consumption(root, taskId) {
 // after validating a packet. It did not invoke the live dispatch revalidation.
 function formerParallelHeadOnlyGuard(packet, currentHead) {
   return packet.decomposition !== null && packet.repository?.head === currentHead;
+}
+
+function redigestDurableIntent(intent) {
+  const projection = structuredClone(intent);
+  delete projection.digest;
+  projection.authentication.value = null;
+  intent.digest = `sha256:agenticloop.recoverable-mutation-intent.v1:${canonicalSha256(projection)}`;
 }
 
 // ── N1: role-start is NOT receipt-revalidation safe ────────────────────────
@@ -493,6 +501,293 @@ describe('N7: role-start behavioral tests', () => {
     assert.equal(existsSync(consumptionDir), preConsumptionExists, 'consumption dir must be unchanged');
     assert.equal(existsSync(checksPath), preChecksExists, 'checks file must be unchanged');
   });
+
+  for (const [name, injectTermination] of [
+    ['after durable intent before any replacement', {
+      afterDurableIntent: () => {
+        const error = new Error('simulated process termination after durable intent');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }],
+    ['after carrier/check replacement before consumption creation', {
+      afterMutation: ({ path, type }) => {
+        if (type !== 'write' || path !== '.agenticloop/tmp/checks.json') return;
+        const error = new Error('simulated process termination after replacements');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }],
+  ]) {
+    it(`recovers ${name} and converges on one accepted role start`, async () => {
+      const fixture = await createDispatchFixture(temp, `recover-${name.replaceAll(/[^a-z]+/g, '-')}`, { initialStatus: 'agent-ready' });
+      const root = fixture.root;
+      const prepared = prepareRoleDispatch(fixture, fixture.options);
+      assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+      const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+      mkdirSync(dirname(packetPath), { recursive: true });
+      writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+      const argv = [
+        'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+        '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+      ];
+      const transactionPath = join(root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+        `${prepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+
+      const interrupted = await runCliInProcess(argv, {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+        fsMutationOptions: injectTermination,
+      });
+      assert.equal(interrupted.status, 1, interrupted.stdout);
+      assert.equal(existsSync(transactionPath), true, 'interrupted transaction intent must survive process termination');
+      assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 0,
+        'interrupted start must not create a partial consumption');
+
+      const retried = await runCliInProcess(argv, {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+      });
+      assert.equal(retried.status, 0, retried.stdout);
+      assert.equal(JSON.parse(retried.stdout).disposition, 'committed');
+      assert.equal(existsSync(transactionPath), false, 'recovery must remove the durable intent once consistent');
+      const consumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+      assert.equal(consumptions.ok, true, consumptions.errors?.join('\n'));
+      assert.equal(consumptions.records.length, 1, 'retry must create exactly one accepted consumption');
+    });
+  }
+
+  it('rolls forward a committed consumption after termination before intent cleanup', async () => {
+    const fixture = await createDispatchFixture(temp, 'recover-after-consumption-commit', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const transactionPath = join(root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+      `${prepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+    const carrierPath = join(root, '.agenticloop', 'tasks', 'T-001.md');
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+
+    const interrupted = await runCliInProcess(argv, {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+      fsMutationOptions: {
+        afterMutation: ({ phase }) => {
+          if (phase !== 'commit') return;
+          const error = new Error('simulated process termination after consumption commit');
+          error.code = 'fs.mutation.simulated_termination';
+          throw error;
+        },
+      },
+    });
+    assert.equal(interrupted.status, 1, interrupted.stdout);
+    assert.equal(existsSync(transactionPath), true, 'intent must remain after termination following the consumption commit');
+    const interruptedConsumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(interruptedConsumptions.ok, true, interruptedConsumptions.errors?.join('\n'));
+    assert.equal(interruptedConsumptions.records.length, 1, 'the exclusive consumption create must already exist');
+    const postCommitConsumption = structuredClone(interruptedConsumptions.records[0]);
+    const postCommitCarrier = readFileSync(carrierPath, 'utf8');
+    const postCommitChecks = readFileSync(checksPath, 'utf8');
+
+    const retried = await runCliInProcess(argv, {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    assert.equal(retried.status, 0, retried.stdout);
+    const recovered = JSON.parse(retried.stdout);
+    assert.equal(recovered.disposition, 'already_current', 'retry must roll forward the committed start');
+    assert.equal(existsSync(transactionPath), false, 'roll-forward recovery must remove the retained intent');
+    assert.equal(readFileSync(carrierPath, 'utf8'), postCommitCarrier, 'roll-forward must retain the committed carrier state');
+    assert.equal(readFileSync(checksPath, 'utf8'), postCommitChecks, 'roll-forward must retain the committed check evidence');
+    const finalConsumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(finalConsumptions.ok, true, finalConsumptions.errors?.join('\n'));
+    assert.equal(finalConsumptions.records.length, 1, 'roll-forward retry must not duplicate the consumption');
+    assert.deepEqual(finalConsumptions.records[0], postCommitConsumption, 'roll-forward must preserve the original consumption');
+    assert.equal(recovered.transitionKey, postCommitConsumption.transitionKey);
+    assert.equal(recovered.currentCarrierDigest, postCommitConsumption.acceptedResult.currentCarrierDigest);
+  });
+
+  it('refuses a malformed durable role-start intent without mutation', async () => {
+    const fixture = await createDispatchFixture(temp, 'malformed-role-start-intent', { initialStatus: 'agent-ready' });
+    const root = fixture.root;
+    const prepared = prepareRoleDispatch(fixture, fixture.options);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(packetPath), { recursive: true });
+    writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+    const carrierPath = join(root, '.agenticloop', 'tasks', 'T-001.md');
+    const carrierBefore = readFileSync(carrierPath, 'utf8');
+    const transactionPath = join(root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+      `${prepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+    mkdirSync(dirname(transactionPath), { recursive: true });
+    writeFileSync(transactionPath, '{}\n', 'utf8');
+
+    const refused = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'verification.context.malformed');
+    assert.equal(readFileSync(carrierPath, 'utf8'), carrierBefore, 'malformed intent refusal must not mutate the carrier');
+    assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 0);
+  });
+
+  it('refuses a valid reused-key intent signed for target A when recovering target B', async () => {
+    const source = await createDispatchFixture(temp, 'cross-target-intent-source', { initialStatus: 'agent-ready' });
+    const recovering = await createDispatchFixture(temp, 'cross-target-intent-recovering', { initialStatus: 'agent-ready' });
+    const sourcePrepared = prepareRoleDispatch(source, source.options);
+    const recoveringPrepared = prepareRoleDispatch(recovering, recovering.options);
+    assert.equal(sourcePrepared.ok, true, sourcePrepared.validation.errors?.join('\n'));
+    assert.equal(recoveringPrepared.ok, true, recoveringPrepared.validation.errors?.join('\n'));
+
+    const reusedKeyTrust = createTestHostTrust({ target: recovering.root });
+    reusedKeyTrust.privateKey = source.trust.privateKey;
+    reusedKeyTrust.publicKey = source.trust.publicKey;
+    reusedKeyTrust.publicKeyBase64 = source.trust.publicKeyBase64;
+    reusedKeyTrust.adapter = { ...reusedKeyTrust.adapter, publicKey: source.trust.publicKeyBase64 };
+    reusedKeyTrust.document.adapters[0].publicKey = source.trust.publicKeyBase64;
+    writeHostTrustStore(recovering.operatorTrustRoot, reusedKeyTrust);
+
+    const sourcePacketPath = join(source.root, '.agenticloop', 'tmp', 'packet.json');
+    const recoveringPacketPath = join(recovering.root, '.agenticloop', 'tmp', 'packet.json');
+    mkdirSync(dirname(sourcePacketPath), { recursive: true });
+    mkdirSync(dirname(recoveringPacketPath), { recursive: true });
+    writeFileSync(sourcePacketPath, JSON.stringify(sourcePrepared.packet, null, 2), 'utf8');
+    writeFileSync(recoveringPacketPath, JSON.stringify(recoveringPrepared.packet, null, 2), 'utf8');
+
+    const sourceArgv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', source.root,
+    ];
+    const interrupted = await runCliInProcess(sourceArgv, {
+      operatorTrustRoot: source.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(source.trust),
+      fsMutationOptions: {
+        afterDurableIntent: () => {
+          const error = new Error('simulate termination after source intent');
+          error.code = 'fs.mutation.simulated_termination';
+          throw error;
+        },
+      },
+    });
+    assert.equal(interrupted.status, 1, interrupted.stdout);
+    const sourceIntentPath = join(source.root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+      `${sourcePrepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+    const forged = JSON.parse(readFileSync(sourceIntentPath, 'utf8'));
+    assert.equal(forged.targetRepositoryIdentity, targetRepositoryIdentity(source.root));
+
+    // The attacker has a legitimately signed, well-formed image for target A
+    // and a key also pinned in B. Only the signed target identity distinguishes
+    // this replay from B's own interrupted role start.
+    forged.binding = {
+      taskId: 'T-001',
+      packetId: recoveringPrepared.packet.packetId,
+      packetDigest: recoveringPrepared.packet.digest,
+    };
+    redigestDurableIntent(forged);
+    forged.authentication.value = signHostPayload(durableMutationIntentSignaturePayload(forged), source.trust.privateKey);
+    const recoveringIntentPath = join(recovering.root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+      `${recoveringPrepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+    mkdirSync(dirname(recoveringIntentPath), { recursive: true });
+    writeFileSync(recoveringIntentPath, `${JSON.stringify(forged, null, 2)}\n`, 'utf8');
+    const carrierPath = join(recovering.root, '.agenticloop', 'tasks', 'T-001.md');
+    const carrierBefore = readFileSync(carrierPath, 'utf8');
+
+    const refused = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', recovering.root,
+    ], {
+      operatorTrustRoot: recovering.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(reusedKeyTrust),
+    });
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'verification.context.malformed');
+    assert.equal(readFileSync(carrierPath, 'utf8'), carrierBefore, 'cross-target intent must not restore its snapshots');
+    assert.equal(listDispatchConsumptions(recovering.root, 'T-001', { backend: 'files' }).records.length, 0);
+  });
+
+  it('refuses a durable-intent challenge with a non-null identity for another target', () => {
+    const trust = createTestHostTrust({ target: join(temp, 'challenge-target') });
+    const boundary = protectedHostBoundary(trust);
+    assert.throws(() => boundary({
+      kind: 'agenticloop.durable-mutation-intent-authentication-challenge',
+      schemaVersion: 1,
+      adapterId: trust.adapterId,
+      keyId: trust.keyId,
+      targetRepositoryIdentity: targetRepositoryIdentity(join(temp, 'other-target')),
+      payload: {
+        kind: 'agenticloop.durable-mutation-intent-authentication-challenge',
+        schemaVersion: 1,
+        intent: { targetRepositoryIdentity: trust.repositoryIdentity },
+      },
+    }), /refused an invalid durable mutation intent authentication challenge/);
+  });
+
+  for (const [name, alterIntent] of [
+    ['a valid-shaped re-digested forged preimage reconstruction', intent => {
+      const carrierSnapshot = intent.snapshots.find(snapshot => snapshot.path === '.agenticloop/tasks/T-001.md');
+      carrierSnapshot.bytes = Buffer.from('forged preimage', 'utf8').toString('base64');
+    }],
+    ['a re-digested tampered preimage byte', intent => {
+      const carrierSnapshot = intent.snapshots.find(snapshot => snapshot.path === '.agenticloop/tasks/T-001.md');
+      const bytes = Buffer.from(carrierSnapshot.bytes, 'base64');
+      bytes[0] ^= 1;
+      carrierSnapshot.bytes = bytes.toString('base64');
+    }],
+  ]) {
+    it(`refuses ${name} without applying its snapshot`, async () => {
+      const fixture = await createDispatchFixture(temp, `forged-intent-${name.replaceAll(/[^a-z]+/g, '-')}`, { initialStatus: 'agent-ready' });
+      const root = fixture.root;
+      const prepared = prepareRoleDispatch(fixture, fixture.options);
+      assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+      const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
+      mkdirSync(dirname(packetPath), { recursive: true });
+      writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');
+      const argv = [
+        'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+        '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+      ];
+      const transactionPath = join(root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+        `${prepared.packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+      const interrupted = await runCliInProcess(argv, {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+        fsMutationOptions: {
+          afterMutation: ({ path, type }) => {
+            if (type !== 'write' || path !== '.agenticloop/tmp/checks.json') return;
+            const error = new Error('simulated termination after replacements');
+            error.code = 'fs.mutation.simulated_termination';
+            throw error;
+          },
+        },
+      });
+      assert.equal(interrupted.status, 1, interrupted.stdout);
+      const postImage = readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+      const forged = JSON.parse(readFileSync(transactionPath, 'utf8'));
+      alterIntent(forged);
+      redigestDurableIntent(forged);
+      writeFileSync(transactionPath, `${JSON.stringify(forged, null, 2)}\n`, 'utf8');
+
+      const refused = await runCliInProcess(argv, {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+      });
+      assert.equal(refused.status, 1, refused.stdout);
+      assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'verification.context.malformed');
+      assert.equal(readFileSync(join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8'), postImage,
+        'unauthenticated intent must not restore a supplied preimage');
+      assert.equal(listDispatchConsumptions(root, 'T-001', { backend: 'files' }).records.length, 0);
+    });
+  }
 
   it('persists one protected transition result so a response-loss retry resumes the same attempt', async () => {
     const fixture = await createDispatchFixture(temp, 'atomic-retry', { initialStatus: 'agent-ready' });

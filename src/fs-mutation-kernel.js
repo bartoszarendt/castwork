@@ -38,6 +38,245 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { canonicalJson } from './canonical-json.js';
+import {
+  durableMutationIntentSignaturePayload,
+  HOST_SIGNATURE_ALGORITHM,
+  targetRepositoryIdentity,
+  verifyHostPayload,
+} from './host-trust.js';
+
+const RECOVERABLE_MUTATION_INTENT_KIND = 'agenticloop.recoverable-mutation-intent';
+const RECOVERABLE_MUTATION_INTENT_SCHEMA_VERSION = 1;
+export const SIMULATED_MUTATION_TERMINATION_CODE = 'fs.mutation.simulated_termination';
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function recoverableIntentDigest(intent) {
+  const projection = { ...intent };
+  delete projection.digest;
+  // Authentication is deliberately outside the self-checksum because its value
+  // is produced only after the writer has assembled the complete image. The
+  // host signature, not this unkeyed digest, authenticates that value.
+  if (isPlainObject(projection.authentication)) {
+    projection.authentication = { ...projection.authentication, value: null };
+  }
+  return `sha256:agenticloop.recoverable-mutation-intent.v1:${createHash('sha256').update(canonicalJson(projection)).digest('hex')}`;
+}
+
+function encodedFileState(bytes) {
+  return { state: 'file', bytes: Buffer.from(bytes).toString('base64') };
+}
+
+function encodedSnapshot(snapshot) {
+  return snapshot.state === 'file'
+    ? { path: snapshot.path, ...encodedFileState(snapshot.bytes) }
+    : { path: snapshot.path, state: snapshot.state };
+}
+
+function decodeFileState(value) {
+  if (!isPlainObject(value) || value.state !== 'file' || typeof value.bytes !== 'string' ||
+      Buffer.from(value.bytes, 'base64').toString('base64') !== value.bytes) return null;
+  return Buffer.from(value.bytes, 'base64');
+}
+
+function stateShapeIsValid(value) {
+  if (!isPlainObject(value) || !['absent', 'file'].includes(value.state)) return false;
+  return typeof value.path === 'string' && (value.state !== 'file' || decodeFileState(value) !== null);
+}
+
+function currentPathMatchesState(path, state) {
+  const stats = lstatSync(path, { throwIfNoEntry: false });
+  if (state.state === 'absent') return !stats;
+  return Boolean(stats?.isFile()) && readFileSync(path).equals(decodeFileState(state));
+}
+
+function restoreEncodedState(path, state) {
+  if (state.state === 'file') {
+    atomicWriteFile(path, decodeFileState(state));
+    return;
+  }
+  const stats = lstatSync(path, { throwIfNoEntry: false });
+  if (!stats) return;
+  if (!stats.isFile()) throw new Error(`recovery cannot remove non-file path: ${path}`);
+  rmSync(path, { force: true });
+}
+
+function simulatedTermination(error) {
+  return error?.code === SIMULATED_MUTATION_TERMINATION_CODE;
+}
+
+function buildRecoverableIntent(root, prepared, snapshots, transaction) {
+  if (!isPlainObject(transaction) || typeof transaction.intentPath !== 'string' ||
+      !isPlainObject(transaction.binding) || !isPlainObject(transaction.transition) ||
+      typeof transaction.commitPath !== 'string' ||
+      !isPlainObject(transaction.intentAuthenticator) ||
+      typeof transaction.intentAuthenticator.adapterId !== 'string' ||
+      typeof transaction.intentAuthenticator.keyId !== 'string' ||
+      typeof transaction.intentAuthenticator.publicKey !== 'string' ||
+      typeof transaction.intentAuthenticator.authenticate !== 'function') {
+    return { ok: false, error: 'recoverable transaction configuration is malformed' };
+  }
+  let intentPath;
+  try {
+    intentPath = resolveTargetPath(root, transaction.intentPath);
+    assertSafeRelativePath(transaction.commitPath);
+  } catch (error) {
+    return { ok: false, error: `recoverable transaction configuration is unsafe: ${error.message}` };
+  }
+  const paths = new Set();
+  const mutations = [];
+  for (const item of prepared) {
+    if (!['write', 'create'].includes(item.type) || paths.has(item.relPath) ||
+        typeof item.content !== 'string' && !Buffer.isBuffer(item.content)) {
+      return { ok: false, error: 'recoverable transactions require unique write/create file mutations with byte content' };
+    }
+    paths.add(item.relPath);
+    mutations.push({ path: item.relPath, type: item.type, ...encodedFileState(item.content) });
+  }
+  const commit = mutations.find(item => item.path === transaction.commitPath && item.type === 'create');
+  if (!commit || mutations.filter(item => item.path === transaction.commitPath).length !== 1) {
+    return { ok: false, error: 'recoverable transaction commitPath must name exactly one exclusive-create mutation' };
+  }
+  if (paths.has(transaction.intentPath) || existsSync(intentPath)) {
+    return { ok: false, error: `recoverable transaction intent is already present: ${transaction.intentPath}` };
+  }
+  const intent = {
+    kind: RECOVERABLE_MUTATION_INTENT_KIND,
+    schemaVersion: RECOVERABLE_MUTATION_INTENT_SCHEMA_VERSION,
+    // Bind this signed recovery image to the same carrier-root identity the
+    // packet and host-trust paths use. A pinned key may legitimately recur at
+    // another target, so the key alone must never make its preimages portable.
+    targetRepositoryIdentity: targetRepositoryIdentity(root),
+    binding: transaction.binding,
+    transition: transaction.transition,
+    commitPath: transaction.commitPath,
+    mutations,
+    snapshots: snapshots.map(snapshot => encodedSnapshot({
+      ...snapshot,
+      path: prepared.find(item => item.absPath === snapshot.path)?.relPath,
+    })),
+    authentication: {
+      algorithm: HOST_SIGNATURE_ALGORITHM,
+      adapterId: transaction.intentAuthenticator.adapterId,
+      keyId: transaction.intentAuthenticator.keyId,
+      value: null,
+    },
+    digest: null,
+  };
+  intent.digest = recoverableIntentDigest(intent);
+  intent.authentication.value = transaction.intentAuthenticator.authenticate(intent);
+  if (!verifyHostPayload(
+    durableMutationIntentSignaturePayload(intent), intent.authentication.value,
+    transaction.intentAuthenticator.publicKey
+  )) {
+    return { ok: false, error: 'recoverable transaction intent could not be authenticated by the protected host' };
+  }
+  return { ok: true, intentPath, intent };
+}
+
+/**
+ * Recover a persisted mutation intent. Before its exclusive commit file exists,
+ * recovery restores the exact pre-write bytes; after it exists, recovery only
+ * accepts the fully-written post-state and removes the completed intent. Any
+ * malformed or mixed state fails closed without mutation.
+ */
+export function recoverDurableMutationBatch(targetRoot, { intentPath, binding, intentAuthenticator } = {}) {
+  let path;
+  try {
+    path = resolveTargetPath(targetRoot, intentPath);
+  } catch (error) {
+    return { ok: false, recovered: false, code: 'verification.context.malformed', errors: [error.message] };
+  }
+  if (!existsSync(path)) return { ok: true, recovered: false, committed: false, errors: [] };
+
+  let intent;
+  try {
+    const stats = lstatSync(path);
+    if (!stats.isFile()) throw new Error('intent is not a regular file');
+    intent = JSON.parse(readFileSync(path, 'utf8'));
+    const exactKeys = ['kind', 'schemaVersion', 'targetRepositoryIdentity', 'binding', 'transition', 'commitPath', 'mutations', 'snapshots', 'authentication', 'digest'];
+    if (!isPlainObject(intent) || Object.keys(intent).length !== exactKeys.length ||
+        Object.keys(intent).some(key => !exactKeys.includes(key)) ||
+        intent.kind !== RECOVERABLE_MUTATION_INTENT_KIND ||
+        intent.schemaVersion !== RECOVERABLE_MUTATION_INTENT_SCHEMA_VERSION ||
+        intent.targetRepositoryIdentity !== targetRepositoryIdentity(targetRoot) ||
+        !isPlainObject(intent.binding) || canonicalJson(intent.binding) !== canonicalJson(binding) ||
+        !isPlainObject(intent.transition) || !/^[a-f0-9]{64}$/.test(String(intent.transition.transitionKey ?? '')) ||
+        !/^[a-f0-9]{64}$/.test(String(intent.transition.protectedInputDigest ?? '')) ||
+        typeof intent.commitPath !== 'string' || !Array.isArray(intent.mutations) || !Array.isArray(intent.snapshots) ||
+        !isPlainObject(intentAuthenticator) ||
+        intent.authentication?.algorithm !== HOST_SIGNATURE_ALGORITHM ||
+        intent.authentication?.adapterId !== intentAuthenticator.adapterId ||
+        intent.authentication?.keyId !== intentAuthenticator.keyId ||
+        typeof intent.authentication?.value !== 'string' ||
+        !verifyHostPayload(durableMutationIntentSignaturePayload(intent), intent.authentication.value, intentAuthenticator.publicKey) ||
+        intent.digest !== recoverableIntentDigest(intent)) {
+      throw new Error('intent does not match the requested recoverable transaction');
+    }
+    const mutationPaths = new Set();
+    for (const mutation of intent.mutations) {
+      assertSafeRelativePath(mutation?.path);
+      const mutationKeys = mutation?.state === 'file'
+        ? ['path', 'type', 'state', 'bytes']
+        : ['path', 'type', 'state'];
+      if (!isPlainObject(mutation) || Object.keys(mutation).length !== mutationKeys.length ||
+          Object.keys(mutation).some(key => !mutationKeys.includes(key)) ||
+          !['write', 'create'].includes(mutation.type) || !stateShapeIsValid(mutation) ||
+          mutationPaths.has(mutation.path)) throw new Error('intent mutations are malformed');
+      mutationPaths.add(mutation.path);
+    }
+    const snapshots = new Map();
+    for (const snapshot of intent.snapshots) {
+      assertSafeRelativePath(snapshot?.path);
+      const snapshotKeys = snapshot?.state === 'file' ? ['path', 'state', 'bytes'] : ['path', 'state'];
+      if (!isPlainObject(snapshot) || Object.keys(snapshot).length !== snapshotKeys.length ||
+          Object.keys(snapshot).some(key => !snapshotKeys.includes(key)) ||
+          !stateShapeIsValid(snapshot) || snapshots.has(snapshot.path)) throw new Error('intent snapshots are malformed');
+      snapshots.set(snapshot.path, snapshot);
+    }
+    if (snapshots.size !== mutationPaths.size || [...mutationPaths].some(item => !snapshots.has(item))) {
+      throw new Error('intent snapshots do not cover the exact mutation set');
+    }
+    const commit = intent.mutations.find(item => item.path === intent.commitPath && item.type === 'create');
+    if (!commit || intent.mutations.filter(item => item.path === intent.commitPath).length !== 1) {
+      throw new Error('intent does not name one exclusive commit mutation');
+    }
+  } catch (error) {
+    return { ok: false, recovered: false, code: 'verification.context.malformed', errors: [error.message] };
+  }
+
+  try {
+    const commitPath = resolveTargetPath(targetRoot, intent.commitPath);
+    if (currentPathMatchesState(commitPath, intent.mutations.find(item => item.path === intent.commitPath))) {
+      const complete = intent.mutations.every(mutation =>
+        currentPathMatchesState(resolveTargetPath(targetRoot, mutation.path), mutation));
+      if (!complete) {
+        return { ok: false, recovered: false, code: 'verification.context.malformed',
+          errors: ['recoverable transaction reached its commit point with an incomplete post-state'] };
+      }
+      rmSync(path, { force: true });
+      return { ok: true, recovered: true, committed: true, errors: [] };
+    }
+    const knownState = intent.mutations.every(mutation => {
+      const current = resolveTargetPath(targetRoot, mutation.path);
+      return currentPathMatchesState(current, mutation) || currentPathMatchesState(current, intent.snapshots.find(item => item.path === mutation.path));
+    });
+    if (!knownState) {
+      return { ok: false, recovered: false, code: 'verification.context.malformed',
+        errors: ['recoverable transaction state changed outside its persisted pre/post images'] };
+    }
+    for (const snapshot of intent.snapshots) {
+      restoreEncodedState(resolveTargetPath(targetRoot, snapshot.path), snapshot);
+    }
+    rmSync(path, { force: true });
+    return { ok: true, recovered: true, committed: false, errors: [] };
+  } catch (error) {
+    return { ok: false, recovered: false, code: 'verification.context.malformed', errors: [error.message] };
+  }
+}
 
 /**
  * Canonical target-relative path validator. Accepts only forward-slash
@@ -350,7 +589,10 @@ function verifyExpectedMutationState(root, item) {
  *
  * @param {string} targetRoot
  * @param {Array<{type: string, path: string, content?: string|Buffer, expectedDigest?: string, expectedKind?: 'file'|'absent', validateCurrent?: Function}>} mutations
- * @param {{beforeWrite?: Function}} [options] Testable pre-write boundary; production callers omit it.
+ * @param {{beforeWrite?: Function, afterMutation?: Function, afterDurableIntent?: Function, recoverableTransaction?: object}} [options]
+ *   Testable boundaries plus an optional persisted-intent transaction. A
+ *   recoverable transaction writes its intent before replacements and commits
+ *   only when its designated exclusive-create mutation is written last.
  * @returns {{ ok: boolean, stale: boolean, errors: string[], rollbackErrors: string[], writtenFiles: string[], committedPaths: string[] }}
  *   `errors` holds the primary failure; `rollbackErrors` reports genuine
  *   rollback failures separately. `writtenFiles` is empty on failure.
@@ -459,8 +701,30 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
   const createdDirsOrdered = [...createdDirs].sort((left, right) => right.length - left.length);
   const removedDirs = [];
   const createdFiles = new Set();
+  const recoverable = options.recoverableTransaction
+    ? buildRecoverableIntent(root, prepared, snapshots, options.recoverableTransaction)
+    : null;
+  if (recoverable && !recoverable.ok) {
+    return {
+      ok: false, stale: false, errors: [recoverable.error], rollbackErrors: [], writtenFiles: [], committedPaths: [],
+    };
+  }
+  const commitCreate = recoverable
+    ? creates.find(item => item.relPath === options.recoverableTransaction.commitPath)
+    : null;
+  const nonCommitCreates = commitCreate ? creates.filter(item => item !== commitCreate) : creates;
+  let intentWritten = false;
 
   try {
+    if (recoverable) {
+      atomicCreateFile(recoverable.intentPath, `${JSON.stringify(recoverable.intent, null, 2)}\n`);
+      intentWritten = true;
+      options.afterDurableIntent?.({
+        intentPath: options.recoverableTransaction.intentPath,
+        binding: options.recoverableTransaction.binding,
+        transition: options.recoverableTransaction.transition,
+      });
+    }
     for (const item of mkdirs) {
       mkdirSync(item.absPath, { recursive: true });
     }
@@ -476,12 +740,27 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
     }
     for (const item of writes) {
       atomicWriteFile(item.absPath, item.content);
+      options.afterMutation?.({ path: item.relPath, type: item.type, phase: 'replacement' });
     }
-    for (const item of creates) {
+    for (const item of nonCommitCreates) {
       atomicCreateFile(item.absPath, item.content);
       createdFiles.add(item.absPath);
+      options.afterMutation?.({ path: item.relPath, type: item.type, phase: 'replacement' });
     }
     removeEmptyParents(root, removes.map(item => item.absPath));
+    if (commitCreate) {
+      atomicCreateFile(commitCreate.absPath, commitCreate.content);
+      createdFiles.add(commitCreate.absPath);
+      options.afterMutation?.({ path: commitCreate.relPath, type: commitCreate.type, phase: 'commit' });
+    }
+    if (recoverable) {
+      try {
+        rmSync(recoverable.intentPath, { force: true });
+      } catch {
+        // The exclusive commit exists and all post-images were written. Leave
+        // the intent for deterministic cleanup by the next role-start retry.
+      }
+    }
     return {
       ok: true,
       stale: false,
@@ -491,6 +770,10 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
       committedPaths: prepared.map(item => item.relPath),
     };
   } catch (error) {
+    // Fault injection models process termination, not an ordinary catchable
+    // failure. The durable intent and every written post-image intentionally
+    // survive so the public retry path exercises restart recovery.
+    if (simulatedTermination(error)) throw error;
     // Do not remove a competing creator's file when our exclusive link failed
     // with EEXIST after snapshotting. Only roll back create paths this batch
     // actually linked.
@@ -515,6 +798,13 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
         }
       } catch (dirError) {
         rollbackErrors.push(`dir rollback ${dir}: ${dirError.message}`);
+      }
+    }
+    if (intentWritten && recoverable) {
+      try {
+        rmSync(recoverable.intentPath, { force: true });
+      } catch (intentError) {
+        rollbackErrors.push(`intent rollback ${recoverable.intentPath}: ${intentError.message}`);
       }
     }
     return {
