@@ -111,14 +111,18 @@ describe('dispatch acting-context measurement', () => {
     // delegated role wrapper before packet/task evidence, while retaining the
     // same generated component measurement for auditability.
     const orientation = measure('orchestrator');
-    assert.ok(orientation.totalCanonicalWords <= 12000, JSON.stringify(orientation));
+    assert.equal(orientation.totalCanonicalWords, 6193, JSON.stringify(orientation));
     assert.equal(orientation.actualInputTokens, 'unavailable');
     const delegated = {};
     for (const role of ['maintainer', 'engineer', 'auditor']) {
       const measurement = measure(role);
       const wrapper = measurement.components.find(item => item.kind === 'generated_role_wrapper');
       assert.ok(wrapper, `${role} must have a generated role wrapper component`);
-      assert.ok(wrapper.canonicalWords <= 6000, `${role} exceeds the P36-M5 word ceiling`);
+      assert.equal(wrapper.canonicalWords, {
+        maintainer: 4632,
+        engineer: 4097,
+        auditor: 2362,
+      }[role], `${role} M5 measurement drifted`);
       assert.equal(measurement.actualInputTokens, 'unavailable');
       delegated[role] = {
         canonicalWords: wrapper.canonicalWords,

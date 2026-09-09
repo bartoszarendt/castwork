@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "kind": "agenticloop.synthetic-refusal-chain",
+  "privacy": "synthetic-only",
+  "steps": [
+    {
+      "id": "activation-expiry",
+      "observedShape": "authorization expired after a pause",
+      "syntheticResult": "authorization.continues_when_semantic_inputs_match"
+    },
+    {
+      "id": "wrong-product-head",
+      "observedShape": "repair evidence named the wrong product identity",
+      "syntheticResult": "product-lineage.recomputed_from_attributed_commit"
+    },
+    {
+      "id": "artifact-class-mismatch",
+      "observedShape": "evidence required a different generated artifact class",
+      "syntheticResult": "derived-artifact.recomputed_without_attempt"
+    },
+    {
+      "id": "packet-liveness",
+      "observedShape": "packet liveness expired after a successful preflight",
+      "syntheticResult": "packet.revalidated_from_current_protected_inputs"
+    },
+    {
+      "id": "recovery-supersession",
+      "observedShape": "recovery abandoned an attempt and added supersession history",
+      "syntheticResult": "attempt.history_preserved_without_protocol_attempt"
+    },
+    {
+      "id": "generated-clean-gate",
+      "observedShape": "generated host-local files failed the clean gate after an update",
+      "syntheticResult": "host-local-state.classified_outside_product_dirty_state"
+    },
+    {
+      "id": "decomposition-schema",
+      "observedShape": "decomposition schema changed during active work",
+      "syntheticResult": "schema.compatibility_or_atomic_migration"
+    },
+    {
+      "id": "member-dependency-evidence",
+      "observedShape": "multi-member dependency evidence could not satisfy the per-task validator",
+      "syntheticResult": "serial-route.does_not_require_parallel_member_evidence"
+    }
+  ]
+}

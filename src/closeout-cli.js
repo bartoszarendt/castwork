@@ -1133,6 +1133,14 @@ export async function cmdCloseout(args, io = createIo()) {
     return EXIT_USAGE;
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
+    if (error instanceof PublicCommandError) {
+      return printGateResult(
+        `closeout ${sub}`,
+        commandFailure(`closeout ${sub}`, error, 'public_error', {}, target),
+        Boolean(opts.json),
+        io,
+      );
+    }
     io.err(error.message);
     return 1;
   }

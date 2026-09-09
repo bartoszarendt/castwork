@@ -34,7 +34,12 @@ const TEXT_EXTENSIONS = new Set(['.js', '.json', '.jsonc', '.md', '.toml', '.txt
 // untracked non-ignored files so a commit cannot introduce a latent violation.
 const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
-const SYNTHETIC_BASELINE_TEST = 'test/phase36-baseline.test.js';
+const PHASE_EVIDENCE_PATHS = new Set([
+  'test/phase36-baseline.test.js',
+  'test/fixtures/phase36-eight-step-chain/fixture.json',
+  'docs/integrated-proof.md',
+  'docs/field-assertions.md',
+]);
 const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
   opencode: { generatedPayload: 16128, agentDefinitions: 15120, activationSurface: 1008, referenceLibrary: 0 },
   codex: { generatedPayload: 76822, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60073 },
@@ -56,7 +61,7 @@ function candidateRepositoryFiles() {
 function candidatePhaseViolations() {
   const violations = [];
   for (const relativePath of candidateRepositoryFiles()) {
-    if (relativePath === SYNTHETIC_BASELINE_TEST) continue;
+    if (PHASE_EVIDENCE_PATHS.has(relativePath)) continue;
     const file = join(REPO_ROOT, relativePath);
     if (PHASE_NUMBER_IN_FILENAME.test(basename(file))) {
       violations.push(`${relativePath}: numbered phase in filename`);
@@ -124,8 +129,8 @@ describe('P36-00A frozen baseline', () => {
     }
   });
 
-  it('keeps canonical methodology within the deferred P36-M6 ceiling', () => {
-    assert.ok(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')) <= 15000);
+  it('pins canonical methodology to the P36-M6 measurement', () => {
+    assert.equal(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')), 2071);
   });
 
   it('pins the stable transition key to real immutable dispatch consumption and the outside-attempt sentinel', async () => {

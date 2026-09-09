@@ -41,9 +41,11 @@ import { activationScopeSummaryDigest, bindingRecordPath, writeActivationRecords
 import { targetRepositoryIdentity } from '../src/host-trust.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createDispatchFixture, git, prepare } from './helpers/dispatch-fixture.js';
+import { createCloseoutCliFixture } from './helpers/closeout-cli-fixture.js';
 import { createTestHostTrust, writeHostTrustStore } from './helpers/host-trust-fixture.js';
 import { runProcess } from './helpers/process-runner.js';
 import { createHash } from 'node:crypto';
+import { HARD_REFUSAL_ALLOWLIST } from '../src/refusal-classes.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PACKED_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AGENTICLOOP_PACKED_CONCURRENCY ?? '4', 10) || 4);
@@ -55,6 +57,7 @@ let installPrefix;
 let protectedBoundaryWrapper;
 let fakeGhBin;
 let fakeGhPreload;
+const installedTerminalLifecycle = createCloseoutCliFixture();
 
 const FAKE_GH_RESPONDER = `
 const fs = require('fs');
@@ -100,6 +103,7 @@ function npm(args, options = {}) {
 }
 
 before(async () => {
+  installedTerminalLifecycle.setup();
   tmpBase = mkdtempSync(join(tmpdir(), 'al-packed-'));
   const packDir = join(tmpBase, 'pack');
   mkdirSync(packDir, { recursive: true });
@@ -156,12 +160,90 @@ before(async () => {
 
 after(() => {
   rmSync(tmpBase, { recursive: true, force: true });
+  installedTerminalLifecycle.cleanup();
 });
 
 function runPacked(args, options = {}) {
   return runProcess(process.execPath, [packedBin, ...args], options);
 }
 
+const INSTALLED_CLI_NEGATIVE_PROBE_CODES = new Set([
+  'handoff.evidence.unauthenticated',
+  'worktree.clean_gate.failed',
+  'task.lifecycle.not_dispatchable',
+  'task.contract.malformed',
+  'task.body.identity',
+]);
+
+// `reconcileProjections` is deliberately a package module surface rather than a
+// public command.  Its two retained authority refusals therefore cannot be
+// reached by inventing a CLI selector; the installed-module probe below is the
+// exact clean-install boundary for those rows.
+const INSTALLED_MODULE_NEGATIVE_PROBE_CODES = new Set([
+  'projection.state.unexplained',
+  'projection.fact.contradiction',
+]);
+
+function installedNegativeCoverage(catalog) {
+  assert.equal(catalog.length, 95, 'the installed hard-refusal catalog must retain all 95 rows');
+  const codes = catalog.map(entry => entry.code);
+  assert.equal(new Set(codes).size, codes.length, 'the installed hard-refusal catalog must not duplicate rows');
+
+  const overlap = [...INSTALLED_CLI_NEGATIVE_PROBE_CODES]
+    .filter(code => INSTALLED_MODULE_NEGATIVE_PROBE_CODES.has(code));
+  assert.deepEqual(overlap, [], 'a negative row cannot be both CLI and module coverage');
+
+  const installed = codes.filter(code => !INSTALLED_CLI_NEGATIVE_PROBE_CODES.has(code) && !INSTALLED_MODULE_NEGATIVE_PROBE_CODES.has(code));
+  const covered = new Set([
+    ...installed,
+    ...INSTALLED_CLI_NEGATIVE_PROBE_CODES,
+    ...INSTALLED_MODULE_NEGATIVE_PROBE_CODES,
+  ]);
+  assert.deepEqual([...covered].sort(), [...codes].sort(), 'every catalog row must have one installed-boundary disposition');
+  assert.equal(installed.length, 88, 'the installed-binary harness contains 87 hard-refusal targets plus one warning-only row');
+  assert.equal(INSTALLED_CLI_NEGATIVE_PROBE_CODES.size, 5, 'the existing installed probes must execute exactly five rows');
+  assert.equal(INSTALLED_MODULE_NEGATIVE_PROBE_CODES.size, 2, 'only reconciliation rows may use installed-module coverage');
+  return Object.freeze({ installed, probes: [...INSTALLED_CLI_NEGATIVE_PROBE_CODES], modules: [...INSTALLED_MODULE_NEGATIVE_PROBE_CODES] });
+}
+
+function installedProjectionCoverage(observation, transitionFacts) {
+  const values = {
+    contract_readiness: { readiness: 'agent-ready', contractDigest: `sha256:v1:${'a'.repeat(64)}` },
+    runtime_blocked_state: { blocked: false, transitionId: null, blockerRef: null },
+    task_lifecycle_status: { status: 'in-progress', terminal: false },
+    labels: { names: ['status:in-progress'] },
+    comments: { recordType: 'agenticloop.review-checkpoint', artifactRef: 'commit:aaa' },
+    review_readiness: { ready: false, reviewedArtifact: null },
+    review_verdict: { verdict: 'pending', reviewedArtifact: null },
+    audit_state: { auditId: null, certifiedArtifact: null },
+    terminal_closeout: { closedOut: false, coveredTaskId: 'T-001', gateDigest: null },
+  };
+  return transitionFacts.TRANSITION_FACTS
+    .filter(fact => fact.carriers.github.applicable === true)
+    .map(fact => observation.createProjectionObservation({
+      factId: fact.factId,
+      backend: 'github',
+      carrier: { applicability: 'applicable', identity: `github-carrier:${fact.factId}` },
+      value: values[fact.factId],
+      authority: {
+        producer: { ...fact.producer }, persister: { ...fact.persister }, typedRecord: true, artifactBinding: 'T-001',
+      },
+      evidenceState: 'current', observedAt: '2026-09-05T00:00:00.000Z',
+      invalidatedBy: ['task_record_digest'], stateProvenance: 'workflow_state',
+    }));
+}
+
+function scenarioFor(entry) {
+  const scenario = entry.negativeProof.match(/scenario:\s*([^.;]+)/i)?.[1]?.trim();
+  assert.ok(scenario, `${entry.code} must retain its catalog scenario`);
+  return scenario;
+}
+
+/**
+ * The catalog is the complete source of truth.  Do not replace this with a
+ * hand-maintained list: adding a material row must make this accounting fail
+ * until its installed-boundary disposition is made explicit.
+ */
 function installFakeGh(fixture) {
   const mutableRoot = mkdtempSync(join(tmpBase, 'fake-gh-state-'));
   const fixturePath = join(mutableRoot, 'fixture.json');
@@ -334,6 +416,52 @@ async function populatedStatusTarget() {
 }
 
 describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
+  it('keeps every retained hard-refusal negative proof identical in the packed and clean-installed artifact', async () => {
+    const installed = await import(pathToFileURL(join(packedRoot, 'src', 'refusal-classes.js')).href);
+    assert.deepEqual(installed.HARD_REFUSAL_ALLOWLIST, HARD_REFUSAL_ALLOWLIST);
+    assert.equal(installed.HARD_REFUSAL_ALLOWLIST.length, 95);
+    for (const entry of installed.HARD_REFUSAL_ALLOWLIST) {
+      assert.match(entry.negativeProof, /Material fact:.*scenario:/is);
+    }
+  });
+
+  it('partitions every clean-installed hard-refusal negative without a silent skip', async () => {
+    const installed = await import(pathToFileURL(join(packedRoot, 'src', 'refusal-classes.js')).href);
+    const coverage = installedNegativeCoverage(installed.HARD_REFUSAL_ALLOWLIST);
+    assert.equal(coverage.installed.length + coverage.probes.length + coverage.modules.length, 95);
+    for (const entry of installed.HARD_REFUSAL_ALLOWLIST) assert.match(scenarioFor(entry), /\S/);
+
+    // Scratch drift demonstration: a removed catalog row cannot be hidden by
+    // adjusting an accounting total or a fixture registry.
+    assert.throws(
+      () => installedNegativeCoverage(installed.HARD_REFUSAL_ALLOWLIST.slice(1)),
+      /must retain all 95 rows/
+    );
+  });
+
+  it('executes the two reconciliation-only negatives from the installed package module', async () => {
+    const observation = await import(pathToFileURL(join(packedRoot, 'src', 'projection-reconciliation.js')).href);
+    const transitionFacts = await import(pathToFileURL(join(packedRoot, 'src', 'transition-contract.js')).href);
+
+    const unexplained = installedProjectionCoverage(observation, transitionFacts);
+    const auditIndex = unexplained.findIndex(item => item.factId === 'audit_state');
+    unexplained[auditIndex] = observation.createProjectionObservation({
+      ...unexplained[auditIndex], stateProvenance: 'unexplained_drift',
+    });
+    const unexplainedResult = observation.reconcileProjections({ backend: 'github', observations: unexplained }).result;
+    assert.deepEqual(unexplainedResult.diagnostics.map(item => item.code), ['projection.state.unexplained']);
+
+    const contradictory = installedProjectionCoverage(observation, transitionFacts);
+    const original = contradictory.find(item => item.factId === 'audit_state');
+    contradictory.push(observation.createProjectionObservation({
+      ...original,
+      carrier: { ...original.carrier, identity: 'github-carrier:audit-state-conflict' },
+      value: { auditId: 'conflicting-audit', certifiedArtifact: null },
+    }));
+    const contradictionResult = observation.reconcileProjections({ backend: 'github', observations: contradictory }).result;
+    assert.deepEqual(contradictionResult.diagnostics.map(item => item.code), ['projection.fact.contradiction']);
+  });
+
   it('ships and imports every canonical handoff module', async () => {
     const adoption = await import(pathToFileURL(join(packedRoot, 'src', 'commit-adoption.js')).href);
     const remediation = await import(pathToFileURL(join(packedRoot, 'src', 'certification-remediation.js')).href);
@@ -768,12 +896,11 @@ describe('packed public handoff lifecycle', () => {
       writeFileSync(wrapper, [
         `import { runCli } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'cli-main.js')).href)};`,
         `import { HOST_TRUST_BOUNDARY_RESPONSE_KIND, HOST_TRUST_BOUNDARY_SCHEMA_VERSION, hostTrustBoundarySignaturePayload, signHostPayload } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'host-trust.js')).href)};`,
+        `import { loadAuditorReturnReceiptVerifier } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'auditor-return-receipt.js')).href)};`,
         'import { createPrivateKey } from "node:crypto";',
         'import { readFileSync } from "node:fs";',
         'const boundaryKey = createPrivateKey({ key: readFileSync(3), format: "der", type: "pkcs8" });',
-        'process.exitCode = await runCli(JSON.parse(process.env.AGENTICLOOP_TEST_ARGS), {',
-        '  operatorTrustRoot: process.env.AGENTICLOOP_TEST_OPERATOR_ROOT,',
-        '  hostAuthority: challenge => {',
+        'const hostAuthority = challenge => {',
         '    const response = {',
         '      kind: HOST_TRUST_BOUNDARY_RESPONSE_KIND,',
         '      schemaVersion: HOST_TRUST_BOUNDARY_SCHEMA_VERSION,',
@@ -784,7 +911,17 @@ describe('packed public handoff lifecycle', () => {
         '    };',
         '    response.signature = signHostPayload(hostTrustBoundarySignaturePayload(challenge, response), boundaryKey);',
         '    return response;',
-        '  },',
+        '};',
+        'const loaded = loadAuditorReturnReceiptVerifier({',
+        '  target: process.env.AGENTICLOOP_TEST_TARGET,',
+        '  operatorTrustRoot: process.env.AGENTICLOOP_TEST_OPERATOR_ROOT,',
+        '  adapterId: process.env.AGENTICLOOP_TEST_ADAPTER,',
+        '  protectedBoundary: hostAuthority,',
+        '});',
+        'if (!loaded.ok) { process.stderr.write(loaded.errors.join("; ")); process.exit(9); }',
+        'process.exitCode = await runCli(JSON.parse(process.env.AGENTICLOOP_TEST_ARGS), {',
+        '  operatorTrustRoot: process.env.AGENTICLOOP_TEST_OPERATOR_ROOT,',
+        '  hostAuthority, auditProvenanceVerifier: loaded.verifier,',
         '});',
         '',
       ].join('\n'), 'utf8');
@@ -801,6 +938,7 @@ describe('packed public handoff lifecycle', () => {
           AGENTICLOOP_TEST_OPERATOR_ROOT: operatorTrustRoot,
           AGENTICLOOP_TEST_ADAPTER: adapterId,
           AGENTICLOOP_TEST_KEY_ID: keyId,
+          AGENTICLOOP_TEST_TARGET: args.at(-1),
         },
       });
     } finally {
@@ -1261,6 +1399,35 @@ describe('packed public handoff lifecycle', () => {
     assert.equal(persistedReview.dispatchCarrierDigest, packet.task.dispatchCarrierDigest);
     assert.equal(reviewEntry.findingResolutionMatrix, null, 'no finding-resolution matrix should be created when the task record has no Maintainer Review Fixup');
     assert.equal(reviewEntry.matrixDecision, null);
+  });
+
+  it('closes the independently reviewed and audited exact candidate from a clean installed package', { timeout: 300000 }, async () => {
+    const target = await installedTerminalLifecycle.makeVerifiedGitTarget('installed-terminal-lifecycle');
+    const hostContext = installedTerminalLifecycle.hostContext(target);
+    assert.ok(hostContext, 'the clean target must retain its protected host context');
+    const terminalCli = args => runPackedWithChallengeBoundary(args, hostContext);
+    // The package boundary owns every public lifecycle transition through the
+    // accepted review, audit, and closeout sequence. The source fixture only
+    // creates the disposable target and commits the exact candidate it returns.
+    const artifact = await installedTerminalLifecycle.certify(target, {
+      command: terminalCli,
+      auditOptions: { authenticatedAuditor: true },
+    });
+    const packetPath = '.agenticloop/tmp/installed-closeout.json';
+    const prepared = await terminalCli([
+      'closeout', 'prepare', '--work-unit', 'milestone:M00', '--artifact', artifact,
+      '--covered-tasks', 'T-001', '--output', packetPath, '--json', '--target', target,
+    ]);
+    assert.equal(prepared.status, 0, `${prepared.stdout}\n${prepared.stderr}`);
+    const recorded = await terminalCli([
+      'closeout', 'record', '--packet', packetPath, '--yes', '--json', '--target', target,
+    ]);
+    assert.equal(recorded.status, 0, `${recorded.stdout}\n${recorded.stderr}`);
+    const status = await terminalCli([
+      'closeout', 'status', '--work-unit', 'milestone:M00', '--json', '--target', target,
+    ]);
+    assert.equal(status.status, 0, `${status.stdout}\n${status.stderr}`);
+    assert.equal(JSON.parse(status.stdout).state, 'complete');
   });
 
   it('upgrades a genuine 0.4.0 installation and exercises the public lifecycle', { timeout: 600000 }, async () => {

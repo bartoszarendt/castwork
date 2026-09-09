@@ -212,7 +212,11 @@ export function isCarryCompatibleAttempt(attempt) {
   return Boolean(
     attempt?.abandonment &&
     EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS.includes(attempt.state) &&
-    attempt.abandonment.disposition === attempt.state
+    attempt.abandonment.disposition === attempt.state &&
+    // A predecessor without product mutation carries no product lineage. Its
+    // workflow-only abandonment remains history, but must not pull a later
+    // adopted product range back across the later attempt's authorization base.
+    attempt.abandonment.productMutationOccurred === true
   );
 }
 

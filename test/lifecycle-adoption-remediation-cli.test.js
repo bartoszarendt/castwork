@@ -14,7 +14,7 @@ import { createDispatchConsumption, dispatchConsumptionRelativePath } from '../s
 import { recognizeHandoff } from '../src/handoff-recognition.js';
 import { createReturnVerification, listReturnVerifications, writeReturnVerification } from '../src/return-verification.js';
 import { refetchFilesReturnEvidence } from '../src/files-return-evidence.js';
-import { executionAttemptIdentity } from '../src/execution-attempt.js';
+import { executionAttemptAbandonmentRelativePath, executionAttemptIdentity } from '../src/execution-attempt.js';
 import { maintainerReviewOutcomeBinding, createMaintainerReviewOutcomeReceipt } from '../src/maintainer-review-receipt.js';
 import { parseFilesReviewHistory } from '../src/review-history.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
@@ -230,6 +230,25 @@ async function persistDurableCertifications(fixture, attempt, head, {
 describe('production lifecycle adoption and remediation commands', () => {
   it('records deliberate human-fix adoption and invalidates the exact certifications for rerun without consuming the attempt', async () => {
     const fixture = await createDispatchFixture(temp, 'adopt-success');
+    const failedAttempt = consumeAttempt(fixture);
+    const failedRecord = {
+      kind: 'agenticloop.execution-attempt-abandonment', schemaVersion: 2,
+      backend: 'files', taskId: 'T-001', attemptId: failedAttempt.attemptId,
+      packetId: failedAttempt.packet.packetId,
+      reason: 'The prior attempt failed before product work could begin.',
+      disposition: 'tooling_failed', authority: 'maintainer:adoption-history-test',
+      productMutationOccurred: false, carrierMutationOccurred: true,
+      abandonedAt: new Date().toISOString(),
+    };
+    const failedRecordPath = join(fixture.root, executionAttemptAbandonmentRelativePath(failedRecord));
+    mkdirSync(join(failedRecordPath, '..'), { recursive: true });
+    writeFileSync(failedRecordPath, `${JSON.stringify(failedRecord, null, 2)}\n`);
+    git(fixture.root, ['add', '.agenticloop/handoffs']);
+    git(fixture.root, ['commit', '-m', 'preserve failed attempt before adoption\n\nTask: T-001\nAgent: maintainer']);
+    const priorRepository = fixture.repository;
+    const currentHead = git(fixture.root, ['rev-parse', 'HEAD']);
+    fixture.repository = () => ({ ...priorRepository(), head: currentHead, baseHead: currentHead });
+    fixture.refetchRepository = fixture.repository;
     const attempt = consumeAttempt(fixture);
     const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
     const result = await runCliInProcess(adoptionArgs(fixture, attempt, head));
@@ -240,12 +259,37 @@ describe('production lifecycle adoption and remediation commands', () => {
     assert.equal(payload.preserved.attempt.id, attempt.attemptId);
     assert.deepEqual(payload.certification.invalidated, ['required_checks', 'review', 'audit', 'closeout']);
     assert.deepEqual(payload.certification.rerun, ['required_checks', 'review', 'audit']);
+    const attempts = JSON.parse((await runCliInProcess([
+      'task', 'attempt-status', 'T-001', '--json', '--target', fixture.root,
+    ], protectedOptions(fixture))).stdout).attempts;
+    assert.equal(attempts.find(item => item.attemptId === failedAttempt.attemptId)?.state, 'tooling_failed');
+    assert.ok(attempts.some(item => item.attemptId === attempt.attemptId), 'adoption must preserve the live attempt');
   });
 
   it('consumes a durable adoption record in the real prepare-return lineage while refusing an unadopted human commit', async () => {
     const fixture = await createDispatchFixture(temp, 'adoption-return-lineage', {
       requiredChecksText: '- [RC-1] command: `node --version`\n- [RC-2] command: `node --version`',
+      independentReviewRequired: true,
     });
+    const failedAttempt = consumeAttempt(fixture);
+    const failedRecord = {
+      kind: 'agenticloop.execution-attempt-abandonment', schemaVersion: 2,
+      backend: 'files', taskId: 'T-001', attemptId: failedAttempt.attemptId,
+      packetId: failedAttempt.packet.packetId,
+      reason: 'The prior attempt failed before product work could begin.',
+      disposition: 'tooling_failed', authority: 'maintainer:adoption-lineage-test',
+      productMutationOccurred: false, carrierMutationOccurred: true,
+      abandonedAt: new Date().toISOString(),
+    };
+    const failedRecordPath = join(fixture.root, executionAttemptAbandonmentRelativePath(failedRecord));
+    mkdirSync(join(failedRecordPath, '..'), { recursive: true });
+    writeFileSync(failedRecordPath, `${JSON.stringify(failedRecord, null, 2)}\n`);
+    git(fixture.root, ['add', '.agenticloop/handoffs']);
+    git(fixture.root, ['commit', '-m', 'preserve failed attempt before adoption\n\nTask: T-001\nAgent: maintainer']);
+    const priorRepository = fixture.repository;
+    const currentHead = git(fixture.root, ['rev-parse', 'HEAD']);
+    fixture.repository = () => ({ ...priorRepository(), head: currentHead, baseHead: currentHead });
+    fixture.refetchRepository = fixture.repository;
     const packetPath = '.agenticloop/tmp/packet.json';
     mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
     const packet = prepare(fixture).packet;
@@ -276,22 +320,56 @@ describe('production lifecycle adoption and remediation commands', () => {
       'task', 'adopt-commit', 'T-001', '--attempt', attempt, '--base', packet.repository.head, '--head', humanHead,
       '--actor-class', 'human', '--actor-id', 'operator-1', '--reason', 'Human bounded correction.', '--json',
     ]);
-    assert.equal(adopted.status, 0, adopted.stderr);
+    assert.equal(adopted.status, 0, `${adopted.stdout}\n${adopted.stderr}`);
     commitWorkflow(fixture, 'record deliberate human adoption');
-    const returned = await cli(['task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', checksPath, '--outcome', 'implementation_ready_for_review', '--output', returnPath, '--json']);
+    const currentChecksPath = '.agenticloop/tmp/checks-after-adoption.json';
+    const initializedAfterAdoption = await cli([
+      'task', 'check-evidence-init', 'T-001', '--packet', packetPath,
+      '--output', currentChecksPath, '--json',
+    ]);
+    assert.equal(initializedAfterAdoption.status, 0, `${initializedAfterAdoption.stderr}\n${initializedAfterAdoption.stdout}`);
+    const checksAfterAdoption = JSON.parse(readFileSync(join(fixture.root, currentChecksPath), 'utf8'));
+    for (const check of checksAfterAdoption) {
+      const rerun = await cli([
+        'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+        '--input', currentChecksPath, '--output', currentChecksPath, '--check', check.id,
+        '--outcome', 'passed', '--evidence', `${check.id} rerun after adoption`,
+        '--execution-output', `.agenticloop/checks/T-001/${check.id}.execution.json`, '--json',
+      ]);
+      assert.equal(rerun.status, 0, `${rerun.stderr}\n${rerun.stdout}`);
+    }
+    git(fixture.root, ['add', '.agenticloop/checks']);
+    git(fixture.root, ['commit', '-m', 'rerun required checks after adoption\n\nTask: T-001\nAgent: engineer']);
+    const returned = await cli(['task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', currentChecksPath, '--outcome', 'implementation_ready_for_review', '--output', returnPath, '--json']);
     assert.equal(returned.status, 0, `${returned.stderr}\n${returned.stdout}`);
     const roleReturn = JSON.parse(readFileSync(join(fixture.root, returnPath), 'utf8'));
+    assert.equal(roleReturn.productBaseHead, packet.repository.head);
     assert.equal(roleReturn.productHead, humanHead);
     assert.deepEqual(roleReturn.productAttribution.commits, [humanHead]);
     const verified = await cli(['task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath, '--from-current-repository', '--json']);
     assert.equal(verified.status, 0, `${verified.stderr}\n${verified.stdout}`);
-    git(fixture.root, ['add', '.agenticloop/returns']);
-    git(fixture.root, ['commit', '-m', 'record verified renewed return\n\nTask: T-001\nAgent: maintainer']);
+
+    // The adopted product commit keeps the live attempt and preserves its failed
+    // predecessor. It does not create an empty protocol-only attempt merely to
+    // get back to review; current checks and a fresh independent Maintainer
+    // review are both rerun after adoption.
+    const verification = listReturnVerifications(fixture.root, 'T-001').records[0];
+    const maintainerReceipt = persistAuthenticatedMaintainerReview(fixture, verification, humanHead, 'maintainer-2');
+    const reviewed = await cli([
+      'task', 'review-prepare', 'T-001', '--maintainer-receipt', maintainerReceipt, '--json',
+    ]);
+    assert.equal(reviewed.status, 0, `${reviewed.stderr}\n${reviewed.stdout}`);
+    const attempts = JSON.parse((await cli(['task', 'attempt-status', 'T-001', '--json'])).stdout).attempts;
+    assert.equal(attempts.find(item => item.attemptId === failedAttempt.attemptId)?.state, 'tooling_failed',
+      'the adopted fixture must retain the failed predecessor as durable history');
+    assert.equal(attempts.filter(item => item.attemptId === attempt).length, 1,
+      'adoption must retain exactly the live attempt that adopted the product commit');
+    assert.equal(attempts.length, 2, 'adoption must not mint a protocol-only attempt after the current checks and independent review rerun');
 
     const adoptionPath = join(fixture.root, '.agenticloop', 'adoptions', 'commits', 'T-001', `${humanHead}.json`);
     writeFileSync(adoptionPath, '{not json}\n');
     commitWorkflow(fixture, 'corrupt adoption record for refusal probe');
-    const corrupt = await cli(['task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', checksPath, '--outcome', 'implementation_ready_for_review', '--output', '.agenticloop/tmp/corrupt-return.json', '--json']);
+    const corrupt = await cli(['task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', currentChecksPath, '--outcome', 'implementation_ready_for_review', '--output', '.agenticloop/tmp/corrupt-return.json', '--json']);
     assert.equal(corrupt.status, 1);
     assert.match(corrupt.stdout, /commit adoption/);
   });
