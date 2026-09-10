@@ -123,6 +123,7 @@ import {
   resolvePacketActivationBinding,
   unactivatedTaskError,
 } from './activation-resolution.js';
+import { createOperatorDurableMutationIntentAuthenticator } from './activation-trust.js';
 import { buildGitHubTaskIdentityInventory, resolveCoveredGitHubTask } from './github-task-identity.js';
 import { fetchGitHubTaskBody } from './github-task-body.js';
 import {
@@ -666,6 +667,23 @@ function repositoryBaseHeadInvalidator(target, productBaseHead) {
       code: 'dispatch.packet.stale', evidenceState: 'changed', disposition: 'superseded',
       committedStateEvaluated: true,
       safeRepair: 'Rerun npx agenticloop task prepare-dispatch to mint a fresh packet.',
+    },
+  );
+}
+
+/** Refuse an idempotent role-start response when its grant authority is no longer live. */
+function roleStartCurrentAuthorityInvalidator(target, io, packet, hostTrustStore) {
+  if (!packet?.activationBinding) return null;
+  const current = resolvePacketActivationBinding(target, io, packet, { hostTrustStorePath: hostTrustStore });
+  if (current.ok) return null;
+  const finding = current.errors?.[0] ?? {};
+  return new PublicCommandError(
+    finding.message ?? 'dispatch activation authority is no longer current',
+    {
+      code: finding.code ?? 'activation.grant.unauthenticated',
+      evidenceState: finding.evidenceState ?? current.evidenceState ?? 'negative',
+      disposition: current.disposition ?? 'blocked',
+      committedStateEvaluated: true,
     },
   );
 }
@@ -3388,9 +3406,9 @@ export async function cmdTask(args, io = createIo()) {
       };
       let intentAuthenticator;
       try {
-        // Standard-assurance packets deliberately omit a return adapter. Their
-        // host-signed activation capture remains the packet-bound protected
-        // signer identity for this recovery-only transaction.
+        // Standard host-signed packets deliberately omit a return adapter. Their
+        // activation capture remains the packet-bound protected signer identity
+        // for this recovery-only transaction.
         const intentAdapterId = dispatchPacket.returnAdapter?.adapterId ?? dispatchPacket.activation?.adapter;
         const intentAdapterKeyId = dispatchPacket.returnAdapter?.keyId ?? dispatchPacket.activation?.signature?.keyId;
         const trustedIntentAdapter = resolveTrustedHostAdapter(target, io, opts.hostTrustStore, intentAdapterId);
@@ -3403,10 +3421,24 @@ export async function cmdTask(args, io = createIo()) {
           protectedBoundary: io.hostAuthority,
         });
       } catch {
-        // Standard local role starts historically have no protected adapter.
-        // They never write a recoverable intent; if an attacker supplies one,
-        // the kernel still refuses it below because no verifier is available.
         intentAuthenticator = null;
+      }
+      if (!intentAuthenticator && dispatchPacket.assurance?.activation === 'operator_confirmed') {
+        // The ordinary operator-confirmed route carries no host adapter, but
+        // its external operator key is already the authentication boundary for
+        // the grant. Use that same target-bound key to make its recovery image
+        // durable and authenticated rather than allowing a stranded carrier.
+        const operatorIntent = createOperatorDurableMutationIntentAuthenticator(target, {
+          operatorActivationRoot: io?.operatorActivationRoot ?? undefined,
+        });
+        const packetKeyId = dispatchPacket.activationBinding?.grant?.authentication?.keyId;
+        if (!operatorIntent.ok || packetKeyId !== operatorIntent.intentAuthenticator?.keyId) {
+          throw new VerificationContextMalformedError(
+            operatorIntent.errors?.join('; ') ||
+            'packet-bound operator recovery signer does not match the external activation key',
+          );
+        }
+        intentAuthenticator = operatorIntent.intentAuthenticator;
       }
       const recoveredTransaction = recoverDurableMutationBatch(target, {
         intentPath: roleStartTransactionPath,
@@ -3497,6 +3529,14 @@ export async function cmdTask(args, io = createIo()) {
               { code: 'dispatch.packet.stale', evidenceState: 'changed', disposition: 'superseded', committedStateEvaluated: true,
                 safeRepair: 'Rerun npx agenticloop task prepare-dispatch to mint a fresh packet.' }
             ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
+          }
+          const authorityInvalidator = roleStartCurrentAuthorityInvalidator(
+            target, io, dispatchPacket, opts.hostTrustStore,
+          );
+          if (authorityInvalidator) {
+            return printGateResult('task role-start', commandFailure(
+              'task role-start', authorityInvalidator, 'operational_error', { task_id: taskId, file: carrier }, target,
+            ), asJson, io);
           }
           // Validate check-evidence file matches canonical scaffolding.
           const existingChecksAbs = resolve(target, checkEvidencePath.relPath);

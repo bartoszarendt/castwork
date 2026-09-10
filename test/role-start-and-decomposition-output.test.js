@@ -33,6 +33,7 @@ import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { validationResultDigest } from '../src/result-envelope.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
 import { durableMutationIntentSignaturePayload, signHostPayload, targetRepositoryIdentity } from '../src/host-trust.js';
+import { scaffoldFixture, interactiveOptions, runPrepareDispatch } from './helpers/activation-fixture.js';
 
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'role-start-')); });
@@ -73,6 +74,27 @@ function redigestDurableIntent(intent) {
   delete projection.digest;
   projection.authentication.value = null;
   intent.digest = `sha256:agenticloop.recoverable-mutation-intent.v1:${canonicalSha256(projection)}`;
+}
+
+async function prepareOperatorConfirmedRoleStart(name) {
+  const fixture = await scaffoldFixture(temp, name);
+  const activated = await runCliInProcess([
+    'activate', 'T-001', '--json', '--target', fixture.root,
+  ], interactiveOptions(fixture));
+  assert.equal(activated.status, 0, activated.stderr);
+  const add = spawnSync('git', ['add', '.agenticloop/activations'], { cwd: fixture.root, encoding: 'utf8' });
+  assert.equal(add.status, 0, add.stderr);
+  const commit = spawnSync('git', ['commit', '-m', 'record operator activation'], { cwd: fixture.root, encoding: 'utf8' });
+  assert.equal(commit.status, 0, commit.stderr);
+  const prepared = await runPrepareDispatch(fixture, ['--json']);
+  assert.equal(prepared.status, 0, `${prepared.stdout}\n${prepared.stderr}`);
+  const packet = JSON.parse(prepared.stdout);
+  assert.equal(packet.assurance.activation, 'operator_confirmed');
+  assert.equal(packet.returnAdapter, null);
+  const packetPath = join(fixture.root, '.agenticloop', 'tmp', 'packet.json');
+  mkdirSync(dirname(packetPath), { recursive: true });
+  writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+  return { fixture, packet };
 }
 
 // ── N1: role-start is NOT receipt-revalidation safe ────────────────────────
@@ -500,6 +522,118 @@ describe('N7: role-start behavioral tests', () => {
     assert.equal(postCarrier, preCarrier, 'carrier must be unchanged after injected failure');
     assert.equal(existsSync(consumptionDir), preConsumptionExists, 'consumption dir must be unchanged');
     assert.equal(existsSync(checksPath), preChecksExists, 'checks file must be unchanged');
+  });
+
+  for (const [name, injectTermination, expectedConsumptions] of [
+    ['after durable intent', {
+      afterDurableIntent: () => {
+        const error = new Error('simulated ordinary-route termination after durable intent');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }, 0],
+    ['after carrier replacement', {
+      afterMutation: ({ path, phase }) => {
+        if (phase !== 'replacement' || path !== '.agenticloop/tasks/T-001.md') return;
+        const error = new Error('simulated ordinary-route termination after carrier replacement');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }, 0],
+    ['after check-evidence replacement', {
+      afterMutation: ({ path, phase }) => {
+        if (phase !== 'replacement' || path !== '.agenticloop/tmp/checks.json') return;
+        const error = new Error('simulated ordinary-route termination after check-evidence replacement');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }, 0],
+    ['after consumption commit', {
+      afterMutation: ({ phase }) => {
+        if (phase !== 'commit') return;
+        const error = new Error('simulated ordinary-route termination after consumption commit');
+        error.code = 'fs.mutation.simulated_termination';
+        throw error;
+      },
+    }, 1],
+  ]) {
+    it(`recovers an operator-confirmed start ${name} with its original bounded authority`, async () => {
+      const { fixture, packet } = await prepareOperatorConfirmedRoleStart(
+        `ordinary-recovery-${name.replaceAll(/[^a-z]+/g, '-')}`,
+      );
+      const root = fixture.root;
+      const argv = [
+        'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+        '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+      ];
+      const options = {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        operatorActivationRoot: fixture.operatorActivationRoot,
+      };
+      const transactionPath = join(root, '.agenticloop', 'handoffs', 'role-start-transactions', 'T-001',
+        `${packet.packetId.replace(/[^A-Za-z0-9._-]/g, '_')}.json`);
+
+      const interrupted = await runCliInProcess(argv, {
+        ...options,
+        fsMutationOptions: injectTermination,
+      });
+      assert.equal(interrupted.status, 1, interrupted.stdout);
+      assert.equal(existsSync(transactionPath), true, 'ordinary route must retain an authenticated recovery intent');
+      const intent = JSON.parse(readFileSync(transactionPath, 'utf8'));
+      assert.equal(intent.authentication.keyId, packet.activationBinding.grant.authentication.keyId);
+      assert.match(intent.authentication.value, /^ed25519:/);
+      const interruptedConsumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+      assert.equal(interruptedConsumptions.ok, true, interruptedConsumptions.errors?.join('\n'));
+      assert.equal(interruptedConsumptions.records.length, expectedConsumptions);
+
+      const retried = await runCliInProcess(argv, options);
+      assert.equal(retried.status, 0, retried.stdout);
+      const resumed = JSON.parse(retried.stdout);
+      assert.equal(resumed.disposition, expectedConsumptions === 1 ? 'already_current' : 'committed');
+      assert.equal(existsSync(transactionPath), false, 'retry must resolve the authenticated transaction');
+      const consumptions = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+      assert.equal(consumptions.ok, true, consumptions.errors?.join('\n'));
+      assert.equal(consumptions.records.length, 1, 'retry must converge on exactly one consumption');
+      assert.equal(consumptions.records[0].packetId, packet.packetId);
+      assert.equal(consumptions.records[0].taskContractDigest, packet.task.taskContractDigest,
+        'recovery must retain the original bounded authority');
+    });
+  }
+
+  it('refuses a revoked operator-confirmed retry without rewriting its accepted consumption', async () => {
+    const { fixture, packet } = await prepareOperatorConfirmedRoleStart('ordinary-retry-revoked');
+    const root = fixture.root;
+    const argv = [
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/packet.json',
+      '--check-evidence-output', '.agenticloop/tmp/checks.json', '--json', '--target', root,
+    ];
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    };
+    const started = await runCliInProcess(argv, options);
+    assert.equal(started.status, 0, started.stdout);
+    const authorizedRetry = await runCliInProcess(argv, options);
+    assert.equal(authorizedRetry.status, 0, authorizedRetry.stdout);
+    assert.equal(JSON.parse(authorizedRetry.stdout).disposition, 'already_current');
+    const consumptionsBefore = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsBefore.ok, true, consumptionsBefore.errors?.join('\n'));
+    const checksPath = join(root, '.agenticloop', 'tmp', 'checks.json');
+    const checksBefore = readFileSync(checksPath, 'utf8');
+
+    const revoked = await runCliInProcess([
+      'activation', 'revoke', packet.activationBinding.grant.grantId,
+      '--json', '--target', root,
+    ], { operatorActivationRoot: fixture.operatorActivationRoot });
+    assert.equal(revoked.status, 0, revoked.stderr);
+
+    const retry = await runCliInProcess(argv, options);
+    assert.equal(retry.status, 1, retry.stdout);
+    assert.equal(JSON.parse(retry.stdout).diagnostics[0].code, 'activation.grant.revoked');
+    const consumptionsAfter = listDispatchConsumptions(root, 'T-001', { backend: 'files' });
+    assert.equal(consumptionsAfter.ok, true, consumptionsAfter.errors?.join('\n'));
+    assert.deepEqual(consumptionsAfter.records, consumptionsBefore.records);
+    assert.equal(readFileSync(checksPath, 'utf8'), checksBefore);
   });
 
   for (const [name, injectTermination] of [
