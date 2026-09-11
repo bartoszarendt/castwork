@@ -22,7 +22,7 @@
     {
       "id": "wrong-product-head",
       "observedShape": "repair evidence named the wrong product identity",
-      "syntheticResult": "product-lineage.recomputed_from_attributed_commit",
+      "syntheticResult": "typed-refusal-observed:task.evidence.product_head",
       "execution": {
         "command": "task evidence",
         "result": { "status": 1, "code": "task.evidence.product_head" },
@@ -32,7 +32,7 @@
     {
       "id": "artifact-class-mismatch",
       "observedShape": "evidence required a different generated artifact class",
-      "syntheticResult": "derived-artifact.recomputed_without_attempt",
+      "syntheticResult": "typed-refusal-observed:task.evidence.lineage",
       "execution": {
         "command": "task evidence",
         "result": { "status": 1, "code": "task.evidence.lineage" },

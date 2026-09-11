@@ -49,6 +49,13 @@ describe('integrated lifecycle proof', () => {
       assert.deepEqual(stage.observedResults, [expected.result], `${stage.id} result changed`);
       assert.deepEqual(stage.invariants, expected.invariants, `${stage.id} lineage invariants changed`);
       if (expected.authorization) assert.deepEqual(stage.authorization, expected.authorization, `${stage.id} authorization demonstration changed`);
+      if (expected.result.status !== 0) {
+        assert.equal(
+          fixture.steps.find(step => step.id === stage.id).syntheticResult,
+          `typed-refusal-observed:${expected.result.code}`,
+          `${stage.id} label must state the observed typed refusal`,
+        );
+      }
     }
   });
 

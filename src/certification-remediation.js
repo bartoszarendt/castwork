@@ -62,6 +62,8 @@ const FILES_REVIEW_ENTRY_FIELDS = Object.freeze([
   'maintainerOutcome',
 ]);
 
+// Schema and digest-domain versions intentionally evolve independently: v5
+// receipt fields retain the persisted v4 digest domain and are never renamed.
 const FILES_REVIEW_ENTRY_V5_FIELDS = Object.freeze([
   ...FILES_REVIEW_ENTRY_FIELDS,
   'initialAuthentication',
@@ -89,6 +91,8 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
       const isV3 = entry?.schemaVersion === 3 &&
         Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_FIELDS.length &&
         Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_FIELDS.includes(key));
+      // The schema and digest-domain versions intentionally evolve independently:
+      // v5 receipt fields retain the persisted v4 digest domain, and other pairs refuse.
       const isV5 = entry?.schemaVersion === 5 &&
         Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_V5_FIELDS.length &&
         Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_V5_FIELDS.includes(key)) &&
