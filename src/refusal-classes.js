@@ -82,6 +82,7 @@ const PRODUCER_INVENTORY_ROWS = [
     'execution_evidence.binding_mismatch', 'execution_evidence.lineage_mismatch',
   ]],
   ['src/closeout-cli.js', ['evidence.negative']],
+  ['src/public-output-policy.js', ['evidence.negative']],
   ['src/task-carrier-guard.js', ['task.carrier.armed']],
   ['src/dispatch-envelope.js', [
     'verification.context.missing', 'verification.context.malformed', 'verification.context.stale',

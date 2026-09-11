@@ -1387,6 +1387,84 @@ describe('N7: prepare-decomposition behavioral tests', () => {
     assert.equal(output2.disposition, 'already_current', 'exact retry must return already_current');
   });
 
+  it('refuses a task carrier inside the authorized decomposition namespace while allowing ordinary decomposition output', async () => {
+    const template = '.agenticloop/decompositions/tasks/{taskId}.md';
+    const fixture = await createDispatchFixture(temp, 'decomp-protected-output', {
+      initialStatus: 'agent-ready', taskFileTemplate: template,
+    });
+    const root = fixture.root;
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const carrierOutput = template.replace('{taskId}', 'T-001');
+    const carrier = join(root, carrierOutput);
+    const before = readFileSync(carrier, 'utf8');
+    const command = output => [
+      'task', 'prepare-decomposition', 'T-001',
+      '--work-unit', 'fixture-work-unit', '--source-ref', '.agenticloop/decompositions/T-001.json',
+      '--source-revision', `git-commit:${head}`, '--base', tree, '--dependencies', 'dependencies.json',
+      '--output', output, '--json', '--target', root,
+    ];
+    const result = await runCliInProcess(command(carrierOutput), { operatorTrustRoot: fixture.operatorTrustRoot });
+    assert.equal(result.status, 1, result.stderr);
+    const refusal = JSON.parse(result.stdout);
+    assert.equal(refusal.diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(carrier, 'utf8'), before);
+
+    const ordinaryOutput = '.agenticloop/decompositions/results/T-001.json';
+    const allowed = await runCliInProcess(command(ordinaryOutput), { operatorTrustRoot: fixture.operatorTrustRoot });
+    assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+    assert.equal(existsSync(join(root, ordinaryOutput)), true);
+    assert.equal(readFileSync(carrier, 'utf8'), before);
+  });
+
+  it('uses resolved repeated-token carriers for protected and exclusive decomposition outputs', async () => {
+    const template = '.agenticloop/decompositions/tasks/{taskId}{taskId}.md';
+    const fixture = await createDispatchFixture(temp, 'decomp-repeated-carrier-output', {
+      initialStatus: 'agent-ready', taskFileTemplate: template,
+      taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001', 'T-002'],
+    });
+    const root = fixture.root;
+    const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+    const carrier = taskId => template.replaceAll('{taskId}', taskId);
+    const command = output => [
+      'task', 'prepare-decomposition', 'T-001',
+      '--work-unit', 'fixture-work-unit', '--source-ref', '.agenticloop/decompositions/T-001.json',
+      '--source-revision', `git-commit:${head}`, '--base', tree, '--dependencies', 'dependencies.json',
+      '--output', output, '--json', '--target', root,
+    ];
+    const existing = carrier('T-002');
+    const existingBefore = readFileSync(join(root, existing), 'utf8');
+    const refused = await runCliInProcess(command(existing), { operatorTrustRoot: fixture.operatorTrustRoot });
+    assert.equal(refused.status, 1, `${refused.stdout}\n${refused.stderr}`);
+    assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(join(root, existing), 'utf8'), existingBefore);
+
+    const absent = carrier('T-003');
+    const created = await runCliInProcess(command(absent), { operatorTrustRoot: fixture.operatorTrustRoot });
+    assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+    assert.equal(existsSync(join(root, absent)), true, 'an absent carrier-shaped decomposition output must be exclusively created');
+    // A JSON decomposition source at a carrier-shaped path is intentionally not
+    // a valid task record, so remove this successful output before the next
+    // command re-enumerates the task inventory for the race probe.
+    rmSync(join(root, absent));
+
+    const raced = carrier('T-004');
+    const racedBytes = 'concurrent decomposition carrier\n';
+    const concurrent = await runCliInProcess(command(raced), {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      fsMutationOptions: {
+        afterFinalVerification: () => {
+          mkdirSync(join(root, raced, '..'), { recursive: true });
+          writeFileSync(join(root, raced), racedBytes, 'utf8');
+        },
+      },
+    });
+    assert.equal(concurrent.status, 1, `${concurrent.stdout}\n${concurrent.stderr}`);
+    assert.equal(JSON.parse(concurrent.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(join(root, raced), 'utf8'), racedBytes);
+  });
+
   it('F7: revalidation command handles paths with spaces', () => {
     // Test that shellQuoteArgument is used for paths with spaces
     const result = shellQuoteArgument('path with spaces');

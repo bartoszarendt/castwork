@@ -49,6 +49,12 @@ import {
 const RECOVERABLE_MUTATION_INTENT_KIND = 'agenticloop.recoverable-mutation-intent';
 const RECOVERABLE_MUTATION_INTENT_SCHEMA_VERSION = 1;
 export const SIMULATED_MUTATION_TERMINATION_CODE = 'fs.mutation.simulated_termination';
+const LIFECYCLE_LOCK_CODES = Object.freeze({
+  malformed: ['fs', 'lifecycle_lock', 'malformed'].join('.'),
+  inspectFailed: ['fs', 'lifecycle_lock', 'inspect_failed'].join('.'),
+  invalidInput: ['fs', 'lifecycle_lock', 'invalid_input'].join('.'),
+  contended: ['fs', 'lifecycle_lock', 'contended'].join('.'),
+});
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -553,12 +559,10 @@ function verifyExpectedMutationState(root, item) {
   if (item.expectedKind !== undefined && kind !== item.expectedKind) {
     return `conditional mutation '${item.relPath}' is stale: expected ${item.expectedKind}, found ${kind}`;
   }
-  if (item.expectedDigest !== undefined) {
-    const expected = item.expectedDigest.replace(/^sha256:/, '');
-    if (current !== expected) {
-      return `conditional mutation '${item.relPath}' is stale: expected digest ${item.expectedDigest}, found ${current === null ? 'absent' : current}`;
-    }
-  }
+  // A current-state validator may inspect related authority records in addition
+  // to this carrier. Run it before the digest comparison so a terminal
+  // lifecycle transition receives its domain-specific refusal rather than a
+  // generic stale-write error.
   if (item.validateCurrent !== undefined) {
     const validation = item.validateCurrent(readFileSync(item.absPath));
     if (validation?.ok !== true) {
@@ -568,7 +572,373 @@ function verifyExpectedMutationState(root, item) {
       return `conditional mutation '${item.relPath}' is stale or malformed: ${detail}`;
     }
   }
+  if (item.expectedDigest !== undefined) {
+    const expected = item.expectedDigest.replace(/^sha256:/, '');
+    if (current !== expected) {
+      return `conditional mutation '${item.relPath}' is stale: expected digest ${item.expectedDigest}, found ${current === null ? 'absent' : current}`;
+    }
+  }
   return null;
+}
+
+/**
+ * Acquire exclusive filesystem locks for the task lifecycle authorities named
+ * by one batch. The lock is kernel-owned so terminal, retirement, and
+ * remediation writers in separate CLI processes share the same per-task
+ * critical section. A contender fails closed rather than writing around a
+ * live authority transition.
+ */
+function lifecycleBootIdentity() {
+  // Linux exposes a per-boot nonce.  It lets us distinguish a dead owner from
+  // a PID that was reused after a reboot without making non-Linux hosts depend
+  // on procfs.
+  try {
+    const value = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+function lifecycleLockOwnerIsLive(owner, { bootIdentity, inspectProcess }) {
+  if (!owner || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, reason: 'lock ownership metadata has no valid process id' };
+  }
+  // A lock written during an earlier boot cannot name a currently live owner.
+  if (bootIdentity && typeof owner.bootIdentity === 'string' && owner.bootIdentity !== bootIdentity) {
+    return { ok: false, stale: true, reason: 'lock owner belongs to an earlier system boot' };
+  }
+  try {
+    const live = inspectProcess(owner.pid, owner);
+    return live
+      ? { ok: true }
+      : { ok: false, stale: true, reason: `owner process ${owner.pid} no longer exists` };
+  } catch (error) {
+    if (error?.code === 'ESRCH') return { ok: false, stale: true, reason: `owner process ${owner.pid} no longer exists` };
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.inspectFailed, reason: `could not determine whether owner process ${owner.pid} is live: ${error.message}` };
+  }
+}
+
+function releaseLifecycleAuthorityLock(root, lock) {
+  try {
+    const owner = JSON.parse(readFileSync(lock.path, 'utf8'));
+    if (owner?.lockId !== lock.lockId) return;
+    rmSync(lock.path, { force: true });
+    removeEmptyParents(root, [lock.path]);
+  } catch (error) {
+    // A disappeared lock is already released.  Other failures must not turn a
+    // successful mutation into an exception from cleanup.
+    if (error?.code !== 'ENOENT') return;
+  }
+}
+
+function recoverTransferredLifecycleClaims(reclaimPath, taskId, {
+  bootIdentity,
+  inspectProcess,
+  afterTransferredLifecycleClaimReadForTest,
+}) {
+  const transferPrefix = `${reclaimPath.slice(reclaimPath.lastIndexOf(sep) + 1)}.reclaiming-`;
+  let transferNames;
+  try {
+    transferNames = readdirSync(dirname(reclaimPath))
+      .filter(name => name.startsWith(transferPrefix))
+      .sort();
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { ok: true };
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' could not inspect transferred reclaim claims: ${error.message}` };
+  }
+
+  for (const transferName of transferNames) {
+    const transferPath = `${dirname(reclaimPath)}${sep}${transferName}`;
+    let transferredContent;
+    let transferred;
+    try {
+      transferredContent = readFileSync(transferPath, 'utf8');
+      transferred = JSON.parse(transferredContent);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has unreadable transferred reclaim ownership metadata: ${error.message}` };
+    }
+    if (transferred?.taskId !== taskId || typeof transferred?.reclaimId !== 'string' || !transferred.reclaimId) {
+      return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has malformed transferred reclaim ownership metadata` };
+    }
+
+    let authoritativeContent;
+    let authoritative;
+    try {
+      authoritativeContent = readFileSync(reclaimPath, 'utf8');
+      authoritative = JSON.parse(authoritativeContent);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has unreadable reclaim ownership metadata: ${error.message}` };
+      }
+    }
+    if (authoritativeContent !== undefined &&
+        (authoritative?.taskId !== taskId || typeof authoritative?.reclaimId !== 'string' || !authoritative.reclaimId)) {
+      return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has malformed reclaim ownership metadata` };
+    }
+
+    if (authoritativeContent === undefined) {
+      const inspected = lifecycleLockOwnerIsLive(transferred, { bootIdentity, inspectProcess });
+      if (inspected.ok) {
+        try {
+          // `rename` replaces a destination on POSIX, so an absence observation
+          // cannot make restoration safe. Publish a second hard link instead:
+          // link(2) atomically fails with EEXIST if another reclaimer published
+          // a newer authoritative claim after our inspection.
+          afterTransferredLifecycleClaimReadForTest?.(transferred);
+          linkSync(transferPath, reclaimPath);
+          const restoredContent = readFileSync(reclaimPath, 'utf8');
+          const restored = JSON.parse(restoredContent);
+          if (restoredContent !== transferredContent || restored?.taskId !== taskId || restored?.reclaimId !== transferred.reclaimId) {
+            return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' restored mismatched reclaim ownership metadata` };
+          }
+          // The authoritative link now holds the verified exact claim, so only
+          // this private transfer entry may be removed.
+          unlinkSync(transferPath);
+          return { ok: true, retry: true };
+        } catch (error) {
+          if (error?.code === 'EEXIST' || error?.code === 'ENOENT') return { ok: true, retry: true };
+          return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' could not restore transferred reclaim claim: ${error.message}` };
+        }
+      }
+      if (!inspected.stale) {
+        return { ok: false, code: inspected.code, error: `${inspected.code}: task lifecycle authority '${taskId}' cannot inspect transferred reclaim claim: ${inspected.reason}` };
+      }
+      try {
+        rmSync(transferPath, { force: true });
+        return { ok: true, retry: true };
+      } catch (error) {
+        if (error?.code === 'ENOENT') return { ok: true, retry: true };
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' could not remove stale transferred reclaim claim: ${error.message}` };
+      }
+    }
+
+    if (authoritativeContent === transferredContent) {
+      // A completed restore can leave a duplicate private entry only if it was
+      // interrupted between writing the authoritative claim and private cleanup.
+      rmSync(transferPath, { force: true });
+      return { ok: true, retry: true };
+    }
+
+    const inspected = lifecycleLockOwnerIsLive(authoritative, { bootIdentity, inspectProcess });
+    if (inspected.ok) {
+      // The authoritative claim was published after this entry was transferred,
+      // so it is the newer live owner. The private predecessor is safe to clean.
+      rmSync(transferPath, { force: true });
+      return { ok: true, retry: true };
+    }
+    if (!inspected.stale) {
+      return { ok: false, code: inspected.code, error: `${inspected.code}: task lifecycle authority '${taskId}' cannot inspect its authoritative reclaim claim: ${inspected.reason}` };
+    }
+    // Leave a live transferred claim in place while the normal reclamation path
+    // resolves the stale authoritative claim. The next bounded attempt restores
+    // the transfer (or verifies it stale) without ever dropping its ownership.
+  }
+  return { ok: true };
+}
+
+function reclaimInterruptedLifecycleClaim(reclaimPath, taskId, {
+  bootIdentity,
+  inspectProcess,
+  afterLifecycleReclaimClaimReadForTest,
+  interruptAfterLifecycleReclaimClaimTransferForTest,
+}) {
+  let existing;
+  let existingContent;
+  try {
+    existingContent = readFileSync(reclaimPath, 'utf8');
+    existing = JSON.parse(existingContent);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { ok: true, retry: true };
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has unreadable reclaim ownership metadata: ${error.message}` };
+  }
+  if (existing?.taskId !== taskId || typeof existing?.reclaimId !== 'string' || !existing.reclaimId) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has malformed reclaim ownership metadata` };
+  }
+  const inspected = lifecycleLockOwnerIsLive(existing, { bootIdentity, inspectProcess });
+  if (inspected.ok) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' reclamation is owned by live process ${existing.pid}` };
+  }
+  if (!inspected.stale) {
+    return { ok: false, code: inspected.code, error: `${inspected.code}: task lifecycle authority '${taskId}' cannot reclaim its reclaim claim: ${inspected.reason}` };
+  }
+  try {
+    // Capture the exact bytes we intend to reclaim.  The subsequent rename
+    // atomically transfers whichever directory entry is present, so an
+    // interleaving publisher cannot have its replacement unlinked by name.
+    const currentContent = readFileSync(reclaimPath, 'utf8');
+    const current = JSON.parse(currentContent);
+    if (currentContent !== existingContent || current?.reclaimId !== existing.reclaimId) {
+      return { ok: true, retry: true };
+    }
+    afterLifecycleReclaimClaimReadForTest?.(current);
+
+    const transferPath = `${reclaimPath}.reclaiming-${existing.reclaimId}-${randomUUID()}`;
+    renameSync(reclaimPath, transferPath);
+    if (interruptAfterLifecycleReclaimClaimTransferForTest) {
+      return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: simulated reclaimer interruption after-claim-transfer` };
+    }
+    const transferredContent = readFileSync(transferPath, 'utf8');
+    if (transferredContent !== existingContent) {
+      // We atomically moved a newer claim after our observation. Restore those
+      // exact bytes only into an absent name; never rename over another claim.
+      try {
+        writeFileSync(reclaimPath, transferredContent, { flag: 'wx' });
+      } catch (restoreError) {
+        if (restoreError?.code !== 'EEXIST') throw restoreError;
+      }
+      rmSync(transferPath, { force: true });
+      return { ok: true, retry: true };
+    }
+    // transferPath is this attempt's private name, so removing it cannot
+    // delete a claim published by another reclaimer.
+    rmSync(transferPath, { force: true });
+    return { ok: true, reclaimed: true };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { ok: true, retry: true };
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' could not reclaim dead reclaim claim: ${error.message}` };
+  }
+}
+
+function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
+  if (taskIds === undefined) return { ok: true, release: () => {} };
+  if (!Array.isArray(taskIds) || taskIds.some(taskId => typeof taskId !== 'string' || !taskId)) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.invalidInput, error: 'lifecycle authority task ids must be a non-empty string array' };
+  }
+  const acquired = [];
+  const bootIdentity = options.lifecycleLockBootIdentity?.() ?? lifecycleBootIdentity();
+  const inspectProcess = options.lifecycleLockProcessInspector ?? (pid => {
+    process.kill(pid, 0);
+    return true;
+  });
+  for (const taskId of [...new Set(taskIds)].sort()) {
+    const token = createHash('sha256').update(taskId).digest('hex');
+    const relPath = `.agenticloop/locks/lifecycle-authority/${token}.lock`;
+    const lockPath = resolveTargetPath(root, relPath);
+    const reclaimPath = `${lockPath}.reclaim`;
+    const lockId = randomUUID();
+    const owner = { taskId, pid: process.pid, bootIdentity, lockId };
+    let acquiredHere = false;
+    for (let attempt = 0; attempt < 3 && !acquiredHere; attempt += 1) {
+      const transferRecovered = recoverTransferredLifecycleClaims(reclaimPath, taskId, {
+        bootIdentity,
+        inspectProcess,
+        afterTransferredLifecycleClaimReadForTest: options.afterTransferredLifecycleClaimReadForTest,
+      });
+      if (!transferRecovered.ok) {
+        for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+        return transferRecovered;
+      }
+      if (transferRecovered.retry) continue;
+      if (existsSync(reclaimPath)) {
+        const recovered = reclaimInterruptedLifecycleClaim(reclaimPath, taskId, {
+          bootIdentity,
+          inspectProcess,
+          afterLifecycleReclaimClaimReadForTest: options.afterLifecycleReclaimClaimReadForTest,
+          interruptAfterLifecycleReclaimClaimTransferForTest: options.lifecycleLockReclaimInterruptionForTest === 'after-claim-transfer',
+        });
+        if (!recovered.ok) {
+          for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+          return recovered;
+        }
+        // A dead reclaimer's claim was removed (or changed under inspection).
+        // Restart from the primary-lock acquisition rather than writing around
+        // a handoff whose authority state we have not re-observed.
+        continue;
+      }
+      try {
+        mkdirSync(dirname(lockPath), { recursive: true });
+        writeFileSync(lockPath, `${JSON.stringify(owner)}\n`, { flag: 'wx' });
+        acquired.push({ path: lockPath, lockId });
+        acquiredHere = true;
+        continue;
+      } catch (error) {
+        if (error?.code !== 'EEXIST') {
+          for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+          return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' is currently locked: ${error.message}` };
+        }
+      }
+
+      let existing;
+      try {
+        existing = JSON.parse(readFileSync(lockPath, 'utf8'));
+      } catch (error) {
+        for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has unreadable ownership metadata: ${error.message}` };
+      }
+      const inspected = lifecycleLockOwnerIsLive(existing, { bootIdentity, inspectProcess });
+      if (inspected.ok) {
+        for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' is currently locked by live process ${existing.pid}` };
+      }
+      if (!inspected.stale) {
+        for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+        return { ok: false, code: inspected.code, error: `${inspected.code}: task lifecycle authority '${taskId}' cannot reclaim its lock: ${inspected.reason}` };
+      }
+
+      // Serialize stale-lock reclamation with a distinct exclusive claim.  A
+      // plain read/unlink is unsafe: two reclaimers could unlink a newly
+      // acquired live lock.  Every normal acquirer observes this claim and
+      // refuses until the reclaimer either publishes its lock or gives up.
+      let reclaimId;
+      let preserveClaimForTest = false;
+      let simulatedInterruption = null;
+      let handoffCompleted = false;
+      try {
+        reclaimId = randomUUID();
+        writeFileSync(reclaimPath, `${JSON.stringify({ taskId, reclaimId, pid: process.pid, bootIdentity })}\n`, { flag: 'wx' });
+      } catch (error) {
+        for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+        // Another reclaimer may have won after our pre-create observation. Let
+        // the next bounded attempt inspect its owner rather than permanently
+        // treating an interrupted claimant as contention.
+        if (error?.code === 'EEXIST') continue;
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' reclamation could not publish its claim: ${error.message}` };
+      }
+      try {
+        if (options.lifecycleLockReclaimInterruptionForTest === 'after-claim-publication') {
+          preserveClaimForTest = true;
+          simulatedInterruption = 'after-claim-publication';
+        }
+        if (!simulatedInterruption) {
+          const current = JSON.parse(readFileSync(lockPath, 'utf8'));
+          if (current?.lockId !== existing?.lockId) continue;
+          const rechecked = lifecycleLockOwnerIsLive(current, { bootIdentity, inspectProcess });
+          if (rechecked.ok || !rechecked.stale) continue;
+          rmSync(lockPath, { force: true });
+          handoffCompleted = true;
+          if (options.lifecycleLockReclaimInterruptionForTest === 'after-primary-lock-removal') {
+            preserveClaimForTest = true;
+            simulatedInterruption = 'after-primary-lock-removal';
+          }
+        }
+      } finally {
+        if (!preserveClaimForTest) {
+          try {
+            const claim = JSON.parse(readFileSync(reclaimPath, 'utf8'));
+            if (claim?.reclaimId === reclaimId) rmSync(reclaimPath, { force: true });
+          } catch { /* The claim was already removed; never remove another owner's claim. */ }
+        }
+      }
+      if (!simulatedInterruption && handoffCompleted && options.lifecycleLockReclaimInterruptionForTest === 'after-handoff') {
+        simulatedInterruption = 'after-handoff';
+      }
+      if (simulatedInterruption) {
+        return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: simulated reclaimer interruption ${simulatedInterruption}` };
+      }
+    }
+    if (!acquiredHere) {
+      for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+      return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' changed while its stale lock was being reclaimed` };
+    }
+  }
+  return {
+    ok: true,
+    release: () => {
+      for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+    },
+  };
 }
 
 /**
@@ -589,7 +959,7 @@ function verifyExpectedMutationState(root, item) {
  *
  * @param {string} targetRoot
  * @param {Array<{type: string, path: string, content?: string|Buffer, expectedDigest?: string, expectedKind?: 'file'|'absent', validateCurrent?: Function}>} mutations
- * @param {{beforeWrite?: Function, afterMutation?: Function, afterDurableIntent?: Function, recoverableTransaction?: object}} [options]
+ * @param {{beforeWrite?: Function, afterValidation?: Function, afterFinalValidation?: Function, afterFinalVerification?: Function, afterMutation?: Function, afterDurableIntent?: Function, recoverableTransaction?: object, lifecycleAuthorityTaskIds?: string[], lifecycleLockProcessInspector?: Function, lifecycleLockBootIdentity?: Function, retainLifecycleAuthorityLocksForTest?: boolean, lifecycleLockReclaimInterruptionForTest?: 'after-claim-publication'|'after-primary-lock-removal'|'after-handoff', afterLifecycleReclaimClaimReadForTest?: Function}} [options]
  *   Testable boundaries plus an optional persisted-intent transaction. A
  *   recoverable transaction writes its intent before replacements and commits
  *   only when its designated exclusive-create mutation is written last.
@@ -601,6 +971,20 @@ function verifyExpectedMutationState(root, item) {
  */
 export function executeMutationBatch(targetRoot, mutations, options = {}) {
   const root = resolve(targetRoot);
+  const locks = acquireLifecycleAuthorityLocks(root, options.lifecycleAuthorityTaskIds, options);
+  if (!locks.ok) {
+    return { ok: false, stale: false, code: locks.code, errors: [locks.error], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+  }
+  try {
+    return executeUnlockedMutationBatch(root, mutations, options);
+  } finally {
+    // Test seam only: model an uncatchable process interruption after the
+    // owner created its lock.  Production callers never set this option.
+    if (options.retainLifecycleAuthorityLocksForTest !== true) locks.release();
+  }
+}
+
+function executeUnlockedMutationBatch(root, mutations, options) {
 
   // Phase 1: validate and resolve every mutation through the canonical
   // validator BEFORE any snapshot or write. Unsafe paths fail closed here.
@@ -686,6 +1070,55 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
     } catch (error) {
       return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
     }
+  }
+  // A caller may use this test seam to model a competing authority update after
+  // the guarded read. Re-run the complete authority comparison immediately
+  // afterward, still before snapshots or any mutation, so the batch never
+  // overwrites that update or creates a record based on it.
+  try {
+    options.afterValidation?.();
+  } catch (error) {
+    return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+  }
+  for (const item of prepared) {
+    try {
+      const stale = verifyExpectedMutationState(root, item);
+      if (stale) {
+        return { ok: false, stale: true, errors: [stale], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+      }
+    } catch (error) {
+      return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+    }
+  }
+
+  // Cooperating lifecycle writers cannot enter after the final in-section
+  // validation above. The seam models an uncooperative external filesystem
+  // change so the CAS guard remains tested independently of the lock.
+  try {
+    options.afterFinalValidation?.();
+  } catch (error) {
+    return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+  }
+  // Bind writes (including exclusive remediation-record creation) to the
+  // exact carrier and related authority state observed under the lock.
+  for (const item of prepared) {
+    try {
+      const stale = verifyExpectedMutationState(root, item);
+      if (stale) {
+        return { ok: false, stale: true, errors: [stale], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+      }
+    } catch (error) {
+      return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
+    }
+  }
+
+  // This seam deliberately follows the final verification loop. It lets tests
+  // model a cooperating lifecycle contender at the last possible point before
+  // writes; the enclosing lifecycle lock must serialize that contender.
+  try {
+    options.afterFinalVerification?.();
+  } catch (error) {
+    return { ok: false, stale: false, errors: [error.message], rollbackErrors: [], writtenFiles: [], committedPaths: [] };
   }
 
   const affectedPaths = [...new Set(prepared.map(item => item.absPath))];

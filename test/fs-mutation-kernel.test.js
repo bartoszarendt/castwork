@@ -22,6 +22,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
+import { createHash } from 'node:crypto';
 
 import {
   assertSafeRelativePath,
@@ -323,6 +324,337 @@ describe('primary errors versus rollback errors', () => {
     // victim.txt was restorable, so rollbackErrors is clean here.
     assert.deepEqual(result.rollbackErrors, []);
     assert.equal(readFileSync(join(t, 'victim.txt'), 'utf-8'), 'original');
+  });
+});
+
+describe('lifecycle authority locks', () => {
+  it('serializes a competing lifecycle writer injected after the final verification', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    let contender;
+    const started = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress',
+      expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') ?? '0'.repeat(64),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-001'],
+      afterFinalVerification: () => {
+        contender = executeMutationBatch(t, [{
+          type: 'write', path: 'carrier.txt', content: 'accepted',
+          expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') ?? '0'.repeat(64),
+        }], { lifecycleAuthorityTaskIds: ['T-001'] });
+      },
+    });
+
+    assert.equal(started.ok, true, started.errors.join('\n'));
+    assert.equal(contender.ok, false);
+    assert.match(contender.errors[0], /lifecycle authority 'T-001' is currently locked/);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+
+    const terminal = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted',
+      expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') ?? '0'.repeat(64),
+    }], { lifecycleAuthorityTaskIds: ['T-001'] });
+    assert.equal(terminal.ok, true, terminal.errors.join('\n'));
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+  });
+
+  it('reclaims an interrupted lock owner and completes the next guarded mutation', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const expected = fingerprintTargetPath(t, 'carrier.txt');
+    const interrupted = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: expected,
+    }], {
+      lifecycleAuthorityTaskIds: ['T-CRASH'],
+      // Model SIGKILL after ownership was published: normal finally cleanup
+      // cannot run, leaving an owner file whose PID is now reported dead.
+      retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot',
+    });
+    assert.equal(interrupted.ok, true, interrupted.errors.join('\n'));
+
+    const reclaimed = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-CRASH'],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => false,
+    });
+    assert.equal(reclaimed.ok, true, reclaimed.errors.join('\n'));
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+  });
+
+  it('reclaims dead reclaim claims interrupted throughout stale-lock handoff', () => {
+    for (const phase of ['after-claim-publication', 'after-primary-lock-removal', 'after-handoff']) {
+      const t = target();
+      writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+      const expected = fingerprintTargetPath(t, 'carrier.txt');
+      const held = executeMutationBatch(t, [{
+        type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: expected,
+      }], {
+        lifecycleAuthorityTaskIds: [`T-RECLAIM-${phase}`],
+        retainLifecycleAuthorityLocksForTest: true,
+        lifecycleLockBootIdentity: () => 'test-boot',
+      });
+      assert.equal(held.ok, true, `${phase}: ${held.errors.join('\n')}`);
+
+      const interrupted = executeMutationBatch(t, [{
+        type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+        expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+      }], {
+        lifecycleAuthorityTaskIds: [`T-RECLAIM-${phase}`],
+        lifecycleLockBootIdentity: () => 'test-boot',
+        lifecycleLockProcessInspector: () => false,
+        lifecycleLockReclaimInterruptionForTest: phase,
+      });
+      assert.equal(interrupted.ok, false, `${phase}: interruption must leave no successful mutation`);
+
+      const recovered = executeMutationBatch(t, [{
+        type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+        expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+      }], {
+        lifecycleAuthorityTaskIds: [`T-RECLAIM-${phase}`],
+        lifecycleLockBootIdentity: () => 'test-boot',
+        lifecycleLockProcessInspector: () => false,
+      });
+      assert.equal(recovered.ok, true, `${phase}: ${recovered.errors.join('\n')}`);
+      assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+    }
+  });
+
+  it('does not unlink a live replacement claim when another reclaimer wins after its reread', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-RECLAIM-TOCTOU';
+    let publishedByA;
+
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    // Seed the dead R0 that reclaimer B will inspect and attempt to reclaim.
+    const interruptedR0 = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => false,
+      lifecycleLockReclaimInterruptionForTest: 'after-claim-publication',
+    });
+    assert.equal(interruptedR0.ok, false);
+
+    const reclaimerB = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: (_pid, owner) => owner?.reclaimId === publishedByA,
+      afterLifecycleReclaimClaimReadForTest: () => {
+        // Reclaimer A removes B's observed dead R0 and publishes its live R1
+        // before B performs its atomic ownership transfer.
+        const reclaimerA = executeMutationBatch(t, [{
+          type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+          expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+        }], {
+          lifecycleAuthorityTaskIds: [taskId],
+          lifecycleLockBootIdentity: () => 'test-boot',
+          lifecycleLockProcessInspector: () => false,
+          lifecycleLockReclaimInterruptionForTest: 'after-claim-publication',
+        });
+        assert.equal(reclaimerA.ok, false);
+        const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+        const reclaimName = readdirSync(lockDir).find(name => name.endsWith('.lock.reclaim'));
+        publishedByA = JSON.parse(readFileSync(join(lockDir, reclaimName), 'utf8')).reclaimId;
+      },
+    });
+
+    assert.equal(reclaimerB.ok, false);
+    assert.equal(reclaimerB.code, 'fs.lifecycle_lock.contended');
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    const reclaimName = readdirSync(lockDir).find(name => name.endsWith('.lock.reclaim'));
+    const surviving = JSON.parse(readFileSync(join(lockDir, reclaimName), 'utf8'));
+    assert.equal(surviving.reclaimId, publishedByA, 'A\'s live R1 survives B\'s removal attempt');
+    assert.equal(readdirSync(lockDir).some(name => name.includes('.lock.reclaim.reclaiming-')), false, 'B cleans its completed transfer entry');
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+  });
+
+  it('restores a live replacement claim after interruption during its private transfer', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-RECLAIM-TRANSFER-INTERRUPTION';
+    let publishedByA;
+
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const interruptedR0 = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => false,
+      lifecycleLockReclaimInterruptionForTest: 'after-claim-publication',
+    });
+    assert.equal(interruptedR0.ok, false);
+
+    const interruptedB = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: (_pid, owner) => owner?.reclaimId === publishedByA,
+      afterLifecycleReclaimClaimReadForTest: () => {
+        const reclaimerA = executeMutationBatch(t, [{
+          type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+          expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+        }], {
+          lifecycleAuthorityTaskIds: [taskId],
+          lifecycleLockBootIdentity: () => 'test-boot',
+          lifecycleLockProcessInspector: () => false,
+          lifecycleLockReclaimInterruptionForTest: 'after-claim-publication',
+        });
+        assert.equal(reclaimerA.ok, false);
+        const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+        const reclaimName = readdirSync(lockDir).find(name => name.endsWith('.lock.reclaim'));
+        publishedByA = JSON.parse(readFileSync(join(lockDir, reclaimName), 'utf8')).reclaimId;
+      },
+      lifecycleLockReclaimInterruptionForTest: 'after-claim-transfer',
+    });
+    assert.equal(interruptedB.ok, false);
+    assert.equal(interruptedB.code, 'fs.lifecycle_lock.contended');
+
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    assert.equal(readdirSync(lockDir).some(name => name.includes('.lock.reclaim.reclaiming-')), true, 'B leaves A\'s live R1 discoverable at its transfer path');
+
+    const recovered = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: (_pid, owner) => owner?.reclaimId === publishedByA || owner?.reclaimId === 'R2-concurrent',
+      afterTransferredLifecycleClaimReadForTest: () => {
+        writeFileSync(join(lockDir, `${createHash('sha256').update(taskId).digest('hex')}.lock.reclaim`), `${JSON.stringify({
+          taskId, reclaimId: 'R2-concurrent', pid: 1003, bootIdentity: 'test-boot',
+        })}\n`, { flag: 'wx' });
+      },
+    });
+    assert.equal(recovered.ok, false);
+    assert.equal(recovered.code, 'fs.lifecycle_lock.contended');
+    const reclaimName = readdirSync(lockDir).find(name => name.endsWith('.lock.reclaim'));
+    assert.equal(JSON.parse(readFileSync(join(lockDir, reclaimName), 'utf8')).reclaimId, 'R2-concurrent', 'recovery preserves the concurrently published live claim');
+    assert.equal(readdirSync(lockDir).some(name => name.includes('.lock.reclaim.reclaiming-')), false, 'recovery leaves no orphaned transfer entry');
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+  });
+
+  it('cleans an interrupted transfer once a newer live claim is authoritative', () => {
+    const t = target();
+    const taskId = 'T-RECLAIM-NEWER-AUTHORITATIVE';
+    const token = createHash('sha256').update(taskId).digest('hex');
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    const reclaimName = `${token}.lock.reclaim`;
+    const reclaimPath = join(lockDir, reclaimName);
+    const transferred = { taskId, reclaimId: 'R1-transferred', pid: 1001, bootIdentity: 'test-boot' };
+    const authoritative = { taskId, reclaimId: 'R2-authoritative', pid: 1002, bootIdentity: 'test-boot' };
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(`${reclaimPath}.reclaiming-${transferred.reclaimId}-interrupted`, `${JSON.stringify(transferred)}\n`, 'utf8');
+    writeFileSync(reclaimPath, `${JSON.stringify(authoritative)}\n`, 'utf8');
+
+    const resumedB = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'absent',
+    }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: (_pid, owner) => owner?.reclaimId === authoritative.reclaimId,
+    });
+    assert.equal(resumedB.ok, false);
+    assert.equal(resumedB.code, 'fs.lifecycle_lock.contended');
+    assert.equal(JSON.parse(readFileSync(reclaimPath, 'utf8')).reclaimId, authoritative.reclaimId);
+    assert.equal(readdirSync(lockDir).some(name => name.includes('.lock.reclaim.reclaiming-')), false, 'the older private transfer is cleaned');
+    assert.equal(existsSync(join(t, 'carrier.txt')), false);
+  });
+
+  it('refuses a live reclaim claim with the typed contention diagnostic', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const expected = fingerprintTargetPath(t, 'carrier.txt');
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: expected,
+    }], {
+      lifecycleAuthorityTaskIds: ['T-RECLAIM-LIVE'],
+      retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const interrupted = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-RECLAIM-LIVE'],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => false,
+      lifecycleLockReclaimInterruptionForTest: 'after-claim-publication',
+    });
+    assert.equal(interrupted.ok, false);
+
+    const refused = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-RECLAIM-LIVE'],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true,
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'fs.lifecycle_lock.contended');
+    assert.match(refused.errors[0], /^fs\.lifecycle_lock\.contended:.*reclamation is owned by live process/);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+  });
+
+  it('refuses a live lock owner with a typed contention diagnostic', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress',
+      expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-LIVE'],
+      retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const refused = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted',
+      expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: ['T-LIVE'],
+      lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true,
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'fs.lifecycle_lock.contended');
+    assert.match(refused.errors[0], /^fs\.lifecycle_lock\.contended:/);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
   });
 });
 

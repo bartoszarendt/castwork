@@ -7,6 +7,8 @@ import { join } from 'node:path';
 
 import { serializeValidationResult } from '../src/result-envelope.js';
 import { getProjectRoleCapabilities } from '../src/role-capabilities.js';
+import { applyFilesCloseoutTerminalTransition } from '../src/closeout-cli.js';
+import { loadProjectMap } from '../src/project-map.js';
 import { createCloseoutCliFixture } from './helpers/closeout-cli-fixture.js';
 import { git as fixtureGit } from './helpers/dispatch-fixture.js';
 
@@ -131,5 +133,41 @@ describe('closeout record and status', () => {
     for (const taskId of ['T-001']) {
       assert.match(readFileSync(join(target, '.agenticloop', 'tasks', `${taskId}.md`), 'utf8'), /status: accepted/);
     }
+  });
+
+  it('serializes a terminal transition after final marker verification so the marker cannot restore accepted', async () => {
+    const target = await makeVerifiedGitTarget('marker-terminal-interleave');
+    const artifact = await certify(target);
+    const packetPath = join(target, '.agenticloop', 'tmp', 'packet.json');
+    const prepared = await closeout([
+      'prepare', '--work-unit', 'milestone:M00', '--artifact', artifact, '--covered-tasks', 'T-001', '--output', packetPath,
+    ], target);
+    assert.equal(prepared.status, 0, `${prepared.stdout}${prepared.stderr}`);
+
+    const packet = JSON.parse(readFileSync(packetPath, 'utf8'));
+    const config = loadProjectMap(target)?.config;
+    let contender;
+    let interleaved = false;
+    const recorded = await closeout(
+      ['record', '--packet', packetPath, '--yes'],
+      target,
+      {
+        fsMutationOptions: {
+          afterFinalVerification: () => {
+            if (interleaved) return;
+            interleaved = true;
+            contender = applyFilesCloseoutTerminalTransition(target, config, packet, { err: () => {} });
+          },
+        },
+      }
+    );
+
+    assert.equal(interleaved, true);
+    assert.equal(contender.ok, false, 'the competing terminal transition must not enter the marker critical section');
+    assert.match(contender.errors[0], /lifecycle authority 'T-001' is currently locked/);
+    assert.equal(recorded.status, 0, `${recorded.stdout}${recorded.stderr}`);
+    const carrier = readFileSync(join(target, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+    assert.match(carrier, /^status: closed$/m, 'the successful closeout terminal transition must be preserved');
+    assert.match(carrier, /AGENT_CLOSEOUT_GATE:/, 'the legitimate marker must be retained with the terminal state');
   });
 });

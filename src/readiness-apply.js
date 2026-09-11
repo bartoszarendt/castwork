@@ -66,6 +66,7 @@ import { verifyCommittedAttributedSource } from './committed-source.js';
 import { executeMutationBatch, fingerprintTargetPath, resolveTargetPath } from './fs-mutation-kernel.js';
 import { repositoryAuthorityIdentity } from './repository-identity.js';
 import { prepareDecompositionSource } from './dispatch-envelope.js';
+import { evaluateDispatchableLifecycle, taskStatusFromBody } from './dispatchability.js';
 import { readTaskActivationBinding } from './activation-store.js';
 import { evaluateHandoffPreflight } from './handoff-preflight.js';
 import { isGitObjectId } from './git-oid.js';
@@ -902,6 +903,7 @@ export function applyReadinessPlan(input) {
           prospectiveTaskContent = candidate.candidate;
           candidates.push({
             role: 'task_carrier',
+            taskId,
             path: entry.path,
             predecessor: entry,
             content: candidate.candidate,
@@ -1003,10 +1005,10 @@ export function applyReadinessPlan(input) {
 
   // --- 8. The filesystem transaction ------------------------------------
   capturePredecessorBytes(target, candidates);
-  const mutations = candidates.map(item => (item.predecessor.state === 'absent'
-    ? { type: 'create', path: item.path, content: item.content }
-    : { type: 'write', path: item.path, content: item.content, expectedDigest: item.predecessor.digest, expectedKind: 'file' }));
-  const written = executeMutationBatch(target, mutations, beforeWrite ? { beforeWrite } : {});
+  const mutations = candidates.map(readinessCandidateMutation);
+  const written = executeMutationBatch(target, mutations, {
+    ...(beforeWrite ? { beforeWrite } : {}), ...readinessLifecycleLockOptions(candidates),
+  });
   if (!written.ok) {
     const rolledBack = written.rollbackErrors.length === 0;
     return result({
@@ -1459,7 +1461,7 @@ export function applyWorkUnitReadinessPlan(input) {
           else if (prepared.candidateDigest !== executable.task.prospectiveDigest) prepareErrors.push(`${taskId}: prepared carrier differs from the plan binding`);
           else {
             prospective = prepared.candidate;
-            taskCandidates.push({ role: 'task_carrier', path: entry.path, predecessor: entry, content: prospective, candidateDigest: prepared.candidateDigest, nextStatus: 'agent-ready' });
+            taskCandidates.push({ role: 'task_carrier', taskId, path: entry.path, predecessor: entry, content: prospective, candidateDigest: prepared.candidateDigest, nextStatus: 'agent-ready' });
           }
         }
       }
@@ -1527,10 +1529,10 @@ export function applyWorkUnitReadinessPlan(input) {
   });
 
   capturePredecessorBytes(target, transactionCandidates);
-  const mutations = transactionCandidates.map(item => item.predecessor.state === 'absent'
-    ? { type: 'create', path: item.path, content: item.content }
-    : { type: 'write', path: item.path, content: item.content, expectedDigest: item.predecessor.digest, expectedKind: 'file' });
-  const written = executeMutationBatch(target, mutations, beforeWrite ? { beforeWrite } : {});
+  const mutations = transactionCandidates.map(readinessCandidateMutation);
+  const written = executeMutationBatch(target, mutations, {
+    ...(beforeWrite ? { beforeWrite } : {}), ...readinessLifecycleLockOptions(transactionCandidates),
+  });
   if (!written.ok) return refuse(written.rollbackErrors.length === 0 ? 'rolled_back' : 'unresolved', written.errors, {
     expectedHead: plan.expectedHead,
     changedPaths: written.rollbackErrors.length === 0 ? [] : changedPaths,
@@ -1782,6 +1784,36 @@ function proveConsumedReadinessCommit(target, plan) {
   return { ok: errors.length === 0, head, errors };
 }
 
+function readinessLifecycleLockOptions(candidates) {
+  const taskIds = [...new Set(candidates
+    .filter(item => item.role === 'task_carrier' && typeof item.taskId === 'string')
+    .map(item => item.taskId))].sort();
+  return taskIds.length > 0 ? { lifecycleAuthorityTaskIds: taskIds } : {};
+}
+
+function readinessCandidateMutation(item) {
+  const mutation = item.predecessor.state === 'absent'
+    ? { type: 'create', path: item.path, content: item.content }
+    : { type: 'write', path: item.path, content: item.content, expectedDigest: item.predecessor.digest, expectedKind: 'file' };
+  if (item.role !== 'task_carrier') return mutation;
+  return {
+    ...mutation,
+    // Re-evaluate the legal transition from the current carrier while the
+    // shared lifecycle lock is held.  A terminal writer that won before this
+    // batch is therefore refused with the same lifecycle code rather than
+    // being overwritten by the reviewed readiness snapshot.
+    validateCurrent: bytes => {
+      const current = evaluateCurrentTaskCarrier({
+        currentContent: bytes.toString('utf8'), relPath: item.path,
+        taskId: item.taskId, nextStatus: item.nextStatus,
+      });
+      return current.ok
+        ? { ok: true }
+        : { ok: false, error: `task.lifecycle.not_dispatchable: ${current.errors.join('; ')}` };
+    },
+  };
+}
+
 /**
  * Restore only the operation-owned paths - and, when a path set is supplied, only
  * their index entries - to their exact predecessor state.
@@ -1794,9 +1826,24 @@ function proveConsumedReadinessCommit(target, plan) {
  * repository-wide) is performed anywhere in this module.
  */
 function restorePredecessors(target, candidates, changedPaths = null, anchor = 'HEAD') {
-  const rollback = executeMutationBatch(target, candidates.map(item => (item.predecessor.state === 'absent'
-    ? { type: 'remove', path: item.path }
-    : { type: 'write', path: item.path, content: item.predecessorBytes })));
+  const rollback = executeMutationBatch(target, candidates.map(item => {
+    if (item.predecessor.state === 'absent') return { type: 'remove', path: item.path };
+    const current = fingerprintTargetPath(target, item.path);
+    const mutation = {
+      type: 'write', path: item.path, content: item.predecessorBytes,
+      expectedKind: 'file', expectedDigest: current ?? '0'.repeat(64),
+    };
+    if (item.role !== 'task_carrier') return mutation;
+    return {
+      ...mutation,
+      validateCurrent: bytes => {
+        const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(bytes.toString('utf8')));
+        return lifecycle.ok
+          ? { ok: true }
+          : { ok: false, error: `task.lifecycle.not_dispatchable: ${lifecycle.reason}` };
+      },
+    };
+  }), readinessLifecycleLockOptions(candidates));
   const errors = [...rollback.errors, ...rollback.rollbackErrors];
   if (changedPaths !== null) {
     const unstaged = git(target, ['reset', '--quiet', anchor, '--', ...changedPaths.map(literalPathspec)]);

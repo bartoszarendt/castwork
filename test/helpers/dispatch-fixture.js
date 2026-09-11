@@ -188,12 +188,27 @@ async function buildDispatchFixture(temp, name, options = {}) {
   // project that predates activation or was created with `task new --scaffold`.
   const scaffold = options.scaffold === true;
   const taskIds = options.taskIds ?? ['T-001'];
+  const taskFileTemplate = options.taskFileTemplate ?? '.agenticloop/tasks/{taskId}.md';
+  const taskCarrier = taskId => taskFileTemplate.replaceAll('{taskId}', taskId);
+  const taskDirectory = dirname(taskCarrier('__task_id_probe__')).replaceAll('\\', '/');
+  const taskDirectoryPath = taskDirectory === '.' ? '' : taskDirectory;
+  const taskInventoryId = `files:${taskDirectoryPath || '.'}`;
   const parallel = options.parallel === true;
   assert.ok(taskIds.length > 0 && new Set(taskIds).size === taskIds.length, 'dispatch fixture task IDs must be unique');
   const root = mkdtempSync(join(temp, `${name}-`));
   createTaskProjectFixture(root, { initialBranch: 'task/T-001' });
   if (typeof options.projectMapContent === 'string') {
     writeFileSync(join(root, '.agenticloop', 'project.md'), options.projectMapContent, 'utf8');
+  } else if (options.taskFileTemplate) {
+    const projectMapPath = join(root, '.agenticloop', 'project.md');
+    writeFileSync(
+      projectMapPath,
+      readFileSync(projectMapPath, 'utf8').replace(
+        'task_file_template: ".agenticloop/tasks/{taskId}.md"',
+        () => `task_file_template: "${taskFileTemplate}"`
+      ),
+      'utf8'
+    );
   }
   const trust = createTestHostTrust({ target: root });
   const operatorTrustRoot = join(temp, `${name}-operator-trust`);
@@ -210,7 +225,8 @@ async function buildDispatchFixture(temp, name, options = {}) {
     const capture = scaffold ? null : activation(trust, DEFAULT_ACTIVATION_PAYLOAD, sha256(DEFAULT_ACTIVATION_PAYLOAD), { intendedTaskId: taskId });
     captures.set(taskId, capture);
     if (capture) writeFileSync(join(root, capturePath), JSON.stringify(capture, null, 2), 'utf8');
-    const taskPath = join(root, '.agenticloop', 'tasks', `${taskId}.md`);
+    const taskPath = join(root, taskCarrier(taskId));
+    mkdirSync(dirname(taskPath), { recursive: true });
     taskPaths.set(taskId, taskPath);
     let body = readFileSync(join(root, 'agenticloop', 'memory', 'task-record.md'), 'utf8')
       .replaceAll('T-001', taskId)
@@ -266,7 +282,7 @@ async function buildDispatchFixture(temp, name, options = {}) {
     }
     writeFileSync(taskPath, body, 'utf8');
   }
-  git(root, ['add', 'src', '.agenticloop/project.md', '.agenticloop/tasks', ...(!scaffold ? ['.agenticloop/activation'] : [])]);
+  git(root, ['add', 'src', '.agenticloop/project.md', ...taskIds.map(taskCarrier), ...(!scaffold ? ['.agenticloop/activation'] : [])]);
   git(root, ['commit', '-m', 'task fixture']);
   for (const taskId of taskIds) {
     const baseline = await runCliInProcess([
@@ -285,7 +301,7 @@ async function buildDispatchFixture(temp, name, options = {}) {
     .filter(([, status]) => status !== 'agent-ready'));
   const dependencySource = JSON.stringify({
     kind: 'agenticloop.dependency-snapshot', schemaVersion: 1,
-    source: 'files:.agenticloop/tasks', observedAt,
+    source: taskInventoryId, observedAt,
     freshnessPolicy: { maxAgeSeconds: 3600 }, statuses: initialDependencyStatuses,
   });
   writeFileSync(join(root, 'dependencies.json'), dependencySource, 'utf8');
@@ -330,7 +346,7 @@ async function buildDispatchFixture(temp, name, options = {}) {
     const current = readFileSync(taskPaths.get(taskId), 'utf8');
     const history = loadFilesTaskContractRecords(root, taskId);
     return {
-      backend: 'files', taskId, carrier: `.agenticloop/tasks/${taskId}.md`, body: current,
+      backend: 'files', taskId, carrier: taskCarrier(taskId), body: current,
       digest: sha256(current), trustedRecords: history.trustedRecords, trustedRecordErrors: history.errors,
     };
   }]));
@@ -361,7 +377,7 @@ async function buildDispatchFixture(temp, name, options = {}) {
   // Decomposition completeness is derived from a real scan over the exact task
   // surface, never asserted: the fixture must prove what a caller must prove.
   const inventoryEntries = taskIds.map(taskId => ({
-    carrier: `.agenticloop/tasks/${taskId}.md`, content: snapshots.get(taskId)().body, readError: null,
+    carrier: taskCarrier(taskId), content: snapshots.get(taskId)().body, readError: null,
   }));
   const decompositions = new Map();
   mkdirSync(join(root, '.agenticloop', 'decompositions'), { recursive: true });
@@ -374,9 +390,9 @@ async function buildDispatchFixture(temp, name, options = {}) {
     const scanned = evaluateParallelScan({
       workUnit: { id: options.workUnit ?? 'fixture-work-unit', backend: 'files' },
       inventory: normalizeFilesTaskInventory({
-        inventoryId: 'files:.agenticloop/tasks', entries: inventoryEntries, complete: true,
+        inventoryId: taskInventoryId, entries: inventoryEntries, complete: true,
         enumeration: createTaskInventoryEnumeration({
-          backend: 'files', inventoryId: 'files:.agenticloop/tasks', observedAt,
+          backend: 'files', inventoryId: taskInventoryId, observedAt,
           discovered: inventoryEntries.length, returned: inventoryEntries.length,
         }),
       }),
@@ -430,21 +446,21 @@ async function buildDispatchFixture(temp, name, options = {}) {
         configurable: true,
       });
     }
-    const entries = readdirSync(join(root, '.agenticloop', 'tasks'))
+    const entries = readdirSync(join(root, taskDirectoryPath))
       .filter(entry => entry.endsWith('.md'))
       .sort()
       .map(entry => ({
-        carrier: `.agenticloop/tasks/${entry}`,
-        content: readFileSync(join(root, '.agenticloop', 'tasks', entry), 'utf8'),
+        carrier: taskDirectoryPath ? `${taskDirectoryPath}/${entry}` : entry,
+        content: readFileSync(join(root, taskDirectoryPath, entry), 'utf8'),
         readError: null,
       }));
     return normalizeFilesTaskInventory({
-      inventoryId: 'files:.agenticloop/tasks',
+      inventoryId: taskInventoryId,
       entries,
       complete: true,
       enumeration: createTaskInventoryEnumeration({
         backend: 'files',
-        inventoryId: 'files:.agenticloop/tasks',
+        inventoryId: taskInventoryId,
         observedAt: new Date().toISOString(),
         discovered: entries.length,
         returned: entries.length,
@@ -452,7 +468,7 @@ async function buildDispatchFixture(temp, name, options = {}) {
     });
   };
   const template = {
-    root, trust, operatorTrustRoot, trustStorePath, tree, basePaths, head, observedAt,
+    root, trust, operatorTrustRoot, trustStorePath, tree, basePaths, head, observedAt, taskFileTemplate,
     taskIds, captures, readinessByTask, decompositions,
   };
   return scaffold ? template : bindDispatchFixture(template, root);
@@ -482,7 +498,11 @@ function cloneTrust(trust) {
 }
 
 function bindDispatchFixture(template, root) {
-  const { tree, head, observedAt } = template;
+  const { tree, head, observedAt, taskFileTemplate = '.agenticloop/tasks/{taskId}.md' } = template;
+  const taskCarrier = taskId => taskFileTemplate.replaceAll('{taskId}', taskId);
+  const taskDirectory = dirname(taskCarrier('__task_id_probe__')).replaceAll('\\', '/');
+  const taskDirectoryPath = taskDirectory === '.' ? '' : taskDirectory;
+  const taskInventoryId = `files:${taskDirectoryPath || '.'}`;
   const trust = cloneTrust(template.trust);
   const operatorTrustRoot = template.operatorTrustRoot;
   const trustStorePath = template.trustStorePath;
@@ -491,12 +511,12 @@ function bindDispatchFixture(template, root) {
   const captures = structuredClone(template.captures);
   const readinessByTask = structuredClone(template.readinessByTask);
   const decompositions = structuredClone(template.decompositions);
-  const taskPaths = new Map(taskIds.map(taskId => [taskId, join(root, '.agenticloop', 'tasks', `${taskId}.md`)]));
+  const taskPaths = new Map(taskIds.map(taskId => [taskId, join(root, taskCarrier(taskId))]));
   const snapshots = new Map(taskIds.map(taskId => [taskId, () => {
     const current = readFileSync(taskPaths.get(taskId), 'utf8');
     const history = loadFilesTaskContractRecords(root, taskId);
     return {
-      backend: 'files', taskId, carrier: `.agenticloop/tasks/${taskId}.md`, body: current,
+      backend: 'files', taskId, carrier: taskCarrier(taskId), body: current,
       digest: sha256(current), trustedRecords: history.trustedRecords, trustedRecordErrors: history.errors,
     };
   }]));
@@ -515,21 +535,21 @@ function bindDispatchFixture(template, root) {
         configurable: true,
       });
     }
-    const entries = readdirSync(join(root, '.agenticloop', 'tasks'))
+    const entries = readdirSync(join(root, taskDirectoryPath))
       .filter(entry => entry.endsWith('.md'))
       .sort()
       .map(entry => ({
-        carrier: `.agenticloop/tasks/${entry}`,
-        content: readFileSync(join(root, '.agenticloop', 'tasks', entry), 'utf8'),
+        carrier: taskDirectoryPath ? `${taskDirectoryPath}/${entry}` : entry,
+        content: readFileSync(join(root, taskDirectoryPath, entry), 'utf8'),
         readError: null,
       }));
     return normalizeFilesTaskInventory({
-      inventoryId: 'files:.agenticloop/tasks',
+      inventoryId: taskInventoryId,
       entries,
       complete: true,
       enumeration: createTaskInventoryEnumeration({
         backend: 'files',
-        inventoryId: 'files:.agenticloop/tasks',
+        inventoryId: taskInventoryId,
         observedAt: new Date().toISOString(),
         discovered: entries.length,
         returned: entries.length,

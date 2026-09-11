@@ -182,6 +182,11 @@ import {
   validatePreparedCommandCheckExecutions,
 } from './task-fact-readers.js';
 import {
+  publicOutputMutation,
+  publicOutputMutationFailure,
+  publicOutputTargetRelativePath,
+} from './public-output-policy.js';
+import {
   WORK_UNIT_READINESS_PLAN_KIND,
   buildReadinessPlan,
   buildWorkUnitReadinessPlan,
@@ -371,6 +376,37 @@ export function reviewEntryPersistenceFailure(stage, { stale = false } = {}) {
   const [code, evidenceState, disposition] = facts[stage === 'write' && stale ? 'carrier' : stage] ?? [];
   if (!code) return null;
   return { code, evidenceState, disposition };
+}
+
+/**
+ * Re-read authority facts for a files review-entry carrier write. Review
+ * preparation requires a dispatchable task; terminal outcome attachment is
+ * historical evidence but still requires a well-formed carrier. Callers pass
+ * this reader to the mutation kernel, which invokes it under the shared
+ * lifecycle-authority lock.
+ */
+function resolveReviewEntryLifecycle(currentBody, { allowTerminalHistory = false } = {}) {
+  const currentContract = taskContractDigest(currentBody);
+  if (!currentContract.ok) {
+    return {
+      ok: false,
+      diagnostic: {
+        type: 'live_authorization', code: 'verification.context.malformed', evidenceState: 'malformed',
+      },
+      reason: currentContract.error,
+    };
+  }
+  const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(currentBody));
+  if (!lifecycle.ok && !allowTerminalHistory) {
+    return {
+      ok: false,
+      diagnostic: {
+        type: 'live_authorization', code: 'task.lifecycle.not_dispatchable', evidenceState: lifecycle.evidenceState,
+      },
+      reason: lifecycle.reason,
+    };
+  }
+  return { ok: true, contract: currentContract, lifecycle };
 }
 
 /** The review-entry guard's non-persistence facts are deliberately distinct. */
@@ -1332,12 +1368,17 @@ function writeCheckEvidenceUpdate(
 
 
 /** Atomically persist a public JSON artifact below the selected target. */
-function writeTargetJson(target, relPath, value) {
-  const destination = publicTargetRelativePath(target, relPath, 'output path');
-  const applied = executeMutationBatch(target, [{
-    type: 'write', path: destination.relPath, content: `${JSON.stringify(value, null, 2)}\n`,
-  }]);
+function writeTargetJson(target, relPath, value, projectConfig, taskId, fsMutationOptions = null) {
+  const destination = publicOutputTargetRelativePath(target, relPath, 'output path', {
+    projectConfig,
+    activeTaskId: taskId,
+  });
+  const applied = executeMutationBatch(target, [
+    publicOutputMutation(destination, `${JSON.stringify(value, null, 2)}\n`),
+  ], fsMutationOptions ?? {});
   if (!applied.ok) {
+    const refusal = publicOutputMutationFailure(destination, 'output path', applied);
+    if (refusal) throw refusal;
     throw new VerificationContextMalformedError(`output could not be written atomically: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`);
   }
   return destination.path;
@@ -2932,7 +2973,14 @@ export async function cmdTask(args, io = createIo()) {
       // kernel and report the disposition; stdout always receives the source
       // so it can still be redirected or inspected.
       if (opts.output) {
-        const outputPath = publicTargetRelativePath(target, opts.output, 'decomposition output');
+        // This is the designated Maintainer decomposition writer. Its existing
+        // compare-before-write flow owns this one authority root; all other
+        // public output destinations remain protected by the shared policy.
+        const outputPath = publicOutputTargetRelativePath(target, opts.output, 'decomposition output', {
+          projectConfig,
+          activeTaskId: taskId,
+          authorizedAuthorityPrefixes: ['.agenticloop/decompositions'],
+        });
         const sourceContent = `${prepared.source.trimEnd()}\n`;
         const sourceDigest = taskRecordDigest(sourceContent);
         const priorAbsPath = resolve(target, outputPath.relPath);
@@ -2965,12 +3013,17 @@ export async function cmdTask(args, io = createIo()) {
         }
         // B5: New-file uses expectedKind absent so concurrent creators are refused.
         const applied = executeMutationBatch(target, [{
-          type: 'write', path: outputPath.relPath, content: sourceContent,
+          ...publicOutputMutation(outputPath, sourceContent),
           ...(priorExisted
             ? { expectedDigest: priorDigest, expectedKind: 'file' }
             : { expectedKind: 'absent' }),
-        }]);
+        }], io?.fsMutationOptions ?? {});
         if (!applied.ok) {
+          const refusal = publicOutputMutationFailure(outputPath, 'decomposition output', applied);
+          if (refusal) {
+            return printGateResult('task prepare-decomposition', commandFailure('task prepare-decomposition',
+              refusal, 'operational_error', {}, target), asJson, io);
+          }
           return printGateResult('task prepare-decomposition', commandFailure('task prepare-decomposition',
             new VerificationContextMalformedError(
               `decomposition source could not be written atomically: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`
@@ -3338,7 +3391,7 @@ export async function cmdTask(args, io = createIo()) {
       }
       const presentedValidation = presentGateResultForTarget(prepared.validation, target);
       const outputPath = prepared.ok && !opts.packet && opts.output
-        ? writeTargetJson(target, opts.output, prepared.packet)
+        ? writeTargetJson(target, opts.output, prepared.packet, projectConfig, taskId, io?.fsMutationOptions)
         : null;
       if (asJson) {
         if (prepared.ok && opts.packet) printGateResult('task prepare-dispatch', presentedValidation, true, io);
@@ -3775,6 +3828,7 @@ export async function cmdTask(args, io = createIo()) {
       ];
       const committed = executeMutationBatch(target, mutationActions, {
         ...(io?.fsMutationOptions ?? {}),
+        lifecycleAuthorityTaskIds: [taskId],
         ...(intentAuthenticator ? {
           recoverableTransaction: {
             intentPath: roleStartTransactionPath,
@@ -3831,7 +3885,15 @@ export async function cmdTask(args, io = createIo()) {
         // N3: Restore using kernel guards. Restore carrier to prior bytes;
         // restore pre-existing check-evidence bytes exactly.
         const restoreActions = [
-          { type: 'write', path: carrier, content: currentContent, expectedDigest: resultingDigest, expectedKind: 'file' },
+          {
+            type: 'write', path: carrier, content: currentContent, expectedDigest: resultingDigest, expectedKind: 'file',
+            validateCurrent: bytes => {
+              const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(bytes.toString('utf8')));
+              return lifecycle.ok
+                ? { ok: true }
+                : { ok: false, error: `task.lifecycle.not_dispatchable: ${lifecycle.reason}` };
+            },
+          },
         ];
         if (consumptionExists) restoreActions.push({ type: 'remove', path: consumptionPath });
         for (const record of attemptSupersessions) {
@@ -3848,7 +3910,10 @@ export async function cmdTask(args, io = createIo()) {
         } else if (checksExist && !checksPreExists) {
           restoreActions.push({ type: 'remove', path: checkEvidencePath.relPath });
         }
-        const restored = executeMutationBatch(target, restoreActions);
+        // Recovery writes the complete prior carrier.  It must use the same
+        // authority lock as the original role-start transition so a terminal
+        // writer cannot be restored over after post-write verification.
+        const restored = executeMutationBatch(target, restoreActions, { lifecycleAuthorityTaskIds: [taskId] });
         const finalCarrier = readFileSync(filePath, 'utf8');
         const restoredOk = restored.ok && finalCarrier === currentContent;
         const result = createValidationResult({
@@ -3950,7 +4015,7 @@ export async function cmdTask(args, io = createIo()) {
         } else {
           try {
             refreshPlan = createHandoffEvidenceRefreshPlan({ target, preflight: result });
-            refreshPlanPath = writeTargetJson(target, opts.repairPlan, refreshPlan);
+            refreshPlanPath = writeTargetJson(target, opts.repairPlan, refreshPlan, projectConfig, taskId, io?.fsMutationOptions);
           } catch (error) {
             return printGateResult('task handoff-preflight',
               commandFailure('task handoff-preflight', error, 'operational_error', {}, target), asJson, io);
@@ -3967,7 +4032,7 @@ export async function cmdTask(args, io = createIo()) {
       };
       if (opts.output) {
         try {
-          writeTargetJson(target, opts.output, { ...result, ...refreshPlanFields });
+          writeTargetJson(target, opts.output, { ...result, ...refreshPlanFields }, projectConfig, taskId, io?.fsMutationOptions);
         } catch (error) {
           return printGateResult('task handoff-preflight',
             commandFailure('task handoff-preflight', error, 'operational_error', {}, target), asJson, io);
@@ -4585,7 +4650,7 @@ export async function cmdTask(args, io = createIo()) {
             : null,
           freshness: { invalidatedBy: packet.freshness.invalidatedBy },
         });
-        const outputPath = writeTargetJson(target, opts.output, roleReturn);
+        const outputPath = writeTargetJson(target, opts.output, roleReturn, projectConfig, taskId, io?.fsMutationOptions);
         io.out(JSON.stringify(artifactSuccess({
           taskId, outputPath, artifact: roleReturn,
           assuranceGrade: lineage.dispatchConsumption.assuranceGrade,
@@ -5206,11 +5271,55 @@ export async function cmdTask(args, io = createIo()) {
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
       const receiptPath = carrierMutationRelativePath(receipt);
+      let persistenceAuthority = { ok: true };
       const applied = executeMutationBatch(target, [
-        { type: 'write', path: carrier, content: candidate, expectedDigest: priorCarrierDigest, expectedKind: 'file' },
+        {
+          type: 'write', path: carrier, content: candidate, expectedDigest: priorCarrierDigest, expectedKind: 'file',
+          // The complete carrier is replaced even for an evidence-only edit.
+          // Re-read its lifecycle and the same receipt-lineage authority under
+          // the shared lock so a terminal transition cannot be overwritten by
+          // stale pre-planning bytes.
+          validateCurrent: bytes => {
+            const currentBody = bytes.toString('utf8');
+            const [currentFrontmatter] = parseFrontmatter(currentBody);
+            const currentStatus = frontmatterString(currentFrontmatter?.status);
+            if (!allowedEvidenceStatuses.includes(currentStatus)) {
+              persistenceAuthority = {
+                ok: false, code: 'task.lifecycle.not_dispatchable', evidenceState: 'negative',
+                reason: `task status '${currentStatus || '(missing)'}' no longer permits this evidence mutation`,
+              };
+            } else {
+              const currentContract = taskContractDigest(currentBody);
+              const currentDigest = taskRecordDigest(currentBody);
+              const currentGuard = currentContract.ok && currentContract.digest === contract.digest
+                ? evaluateTaskCarrierMutationGuard(target, taskId, {
+                    backend: 'files', taskContractDigest: contract.digest,
+                    currentCarrierDigest: currentDigest, mutationClass: receiptMutationClass,
+                  })
+                : null;
+              persistenceAuthority = !currentContract.ok
+                ? { ok: false, code: 'verification.context.malformed', evidenceState: 'malformed', reason: currentContract.error }
+                : currentContract.digest !== contract.digest
+                  ? { ok: false, code: 'dispatch.packet.conserved', evidenceState: 'changed', reason: 'current protected contract differs from the evidence authorization' }
+                  : currentGuard?.ok
+                    ? { ok: true }
+                    : { ok: false, code: currentGuard.code, evidenceState: currentGuard.evidenceState, reason: currentGuard.message };
+            }
+            return persistenceAuthority.ok
+              ? { ok: true }
+              : { ok: false, error: `${persistenceAuthority.code}: ${persistenceAuthority.reason}` };
+          },
+        },
         { type: 'create', path: receiptPath, content: `${JSON.stringify(receipt, null, 2)}\n` },
-      ]);
+      ], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
+        if (!persistenceAuthority.ok) {
+          return printGateResult('task evidence', commandFailure('task evidence', new PublicCommandError(
+            `Engineer evidence mutation refused by current authority: ${persistenceAuthority.reason}`, {
+              code: persistenceAuthority.code, evidenceState: persistenceAuthority.evidenceState, disposition: 'blocked',
+            }
+          ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
+        }
         return printGateResult('task evidence', commandFailure('task evidence', new PublicCommandError(
           `Engineer evidence mutation failed: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`, {
             code: 'task.evidence.atomic_write', evidenceState: 'negative', disposition: 'blocked',
@@ -5506,14 +5615,33 @@ export async function cmdTask(args, io = createIo()) {
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
         }
       }
-      // The no-op carrier write is intentional: executeMutationBatch rechecks
-      // its exact bytes immediately before it creates the review entry, so a
-      // carrier race cannot leave an authoritative entry behind.
+      // The no-op carrier write is intentional: it re-reads the live review
+      // lifecycle under the shared terminal-writer lock immediately before it
+      // creates the review entry, so a terminal transition cannot be reverted
+      // by the stale carrier snapshot above.
+      let persistenceLifecycle = { ok: true };
       const applied = executeMutationBatch(target, [
-        { type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file' },
+        {
+          type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file',
+          validateCurrent: bytes => {
+            persistenceLifecycle = resolveReviewEntryLifecycle(bytes.toString('utf8'));
+            return persistenceLifecycle.ok
+              ? { ok: true }
+              : { ok: false, error: `${persistenceLifecycle.diagnostic.code}: ${persistenceLifecycle.reason}` };
+          },
+        },
         ...(!alreadyCurrent ? [{ type: 'create', path: reviewPath, content: receiptText }] : []),
-      ]);
+      ], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
+        if (!persistenceLifecycle.ok) {
+          return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
+            `review-entry persistence refused by current lifecycle: ${persistenceLifecycle.reason}`, {
+              code: persistenceLifecycle.diagnostic.code,
+              evidenceState: persistenceLifecycle.diagnostic.evidenceState,
+              disposition: 'superseded',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
         const stale = applied.stale === true;
         return printGateResult('task review-prepare', commandFailure('task review-prepare', new PublicCommandError(
           `review-entry persistence failed: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`, {
@@ -5613,16 +5741,23 @@ export async function cmdTask(args, io = createIo()) {
         'handoffRecognitionDigest', 'reviewHistory', 'maintainerOutcome',
         'initialAuthentication', 'observedAt', 'digest',
       ];
-      const entryMatches = Object.keys(entry).length === entryFields.length &&
+      const legacyEntryFields = entryFields.filter(field => field !== 'initialAuthentication');
+      const isV3 = Object.keys(entry).length === legacyEntryFields.length &&
+        Object.keys(entry).every(key => legacyEntryFields.includes(key)) &&
+        entry.schemaVersion === 3 &&
+        digest === `sha256:agenticloop.files-review-entry-receipt.v3:${canonicalSha256(entryProjection)}`;
+      const isV5 = Object.keys(entry).length === entryFields.length &&
         Object.keys(entry).every(key => entryFields.includes(key)) &&
-        entry.kind === 'agenticloop.files-review-entry-receipt' && entry.schemaVersion === 5 && entry.backend === 'files' &&
+        entry.schemaVersion === 5 &&
+        digest === `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(entryProjection)}`;
+      const entryMatches = (isV3 || isV5) &&
+        entry.kind === 'agenticloop.files-review-entry-receipt' && entry.backend === 'files' &&
         entry.taskId === taskId && entry.taskContractDigest === contract.digest &&
         entry.verifiedReturn?.recordId === verifiedReturn.recordId &&
         entry.verifiedReturn?.digest === verifiedReturn.digest &&
         entry.verifiedReturn?.returnGenerationDigest === verifiedReturn.returnGenerationDigest &&
         entry.productHead === verifiedReturn.productHead && entry.workflowHead === verifiedReturn.workflowHead &&
-        entry.candidateHead === verifiedReturn.candidateHead &&
-        digest === `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(entryProjection)}`;
+        entry.candidateHead === verifiedReturn.candidateHead;
       if (!entryMatches) {
         return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
           'review entry does not bind the requested exact verified return and candidate', {
@@ -5631,17 +5766,19 @@ export async function cmdTask(args, io = createIo()) {
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
       if (entry.maintainerOutcome !== null) {
-        if (canonicalJson(entry.maintainerOutcome) === canonicalJson(maintainerOutcome)) {
+        if (isV5 && canonicalJson(entry.maintainerOutcome) === canonicalJson(maintainerOutcome)) {
           const result = { ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'already_current' };
           if (asJson) io.out(JSON.stringify(result, null, 2));
           else io.out(`Maintainer review outcome is already attached for ${taskId}: ${reviewPath}`);
           return 0;
         }
-        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
-          'a different Maintainer review outcome is already attached to the exact review entry', {
-            code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
-          }
-        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        if (!isV3) {
+          return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+            'a different Maintainer review outcome is already attached to the exact review entry', {
+              code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
       }
       const reviewHistory = parseFilesReviewHistory(body);
       const latestReview = reviewHistory.events.filter(event => event.type === 'outcome').at(-1) ?? null;
@@ -5667,8 +5804,28 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
+      // V3 has no durable initial-authentication record. Authenticate first so
+      // stale or forged fresh submissions retain their unauthenticated refusal;
+      // only a genuinely fresh host-authenticated receipt may be compared with
+      // unsigned legacy metadata. The new receipt then becomes the sole
+      // authenticated durable representation rather than inferred history.
+      const legacyBindingMatches = isV3 && entry.maintainerOutcome && maintainerOutcome &&
+        canonicalJson(entry.maintainerOutcome.binding) === canonicalJson(maintainerOutcome.binding);
+      if (isV3 && entry.maintainerOutcome !== null && !legacyBindingMatches) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'a fresh Maintainer receipt must bind the recorded legacy review outcome before migration', {
+            code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      // A v3 entry has the same durable identity and review-history binding,
+      // but it predates protected initial authentication.  Fresh receipt
+      // ingestion above is the only source of that authentication, so the
+      // replacement is an atomic v3-to-v5 migration rather than an inference
+      // from historical unsigned metadata.
       const updated = {
         ...entry,
+        ...(isV3 ? { schemaVersion: 5 } : {}),
         maintainerOutcome,
         initialAuthentication: authenticated.initialAuthentication,
         digest: null,
@@ -5676,11 +5833,33 @@ export async function cmdTask(args, io = createIo()) {
       const { digest: _updatedDigest, ...updatedProjection } = updated;
       updated.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(updatedProjection)}`;
       const updatedText = `${JSON.stringify(updated, null, 2)}\n`;
+      // Historical terminal attachment is permitted, but the same in-lock
+      // lifecycle reader rejects malformed carriers before their review entry
+      // bytes can be changed. A terminal state that arrives after planning
+      // fails the carrier CAS rather than being replaced by this stale body.
+      let persistenceLifecycle = { ok: true };
       const applied = executeMutationBatch(target, [
-        { type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file' },
+        {
+          type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file',
+          validateCurrent: bytes => {
+            persistenceLifecycle = resolveReviewEntryLifecycle(bytes.toString('utf8'), { allowTerminalHistory: true });
+            return persistenceLifecycle.ok
+              ? { ok: true }
+              : { ok: false, error: `${persistenceLifecycle.diagnostic.code}: ${persistenceLifecycle.reason}` };
+          },
+        },
         { type: 'write', path: reviewPath, content: updatedText, expectedDigest: taskRecordDigest(entryText), expectedKind: 'file' },
-      ]);
+      ], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
+        if (!persistenceLifecycle.ok) {
+          return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+            `review-outcome attachment refused by current lifecycle: ${persistenceLifecycle.reason}`, {
+              code: persistenceLifecycle.diagnostic.code,
+              evidenceState: persistenceLifecycle.diagnostic.evidenceState,
+              disposition: 'blocked',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
         return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
           `review-outcome attachment failed: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`, {
             ...reviewEntryPersistenceFailure('write', { stale: applied.stale === true }),
@@ -5694,7 +5873,16 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
-      const result = { ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'attached' };
+      // Terminal review storage is historical evidence only.  It may preserve
+      // an already-completed review outcome, but remediation-authority always
+      // rechecks the lifecycle and therefore cannot turn this write into a
+      // resumed execution authorization.
+      const terminalLifecycle = ['accepted', 'closed'].includes(taskStatusFromBody(body));
+      const result = {
+        ok: true, task_id: taskId, reviewEntryPath: reviewPath,
+        mutationDisposition: isV3 ? 'migrated_and_attached' : (terminalLifecycle ? 'attached_historical' : 'attached'),
+        ...(terminalLifecycle ? { authorization: 'historical_recording' } : {}),
+      };
       if (asJson) io.out(JSON.stringify(result, null, 2));
       else io.out(`Attached Maintainer review outcome for ${taskId}: ${reviewPath}`);
       return 0;
@@ -5731,9 +5919,16 @@ export async function cmdTask(args, io = createIo()) {
       if (rejected.length > 0) throw new VerificationContextError(`product commit helper rejects out-of-scope path(s): ${rejected.join(', ')}`);
       const rendered = renderCommitMessage({ taskId, role: 'engineer', subject: opts.subject });
       if (!rendered.ok) throw new VerificationContextMalformedError(rendered.errors.join('; '));
-      const destination = publicTargetRelativePath(target, opts.messageOutput, 'message output path');
-      const applied = executeMutationBatch(target, [{ type: 'write', path: destination.relPath, content: rendered.message }]);
-      if (!applied.ok) throw new VerificationContextError([...applied.errors, ...applied.rollbackErrors].join('; '));
+      const destination = publicOutputTargetRelativePath(target, opts.messageOutput, 'message output path', {
+        projectConfig,
+        activeTaskId: taskId,
+      });
+      const applied = executeMutationBatch(target, [publicOutputMutation(destination, rendered.message)], io?.fsMutationOptions ?? {});
+      if (!applied.ok) {
+        const refusal = publicOutputMutationFailure(destination, 'message output path', applied);
+        if (refusal) throw refusal;
+        throw new VerificationContextError([...applied.errors, ...applied.rollbackErrors].join('; '));
+      }
       const payload = {
         ok: true, task_id: taskId, changedPaths: paths,
         gitAddArgv: ['git', 'add', '--', ...paths],
@@ -5792,11 +5987,14 @@ export async function cmdTask(args, io = createIo()) {
             `rendered commit message does not satisfy canonical commit attribution: ${checked.errors.join('; ')}`
           );
         }
-        const destination = publicTargetRelativePath(target, opts.output, 'output path');
-        const applied = executeMutationBatch(target, [{
-          type: 'write', path: destination.relPath, content: rendered.message,
-        }]);
+        const destination = publicOutputTargetRelativePath(target, opts.output, 'output path', {
+          projectConfig,
+          activeTaskId: taskId,
+        });
+        const applied = executeMutationBatch(target, [publicOutputMutation(destination, rendered.message)], io?.fsMutationOptions ?? {});
         if (!applied.ok) {
+          const refusal = publicOutputMutationFailure(destination, 'output path', applied);
+          if (refusal) throw refusal;
           throw new VerificationContextMalformedError(
             `commit message could not be written atomically: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`
           );
@@ -6246,7 +6444,7 @@ export async function cmdTask(args, io = createIo()) {
         },
       }, {
         type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
-      }]);
+      }], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
@@ -6288,6 +6486,68 @@ export async function cmdTask(args, io = createIo()) {
         io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}; remediation returns to the owner.`);
         return 1;
       }
+      const remediationLifecycleRefusal = lifecycle => {
+        const payload = {
+          command: 'task remediation-authority', taskId, lifecycle,
+          reasons: [lifecycle.reason],
+        };
+        if (asJson) io.out(JSON.stringify(payload, null, 2));
+        else io.err(`remediation refused: ${lifecycle.reason}`);
+        return 1;
+      };
+      // Review and audit certify a candidate; they do not permanently reserve
+      // an execution attempt. Resolve the current task lifecycle and the exact
+      // selected attempt before opening a new authority record, then run this
+      // same reader in the persistence transaction below.
+      const resolveCurrentRemediationLifecycle = currentBody => {
+        const currentContract = taskContractDigest(currentBody);
+        if (!currentContract.ok) {
+          return {
+            ok: false,
+            diagnostic: { type: 'live_authorization', code: 'verification.context.malformed', evidenceState: 'malformed' },
+            reason: currentContract.error,
+          };
+        }
+        const dispatchability = evaluateDispatchableLifecycle(taskStatusFromBody(currentBody));
+        if (!dispatchability.ok) {
+          return {
+            ok: false,
+            diagnostic: {
+              type: 'live_authorization', code: 'task.lifecycle.not_dispatchable', evidenceState: dispatchability.evidenceState,
+            },
+            reason: dispatchability.reason,
+          };
+        }
+        if (currentContract.digest !== consumption.taskContractDigest) {
+          return {
+            ok: false,
+            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'changed' },
+            reason: 'current protected contract differs from the selected execution attempt authorization',
+          };
+        }
+        const conservation = evaluateTaskPacketConservation(target, taskId, { backend: 'files', projectConfig });
+        const attemptId = executionAttemptIdentity(consumption);
+        const attempt = conservation.attempts?.find(item => item.attemptId === attemptId) ?? null;
+        if (!attempt || attempt.state !== 'reviewed_needs_revision') {
+          return {
+            ok: false,
+            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: attempt ? 'negative' : 'malformed' },
+            reason: attempt
+              ? `selected execution attempt '${attemptId}' is ${attempt.state}, not eligible for remediation authority`
+              : `selected execution attempt '${attemptId}' is not present in the current attempt ledger`,
+          };
+        }
+        if (!conservation.ok && conservation.code !== PACKET_CONSERVATION_DIAGNOSTIC_CODE) {
+          return {
+            ok: false,
+            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'malformed' },
+            reason: conservation.reason,
+          };
+        }
+        return { ok: true, contract: currentContract, attempt };
+      };
+      const lifecycle = resolveCurrentRemediationLifecycle(body);
+      if (!lifecycle.ok) return remediationLifecycleRefusal(lifecycle);
       let persistedCandidate;
       let finding;
       try {
@@ -6350,10 +6610,27 @@ export async function cmdTask(args, io = createIo()) {
         audit: { role: durable.audit.role, id: durable.audit.id, record: durable.records.audit },
         finding, authority, openedAt: new Date().toISOString(),
       };
+      let persistenceLifecycle = lifecycle;
       const applied = executeMutationBatch(target, [{
+        // The no-op carrier write protects the current lifecycle state while
+        // the kernel creates the remediation record. The validation rereads
+        // both the task carrier and selected attempt ledger immediately before
+        // persistence, so a terminal transition or retirement cannot race a
+        // new remediation authority into durable storage.
+        type: 'write', path: relative(target, filePath).replace(/\\/g, '/'), content: body,
+        expectedDigest: taskRecordDigest(body), expectedKind: 'file',
+        validateCurrent: bytes => {
+          const current = resolveCurrentRemediationLifecycle(bytes.toString('utf8'));
+          persistenceLifecycle = current;
+          return current.ok
+            ? { ok: true }
+            : { ok: false, error: `${current.diagnostic.code}: ${current.reason}` };
+        },
+      }, {
         type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
-      }]);
+      }], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
+        if (!persistenceLifecycle.ok) return remediationLifecycleRefusal(persistenceLifecycle);
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
       }
@@ -6587,7 +6864,7 @@ export async function cmdTask(args, io = createIo()) {
       const relPath = executionAttemptAbandonmentRelativePath(record);
       const applied = executeMutationBatch(target, [{
         type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
-      }]);
+      }], { lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
@@ -7258,16 +7535,79 @@ export async function cmdTask(args, io = createIo()) {
       // --- 4. Validated no-op: rerunning an already-current transition ---
       if (candidate === currentContent) {
         if (roleStartConsumption) {
+          let currentRoleStartAuthority = { ok: true };
+          // This status route can consume a fresh packet while the carrier is
+          // already in-progress. Re-read the same lifecycle and attempt
+          // authorities under the kernel lock, rather than letting an earlier
+          // recognition authorize evidence after a terminal writer has won.
+          const revalidateCurrentRoleStartAuthority = bytes => {
+            const body = bytes.toString('utf8');
+            const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(body));
+            if (!lifecycle.ok) {
+              return currentRoleStartAuthority = {
+                ok: false, code: 'task.lifecycle.not_dispatchable',
+                evidenceState: lifecycle.evidenceState, reason: lifecycle.reason,
+              };
+            }
+            const currentContract = taskContractDigest(body);
+            if (!currentContract.ok || currentContract.digest !== roleStartConsumption.taskContractDigest) {
+              return currentRoleStartAuthority = {
+                ok: false, code: PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+                evidenceState: currentContract.ok ? 'changed' : 'malformed',
+                reason: currentContract.ok
+                  ? 'current protected contract differs from the recognized role-start consumption'
+                  : currentContract.error,
+              };
+            }
+            const conservation = evaluateTaskPacketConservation(target, taskId, {
+              backend: 'files', projectConfig,
+            });
+            if (!conservation.ok) {
+              return currentRoleStartAuthority = {
+                ok: false, code: conservation.code ?? PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+                evidenceState: 'negative', reason: conservation.reason,
+              };
+            }
+            const refreshed = deriveAttemptSupersessions(target, taskId, roleStartConsumption, { backend: 'files' });
+            if (!refreshed.ok || canonicalJson(refreshed.records) !== canonicalJson(attemptSupersessions)) {
+              return currentRoleStartAuthority = {
+                ok: false, code: PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+                evidenceState: refreshed.ok ? 'changed' : 'malformed',
+                reason: refreshed.ok
+                  ? 'execution-attempt authority changed after role-start recognition'
+                  : refreshed.errors.join('; '),
+              };
+            }
+            return currentRoleStartAuthority = { ok: true };
+          };
           const recorded = executeMutationBatch(target, [
-            { type: 'write', path: relPath, content: currentContent, expectedDigest: currentDigest, expectedKind: 'file' },
+            {
+              type: 'write', path: relPath, content: currentContent,
+              expectedDigest: currentDigest, expectedKind: 'file',
+              validateCurrent: bytes => {
+                const authority = revalidateCurrentRoleStartAuthority(bytes);
+                return authority.ok ? { ok: true } : { ok: false, error: `${authority.code}: ${authority.reason}` };
+              },
+            },
             {
               type: 'create',
               path: dispatchConsumptionRelativePath(roleStartConsumption),
               content: `${JSON.stringify(roleStartConsumption, null, 2)}\n`,
             },
             ...supersessionMutations(attemptSupersessions),
-          ]);
+          ], {
+            ...(io?.fsMutationOptions ?? {}),
+            lifecycleAuthorityTaskIds: [taskId],
+          });
           if (!recorded.ok) {
+            if (!currentRoleStartAuthority.ok) {
+              return failure(new PublicCommandError(currentRoleStartAuthority.reason, {
+                code: currentRoleStartAuthority.code,
+                evidenceState: currentRoleStartAuthority.evidenceState,
+                disposition: 'blocked',
+                committedStateEvaluated: true,
+              }));
+            }
             for (const error of recorded.errors) io.err(`task status failed: ${error}`);
             return 1;
           }
@@ -7312,7 +7652,7 @@ export async function cmdTask(args, io = createIo()) {
         });
         mutationActions.push(...supersessionMutations(attemptSupersessions));
       }
-      const committed = executeMutationBatch(target, mutationActions);
+      const committed = executeMutationBatch(target, mutationActions, { lifecycleAuthorityTaskIds: [taskId] });
       if (!committed.ok) {
         const rolledBack = committed.rollbackErrors.length === 0;
         const result = createValidationResult({
@@ -7365,7 +7705,13 @@ export async function cmdTask(args, io = createIo()) {
           ? executeMutationBatch(target, [{
               type: 'write', path: relPath, content: currentContent,
               expectedDigest: resultingDigest, expectedKind: 'file',
-            }])
+              validateCurrent: bytes => {
+                const lifecycle = evaluateDispatchableLifecycle(taskStatusFromBody(bytes.toString('utf8')));
+                return lifecycle.ok
+                  ? { ok: true }
+                  : { ok: false, error: `task.lifecycle.not_dispatchable: ${lifecycle.reason}` };
+              },
+            }], { lifecycleAuthorityTaskIds: [taskId] })
           : null;
         const restored = rollback?.ok === true && readFileSync(filePath, 'utf8') === currentContent;
         const result = createValidationResult({

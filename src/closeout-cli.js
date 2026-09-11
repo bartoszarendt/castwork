@@ -1372,7 +1372,10 @@ export function applyFilesCloseoutTerminalTransition(target, config, packet, io)
     };
   }
 
-  const committed = executeMutationBatch(target, writes, io?.fsMutationOptions ?? {});
+  const committed = executeMutationBatch(target, writes, {
+    ...(io?.fsMutationOptions ?? {}),
+    lifecycleAuthorityTaskIds: packet.covered_tasks,
+  });
   if (!committed.ok) {
     for (const error of committed.errors) io.err(`closeout terminal transition failed: ${error}`);
     for (const error of committed.rollbackErrors) io.err(`rollback error: ${error}`);
@@ -1540,7 +1543,10 @@ function recordFilesMarker(target, config, packet, markerBody, live, mode, io) {
     expectedDigest: createHash('sha256').update(currentBytes).digest('hex'),
     expectedKind: 'file',
     validateCurrent: bytes => evaluateTaskRecordRoot(bytes.toString('utf8'), { bytes }),
-  }], io?.fsMutationOptions ?? {});
+  }], {
+    ...(io?.fsMutationOptions ?? {}),
+    lifecycleAuthorityTaskIds: packet.covered_tasks,
+  });
   if (!committed.ok) {
     for (const error of committed.errors) io.err(`closeout record failed; the carrier is unchanged: ${error}`);
     for (const error of committed.rollbackErrors) io.err(`rollback error: ${error}`);

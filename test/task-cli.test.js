@@ -33,6 +33,9 @@ import {
   reviewEntryPersistenceFailure,
   reviewEntryPreparationFailure,
 } from '../src/task-cli.js';
+import { executeMutationBatch } from '../src/fs-mutation-kernel.js';
+import { listDispatchConsumptions } from '../src/handoff-consumption.js';
+import { publicOutputTargetRelativePath } from '../src/public-output-policy.js';
 
 let tmpDir;
 const IS_WINDOWS = platform() === 'win32';
@@ -150,6 +153,97 @@ function git(cwd, args) {
 function sha256(text) {
   return `sha256:${createHash('sha256').update(text, 'utf8').digest('hex')}`;
 }
+
+describe('status-route role-start lifecycle serialization', () => {
+  it('revalidates a terminal carrier inside the lock before creating fresh attempt evidence', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'status-role-start-terminal-revalidation', {
+      initialStatus: 'in-progress',
+    });
+    const packetPath = '.agenticloop/tmp/packet.json';
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    const prepared = prepareDispatch(fixture);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    writeFileSync(join(fixture.root, packetPath), JSON.stringify(prepared.packet), 'utf8');
+    let accepted;
+    const refused = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
+      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+      fsMutationOptions: {
+        // This external mutation follows the earlier validation pass. The
+        // final in-lock authority reader must return its lifecycle code rather
+        // than creating a consumption from stale recognition state.
+        afterFinalValidation: () => {
+          accepted = readFileSync(fixture.taskPath, 'utf8').replace(/^status: in-progress$/m, 'status: accepted');
+          writeFileSync(fixture.taskPath, accepted, 'utf8');
+        },
+      },
+    });
+
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'task.lifecycle.not_dispatchable');
+    assert.equal(readFileSync(fixture.taskPath, 'utf8'), accepted);
+    assert.equal(listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' }).records.length, 0);
+  });
+
+  it('serializes a terminal writer after final verification and refuses a later start without new attempt evidence', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'status-role-start-terminal-interleave', {
+      initialStatus: 'in-progress',
+    });
+    const packetPath = '.agenticloop/tmp/packet.json';
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    const prepared = prepareDispatch(fixture);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    writeFileSync(join(fixture.root, packetPath), JSON.stringify(prepared.packet), 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    let terminalContender;
+    const started = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
+      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
+    ], {
+      ...options,
+      fsMutationOptions: {
+        afterFinalVerification: () => {
+          const carrier = readFileSync(fixture.taskPath, 'utf8');
+          terminalContender = executeMutationBatch(fixture.root, [{
+            type: 'write', path: '.agenticloop/tasks/T-001.md',
+            content: carrier.replace(/^status: in-progress$/m, 'status: accepted'),
+            expectedKind: 'file', expectedDigest: sha256(carrier),
+          }], { lifecycleAuthorityTaskIds: ['T-001'] });
+        },
+      },
+    });
+    assertOk(started);
+    assert.equal(terminalContender.ok, false);
+    assert.match(terminalContender.errors[0], /lifecycle authority 'T-001' is currently locked/);
+    assert.equal(listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' }).records.length, 1);
+
+    const carrier = readFileSync(fixture.taskPath, 'utf8');
+    const terminal = executeMutationBatch(fixture.root, [{
+      type: 'write', path: '.agenticloop/tasks/T-001.md',
+      content: carrier.replace(/^status: in-progress$/m, 'status: accepted'),
+      expectedKind: 'file', expectedDigest: sha256(carrier),
+    }], { lifecycleAuthorityTaskIds: ['T-001'] });
+    assert.equal(terminal.ok, true, terminal.errors.join('\n'));
+    const accepted = readFileSync(fixture.taskPath, 'utf8');
+    assert.match(accepted, /^status: accepted$/m);
+
+    const refused = await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', sha256(accepted),
+      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
+    ], options);
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(fixture.taskPath, 'utf8'), accepted, 'terminal state must not revert');
+    assert.equal(listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' }).records.length, 1,
+      'terminal state must not create a later attempt');
+  });
+});
 
 // This is deliberately test-owned rather than a role-return constructor: the
 // GitHub producer has no public prepare-return command. It models the external
@@ -3058,5 +3152,615 @@ describe('return evidence, cancellation provenance, and current-repository verif
     assert.notEqual(produced.status, 0);
     assert.match(JSON.parse(produced.stdout).diagnostics[0].message, /positive cancellation authority is unavailable/);
     assert.equal(existsSync(join(fixture.root, returnPath)), false);
+  });
+
+  it('protects lifecycle authority from generic JSON and dispatch output while allowing scratch output', async () => {
+    const directRoot = join(tmpDir, 'public-output-policy-direct');
+    for (const alias of [
+      '.AGENTICLOOP/tasks/T-001.md',
+      '.agenticloop/TASKS/T-001.md',
+      '.agenticloop/PROJECT.MD',
+    ]) {
+      assert.throws(
+        () => publicOutputTargetRelativePath(directRoot, alias, 'output path', {
+          projectConfig: { task_file_template: '.agenticloop/tasks/{taskId}.md' },
+          activeTaskId: 'T-001',
+        }),
+        error => error.code === 'evidence.negative',
+        alias,
+      );
+    }
+    assert.equal(
+      publicOutputTargetRelativePath(directRoot, 'Artifacts/Output.JSON', 'output path').relPath,
+      'Artifacts/Output.JSON',
+    );
+    const absentConfiguredCarrier = publicOutputTargetRelativePath(
+      directRoot, '.agenticloop/custom-task-carriers/T-001.md', 'output path', {
+        projectConfig: { task_file_template: '.agenticloop/custom-task-carriers/{taskId}.md' },
+      }
+    );
+    assert.equal(absentConfiguredCarrier.requiresExclusiveCreate, true);
+    assert.equal(
+      publicOutputTargetRelativePath(
+        directRoot, '.agenticloop/custom-task-carriers/notes/output.json', 'output path', {
+          projectConfig: { task_file_template: '.agenticloop/custom-task-carriers/{taskId}.md' },
+        }
+      ).requiresExclusiveCreate,
+      false,
+    );
+    for (const path of ['.agenticloop/tmp/output.json', '.agenticloop/checks/T-001/RC-1.json', 'artifacts/output.json']) {
+      assert.equal(publicOutputTargetRelativePath(directRoot, path, 'output path').relPath, path);
+    }
+    mkdirSync(directRoot, { recursive: true });
+    assert.equal(
+      publicOutputTargetRelativePath(directRoot, 'T-002.md', 'output path', {
+        projectConfig: { task_file_template: '{taskId}.md' }, activeTaskId: 'T-001',
+      }).relPath,
+      'T-002.md',
+    );
+    writeFileSync(join(directRoot, 'T-002.md'), 'T-002 carrier\n', 'utf8');
+    assert.throws(
+      () => publicOutputTargetRelativePath(directRoot, 'T-002.md', 'output path', {
+        projectConfig: { task_file_template: '{taskId}.md' }, activeTaskId: 'T-001',
+      }),
+      error => error.code === 'evidence.negative',
+    );
+
+    const fixture = await createDispatchFixture(tmpDir, 'public-output-policy-cli', { initialStatus: 'agent-ready' });
+    const carrier = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    const before = readFileSync(carrier, 'utf8');
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    for (const args of [
+      ['task', 'handoff-preflight', 'T-001', '--output', '.agenticloop/tasks/T-001.md', '--json', '--target', fixture.root],
+      ['task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--output', '.agenticloop/tasks/T-001.md', '--json', '--target', fixture.root],
+    ]) {
+      const refusal = await runCliInProcess(args, options);
+      assert.equal(refusal.status, 1, `${refusal.stdout}\n${refusal.stderr}`);
+      assert.equal(JSON.parse(refusal.stdout).diagnostics[0].code, 'evidence.negative');
+      assert.equal(readFileSync(carrier, 'utf8'), before);
+    }
+    const scratch = '.agenticloop/tmp/dispatch.json';
+    const allowed = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', scratch, '--json', '--target', fixture.root,
+    ], options);
+    assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+    assert.equal(existsSync(join(fixture.root, scratch)), true);
+    assert.equal(readFileSync(carrier, 'utf8'), before);
+
+    const rootFixture = await createDispatchFixture(tmpDir, 'root-public-output-policy-cli', {
+      initialStatus: 'agent-ready', taskFileTemplate: '{taskId}.md',
+    });
+    const rootCarrier = join(rootFixture.root, 'T-001.md');
+    const rootBefore = readFileSync(rootCarrier, 'utf8');
+    const rootOptions = {
+      operatorTrustRoot: rootFixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(rootFixture.trust),
+    };
+    const rootRefusal = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', 'T-001.md', '--json', '--target', rootFixture.root,
+    ], rootOptions);
+    assert.equal(rootRefusal.status, 1, `${rootRefusal.stdout}\n${rootRefusal.stderr}`);
+    assert.equal(JSON.parse(rootRefusal.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(rootCarrier, 'utf8'), rootBefore);
+
+    const rootDifferentTaskId = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', 'T-002.md', '--json', '--target', rootFixture.root,
+    ], rootOptions);
+    assert.equal(rootDifferentTaskId.status, 0, `${rootDifferentTaskId.stdout}\n${rootDifferentTaskId.stderr}`);
+    assert.equal(existsSync(join(rootFixture.root, 'T-002.md')), true);
+    assert.equal(readFileSync(rootCarrier, 'utf8'), rootBefore);
+
+    const rootCrossTaskCarrier = join(rootFixture.root, 'T-002.md');
+    const rootCrossTaskBefore = rootBefore.replaceAll('T-001', 'T-002');
+    writeFileSync(rootCrossTaskCarrier, rootCrossTaskBefore, 'utf8');
+    for (const args of [
+      ['task', 'handoff-preflight', 'T-001', '--output', 'T-002.md', '--json', '--target', rootFixture.root],
+      ['task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--output', 'T-002.md', '--json', '--target', rootFixture.root],
+    ]) {
+      const refusal = await runCliInProcess(args, rootOptions);
+      assert.equal(refusal.status, 1, `${refusal.stdout}\n${refusal.stderr}`);
+      assert.equal(JSON.parse(refusal.stdout).diagnostics[0].code, 'evidence.negative');
+      assert.equal(readFileSync(rootCrossTaskCarrier, 'utf8'), rootCrossTaskBefore);
+    }
+
+    const rootScratch = 'other.md';
+    const rootAllowed = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', rootScratch, '--json', '--target', rootFixture.root,
+    ], rootOptions);
+    assert.equal(rootAllowed.status, 0, `${rootAllowed.stdout}\n${rootAllowed.stderr}`);
+    assert.equal(existsSync(join(rootFixture.root, rootScratch)), true);
+    assert.equal(readFileSync(rootCarrier, 'utf8'), rootBefore);
+  });
+
+  it('case-folds active carrier task IDs for every public output writer and carrier template', async () => {
+    const templates = [
+      '{taskId}.md',
+      'workflow/{taskId}/task-{taskId}-record.md',
+      'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
+      'workflow\\{taskId}.md',
+    ];
+    for (const [index, template] of templates.entries()) {
+      const fixtureTemplate = template.replace(/\\/g, '/');
+      const fixture = await createDispatchFixture(tmpDir, `case-folded-public-output-${index}`, {
+        initialStatus: 'agent-ready', taskFileTemplate: fixtureTemplate,
+        taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+      });
+      if (fixtureTemplate !== template) {
+        const projectMap = join(fixture.root, '.agenticloop', 'project.md');
+        writeFileSync(
+          projectMap,
+          readFileSync(projectMap, 'utf8').replace(fixtureTemplate, template),
+          'utf8',
+        );
+        git(fixture.root, ['add', '.agenticloop/project.md']);
+        git(fixture.root, ['commit', '-m', 'configure backslash task carrier template']);
+      }
+      const options = {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+      };
+      const carrier = taskId => template.replace(/\\/g, '/').replaceAll('{taskId}', taskId);
+      const writers = [
+        {
+          name: 'commit-message',
+          invoke: output => runCliInProcess([
+            'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+            '--subject', 'record the implementation artifact', '--output', output,
+            '--json', '--target', fixture.root,
+          ], options),
+        },
+        {
+          name: 'generic-json',
+          invoke: output => runCliInProcess([
+            'task', 'handoff-preflight', 'T-001', '--output', output,
+            '--json', '--target', fixture.root,
+          ], options),
+        },
+        {
+          name: 'dispatch',
+          invoke: output => runCliInProcess([
+            'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+            '--output', output, '--json', '--target', fixture.root,
+          ], options),
+        },
+      ];
+      const active = carrier('T-001');
+      const lowerCaseActive = carrier('t-001');
+      const upperCaseExtension = active.replace(/\.md$/, '.MD');
+      const differentTask = carrier('T-002');
+      const activeBefore = readFileSync(join(fixture.root, active), 'utf8');
+      const differentBefore = readFileSync(join(fixture.root, differentTask), 'utf8');
+
+      for (const writer of writers) {
+        for (const output of [lowerCaseActive, upperCaseExtension, differentTask]) {
+          const refused = await writer.invoke(output);
+          assert.equal(refused.status, 1, `${template} ${writer.name} ${output}\n${refused.stdout}\n${refused.stderr}`);
+          assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+        }
+        const ordinary = 'other.md';
+        if (fixtureTemplate === template) {
+          const allowed = await writer.invoke(ordinary);
+          assert.equal(allowed.status, 0, `${template} ${writer.name}\n${allowed.stdout}\n${allowed.stderr}`);
+          assert.equal(existsSync(join(fixture.root, ordinary)), true);
+        } else {
+          assert.equal(publicOutputTargetRelativePath(fixture.root, ordinary, 'output path', {
+            projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+          }).relPath, ordinary);
+        }
+      }
+      assert.equal(readFileSync(join(fixture.root, active), 'utf8'), activeBefore);
+      assert.equal(readFileSync(join(fixture.root, differentTask), 'utf8'), differentBefore);
+    }
+  });
+
+  it('protects lowercase-configured carrier aliases for every public output writer', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'lowercase-public-output', {
+      initialStatus: 'agent-ready', taskFileTemplate: '{taskId}.md',
+      taskIds: ['t-001', 't-002'], decompositionTaskIds: ['t-001'],
+    });
+    const projectMap = join(fixture.root, '.agenticloop', 'project.md');
+    writeFileSync(
+      projectMap,
+      readFileSync(projectMap, 'utf8').replace(
+        'task_id_regex: "^T-\\d{3,}$"',
+        'task_id_regex: "^t-[0-9]{3}$"',
+      ),
+      'utf8',
+    );
+    fixtureGit(fixture.root, ['add', '.agenticloop/project.md']);
+    fixtureGit(fixture.root, ['commit', '-m', 'configure lowercase task IDs']);
+
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const writers = [
+      {
+        name: 'commit-message',
+        invoke: output => runCliInProcess([
+          'task', 'commit-message', 't-001', '--class', 'implementation_artifact_evidence',
+          '--subject', 'record the implementation artifact', '--output', output,
+          '--json', '--target', fixture.root,
+        ], options),
+      },
+      {
+        name: 'generic-json',
+        invoke: output => runCliInProcess([
+          'task', 'handoff-preflight', 't-001', '--output', output,
+          '--json', '--target', fixture.root,
+        ], options),
+      },
+      {
+        name: 'dispatch',
+        invoke: output => runCliInProcess([
+          'task', 'prepare-dispatch', 't-001', '--host', 'opencode', '--role', 'engineer',
+          '--output', output, '--json', '--target', fixture.root,
+        ], options),
+      },
+    ];
+    const active = 't-001.md';
+    const existing = 't-002.md';
+    const activeBefore = readFileSync(join(fixture.root, active), 'utf8');
+    const existingBefore = readFileSync(join(fixture.root, existing), 'utf8');
+
+    for (const writer of writers) {
+      for (const output of ['T-001.md', active, existing]) {
+        const refused = await writer.invoke(output);
+        assert.equal(refused.status, 1, `${writer.name} ${output}\n${refused.stdout}\n${refused.stderr}`);
+        assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+      }
+      const allowed = await writer.invoke('other.md');
+      assert.equal(allowed.status, 0, `${writer.name}\n${allowed.stdout}\n${allowed.stderr}`);
+      assert.equal(existsSync(join(fixture.root, 'other.md')), true);
+    }
+    assert.equal(readFileSync(join(fixture.root, active), 'utf8'), activeBefore);
+    assert.equal(readFileSync(join(fixture.root, existing), 'utf8'), existingBefore);
+  });
+
+  it('normalizes backslash carrier templates before protecting public outputs', () => {
+    const root = join(tmpDir, 'backslash-carrier-template');
+    const template = 'workflow\\{taskId}.md';
+    mkdirSync(join(root, 'workflow'), { recursive: true });
+    writeFileSync(join(root, 'workflow', 'T-002.md'), 'cross-task carrier\n', 'utf8');
+
+    for (const output of ['workflow/T-001.md', 'workflow/T-002.md']) {
+      assert.throws(
+        () => publicOutputTargetRelativePath(root, output, 'output path', {
+          projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+        }),
+        error => error.code === 'evidence.negative',
+        output,
+      );
+    }
+    assert.equal(
+      publicOutputTargetRelativePath(root, 'workflow/T-003.md', 'output path', {
+        projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+      }).requiresExclusiveCreate,
+      true,
+    );
+    assert.equal(
+      publicOutputTargetRelativePath(root, 'workflow/notes.json', 'output path', {
+        projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+      }).requiresExclusiveCreate,
+      false,
+    );
+  });
+
+  it('protects nested dynamic carriers for generic JSON outputs', async () => {
+    const template = 'workflow/{taskId}/task-{taskId}1.md';
+    const fixture = await createDispatchFixture(tmpDir, 'nested-generic-json-output', {
+      taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+    });
+    const carrier = taskId => join(fixture.root, template.replaceAll('{taskId}', taskId));
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const runPreflight = (output, extra = {}) => runCliInProcess([
+      'task', 'handoff-preflight', 'T-001', '--output', output, '--json', '--target', fixture.root,
+    ], { ...options, ...extra });
+    const activeBefore = readFileSync(carrier('T-001'), 'utf8');
+    const crossTaskBefore = readFileSync(carrier('T-002'), 'utf8');
+
+    for (const output of [template.replaceAll('{taskId}', 'T-001'), template.replaceAll('{taskId}', 'T-002')]) {
+      const refused = await runPreflight(output);
+      assert.equal(refused.status, 1, `${refused.stdout}\n${refused.stderr}`);
+      assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+    }
+    assert.equal(readFileSync(carrier('T-001'), 'utf8'), activeBefore);
+    assert.equal(readFileSync(carrier('T-002'), 'utf8'), crossTaskBefore);
+
+    const absent = template.replaceAll('{taskId}', 'T-004');
+    mkdirSync(join(fixture.root, 'workflow', 'T-004'), { recursive: true });
+    const created = await runPreflight(absent);
+    assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+    assert.equal(existsSync(join(fixture.root, absent)), true);
+
+    const concurrentBytes = 'concurrent generic JSON carrier\n';
+    const concurrent = await runPreflight(template.replaceAll('{taskId}', 'T-003'), {
+      fsMutationOptions: {
+        afterFinalVerification: () => {
+          mkdirSync(join(fixture.root, 'workflow', 'T-003'), { recursive: true });
+          writeFileSync(carrier('T-003'), concurrentBytes, 'utf8');
+        },
+      },
+    });
+    assert.equal(concurrent.status, 1, `${concurrent.stdout}\n${concurrent.stderr}`);
+    assert.equal(JSON.parse(concurrent.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(carrier('T-003'), 'utf8'), concurrentBytes);
+
+    const ordinary = 'workflow/T-001/task-T-00112.md';
+    const allowed = await runPreflight(ordinary);
+    assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+    assert.equal(existsSync(join(fixture.root, ordinary)), true);
+  });
+
+  it('protects nested dynamic carriers for dispatch outputs', async () => {
+    const template = 'workflow/{taskId}/task-{taskId}1.md';
+    const fixture = await createDispatchFixture(tmpDir, 'nested-dispatch-output', {
+      taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+    });
+    const carrier = taskId => join(fixture.root, template.replaceAll('{taskId}', taskId));
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    const runDispatch = (output, extra = {}) => runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', output, '--json', '--target', fixture.root,
+    ], { ...options, ...extra });
+    const activeBefore = readFileSync(carrier('T-001'), 'utf8');
+    const crossTaskBefore = readFileSync(carrier('T-002'), 'utf8');
+
+    for (const output of [template.replaceAll('{taskId}', 'T-001'), template.replaceAll('{taskId}', 'T-002')]) {
+      const refused = await runDispatch(output);
+      assert.equal(refused.status, 1, `${refused.stdout}\n${refused.stderr}`);
+      assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+    }
+    assert.equal(readFileSync(carrier('T-001'), 'utf8'), activeBefore);
+    assert.equal(readFileSync(carrier('T-002'), 'utf8'), crossTaskBefore);
+
+    const absent = template.replaceAll('{taskId}', 'T-004');
+    mkdirSync(join(fixture.root, 'workflow', 'T-004'), { recursive: true });
+    const created = await runDispatch(absent);
+    assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+    assert.equal(existsSync(join(fixture.root, absent)), true);
+
+    const concurrentBytes = 'concurrent dispatch carrier\n';
+    const concurrent = await runDispatch(template.replaceAll('{taskId}', 'T-003'), {
+      fsMutationOptions: {
+        afterFinalVerification: () => {
+          mkdirSync(join(fixture.root, 'workflow', 'T-003'), { recursive: true });
+          writeFileSync(carrier('T-003'), concurrentBytes, 'utf8');
+        },
+      },
+    });
+    assert.equal(concurrent.status, 1, `${concurrent.stdout}\n${concurrent.stderr}`);
+    assert.equal(JSON.parse(concurrent.stdout).diagnostics[0].code, 'evidence.negative');
+    assert.equal(readFileSync(carrier('T-003'), 'utf8'), concurrentBytes);
+
+    const ordinary = 'workflow/T-001/task-T-00112.md';
+    const allowed = await runDispatch(ordinary);
+    assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+    assert.equal(existsSync(join(fixture.root, ordinary)), true);
+  });
+
+  it('protects static-sentinel and regex-literal carrier templates for generic JSON outputs', async () => {
+    for (const template of [
+      'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
+      'workflow/$&[]?/{taskId}/task-{taskId}-record.md',
+    ]) {
+      const fixture = await createDispatchFixture(tmpDir, `static-generic-${template.includes('__protected_output_probe__') ? 'sentinel' : 'literals'}`, {
+        taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+      });
+      const carrier = taskId => template.replaceAll('{taskId}', taskId);
+      const options = {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+      };
+      const runPreflight = output => runCliInProcess([
+        'task', 'handoff-preflight', 'T-001', '--output', output, '--json', '--target', fixture.root,
+      ], options);
+      const active = carrier('T-001');
+      const crossTask = carrier('T-002');
+      const activeBefore = readFileSync(join(fixture.root, active), 'utf8');
+      const crossTaskBefore = readFileSync(join(fixture.root, crossTask), 'utf8');
+
+      for (const output of [active, crossTask]) {
+        const refused = await runPreflight(output);
+        assert.equal(refused.status, 1, `${refused.stdout}\n${refused.stderr}`);
+        assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+      }
+      assert.equal(readFileSync(join(fixture.root, active), 'utf8'), activeBefore);
+      assert.equal(readFileSync(join(fixture.root, crossTask), 'utf8'), crossTaskBefore);
+
+      const absent = carrier('T-003');
+      mkdirSync(join(fixture.root, absent, '..'), { recursive: true });
+      assert.equal(publicOutputTargetRelativePath(fixture.root, absent, 'output path', {
+        projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+      }).requiresExclusiveCreate, true);
+      const created = await runPreflight(absent);
+      assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+      assert.equal(existsSync(join(fixture.root, absent)), true);
+
+      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]?';
+      const ordinary = `workflow/${literal}/T-002/artifacts/preflight.json`;
+      mkdirSync(join(fixture.root, ordinary, '..'), { recursive: true });
+      const allowed = await runPreflight(ordinary);
+      assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+      assert.equal(existsSync(join(fixture.root, ordinary)), true);
+    }
+  });
+
+  it('protects static-sentinel and regex-literal carrier templates for dispatch outputs', async () => {
+    for (const template of [
+      'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
+      'workflow/$&[]?/{taskId}/task-{taskId}-record.md',
+    ]) {
+      const fixture = await createDispatchFixture(tmpDir, `static-dispatch-${template.includes('__protected_output_probe__') ? 'sentinel' : 'literals'}`, {
+        taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+      });
+      const carrier = taskId => template.replaceAll('{taskId}', taskId);
+      const options = {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        hostAuthority: protectedHostBoundary(fixture.trust),
+      };
+      const runDispatch = output => runCliInProcess([
+        'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+        '--output', output, '--json', '--target', fixture.root,
+      ], options);
+      const active = carrier('T-001');
+      const crossTask = carrier('T-002');
+      const activeBefore = readFileSync(join(fixture.root, active), 'utf8');
+      const crossTaskBefore = readFileSync(join(fixture.root, crossTask), 'utf8');
+
+      for (const output of [active, crossTask]) {
+        const refused = await runDispatch(output);
+        assert.equal(refused.status, 1, `${refused.stdout}\n${refused.stderr}`);
+        assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+      }
+      assert.equal(readFileSync(join(fixture.root, active), 'utf8'), activeBefore);
+      assert.equal(readFileSync(join(fixture.root, crossTask), 'utf8'), crossTaskBefore);
+
+      const absent = carrier('T-003');
+      mkdirSync(join(fixture.root, absent, '..'), { recursive: true });
+      assert.equal(publicOutputTargetRelativePath(fixture.root, absent, 'output path', {
+        projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
+      }).requiresExclusiveCreate, true);
+      const created = await runDispatch(absent);
+      assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
+      assert.equal(existsSync(join(fixture.root, absent)), true);
+
+      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]?';
+      const ordinary = `workflow/${literal}/T-002/artifacts/dispatch.json`;
+      mkdirSync(join(fixture.root, ordinary, '..'), { recursive: true });
+      const allowed = await runDispatch(ordinary);
+      assert.equal(allowed.status, 0, `${allowed.stdout}\n${allowed.stderr}`);
+      assert.equal(existsSync(join(fixture.root, ordinary)), true);
+    }
+  });
+
+  it('resolves every repeated taskId token for existing and future carriers across public writers', async () => {
+    const templates = [
+      '{taskId}{taskId}.md',
+      'workflow/{taskId}/task-{taskId}-record.md',
+    ];
+    for (const [templateIndex, template] of templates.entries()) {
+      for (const writer of [
+        {
+          name: 'commit-message',
+          invoke: (fixture, options, output, extra = {}) => runCliInProcess([
+            'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+            '--subject', 'record the implementation artifact', '--output', output,
+            '--json', '--target', fixture.root,
+          ], { ...options, ...extra }),
+        },
+        {
+          name: 'generic-json',
+          invoke: (fixture, options, output, extra = {}) => runCliInProcess([
+            'task', 'handoff-preflight', 'T-001', '--output', output,
+            '--json', '--target', fixture.root,
+          ], { ...options, ...extra }),
+        },
+        {
+          name: 'dispatch',
+          invoke: (fixture, options, output, extra = {}) => runCliInProcess([
+            'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+            '--output', output, '--json', '--target', fixture.root,
+          ], { ...options, ...extra }),
+        },
+      ]) {
+        const fixture = await createDispatchFixture(tmpDir, `repeated-template-${templateIndex}-${writer.name}`, {
+          initialStatus: 'agent-ready', taskFileTemplate: template,
+          taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
+        });
+        const options = {
+          operatorTrustRoot: fixture.operatorTrustRoot,
+          hostAuthority: protectedHostBoundary(fixture.trust),
+        };
+        const carrier = taskId => template.replaceAll('{taskId}', taskId);
+        const existing = carrier('T-002');
+        const existingBefore = readFileSync(join(fixture.root, existing), 'utf8');
+        const refused = await writer.invoke(fixture, options, existing);
+        assert.equal(refused.status, 1, `${template} ${writer.name}\n${refused.stdout}\n${refused.stderr}`);
+        assert.equal(JSON.parse(refused.stdout).diagnostics[0].code, 'evidence.negative');
+        assert.equal(readFileSync(join(fixture.root, existing), 'utf8'), existingBefore);
+
+        const absent = carrier('T-003');
+        const created = await writer.invoke(fixture, options, absent);
+        assert.equal(created.status, 0, `${template} ${writer.name}\n${created.stdout}\n${created.stderr}`);
+        assert.equal(existsSync(join(fixture.root, absent)), true, `${writer.name} must exclusively create a future carrier`);
+
+        const raced = carrier('T-004');
+        const racedBytes = `concurrent ${writer.name} carrier\n`;
+        const concurrent = await writer.invoke(fixture, options, raced, {
+          fsMutationOptions: {
+            afterFinalVerification: () => {
+              mkdirSync(join(fixture.root, raced, '..'), { recursive: true });
+              writeFileSync(join(fixture.root, raced), racedBytes, 'utf8');
+            },
+          },
+        });
+        assert.equal(concurrent.status, 1, `${template} ${writer.name}\n${concurrent.stdout}\n${concurrent.stderr}`);
+        assert.equal(JSON.parse(concurrent.stdout).diagnostics[0].code, 'evidence.negative');
+        assert.equal(readFileSync(join(fixture.root, raced), 'utf8'), racedBytes);
+      }
+    }
+  });
+
+  it('compares resolved carrier paths before namespace authorization', () => {
+    const root = join(tmpDir, 'resolved-carrier-comparison');
+    const template = 'workflow/{taskId}/carrier-{taskId}.md';
+    mkdirSync(join(root, 'workflow', 'T-002'), { recursive: true });
+    writeFileSync(join(root, 'workflow', 'T-002', 'carrier-T-002.md'), 'cross-task carrier\n', 'utf8');
+    const options = { projectConfig: { task_file_template: template }, activeTaskId: 'T-001' };
+
+    // Active, cross-task, separator, case, and dot-segment aliases all resolve
+    // to one of the exact carrier paths; none depends on a carrier regex.
+    for (const path of [
+      'workflow/T-001/./carrier-T-001.md',
+      'workflow\\T-001\\carrier-t-001.MD',
+      'workflow/T-002/temporary/../carrier-T-002.md',
+    ]) {
+      assert.throws(
+        () => publicOutputTargetRelativePath(root, path, 'output path', options),
+        error => error.code === 'evidence.negative',
+        path,
+      );
+    }
+    assert.equal(
+      publicOutputTargetRelativePath(root, 'workflow/T-003/carrier-T-003.md', 'output path', options).requiresExclusiveCreate,
+      true,
+      'an absent but resolvable future carrier remains exclusive-create only',
+    );
+    assert.equal(
+      publicOutputTargetRelativePath(root, 'workflow/T-002/notes.json', 'output path', options).requiresExclusiveCreate,
+      false,
+      'an ordinary sibling is not a carrier',
+    );
+
+    const decompositionCarrier = { projectConfig: { task_file_template: '.agenticloop/decompositions/{taskId}.json' }, activeTaskId: 'T-001' };
+    assert.throws(
+      () => publicOutputTargetRelativePath(root, '.agenticloop/decompositions/T-001.json', 'decomposition output', {
+        ...decompositionCarrier,
+        authorizedAuthorityPrefixes: ['.agenticloop/decompositions'],
+      }),
+      error => error.code === 'evidence.negative',
+      'carrier protection precedes decomposition authorization',
+    );
+    assert.equal(
+      publicOutputTargetRelativePath(root, '.agenticloop/decompositions/report.json', 'decomposition output', {
+        ...decompositionCarrier,
+        authorizedAuthorityPrefixes: ['.agenticloop/decompositions'],
+      }).relPath,
+      '.agenticloop/decompositions/report.json',
+    );
   });
 });
