@@ -1926,6 +1926,45 @@ describe('task CLI', () => {
     }
   });
 
+  it('keeps missing and malformed serial dependency carriers fail-closed at preflight and dispatch', async () => {
+    const optionsFor = fixture => ({
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    });
+    const commandFor = fixture => [
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer', '--json', '--target', fixture.root,
+    ];
+    for (const { name, mutate } of [
+      {
+        name: 'missing',
+        mutate: root => rmSync(join(root, '.agenticloop', 'tasks', 'T-002.md')),
+      },
+      {
+        name: 'malformed',
+        mutate: root => writeFileSync(join(root, '.agenticloop', 'tasks', 'T-002.md'), 'not a task contract\n', 'utf8'),
+      },
+    ]) {
+      const fixture = await createDispatchFixture(tmpDir, `serial-${name}-dependency-carrier`, {
+        taskIds: ['T-001', 'T-002'],
+        dependsOn: { 'T-001': ['T-002'] },
+        initialStatuses: { 'T-002': 'accepted' },
+      });
+      mutate(fixture.root);
+      fixtureGit(fixture.root, ['add', '-A']);
+      fixtureGit(fixture.root, ['commit', '-m', `${name} dependency carrier\n\nTask: T-002\nAgent: maintainer`]);
+
+      for (const result of [
+        await runCliInProcess([
+          'task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json', '--target', fixture.root,
+        ], optionsFor(fixture)),
+        await runCliInProcess(commandFor(fixture), optionsFor(fixture)),
+      ]) {
+        assert.notEqual(result.status, 0, `${name} dependency carrier must refuse`);
+        assert.ok(JSON.parse(result.stdout).diagnostics.some(item => item.code === 'dependency.unresolved'));
+      }
+    }
+  });
+
   it('derives --input serial dependencies from current carriers and refuses caller parallel evidence', async () => {
     const optionsFor = fixture => ({
       operatorTrustRoot: fixture.operatorTrustRoot,
@@ -3555,7 +3594,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
   it('protects static-sentinel and regex-literal carrier templates for generic JSON outputs', async () => {
     for (const template of [
       'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
-      'workflow/$&[]?/{taskId}/task-{taskId}-record.md',
+      'workflow/$&[]()+^/{taskId}/task-{taskId}-record.md',
     ]) {
       const fixture = await createDispatchFixture(tmpDir, `static-generic-${template.includes('__protected_output_probe__') ? 'sentinel' : 'literals'}`, {
         taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
@@ -3590,7 +3629,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
       assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
       assert.equal(existsSync(join(fixture.root, absent)), true);
 
-      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]?';
+      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]()+^';
       const ordinary = `workflow/${literal}/T-002/artifacts/preflight.json`;
       mkdirSync(join(fixture.root, ordinary, '..'), { recursive: true });
       const allowed = await runPreflight(ordinary);
@@ -3602,7 +3641,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
   it('protects static-sentinel and regex-literal carrier templates for dispatch outputs', async () => {
     for (const template of [
       'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
-      'workflow/$&[]?/{taskId}/task-{taskId}-record.md',
+      'workflow/$&[]()+^/{taskId}/task-{taskId}-record.md',
     ]) {
       const fixture = await createDispatchFixture(tmpDir, `static-dispatch-${template.includes('__protected_output_probe__') ? 'sentinel' : 'literals'}`, {
         taskFileTemplate: template, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'],
@@ -3638,7 +3677,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
       assert.equal(created.status, 0, `${created.stdout}\n${created.stderr}`);
       assert.equal(existsSync(join(fixture.root, absent)), true);
 
-      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]?';
+      const literal = template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]()+^';
       const ordinary = `workflow/${literal}/T-002/artifacts/dispatch.json`;
       mkdirSync(join(fixture.root, ordinary, '..'), { recursive: true });
       const allowed = await runDispatch(ordinary);

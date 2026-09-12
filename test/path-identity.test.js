@@ -61,4 +61,22 @@ describe('portable path identity', () => {
       assert.equal(isPathOutside('../outside', root, identityOptions), true);
     });
   }
+
+  it('uses one canonical predicate for Windows separators, case, equality, traversal, links, and sibling prefixes', () => {
+    const windows = { platform: 'win32', exists: () => false };
+    assert.equal(isPathWithin('c:/REPO\\tasks/T-002.md', 'C:\\repo', windows), true, 'mixed separator and case variants retain containment');
+    assert.equal(isPathWithin('C:\\REPO', 'c:/repo', windows), false, 'the target itself is not a carrier inside the target');
+    assert.equal(isPathWithin('C:\\repo\\..\\outside\\T-002.md', 'c:/repo', windows), false, 'traversal remains outside');
+    assert.equal(isPathWithin('C:\\repo-sibling\\T-002.md', 'c:/repo', windows), false, 'a lexical sibling prefix is not contained');
+
+    const linked = {
+      platform: 'win32',
+      exists: () => true,
+      realpath: path => ({
+        'C:\\repo': 'C:\\authority\\repo',
+        'C:\\repo\\linked\\T-002.md': 'D:\\outside\\T-002.md',
+      })[path] ?? path,
+    };
+    assert.equal(isPathWithin('C:\\repo\\linked\\T-002.md', 'C:\\repo', linked), false, 'a linked ancestor resolves to its target before containment');
+  });
 });

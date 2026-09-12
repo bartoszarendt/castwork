@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -8,6 +7,7 @@ import { after, describe, it } from 'node:test';
 
 import { HARD_REFUSAL_ALLOWLIST, REFUSAL_CLASSES } from '../src/refusal-classes.js';
 import { runExecutedEightStepChain } from './helpers/lifecycle-scenario-harness.js';
+import { runNpm } from './helpers/npm-runner.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', `phase${36}-eight-step-chain`, 'fixture.json'), 'utf8'));
@@ -103,7 +103,7 @@ describe('integrated lifecycle proof', () => {
     );
   });
 
-  it('keeps proof records inside the packed artifact and names all integrated scenarios', () => {
+  it('keeps proof records inside the packed artifact and names all integrated scenarios', async () => {
     for (const path of ['docs/integrated-proof.md', 'docs/field-assertions.md']) {
       assert.ok(packageJson.files.includes(path), `${path} must be packaged with the candidate`);
     }
@@ -111,7 +111,11 @@ describe('integrated lifecycle proof', () => {
       'Standard serial lifecycle through simulated review, audit, and closeout', 'Existing product adoption, preserved failed-attempt history, rerun checks and review',
       'Source, packed archive, clean installation', 'Synthetic chain and privacy scan',
     ]) assert.match(proof, new RegExp(phrase));
-    const packed = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: ROOT, encoding: 'utf8' }));
+    const packedResult = await runNpm(['pack', '--dry-run', '--json'], {
+      cache: join(syntheticRoot, 'npm-cache'), cwd: ROOT,
+    });
+    assert.equal(packedResult.status, 0, `npm pack --dry-run failed:\n${packedResult.stdout}\n${packedResult.stderr}`);
+    const packed = JSON.parse(packedResult.stdout);
     const packedPaths = packed[0].files.map(file => file.path);
     for (const path of ['docs/integrated-proof.md', 'docs/field-assertions.md']) {
       assert.ok(packedPaths.includes(path), `${path} is missing from npm pack`);

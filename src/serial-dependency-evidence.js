@@ -10,10 +10,10 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { loadFilesTaskContractRecords } from './files-task-contract.js';
+import { displayPath, isPathWithin } from './path-identity.js';
 import { taskContractDigest, validateTaskContractBaseline } from './task-contract-baseline.js';
 import { taskStatusFromBody } from './dispatchability.js';
 import { defaultDependencyFreshnessSeconds } from './task-evidence-contract.js';
@@ -21,8 +21,8 @@ import { parseTaskReadinessDeclaration } from './task-readiness.js';
 
 function taskCarrierPath(target, template, taskId) {
   const relativePath = template.replace(/\{taskId\}/g, taskId).replace(/\\/g, '/');
-  const path = resolve(target, relativePath);
-  return path === target || path.startsWith(`${target}/`) ? { path, relativePath } : null;
+  const path = displayPath(relativePath, { base: target });
+  return isPathWithin(path, target) ? { path, relativePath } : null;
 }
 
 function currentRevisionTimestamp(target, fallbackNow) {

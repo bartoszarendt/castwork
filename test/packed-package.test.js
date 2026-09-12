@@ -9,9 +9,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  chmodSync,
   closeSync,
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -21,7 +19,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -43,6 +41,8 @@ import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createDispatchFixture, git, prepare } from './helpers/dispatch-fixture.js';
 import { createCloseoutCliFixture } from './helpers/closeout-cli-fixture.js';
 import { createTestHostTrust, writeHostTrustStore } from './helpers/host-trust-fixture.js';
+import { fakeExecutableEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
+import { runNpm } from './helpers/npm-runner.js';
 import { runProcess } from './helpers/process-runner.js';
 import { createHash } from 'node:crypto';
 import { HARD_REFUSAL_ALLOWLIST } from '../src/refusal-classes.js';
@@ -65,9 +65,13 @@ const path = require('path');
 const isMain = require.main === module;
 const isGhBinary = /gh(\\.exe)?$/i.test(path.basename(process.execPath));
 if (isMain || isGhBinary) {
+  if (!process.env.FAKE_GH_SENTINEL) {
+    process.stderr.write('fake gh sentinel is required');
+    process.exit(97);
+  }
   const args = process.argv.slice(isMain ? 2 : 1);
   if (!isMain && args.length > 0 && path.isAbsolute(args[0])) args[0] = path.basename(args[0]);
-  if (process.env.FAKE_GH_LOG) fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify(args) + '\\n');
+  fs.appendFileSync(process.env.FAKE_GH_SENTINEL, JSON.stringify(args) + '\\n');
   const fx = JSON.parse(fs.readFileSync(process.env.FAKE_GH_FIXTURE, 'utf8'));
   const out = value => { process.stdout.write(JSON.stringify(value)); process.exit(0); };
   const fail = message => { process.stderr.write(message); process.exit(1); };
@@ -92,14 +96,7 @@ if (isMain || isGhBinary) {
 `;
 
 function npm(args, options = {}) {
-  const npmCli = process.env.npm_execpath ?? (process.platform === 'win32'
-    ? join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
-    : null);
-  return runProcess(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...args] : args, {
-    timeout: 300000,
-    env: { ...process.env, npm_config_cache: join(tmpBase, 'npm-cache') },
-    ...options,
-  });
+  return runNpm(args, { cache: join(tmpBase, 'npm-cache'), ...options });
 }
 
 before(async () => {
@@ -149,13 +146,7 @@ before(async () => {
   mkdirSync(fakeGhBin, { recursive: true });
   fakeGhPreload = join(fakeGhRoot, 'fake-gh.cjs');
   writeFileSync(fakeGhPreload, FAKE_GH_RESPONDER, 'utf8');
-  if (process.platform === 'win32') {
-    copyFileSync(process.execPath, join(fakeGhBin, 'gh.exe'));
-  } else {
-    const script = join(fakeGhBin, 'gh');
-    writeFileSync(script, `#!/bin/sh\nexec "${process.execPath}" "${fakeGhPreload}" "$@"\n`, 'utf8');
-    chmodSync(script, 0o755);
-  }
+  writeNodeBackedExecutable(fakeGhBin, 'gh', fakeGhPreload);
 }, { timeout: 300000 });
 
 after(() => {
@@ -164,7 +155,11 @@ after(() => {
 });
 
 function runPacked(args, options = {}) {
-  return runProcess(process.execPath, [packedBin, ...args], options);
+  const { env, ...runOptions } = options;
+  return runProcess(process.execPath, [packedBin, ...args], {
+    ...runOptions,
+    env: sanitizedChildEnv(env),
+  });
 }
 
 const INSTALLED_CLI_NEGATIVE_PROBE_CODES = new Set([
@@ -252,15 +247,13 @@ function installFakeGh(fixture) {
   const preloadOption = fakeGhPreload.replace(/\\/g, '/').replaceAll('"', '\\"');
   return {
     logPath,
-    env: {
-      ...process.env,
-      PATH: `${fakeGhBin}${delimiter}${process.env.PATH ?? ''}`,
+    env: fakeExecutableEnv(fakeGhBin, {
       FAKE_GH_FIXTURE: fixturePath,
-      FAKE_GH_LOG: logPath,
+      FAKE_GH_SENTINEL: logPath,
       ...(process.platform === 'win32' ? {
         NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require="${preloadOption}"`.trim(),
       } : {}),
-    },
+    }),
   };
 }
 

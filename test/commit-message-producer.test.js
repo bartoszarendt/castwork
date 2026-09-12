@@ -305,7 +305,7 @@ describe('task commit-message', () => {
   it('protects static-sentinel and regex-literal carrier templates for commit-message output', async () => {
     for (const template of [
       'workflow/__protected_output_probe__/{taskId}/task-{taskId}-record.md',
-      'workflow/$&[]?/{taskId}/task-{taskId}-record.md',
+      'workflow/$&[]()+^/{taskId}/task-{taskId}-record.md',
     ]) {
       const root = target(`static-template-${template.includes('__protected_output_probe__') ? 'sentinel' : 'literals'}`);
       const projectMap = join(root, '.agenticloop', 'project.md');
@@ -352,7 +352,7 @@ describe('task commit-message', () => {
       assert.equal(created.status, 0, created.stderr);
       assert.match(readFileSync(join(root, absent), 'utf8'), /Task: T-001/);
 
-      const ordinary = `workflow/${template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]?'}/T-002/notes/message.txt`;
+      const ordinary = `workflow/${template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]()+^'}/T-002/notes/message.txt`;
       mkdirSync(join(root, ordinary, '..'), { recursive: true });
       const allowed = await runCliInProcess([
         'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',

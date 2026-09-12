@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,8 @@ import { produceExecutionEvidence } from '../src/execution-evidence.js';
 import { resolveCarrierLineage } from '../src/handoff-consumption.js';
 import { createDispatchFixture, git, repositoryEvidence } from './helpers/dispatch-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
+import { fakeExecutableEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
+import { runNpm } from './helpers/npm-runner.js';
 import { runProcess } from './helpers/process-runner.js';
 import { runCliInProcess, scriptedPromptFactory } from './helpers/run-cli.js';
 
@@ -275,12 +277,7 @@ let temp;
 let installedBin;
 
 function npm(args, options = {}) {
-  const npmCli = process.env.npm_execpath;
-  return runProcess(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...args] : args, {
-    timeout: 300000,
-    env: { ...process.env, npm_config_cache: join(temp, 'npm-cache') },
-    ...options,
-  });
+  return runNpm(args, { cache: join(temp, 'npm-cache'), ...options });
 }
 
 function installedRows() {
@@ -492,6 +489,7 @@ async function makeActivationUnauthenticatedFixture() {
 async function makeTaskBodyFixture(kind) {
   const fixture = await createDispatchFixture(temp, `installed-refusal-task-body-${kind}`);
   const fakeBin = writeFakeGh(join(temp, `fake-gh-task-body-${kind}`));
+  const fakeGh = fakeGhEnvironment(fakeBin);
   const bodyPath = join(fixture.root, `task-body-${kind}.md`);
   writeFileSync(bodyPath, kind === 'utf8'
     ? Buffer.from([0xff])
@@ -504,7 +502,8 @@ async function makeTaskBodyFixture(kind) {
   return {
     fixture,
     args: ['task-body', 'lint', '--issue', '7', '--body-file', bodyPath, '--json', '--target', fixture.root],
-    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    env: fakeGh.env,
+    fakeGhSentinel: fakeGh.sentinelPath,
     codes: [`task.${kind === 'absent' ? 'contract.absent' : kind === 'invalid' ? 'body.invalid' : kind === 'utf8' ? 'body.utf8' : 'body.attribution'}`],
   };
 }
@@ -642,7 +641,35 @@ async function makeOperatorActivationFixture(kind) {
 }
 
 async function runInstalled(args, options = {}) {
-  return runProcess(process.execPath, [installedBin, ...args], options);
+  const { env, ...runOptions } = options;
+  return runProcess(process.execPath, [installedBin, ...args], {
+    ...runOptions,
+    env: sanitizedChildEnv(env),
+  });
+}
+
+function fakeGhExecutionEnv(fakeGh, overrides = {}) {
+  const preloadOption = fakeGh.preload.replace(/\\/g, '/').replaceAll('"', '\\"');
+  return fakeExecutableEnv(fakeGh.bin, {
+    ...overrides,
+    ...(process.platform === 'win32' ? {
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require="${preloadOption}"`.trim(),
+    } : {}),
+  });
+}
+
+function fakeGhEnvironment(fakeGh) {
+  const sentinelPath = join(temp, `fake-gh-sentinel-${Math.random().toString(16).slice(2)}.log`);
+  return {
+    sentinelPath,
+    env: fakeGhExecutionEnv(fakeGh, { FAKE_GH_SENTINEL: sentinelPath }),
+  };
+}
+
+function assertFakeGhSentinel(sentinelPath, scenario) {
+  assert.ok(sentinelPath, `${scenario} must declare its fake-gh sentinel`);
+  assert.ok(existsSync(sentinelPath), `${scenario} must reach its fake gh before completing`);
+  assert.match(readFileSync(sentinelPath, 'utf8'), /\S/, `${scenario} fake-gh sentinel must record an invocation`);
 }
 
 async function startFixtureAttempt(fixture, label) {
@@ -1034,8 +1061,7 @@ function writeFakeGh(root, {
   malformedReviewHistory = false, prHead = REVIEW_HEAD, reviewComments = [],
 } = {}) {
   const bin = join(root, 'fake-bin');
-  mkdirSync(bin, { recursive: true });
-  const pr = JSON.stringify({
+  const pr = {
     number: 42, headRefOid: prHead, baseRefOid: 'c'.repeat(40), body: reviewPrBody({ evidence }).replaceAll(REVIEW_HEAD, prHead),
     files: [{ path: 'src/x.js' }], closingIssuesReferences: [{ number: 7 }], statusCheckRollup: [],
     commits: [{ oid: prHead, message: `implementation\n\nTask: T-007\nAgent: ${commitAgent}` }],
@@ -1043,37 +1069,61 @@ function writeFakeGh(root, {
       body: `AGENT_REVIEW_STATUS: needs_revision\nAGENT_REVIEW_MODE: host_subagent\nAGENT_REVIEW_ARTIFACT: ${REVIEW_HEAD}\n[[agent: maintainer]]`,
       author: { login: 'loop-bot', type: 'User' },
     }] : [], reviews: [],
-  });
-  const issue = JSON.stringify({ number: 7, title: 'T-007', body: reviewIssueBody({ invalidPolicy }), comments: [] });
+  };
+  const issue = { number: 7, title: 'T-007', body: reviewIssueBody({ invalidPolicy }), comments: [] };
   const issues = duplicateTask
-    ? JSON.stringify([{ number: 7, title: 'T-007', body: reviewIssueBody({ invalidPolicy }), comments: [] }, { number: 8, title: 'T-007', body: reviewIssueBody({ invalidPolicy }), comments: [] }])
-    : `[${issue}]`;
-  const auditPr = JSON.stringify({ ...JSON.parse(pr), headRefOid: auditHead });
+    ? [issue, { number: 8, title: 'T-007', body: reviewIssueBody({ invalidPolicy }), comments: [] }]
+    : [issue];
+  const auditPr = { ...pr, headRefOid: auditHead };
   const historyPages = reviewComments.length > 0
-    ? JSON.stringify([reviewComments])
+    ? [reviewComments]
     : malformedReviewHistory
-    ? JSON.stringify([[{
+    ? [[{
       body: `AGENT_REVIEW_STATUS: needs_revision\nAGENT_REVIEW_MODE: host_subagent\nAGENT_REVIEW_ARTIFACT: ${REVIEW_HEAD}\n[[agent: maintainer]]`,
       author: { login: 'loop-bot', type: 'User' },
-    }]])
-    : '[[]]';
-  const script = `#!/bin/sh
-case "$1 $2" in
-  "pr view")
-    case "$*" in *"--json headRefOid"*) printf '%s\\n' '${JSON.stringify({ headRefOid: REVIEW_HEAD })}' ;; *"body"*) printf '%s\\n' '${pr}' ;; *) printf '%s\\n' '${auditPr}' ;; esac ;;
-  "issue view") printf '%s\\n' '${issue}' ;;
-  "issue list") printf '%s\\n' '${issues}' ;;
-  "repo view") printf '%s\\n' '{"nameWithOwner":"example/repo"}' ;;
-  "api user") printf '%s\\n' '{"login":"loop-bot","type":"User"}' ;;
-  "api "*)
-    case "$*" in *"git/trees/"*) printf '%s\\n' '{"tree":[]}' ;; *"issues/42/comments"*) printf '%s\\n' '${historyPages}' ;; *) printf '%s\\n' '[[]]' ;; esac ;;
-  *) printf '%s\\n' "unexpected gh invocation: $*" >&2; exit 1 ;;
-esac
-`;
-  const path = join(bin, 'gh');
-  writeFileSync(path, script, 'utf8');
-  chmodSync(path, 0o755);
-  return bin;
+    }]]
+    : [[]];
+  const fixturePath = join(root, 'fixture.json');
+  const preload = join(root, 'fake-gh.cjs');
+  mkdirSync(root, { recursive: true });
+  writeFileSync(fixturePath, JSON.stringify({ pr, issue, issues, auditPr, historyPages, prHead }), 'utf8');
+  writeFileSync(preload, `
+const fs = require('fs');
+const path = require('path');
+const isMain = require.main === module;
+const isGhBinary = /gh(\\.exe)?$/i.test(path.basename(process.execPath));
+if (isMain || isGhBinary) {
+  if (!process.env.FAKE_GH_SENTINEL) {
+    process.stderr.write('fake gh sentinel is required');
+    process.exit(97);
+  }
+  const args = process.argv.slice(isMain ? 2 : 1);
+  if (!isMain && args.length > 0 && path.isAbsolute(args[0])) args[0] = path.basename(args[0]);
+  fs.appendFileSync(process.env.FAKE_GH_SENTINEL, JSON.stringify(args) + '\\n');
+  const fixture = JSON.parse(fs.readFileSync(${JSON.stringify(fixturePath)}, 'utf8'));
+  const out = value => { process.stdout.write(JSON.stringify(value) + '\\n'); process.exit(0); };
+  const fail = message => { process.stderr.write(message); process.exit(1); };
+  if (args[0] === 'pr' && args[1] === 'view') {
+    const jsonFields = args[args.indexOf('--json') + 1] ?? '';
+    if (jsonFields === 'headRefOid') out({ headRefOid: fixture.prHead });
+    if (jsonFields.includes('body')) out(fixture.pr);
+    out(fixture.auditPr);
+  }
+  if (args[0] === 'issue' && args[1] === 'view') out(fixture.issue);
+  if (args[0] === 'issue' && args[1] === 'list') out(fixture.issues);
+  if (args[0] === 'repo' && args[1] === 'view') out({ nameWithOwner: 'example/repo' });
+  if (args[0] === 'api') {
+    if (args[1] === 'user') out({ login: 'loop-bot', type: 'User' });
+    const endpoint = args.find(item => typeof item === 'string' && item.startsWith('repos/')) || '';
+    if (endpoint.includes('git/trees/')) out({ tree: [] });
+    if (endpoint.includes('issues/42/comments')) out(fixture.historyPages);
+    out([[]]);
+  }
+  fail('unexpected gh invocation: ' + args.join(' '));
+}
+`, 'utf8');
+  writeNodeBackedExecutable(bin, 'gh', preload);
+  return { bin, preload };
 }
 
 async function makeGitHubGateFixture(kind) {
@@ -1103,6 +1153,7 @@ async function makeGitHubGateFixture(kind) {
     prHead: reviewHead,
     reviewComments,
   });
+  const fakeGh = fakeGhEnvironment(fakeBin);
   const packet = join(temp, `${kind}-invalid-review-packet.json`);
   if (kind !== 'github-preflight') writeFileSync(packet, '{}', 'utf8');
   return {
@@ -1111,7 +1162,8 @@ async function makeGitHubGateFixture(kind) {
       command, '--pr', '42', '--repo', 'example/repo',
       ...(command === 'github-preflight' ? [] : ['--review-packet', packet]), '--json',
     ],
-    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    env: fakeGh.env,
+    fakeGhSentinel: fakeGh.sentinelPath,
     codes: [kind === 'github-preflight'
       ? 'preflight.attribution'
       : kind === 'github-preflight-checkpoint'
@@ -1139,6 +1191,7 @@ async function makeReviewPrepareFixture(kind) {
   const fakeBin = writeFakeGh(join(temp, `fake-gh-${kind}`), {
     evidence: kind !== 'preflight', invalidPolicy: kind === 'policy',
   });
+  const fakeGh = fakeGhEnvironment(fakeBin);
   if (kind === 'packet') {
     mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
     writeFileSync(join(fixture.root, '.agenticloop', 'tmp', 'broken-review-packet.json'), '{not json', 'utf8');
@@ -1150,7 +1203,8 @@ async function makeReviewPrepareFixture(kind) {
       ...(kind === 'packet' ? ['--packet', join(fixture.root, '.agenticloop/tmp/broken-review-packet.json')] : []),
       ...(kind === 'workspace' ? ['--workspace', 'missing-workspace-for-installed-refusal'] : []),
     ],
-    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    env: fakeGh.env,
+    fakeGhSentinel: kind === 'packet' ? null : fakeGh.sentinelPath,
     codes: [`review_prepare.${kind === 'preflight' ? 'preflight_failed' : kind === 'policy' ? 'independent_review_policy' : kind}`],
   };
 }
@@ -1541,16 +1595,40 @@ describe('installed-binary refusal harness', () => {
       `installed verify-return must never overclaim authenticated producer identity:\n${output}`);
   });
 
+  it('fails locally when the fake gh stub is absent and cannot reach a fallback CLI', async () => {
+    const fixture = await createDispatchFixture(temp, 'installed-refusal-missing-fake-gh');
+    const missingBin = join(temp, 'missing-fake-gh-bin');
+    mkdirSync(missingBin, { recursive: true });
+    const fallbackSentinel = join(temp, 'real-gh-fallback-must-not-run.log');
+    const result = await runInstalled([
+      'github-preflight', '--pr', '42', '--repo', 'example/repo', '--json', '--target', fixture.root,
+    ], { env: fakeExecutableEnv(missingBin, { FAKE_GH_SENTINEL: fallbackSentinel }) });
+    assert.notEqual(result.status, 0, `missing fake gh must fail locally:\n${result.stdout}\n${result.stderr}`);
+    assert.equal(existsSync(fallbackSentinel), false, 'a missing fake gh must not execute any fallback CLI');
+  });
+
+  it('fails locally when the fake gh stub is malformed and cannot reach a fallback CLI', async () => {
+    const fixture = await createDispatchFixture(temp, 'installed-refusal-malformed-fake-gh');
+    const fakeBin = writeFakeGh(join(temp, 'malformed-fake-gh'));
+    const fallbackSentinel = join(temp, 'malformed-real-gh-fallback-must-not-run.log');
+    const result = await runInstalled([
+      'github-preflight', '--pr', '42', '--repo', 'example/repo', '--json', '--target', fixture.root,
+    ], { env: fakeGhExecutionEnv(fakeBin, { FAKE_GH_FALLBACK_SENTINEL: fallbackSentinel }) });
+    assert.notEqual(result.status, 0, `malformed fake gh must fail locally:\n${result.stdout}\n${result.stderr}`);
+    assert.equal(existsSync(fallbackSentinel), false, 'a malformed fake gh must not execute any fallback CLI');
+  });
+
   for (const scenario of [...FIRST_BATCH_SCENARIOS, ...SECOND_BATCH_SCENARIOS, ...THIRD_BATCH_SCENARIOS, ...FOURTH_BATCH_SCENARIOS, ...FIFTH_BATCH_SCENARIOS, ...SIXTH_BATCH_SCENARIOS, ...SEVENTH_BATCH_SCENARIOS, ...DISCOVERED_PUBLIC_SURFACE_SCENARIOS, ...BLOCKED_RETURN_PUBLIC_SURFACE_SCENARIOS, ...PERSISTED_RETURN_PUBLIC_SURFACE_SCENARIOS, EVIDENCE_NEGATIVE_PUBLIC_ROUTE_SCENARIO]) {
     it(`refuses the ${scenario.family} fixture through the installed binary without mutation`, async () => {
-      const { fixture, args, env, codes: expectedCodes, observedCodes } = await scenario.build();
+      const { fixture, args, env, fakeGhSentinel, codes: expectedCodes, observedCodes } = await scenario.build();
       const before = gitState(fixture.root);
-      const result = await runProcess(process.execPath, [installedBin, ...args], { env });
+      const result = await runInstalled(args, { env });
       const codes = refusalCodes(result);
       const expected = observedCodes ?? scenario.observedCodes ?? expectedCodes;
       for (const code of expected) {
         assert.ok(codes.includes(code), `${scenario.family} must expose ${code}; received ${codes.join(', ')}\n${result.stdout}`);
       }
+      if (fakeGhSentinel) assertFakeGhSentinel(fakeGhSentinel, scenario.family);
       assert.equal(gitState(fixture.root), before, `${scenario.family} refusal must not mutate target state`);
     });
   }

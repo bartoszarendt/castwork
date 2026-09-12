@@ -103,7 +103,7 @@ describe('authorization freshness', () => {
     assert.equal(evaluateDispatchableLifecycle('accepted').ok, false, 'terminality remains a current lifecycle gate');
   });
 
-  it('returns unavailable rather than silently trusting an unreadable external deny registry', async () => {
+  it('returns unavailable rather than silently trusting an unreadable external deny registry', async t => {
     const root = mkdtempSync(join(tmpdir(), 'agenticloop-external-revocation-'));
     try {
       const fixture = await scaffoldFixture(root, 'external-unavailable');
@@ -114,7 +114,15 @@ describe('authorization freshness', () => {
         fixture.operatorActivationRoot
       );
       mkdirSync(dirname(registry), { recursive: true });
-      symlinkSync(fixture.root, registry);
+      try {
+        symlinkSync(fixture.root, registry);
+      } catch (error) {
+        if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+          t.skip(`symbolic-link capability unavailable (${error.code}); external deny-registry rejection requires a host with symlink privilege`);
+          return;
+        }
+        throw error;
+      }
       const authorization = resolveCurrentTaskAuthorization(fixture.root, {
         operatorTrustRoot: fixture.operatorTrustRoot,
         operatorActivationRoot: fixture.operatorActivationRoot,
