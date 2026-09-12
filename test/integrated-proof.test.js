@@ -19,7 +19,7 @@ const SERIAL_FIXTURE_MEASUREMENTS = Object.freeze({
   M4: 6193,
   M5: [4632, 4097, 2362],
   M6: 2071,
-  M7: [77, 18, 95],
+   M7: [76, 18, 94],
 });
 const syntheticRoot = mkdtempSync(join(tmpdir(), 'agenticloop-eight-step-proof-'));
 after(() => rmSync(syntheticRoot, { recursive: true, force: true }));
@@ -71,7 +71,7 @@ describe('integrated lifecycle proof', () => {
   it('keeps every retained hard refusal and material human decision bound to a negative proof', () => {
     const hard = HARD_REFUSAL_ALLOWLIST.filter(({ code }) => REFUSAL_CLASSES[code].refusalClass === 'retained_hard_refusal');
     const human = HARD_REFUSAL_ALLOWLIST.filter(({ code }) => REFUSAL_CLASSES[code].refusalClass === 'material_human_decision');
-    assert.equal(hard.length, 77);
+    assert.equal(hard.length, 76, 'P36F-05-C5 classifies session_reported as warning-only');
     assert.equal(human.length, 18);
     assert.equal(hard.length + human.length, HARD_REFUSAL_ALLOWLIST.length);
     for (const entry of HARD_REFUSAL_ALLOWLIST) assert.match(entry.negativeProof, /\S/);
@@ -81,12 +81,12 @@ describe('integrated lifecycle proof', () => {
   it('pins reported non-Git serial-fixture measurements to their exact value', () => {
     assert.deepEqual(SERIAL_FIXTURE_MEASUREMENTS, {
       M3: [1, 0, 0], M4: 6193,
-      M5: [4632, 4097, 2362], M6: 2071, M7: [77, 18, 95],
+       M5: [4632, 4097, 2362], M6: 2071, M7: [76, 18, 94],
     });
     for (const value of [
       '1 attempt, 0 abandonments, 0 supersessions',
       '6,193 canonical words', 'Maintainer 4,632; Engineer 4,097; Auditor 2,362 canonical words',
-      '2,071 canonical words', '77 retained hard refusals and 18 material human decisions',
+       '2,071 canonical words', '76 retained hard refusals and 18 material human decisions',
     ]) assert.match(proof, new RegExp(value));
   });
 

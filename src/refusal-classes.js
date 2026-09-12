@@ -3,8 +3,10 @@
  * the assurance boundary; it deliberately does not change evaluator or
  * presentation behavior.
  */
-import { REPAIR_POLICY } from './repair-policy.js';
+const policy = (category, repairKind, escalationKind, description) => Object.freeze({ category, repairKind, escalationKind, description });
 
+// Repair metadata is attached to the catalog rows below; repair-policy.js only
+// projects the resulting definitions for legacy consumers.
 export const REFUSAL_DISPOSITIONS = Object.freeze([
   'retained_hard_refusal',
   'material_human_decision',
@@ -574,31 +576,31 @@ const METADATA_OVERRIDES = Object.freeze({
   }),
   'execution_evidence.stale_version': Object.freeze({
     semanticInvalidators: 'a current-schema recomputation supersedes the retired representation',
-    proof: 'retired-schema currency is representation-only; recomputing exact execution evidence preserves the fact',
+    proof: 'disposition: migration-recompute; a current-schema execution-evidence recomputation is required before this retired representation can be used.',
   }),
   'dispatch.packet.invalid': Object.freeze({
     semanticInvalidators: 'post-transition state changed',
-    proof: 'atomic start/resume transition replaces mutable packet projections before reevaluation',
+    proof: 'disposition: transition-recompute; the atomic start/resume transition replaces mutable packet projections before reevaluation.',
   }),
   'handoff.evidence.malformed': Object.freeze({
     semanticInvalidators: 'post-transition state changed',
-    proof: 'atomic start/resume transition reevaluates the prepared-packet projection rather than preserving a liveness refusal',
+    proof: 'disposition: transition-recompute; the atomic start/resume transition reevaluates the prepared-packet projection rather than preserving this liveness refusal.',
   }),
   'handoff.evidence.freshness_expired': Object.freeze({
     semanticInvalidators: 'a declared handoff freshness bound is exceeded: return verifiedAt age or prepared-dispatch decomposition observedAt age',
-    proof: 'finish and certification invalidation transition recomputes either expired surface - the verified return receipt or prepared-dispatch decomposition observation - without changing its bound evidence',
+    proof: 'disposition: freshness-recompute; finish and certification invalidation recompute the expired verified-return receipt or prepared-dispatch decomposition observation without changing bound evidence.',
   }),
   'handoff.evidence.schema_retired': Object.freeze({
     semanticInvalidators: 'a current schema representation supersedes the retired packet projection',
-    proof: 'a legacy packet is regenerated and validated under the current schema before role-start recognition',
+    proof: 'disposition: migration-recompute; the legacy packet must be regenerated and validated under the current schema before role-start recognition.',
   }),
   'handoff.evidence.revalidation_failed': Object.freeze({
     semanticInvalidators: 'current external verification succeeds for the exact stored return',
-    proof: 'a failed external revalidation cannot be repaired by receipt freshness alone',
+    proof: 'disposition: no-nonexecution-proof; a failed external revalidation remains blocking until current external verification succeeds for the exact stored return.',
   }),
   'handoff.evidence.ambiguous_return': Object.freeze({
     semanticInvalidators: 'one current stored return verification is selected',
-    proof: 'selection rejects competing return records instead of treating age as their only difference',
+    proof: 'disposition: no-nonexecution-proof; competing current return records remain blocking until one current stored verification is selected.',
   }),
 });
 
@@ -616,255 +618,265 @@ function defaultProof(code, family, refusalClass, rationale, producers) {
   return `${rationale}; ${refusalClass} is emitted at ${producers.join(', ') || 'historical catalog compatibility'}`;
 }
 
-function classified(code, family, refusalClass, factOwner, rationale, repairClass) {
+function classified(code, family, refusalClass, factOwner, rationale, repairClass, repairPolicy) {
   const producers = ACCEPTED_PRODUCER_INVENTORY[code] ?? [];
   const consumers = CONSUMER_INVENTORY[code] ?? [];
   const evaluationSurfaces = EVALUATION_SURFACES[code] ?? [];
   const override = METADATA_OVERRIDES[code] ?? {};
   return Object.freeze({
     code, family, refusalClass, factOwner, rationale, repairClass,
+    // Consumers use this combined definition rather than coordinating a
+    // classification row with an independent policy projection.
+    repairPolicy,
     producers: producers.length > 0 ? producers : null,
     ...(consumers.length > 0 ? { consumers } : {}),
     ...(evaluationSurfaces.length > 0 ? { evaluationSurfaces } : {}),
-    semanticInvalidators: override.semanticInvalidators ?? defaultSemanticInvalidators(refusalClass, rationale),
-    proof: override.proof ?? defaultProof(code, family, refusalClass, rationale, producers),
+    // These descriptions are projections of the row, not evidence. Do not call
+    // generated prose "proof": independent evidence is an executable probe or
+    // a precise non-execution disposition.
+    derivedNarrative: Object.freeze({
+      semanticInvalidator: override.semanticInvalidators ?? defaultSemanticInvalidators(refusalClass, rationale),
+      description: defaultProof(code, family, refusalClass, rationale, producers),
+    }),
+    ...(override.proof ? { semanticEvidence: override.proof } : {}),
   });
 }
 
 const F1 = [
-  classified('activation.capture.missing', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated capture'),
-  classified('activation.capture.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'regenerate capture'),
-  classified('activation.capture.mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'obtain matching capture'),
-  classified('activation.capture.expired', 'F1', 'migration_recompute', 'activation_authority', 'derived-freshness', 'recompute current authorization'),
-  classified('activation.capture.unsupported', 'F1', 'advisory_diagnostic', 'host_boundary', 'unsupported-observation', 'select supported boundary'),
-  classified('activation.grant.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair grant encoding'),
-  classified('activation.grant.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated grant'),
-  classified('activation.grant.revoked', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-revoked', 'obtain new authorization'),
-  classified('activation.grant.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository'),
-  classified('activation.grant.out_of_scope', 'F1', 'material_human_decision', 'activation_authority', 'scope-not-authorized', 'obtain scope authorization'),
-  classified('activation.binding.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair binding encoding'),
-  classified('activation.binding.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated binding'),
-  classified('activation.binding.mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'rebind current authorization'),
-  classified('activation.binding.task_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'task-mismatch', 'use authorized task'),
-  classified('activation.binding.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository'),
-  classified('activation.binding.stale_contract', 'F1', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'obtain renewed authorization'),
-  classified('activation.binding.decomposition_missing', 'F1', 'single_action_mechanical_repair', 'decomposition_record', 'derived-record-missing', 'recompute decomposition binding'),
-  classified('activation.binding.decomposition_invalid', 'F1', 'single_action_mechanical_repair', 'decomposition_record', 'derived-record-invalid', 'recompute decomposition binding'),
-  classified('activation.binding.decomposition_changed', 'F1', 'migration_recompute', 'decomposition_record', 'derived-record-changed', 'recompute decomposition binding'),
-  classified('activation.assurance.insufficient', 'F1', 'material_human_decision', 'activation_authority', 'assurance-not-authorized', 'obtain authorized assurance'),
-  classified('activation.identity.migration_required', 'F1', 'migration_recompute', 'activation_identity', 'identity-version-migration', 'migrate identity'),
-  classified('activation.identity.conflict', 'F1', 'material_human_decision', 'activation_authority', 'authority-conflict', 'select authority'),
-  classified('activation.policy.invalid', 'F1', 'single_action_mechanical_repair', 'activation_policy', 'policy-unavailable', 'repair activation policy'),
+  classified('activation.capture.missing', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated capture', policy('activation', 'repair_evidence', 'none', 'Parser-owned activation capture is required before task authoring.')),
+  classified('activation.capture.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'regenerate capture', policy('activation', 'repair_evidence', 'none', 'Activation capture is malformed or contradicts its adapter capability.')),
+  classified('activation.capture.mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'obtain matching capture', policy('activation', 'repair_evidence', 'none', 'The operator and parser-normalized activation digests do not match.')),
+  classified('activation.capture.expired', 'F1', 'migration_recompute', 'activation_authority', 'derived-freshness', 'recompute current authorization', policy('activation', 'repair_evidence', 'none', 'The task-bound activation capture has expired.')),
+  classified('activation.capture.unsupported', 'F1', 'advisory_diagnostic', 'host_boundary', 'unsupported-observation', 'select supported boundary', policy('activation', 'repair_evidence', 'none', 'The selected adapter cannot produce a proven parser-owned activation artifact.')),
+  classified('activation.grant.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair grant encoding', policy('activation', 'repair_evidence', 'none', 'An activation grant or task activation binding is malformed.')),
+  classified('activation.grant.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated grant', policy('activation', 'repair_evidence', 'human_authority_review', 'An activation grant is unsigned or does not verify against the external operator or pinned host key.')),
+  classified('activation.grant.revoked', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-revoked', 'obtain new authorization', policy('activation', 'repair_evidence', 'none', 'The activation grant was revoked, or a revocation record for this target is unreadable.')),
+  classified('activation.grant.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository', policy('activation', 'repair_evidence', 'none', 'The activation grant was issued for a different target repository.')),
+  classified('activation.grant.out_of_scope', 'F1', 'material_human_decision', 'activation_authority', 'scope-not-authorized', 'obtain scope authorization', policy('activation', 'repair_evidence', 'none', 'The activation grant scope does not authorize this task.')),
+  classified('activation.binding.malformed', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'repair binding encoding', policy('activation', 'repair_evidence', 'none', 'The task activation binding is malformed.')),
+  classified('activation.binding.unauthenticated', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-absent', 'obtain authenticated binding', policy('activation', 'repair_evidence', 'human_authority_review', 'The task activation binding is unsigned or does not verify against the external operator or pinned host key.')),
+  classified('activation.binding.mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'authorization-integrity', 'rebind current authorization', policy('activation', 'repair_evidence', 'none', 'The task activation binding contradicts its grant, assurance, or derivation.')),
+  classified('activation.binding.task_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'task-mismatch', 'use authorized task', policy('activation', 'repair_evidence', 'none', 'The task activation binding authorizes a different task, backend, or carrier.')),
+  classified('activation.binding.repository_mismatch', 'F1', 'retained_hard_refusal', 'activation_authority', 'repository-mismatch', 'use authorized repository', policy('activation', 'repair_evidence', 'none', 'The task activation binding was issued for a different target repository.')),
+  classified('activation.binding.stale_contract', 'F1', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'obtain renewed authorization', policy('activation', 'repair_evidence', 'none', 'The task contract changed after activation; the binding no longer covers the current contract.')),
+  classified('activation.binding.decomposition_missing', 'F1', 'single_action_mechanical_repair', 'decomposition_record', 'derived-record-missing', 'recompute decomposition binding', policy('activation', 'repair_evidence', 'contract_reconciliation', 'A decomposition-derived activation binding requires current committed decomposition evidence.')),
+  classified('activation.binding.decomposition_invalid', 'F1', 'single_action_mechanical_repair', 'decomposition_record', 'derived-record-invalid', 'recompute decomposition binding', policy('activation', 'repair_evidence', 'contract_reconciliation', 'The committed decomposition evidence cannot derive this task activation binding.')),
+  classified('activation.binding.decomposition_changed', 'F1', 'migration_recompute', 'decomposition_record', 'derived-record-changed', 'recompute decomposition binding', policy('activation', 'repair_evidence', 'none', 'The committed decomposition changed after activation; derived bindings are superseded.')),
+  classified('activation.assurance.insufficient', 'F1', 'material_human_decision', 'activation_authority', 'assurance-not-authorized', 'obtain authorized assurance', policy('activation', 'repair_evidence', 'human_authority_review', 'Activation assurance is below the effective minimum required by the current mode.')),
+  classified('activation.identity.migration_required', 'F1', 'migration_recompute', 'activation_identity', 'identity-version-migration', 'migrate identity', policy('activation', 'repair_evidence', 'human_authority_review', 'Operator activation material exists under a superseded repository identity and must be migrated before new activation authority is created.')),
+  classified('activation.identity.conflict', 'F1', 'material_human_decision', 'activation_authority', 'authority-conflict', 'select authority', policy('activation', 'repair_evidence', 'human_authority_review', 'Several operator activation keys claim this repository; the operator must choose which identity survives.')),
+  classified('activation.policy.invalid', 'F1', 'single_action_mechanical_repair', 'activation_policy', 'policy-unavailable', 'repair activation policy', policy('activation', 'repair_evidence', 'none', 'The effective activation policy is unavailable or invalid.')),
 ];
 
 const F2 = [
-  classified('task.contract.malformed', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair contract'),
-  classified('task.contract.absent', 'F2', 'retained_hard_refusal', 'protected_contract', 'authorization-intent-absent', 'create contract'),
-  classified('scope.declaration.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare scope'),
-  classified('scope.declaration.duplicate', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'deduplicate scope'),
-  classified('scope.declaration.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair scope'),
-  classified('scope.existing_path.missing', 'F2', 'removal', 'protected_contract', 'historical-path-inventory-check', 'remove compatibility row when consumers migrate'),
-  classified('scope.intended_creation.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare creation'),
-  classified('scope.intended_creation.uncovered', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'cover creation'),
-  classified('scope.intent.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair path intent'),
-  classified('generated.path.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair generated-path intent'),
-  classified('scope.glob.unmatched', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'confirm scope glob'),
-  classified('scope.deviation.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare deviation'),
-  classified('scope.deviation.malformed', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair deviation'),
-  classified('contract.baseline.missing', 'F2', 'single_action_mechanical_repair', 'protected_contract', 'baseline-record-missing', 'establish baseline'),
-  classified('contract.baseline.invalid', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair baseline'),
-  classified('contract.baseline.stale', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'reconcile contract'),
-  classified('contract.record_marker.mutable_body', 'F2', 'single_action_mechanical_repair', 'protected_contract', 'mutable-projection-marker', 'remove marker'),
-  classified('task.body.bom', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'sanitize record'),
-  classified('task.body.collapsed_newlines', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'sanitize record'),
-  classified('task.body.utf8', 'F2', 'retained_hard_refusal', 'task_record', 'record-integrity', 'repair encoding'),
-  classified('task.record.structure', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'repair record'),
-  classified('task.body.identity', 'F2', 'retained_hard_refusal', 'protected_contract', 'task-mismatch', 'repair task identity'),
-  classified('task.body.invalid', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair task record'),
-  classified('task.body.attribution', 'F2', 'retained_hard_refusal', 'protected_contract', 'attribution-invalid', 'repair task attribution'),
-  classified('task.body.base_inventory.missing', 'F2', 'single_action_mechanical_repair', 'base_inventory', 'derived-record-missing', 'supply inventory'),
-  classified('readiness.base_inventory.missing', 'F2', 'single_action_mechanical_repair', 'base_inventory', 'derived-record-missing', 'supply inventory'),
-  classified('evidence.missing', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-missing', 'supply evidence'),
-  classified('evidence.malformed', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-malformed', 'repair evidence'),
-  classified('evidence.stale', 'F2', 'migration_recompute', 'evidence_record', 'derived-freshness', 'recompute evidence'),
+  classified('task.contract.malformed', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair contract', policy('task_contract', 'repair_task_contract', 'contract_reconciliation', 'Task frontmatter is malformed.')),
+  classified('task.contract.absent', 'F2', 'retained_hard_refusal', 'protected_contract', 'authorization-intent-absent', 'create contract', policy('task_contract', 'create_task_contract', 'contract_reconciliation', 'Task frontmatter is required.')),
+  classified('scope.declaration.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare scope', policy('path_intent', 'declare_scope', 'contract_reconciliation', 'Task scope declaration is missing.')),
+  classified('scope.declaration.duplicate', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'deduplicate scope', policy('path_intent', 'deduplicate_scope', 'contract_reconciliation', 'Task scope declaration contains a duplicate path.')),
+  classified('scope.declaration.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair scope', policy('path_intent', 'repair_scope_declaration', 'contract_reconciliation', 'Task scope declaration is invalid.')),
+  classified('scope.existing_path.missing', 'F2', 'removal', 'protected_contract', 'historical-path-inventory-check', 'remove compatibility row when consumers migrate', policy('path_intent', 'classify_existing_path', 'contract_reconciliation', 'An allowed existing path is missing from the authoritative base-tree inventory.')),
+  classified('scope.intended_creation.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare creation', policy('path_intent', 'declare_intended_creation', 'contract_reconciliation', 'An allowed path absent from the base tree is not declared as an intended creation.')),
+  classified('scope.intended_creation.uncovered', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'cover creation', policy('path_intent', 'cover_intended_creation', 'contract_reconciliation', 'An intended creation is not covered by task scope.')),
+  classified('scope.intent.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair path intent', policy('path_intent', 'repair_path_intent', 'contract_reconciliation', 'Task path intent is invalid.')),
+  classified('generated.path.invalid', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair generated-path intent', policy('generated_paths', 'repair_generated_path_declaration', 'contract_reconciliation', 'Generated-path declaration is invalid.')),
+  classified('scope.glob.unmatched', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'confirm scope glob', policy('path_intent', 'confirm_scope_glob', 'contract_reconciliation', 'A scope glob matches no paths in the authoritative base-tree inventory.')),
+  classified('scope.deviation.missing', 'F2', 'material_human_decision', 'protected_contract', 'scope-not-authorized', 'declare deviation', policy('scope_deviations', 'declare_exact_deviation', 'contract_reconciliation', 'Changed path is not authorized by task scope or a declared deviation.')),
+  classified('scope.deviation.malformed', 'F2', 'material_human_decision', 'protected_contract', 'scope-ambiguous', 'repair deviation', policy('scope_deviations', 'repair_deviation', 'contract_reconciliation', 'A scope deviation declaration is malformed or stale.')),
+  classified('contract.baseline.missing', 'F2', 'single_action_mechanical_repair', 'protected_contract', 'baseline-record-missing', 'establish baseline', policy('task_contract', 'establish_baseline', 'contract_reconciliation', 'Task-contract baseline is missing.')),
+  classified('contract.baseline.invalid', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair baseline', policy('task_contract', 'repair_baseline_record', 'human_authority_review', 'Task-contract baseline or correction record is invalid.')),
+  classified('contract.baseline.stale', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'reconcile contract', policy('task_contract', 'authorize_contract_correction', 'contract_reconciliation', 'Current task contract differs from the trusted baseline chain.')),
+  classified('contract.record_marker.mutable_body', 'F2', 'single_action_mechanical_repair', 'protected_contract', 'mutable-projection-marker', 'remove marker', policy('task_contract', 'remove_mutable_record_marker', 'contract_reconciliation', 'A task-contract RECORD marker is present in mutable task text.')),
+  classified('task.body.bom', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'sanitize record', policy('task_contract', 'preserve_and_sanitize_body', 'record_recovery', 'Task body begins with a UTF-8 BOM.')),
+  classified('task.body.collapsed_newlines', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'sanitize record', policy('task_contract', 'preserve_and_sanitize_body', 'record_recovery', 'Task body has collapsed line boundaries and is not a canonical Markdown record.')),
+  classified('task.body.utf8', 'F2', 'retained_hard_refusal', 'task_record', 'record-integrity', 'repair encoding', policy('task_contract', 'preserve_and_sanitize_body', 'record_recovery', 'Task record is not valid UTF-8.')),
+  classified('task.record.structure', 'F2', 'migration_recompute', 'task_record', 'record-normalization', 'repair record', policy('task_contract', 'repair_task_record', 'record_recovery', 'Canonical record structure is malformed or duplicated.')),
+  classified('task.body.identity', 'F2', 'retained_hard_refusal', 'protected_contract', 'task-mismatch', 'repair task identity', policy('task_contract', 'repair_task_identity', 'contract_reconciliation', 'GitHub task record identity is invalid.')),
+  classified('task.body.invalid', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-invalid', 'repair task record', policy('task_contract', 'repair_task_record', 'contract_reconciliation', 'GitHub task record is invalid.')),
+  classified('task.body.attribution', 'F2', 'retained_hard_refusal', 'protected_contract', 'attribution-invalid', 'repair task attribution', policy('task_contract', 'repair_task_attribution', 'contract_reconciliation', 'GitHub task record attribution is invalid.')),
+  classified('task.body.base_inventory.missing', 'F2', 'single_action_mechanical_repair', 'base_inventory', 'derived-record-missing', 'supply inventory', policy('path_intent', 'supply_base_inventory', 'contract_reconciliation', 'An authoritative base-tree path inventory is required.')),
+  classified('readiness.base_inventory.missing', 'F2', 'single_action_mechanical_repair', 'base_inventory', 'derived-record-missing', 'supply inventory', policy('path_intent', 'supply_base_inventory', 'contract_reconciliation', 'An authoritative base-tree path inventory is required.')),
+  classified('evidence.missing', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-missing', 'supply evidence', policy('evidence', 'repair_evidence', 'none', 'Required evidence was not supplied.')),
+  classified('evidence.malformed', 'F2', 'single_action_mechanical_repair', 'evidence_record', 'evidence-malformed', 'repair evidence', policy('evidence', 'repair_evidence', 'none', 'Supplied evidence is malformed.')),
+  classified('evidence.stale', 'F2', 'migration_recompute', 'evidence_record', 'derived-freshness', 'recompute evidence', policy('evidence', 'repair_evidence', 'none', 'Supplied evidence is stale.')),
   // This shared negative-evidence guard covers both failed required checks and
   // closeout packet-output violations. It does not assert that a check ran
   // when the closeout command rejects an unsafe output path.
-  classified('evidence.negative', 'F2', 'retained_hard_refusal', 'evidence_guard', 'negative-evidence-or-output-guard', 'repair failed condition'),
-  classified('required_check.explain_forbidden', 'F2', 'single_action_mechanical_repair', 'required_check', 'diagnostic-output-not-evidence', 'replace explain with a real required check'),
-  classified('evidence.changed', 'F2', 'migration_recompute', 'evidence_record', 'derived-record-changed', 'recompute evidence'),
-  classified('task.evidence.not_in_progress', 'F2', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use current lifecycle state'),
-  classified('task.evidence.lineage', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-ambiguous', 'resolve lineage'),
-  classified('task.evidence.lineage.stale', 'F2', 'migration_recompute', 'attempt_lineage', 'derived-record-changed', 'recompute lineage'),
-  classified('task.carrier.armed', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'concurrent-mutation-safety', 'complete or explicitly resolve attempt'),
-  classified('task.evidence.provenance_mismatch', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'attribution-invalid', 'supply bound evidence'),
-  classified('task.evidence.contract_drift', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'reconcile contract'),
-  classified('task.evidence.atomic_write', 'F2', 'advisory_diagnostic', 'workflow_projection', 'atomic-write-unproven', 'retry atomic write'),
-  classified('task.evidence.final_validation', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-unproven', 'verify current lineage'),
-  classified('verification.context.missing', 'F2', 'single_action_mechanical_repair', 'verification_context', 'evidence-missing', 'supply context'),
-  classified('verification.context.malformed', 'F2', 'single_action_mechanical_repair', 'verification_context', 'evidence-malformed', 'repair context'),
-  classified('verification.context.stale', 'F2', 'migration_recompute', 'verification_context', 'derived-freshness', 'recompute context'),
-  classified('host.boundary.unsupported', 'F2', 'advisory_diagnostic', 'host_boundary', 'unsupported-observation', 'select supported boundary'),
-  classified('task.record.identity_mismatch', 'F2', 'retained_hard_refusal', 'protected_contract', 'task-mismatch', 'repair record identity'),
-  classified('task.evidence.product_head', 'F2', 'retained_hard_refusal', 'product_lineage', 'candidate-head-mismatch', 'use current product head'),
-  classified('execution_evidence.malformed_input', 'F2', 'single_action_mechanical_repair', 'execution_evidence', 'evidence-malformed', 'repair execution evidence'),
-  classified('execution_evidence.stale_version', 'F2', 'migration_recompute', 'execution_evidence', 'retired-schema-currency', 'recompute execution evidence'),
-  classified('execution_evidence.binding_mismatch', 'F2', 'retained_hard_refusal', 'execution_evidence', 'evidence-binding-mismatch', 'rerun exact check'),
-  classified('execution_evidence.lineage_mismatch', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-ambiguous', 'recompute execution evidence'),
+  classified('evidence.negative', 'F2', 'retained_hard_refusal', 'evidence_guard', 'negative-evidence-or-output-guard', 'repair failed condition', policy('evidence', 'repair_evidence', 'none', 'Supplied evidence shows the required condition is false.')),
+  classified('required_check.explain_forbidden', 'F2', 'single_action_mechanical_repair', 'required_check', 'diagnostic-output-not-evidence', 'replace explain with a real required check', policy('checks', 'repair_required_checks', 'contract_reconciliation', 'A required check attempts to consume read-only task explain diagnostic output.')),
+  classified('evidence.changed', 'F2', 'migration_recompute', 'evidence_record', 'derived-record-changed', 'recompute evidence', policy('evidence', 'repair_evidence', 'none', 'Evidence changed after preparation or verification.')),
+  classified('task.evidence.not_in_progress', 'F2', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use current lifecycle state', policy('evidence', 'repair_evidence', 'none', 'The task is not in a lifecycle state that permits this role-owned evidence mutation.')),
+  classified('task.evidence.lineage', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-ambiguous', 'resolve lineage', policy('evidence', 'repair_evidence', 'none', 'The task carrier does not have one current recognized dispatch lineage.')),
+  classified('task.evidence.lineage.stale', 'F2', 'migration_recompute', 'attempt_lineage', 'derived-record-changed', 'recompute lineage', policy('evidence', 'repair_live_carrier_lineage', 'none', 'The current task carrier differs from the live Engineer attempt lineage terminal.')),
+  classified('task.carrier.armed', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'concurrent-mutation-safety', 'complete or explicitly resolve attempt', policy('evidence', 'repair_live_carrier_lineage', 'none', 'A live Engineer attempt freezes unrelated task-carrier mutations.')),
+  classified('task.evidence.provenance_mismatch', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'attribution-invalid', 'supply bound evidence', policy('evidence', 'repair_evidence', 'none', 'Structured task evidence does not bind the dispatched role, invocation, contract, and attempt.')),
+  classified('task.evidence.contract_drift', 'F2', 'retained_hard_refusal', 'protected_contract', 'protected-contract-changed', 'reconcile contract', policy('task_contract', 'repair_task_contract', 'contract_reconciliation', 'The proposed evidence mutation changes protected task-contract content or is not canonical.')),
+  classified('task.evidence.atomic_write', 'F2', 'advisory_diagnostic', 'workflow_projection', 'atomic-write-unproven', 'retry atomic write', policy('evidence', 'repair_evidence', 'record_recovery', 'The evidence carrier and receipt could not be committed atomically.')),
+  classified('task.evidence.final_validation', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-unproven', 'verify current lineage', policy('evidence', 'repair_evidence', 'record_recovery', 'Persisted evidence did not refetch as one canonical current carrier lineage.')),
+  classified('verification.context.missing', 'F2', 'single_action_mechanical_repair', 'verification_context', 'evidence-missing', 'supply context', policy('evidence', 'repair_evidence', 'none', 'Verification context was not supplied; committed state was not evaluated.')),
+  classified('verification.context.malformed', 'F2', 'single_action_mechanical_repair', 'verification_context', 'evidence-malformed', 'repair context', policy('evidence', 'repair_evidence', 'none', 'Supplied verification context is malformed; committed state was not evaluated.')),
+  classified('verification.context.stale', 'F2', 'migration_recompute', 'verification_context', 'derived-freshness', 'recompute context', policy('evidence', 'repair_evidence', 'none', 'Supplied verification context is stale; committed state was not evaluated.')),
+  classified('host.boundary.unsupported', 'F2', 'advisory_diagnostic', 'host_boundary', 'unsupported-observation', 'select supported boundary', policy('evidence', 'repair_evidence', 'none', 'The host boundary cannot support the declared capability; committed state was not evaluated.')),
+  classified('task.record.identity_mismatch', 'F2', 'retained_hard_refusal', 'protected_contract', 'task-mismatch', 'repair record identity', policy('task_contract', 'repair_task_identity', 'contract_reconciliation', 'The requested task identity differs from the materialized record identity.')),
+  classified('task.evidence.product_head', 'F2', 'retained_hard_refusal', 'product_lineage', 'candidate-head-mismatch', 'use current product head', policy('evidence', 'repair_evidence', 'none', 'Implementation artifact evidence does not name the exact current product head.')),
+  classified('execution_evidence.malformed_input', 'F2', 'single_action_mechanical_repair', 'execution_evidence', 'evidence-malformed', 'repair execution evidence', policy('evidence', 'repair_evidence', 'none', 'Execution evidence has malformed structural input.')),
+  classified('execution_evidence.stale_version', 'F2', 'migration_recompute', 'execution_evidence', 'retired-schema-currency', 'recompute execution evidence', policy('evidence', 'repair_evidence', 'none', 'Execution evidence uses a retired schema version and must be recomputed.')),
+  classified('execution_evidence.binding_mismatch', 'F2', 'retained_hard_refusal', 'execution_evidence', 'evidence-binding-mismatch', 'rerun exact check', policy('evidence', 'repair_evidence', 'none', 'Execution evidence does not bind the expected task or check identity.')),
+  classified('execution_evidence.lineage_mismatch', 'F2', 'retained_hard_refusal', 'attempt_lineage', 'lineage-ambiguous', 'recompute execution evidence', policy('evidence', 'repair_live_carrier_lineage', 'none', 'Execution evidence does not bind the current carrier or repository lineage.')),
 ];
 
 const F3 = [
-  classified('dependency.unresolved', 'F3', 'retained_hard_refusal', 'dependency_state', 'dependency-unsatisfied', 'resolve dependency'),
-  classified('dependency.evidence.stale', 'F3', 'migration_recompute', 'dependency_state', 'derived-freshness', 'recompute dependency state'),
-  classified('dispatch.attempt.budget_exhausted', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'change task policy'),
-  classified('role_result.tooling_failure_repeated', 'F3', 'advisory_diagnostic', 'tooling_observation', 'no-progress-observation', 'diagnose tooling'),
-  classified('role_result.schema.invalid', 'F3', 'single_action_mechanical_repair', 'role_result', 'result-schema-invalid', 'regenerate role result'),
-  classified('task.role_start.check_evidence_missing', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'derived-record-missing', 'initialize check evidence'),
-  classified('task.role_start.check_evidence_mismatch', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-record-changed', 'recompute check evidence'),
-  classified('task.lifecycle.not_dispatchable', 'F3', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use dispatchable state'),
+  classified('dependency.unresolved', 'F3', 'retained_hard_refusal', 'dependency_state', 'dependency-unsatisfied', 'resolve dependency', policy('dependencies', 'resolve_dependency', 'dependency_escalation', 'A declared dependency is unresolved.')),
+  classified('dependency.evidence.stale', 'F3', 'migration_recompute', 'dependency_state', 'derived-freshness', 'recompute dependency state', policy('dependencies', 'regenerate_decomposition', 'contract_reconciliation', 'The dependency snapshot has aged past its freshness window.')),
+  classified('dispatch.attempt.budget_exhausted', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'change task policy', policy('dispatch', 'repair_task_policy', 'human_authority_review', 'The task has recorded as many execution attempts as its attempt_budget allows.')),
+  classified('role_result.tooling_failure_repeated', 'F3', 'advisory_diagnostic', 'tooling_observation', 'no-progress-observation', 'diagnose tooling', policy('role_result', 'repair_evidence', 'none', 'The same contract-bound tooling failure repeated without progress.')),
+  classified('role_result.schema.invalid', 'F3', 'single_action_mechanical_repair', 'role_result', 'result-schema-invalid', 'regenerate role result', policy('evidence', 'repair_evidence', 'none', 'The role result does not satisfy its required schema.')),
+  classified('task.role_start.check_evidence_missing', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'derived-record-missing', 'initialize check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold is missing.')),
+  classified('task.role_start.check_evidence_mismatch', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-record-changed', 'recompute check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold does not match the dispatch packet.')),
+  classified('task.lifecycle.not_dispatchable', 'F3', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use dispatchable state', policy('task_contract', 'repair_task_record', 'contract_reconciliation', 'The task lifecycle status cannot begin an execution attempt.')),
   // Recovery of an unresolved write is evaluated on the same dispatch path that
   // later consumes its state; keep its acceptance proof with that transition.
-  classified('task.mutation.unresolved', 'F3', 'retained_hard_refusal', 'workflow_projection', 'mutation-state-unproven', 'resolve mutation state'),
-  classified('dispatch.packet.invalid', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'packet-malformed', 'regenerate packet'),
-  classified('dispatch.packet.stale', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-freshness', 'recompute packet'),
-  classified('dispatch.packet.conserved', 'F3', 'material_human_decision', 'attempt_lineage', 'attempt-conservation', 'complete or abandon attempt'),
-  classified('dispatch.attempt.history_rewritten', 'F3', 'retained_hard_refusal', 'attempt_lineage', 'attribution-invalid', 'repair attribution'),
-  classified('capability.declaration.invalid', 'F3', 'single_action_mechanical_repair', 'host_capability', 'capability-declaration-invalid', 'repair declaration'),
-  classified('capability.enforcement.degraded', 'F3', 'advisory_diagnostic', 'host_capability', 'enforcement-observation', 'use authoritative boundary'),
-  classified('capability.action.denied', 'F3', 'retained_hard_refusal', 'role_capability', 'role-not-authorized', 'use authorized role'),
-  classified('capability.resolution.failed', 'F3', 'advisory_diagnostic', 'host_capability', 'resolution-unavailable', 'resolve capability'),
-  classified('parallel_scan.inventory.incomplete', 'F3', 'retained_hard_refusal', 'parallel_ownership', 'parallel-inventory-incomplete', 'complete inventory'),
-  classified('parallel_scan.record.invalid', 'F3', 'single_action_mechanical_repair', 'parallel_ownership', 'derived-record-invalid', 'regenerate scan'),
-  classified('parallel_scan.evidence.stale', 'F3', 'migration_recompute', 'parallel_ownership', 'derived-freshness', 'recompute scan'),
-  classified('parallel_scan.decomposition.invalid', 'F3', 'retained_hard_refusal', 'parallel_ownership', 'parallel-ownership-unproven', 'repair decomposition'),
-  classified('handoff.transition.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-transition', 'use supported transition'),
-  classified('handoff.expectation.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'expectation-malformed', 'repair expectation'),
-  classified('handoff.evidence.missing', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'evidence-missing', 'supply handoff evidence'),
-  classified('handoff.evidence.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'evidence-malformed', 'repair handoff evidence'),
-  classified('handoff.evidence.replayed', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'replay-defense', 'use fresh packet'),
-  classified('handoff.evidence.mismatched', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'handoff-binding-mismatch', 'supply matching evidence'),
-  classified('handoff.evidence.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-observation', 'use supported evidence'),
-  classified('handoff.evidence.unauthenticated', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'authorization-absent', 'supply authenticated evidence'),
-  classified('handoff.refresh.plan.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'refresh-plan-invalid', 'repair refresh plan'),
-  classified('handoff.refresh.plan.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-observation', 'use supported backend'),
-  classified('tooling_failure_input_invalid', 'F3', 'single_action_mechanical_repair', 'tooling_observation', 'observation-input-invalid', 'repair tooling observation'),
-  classified('tooling_failure_evidence_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'derived-record-changed', 'recompute tooling observation'),
-  classified('tooling_failure_write_failed', 'F3', 'advisory_diagnostic', 'tooling_observation', 'atomic-write-unproven', 'retry observation write'),
-  classified('tooling_failure_admission_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'concurrent-observation-change', 'recompute retry admission'),
+  classified('task.mutation.unresolved', 'F3', 'retained_hard_refusal', 'workflow_projection', 'mutation-state-unproven', 'resolve mutation state', policy('task_contract', 'repair_task_record', 'record_recovery', 'A task mutation may have committed and its exact final state could not be proven.')),
+  classified('dispatch.packet.invalid', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'packet-malformed', 'regenerate packet', policy('dispatch', 'repair_evidence', 'none', 'Dispatch packet evidence is malformed or incomplete.')),
+  classified('dispatch.packet.stale', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-freshness', 'recompute packet', policy('dispatch', 'repair_evidence', 'none', 'Dispatch packet evidence is stale or changed.')),
+  classified('dispatch.packet.conserved', 'F3', 'material_human_decision', 'attempt_lineage', 'attempt-conservation', 'complete or abandon attempt', policy('dispatch', 'complete_or_abandon_attempt', 'human_authority_disposition', 'A live execution attempt has recorded work and its consumed packet cannot be replaced.')),
+  classified('dispatch.attempt.history_rewritten', 'F3', 'retained_hard_refusal', 'attempt_lineage', 'attribution-invalid', 'repair attribution', policy('dispatch', 'repair_task_attribution', 'human_authority_review', 'Durable history in a recorded execution attempt range was rewritten or replaced.')),
+  classified('capability.declaration.invalid', 'F3', 'single_action_mechanical_repair', 'host_capability', 'capability-declaration-invalid', 'repair declaration', policy('role_capability', 'repair_evidence', 'none', 'The host-role capability declaration is missing, malformed, contradictory, or incomplete.')),
+  classified('capability.enforcement.degraded', 'F3', 'advisory_diagnostic', 'host_capability', 'enforcement-observation', 'use authoritative boundary', policy('role_capability', 'repair_evidence', 'none', 'The host cannot enforce this role action natively; the declared authoritative detection boundary must evaluate it.')),
+  classified('capability.action.denied', 'F3', 'retained_hard_refusal', 'role_capability', 'role-not-authorized', 'use authorized role', policy('role_capability', 'repair_evidence', 'none', 'The assigned role is not authorized for the requested workflow action.')),
+  classified('capability.resolution.failed', 'F3', 'advisory_diagnostic', 'host_capability', 'resolution-unavailable', 'resolve capability', policy('role_capability', 'repair_evidence', 'none', 'Host-role capability resolution failed.')),
+  classified('parallel_scan.inventory.incomplete', 'F3', 'retained_hard_refusal', 'parallel_ownership', 'parallel-inventory-incomplete', 'complete inventory', policy('parallel_scan', 'regenerate_decomposition', 'contract_reconciliation', 'The bounded work-unit task inventory is incomplete and cannot support a complete ready-set conclusion.')),
+  classified('parallel_scan.record.invalid', 'F3', 'single_action_mechanical_repair', 'parallel_ownership', 'derived-record-invalid', 'regenerate scan', policy('parallel_scan', 'regenerate_decomposition', 'none', 'The parallel-scan record is malformed, mis-digested, or does not account for its inventory.')),
+  classified('parallel_scan.evidence.stale', 'F3', 'migration_recompute', 'parallel_ownership', 'derived-freshness', 'recompute scan', policy('parallel_scan', 'regenerate_decomposition', 'none', 'The parallel-scan observation is outside its declared freshness policy.')),
+  classified('parallel_scan.decomposition.invalid', 'F3', 'retained_hard_refusal', 'parallel_ownership', 'parallel-ownership-unproven', 'repair decomposition', policy('parallel_scan', 'regenerate_decomposition', 'contract_reconciliation', 'The decomposition source, attribution, or completeness declaration is invalid.')),
+  classified('handoff.transition.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-transition', 'use supported transition', policy('handoff', 'repair_evidence', 'none', 'The requested transition is not a protected lifecycle transition this seam recognizes.')),
+  classified('handoff.expectation.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'expectation-malformed', 'repair expectation', policy('handoff', 'repair_evidence', 'none', 'The supplied handoff expectation is malformed or does not bind a task and role.')),
+  classified('handoff.evidence.missing', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'evidence-missing', 'supply handoff evidence', policy('handoff', 'repair_evidence', 'none', 'The canonical prepared dispatch or verified return required by this transition was not supplied.')),
+  classified('handoff.evidence.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'evidence-malformed', 'repair handoff evidence', policy('handoff', 'repair_evidence', 'none', 'Supplied handoff evidence is malformed or is not the canonical record kind.')),
+  classified('handoff.evidence.replayed', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'replay-defense', 'use fresh packet', policy('handoff', 'repair_evidence', 'none', 'The prepared dispatch was already consumed; an authoritative role start requires a fresh packet.')),
+  classified('handoff.evidence.mismatched', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'handoff-binding-mismatch', 'supply matching evidence', policy('handoff', 'repair_evidence', 'none', 'Supplied handoff evidence binds a different task, role, packet, artifact, or worktree.')),
+  classified('handoff.evidence.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-observation', 'use supported evidence', policy('handoff', 'repair_evidence', 'none', 'Supplied handoff evidence declares a schema or assurance grade this boundary cannot evaluate.')),
+  classified('handoff.evidence.unauthenticated', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'authorization-absent', 'supply authenticated evidence', policy('handoff', 'repair_evidence', 'human_authority_review', 'Handoff evidence is session-reported or below the required assurance minimum and cannot authorize a protected transition.')),
+  classified('handoff.refresh.plan.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'refresh-plan-invalid', 'repair refresh plan', policy('handoff', 'repair_evidence', 'none', 'Handoff evidence refresh plan is malformed or does not match the expected task binding.')),
+  classified('handoff.refresh.plan.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-observation', 'use supported backend', policy('handoff', 'repair_evidence', 'none', 'Derived-evidence refresh plans apply only to the files backend; the selected backend has no local derived-evidence surface to refresh.')),
+  classified('tooling_failure_input_invalid', 'F3', 'single_action_mechanical_repair', 'tooling_observation', 'observation-input-invalid', 'repair tooling observation', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure observation input is invalid.')),
+  classified('tooling_failure_evidence_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'derived-record-changed', 'recompute tooling observation', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure observation evidence conflicts with current history.')),
+  classified('tooling_failure_write_failed', 'F3', 'advisory_diagnostic', 'tooling_observation', 'atomic-write-unproven', 'retry observation write', policy('tooling_failure', 'repair_evidence', 'record_recovery', 'Tooling-failure observation could not be recorded atomically.')),
+  classified('tooling_failure_admission_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'concurrent-observation-change', 'recompute retry admission', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure retry admission changed concurrently.')),
 ];
 
 const F4 = [
-  classified('readiness.candidate.stage_failure', 'F4', 'advisory_diagnostic', 'candidate_builder', 'candidate-stage-observation', 'inspect stage diagnostic'),
-  classified('readiness.candidate.internal_failure', 'F4', 'advisory_diagnostic', 'candidate_builder', 'candidate-stage-observation', 'inspect stage diagnostic'),
-  classified('return.assurance.insufficient', 'F4', 'material_human_decision', 'return_assurance', 'assurance-not-authorized', 'obtain authorized assurance'),
-  classified('return.assurance.ambiguous', 'F4', 'single_action_mechanical_repair', 'return_adapter', 'adapter-selection-required', 'select adapter'),
-  // Catalog membership remains in the retained-hard-refusal family; installed
-  // accounting deliberately records this one emitted diagnostic as warning-only.
-  classified('return.assurance.session_reported', 'F4', 'retained_hard_refusal', 'return_assurance', 'producer-not-authenticated-warning', 'supply authenticated return'),
-  classified('return.lane.implementation_absent', 'F4', 'retained_hard_refusal', 'product_lineage', 'product-lineage-unreachable', 'reapply implementation'),
-  classified('handoff.evidence.freshness_expired', 'F4', 'migration_recompute', 'handoff_boundary', 'return-receipt-age', 'recompute return receipt'),
-  classified('handoff.evidence.schema_retired', 'F4', 'migration_recompute', 'handoff_boundary', 'prepared-dispatch-schema-retired', 'regenerate prepared dispatch'),
-  classified('handoff.evidence.revalidation_failed', 'F4', 'retained_hard_refusal', 'handoff_boundary', 'external-return-revalidation-failed', 'revalidate exact return'),
-  classified('handoff.evidence.ambiguous_return', 'F4', 'retained_hard_refusal', 'return_identity', 'stored-return-selection-ambiguous', 'resolve return selection'),
-  classified('role_return.invalid', 'F4', 'retained_hard_refusal', 'return_identity', 'return-integrity', 'regenerate return'),
-  classified('role_return.stale', 'F4', 'migration_recompute', 'return_identity', 'derived-freshness', 'recompute return'),
-  classified('role_return.receipt_stale', 'F4', 'migration_recompute', 'return_identity', 'receipt-schema-migration', 'reissue receipt'),
-  classified('role_return.producer_mismatch', 'F4', 'retained_hard_refusal', 'return_identity', 'producer-mismatch', 'supply matching return'),
-  classified('attempt_return_unbound', 'F4', 'retained_hard_refusal', 'return_identity', 'attempt-binding-missing', 'supply bound return'),
-  classified('attempt_return_ambiguous', 'F4', 'retained_hard_refusal', 'return_identity', 'attempt-binding-ambiguous', 'resolve return binding'),
-  classified('attempt_return_conflict', 'F4', 'retained_hard_refusal', 'return_identity', 'candidate-certification-conflict', 'resolve return conflict'),
-  classified('attempt_terminal_conflict', 'F4', 'retained_hard_refusal', 'return_identity', 'candidate-certification-conflict', 'resolve terminal evidence'),
-  classified('blocked_result.owner_mismatch', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'ownership-mismatch', 'use producing owner'),
-  classified('blocked_result.redelegation_required', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'redelegation-authority-absent', 'supply redelegation'),
-  classified('blocked_result.redelegation_stale', 'F4', 'migration_recompute', 'blocked_result_authority', 'derived-freshness', 'reissue redelegation'),
-  classified('blocked_result.redelegation_invalid', 'F4', 'single_action_mechanical_repair', 'blocked_result_authority', 'redelegation-invalid', 'repair redelegation'),
-  classified('blocked_result.redelegation_untrusted', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'authorization-absent', 'supply trusted redelegation'),
-  classified('human_disposition.required', 'F4', 'material_human_decision', 'human_authority', 'human-decision-required', 'obtain disposition'),
-  classified('human_disposition.stale', 'F4', 'migration_recompute', 'human_authority', 'derived-freshness', 'reissue disposition'),
-  classified('human_disposition.invalid', 'F4', 'single_action_mechanical_repair', 'human_authority', 'disposition-invalid', 'repair disposition'),
-  classified('human_disposition.untrusted', 'F4', 'retained_hard_refusal', 'human_authority', 'authorization-absent', 'supply trusted disposition'),
+  classified('readiness.candidate.stage_failure', 'F4', 'advisory_diagnostic', 'candidate_builder', 'candidate-stage-observation', 'inspect stage diagnostic', policy('evidence', 'repair_evidence', 'record_recovery', 'A readiness candidate stage reported a blocking failure.')),
+  classified('readiness.candidate.internal_failure', 'F4', 'advisory_diagnostic', 'candidate_builder', 'candidate-stage-observation', 'inspect stage diagnostic', policy('evidence', 'repair_evidence', 'record_recovery', 'A readiness candidate stage failed without reporting a diagnostic cause.')),
+  classified('return.assurance.insufficient', 'F4', 'material_human_decision', 'return_assurance', 'assurance-not-authorized', 'obtain authorized assurance', policy('role_return', 'repair_evidence', 'human_authority_review', 'Return assurance is below the effective minimum required by the current mode.')),
+  classified('return.assurance.ambiguous', 'F4', 'single_action_mechanical_repair', 'return_adapter', 'adapter-selection-required', 'select adapter', policy('role_return', 'select_return_adapter', 'none', 'Multiple return adapters are available; select one with --return-adapter.')),
+  // This reports reduced assurance but does not itself refuse a transition.
+  classified('return.assurance.session_reported', 'F4', 'advisory_diagnostic', 'return_assurance', 'producer-not-authenticated-warning', 'supply authenticated return', policy('role_return', 'repair_evidence', 'none', 'The role return is session-reported: its producing role identity is not host-authenticated.')),
+  classified('return.lane.implementation_absent', 'F4', 'retained_hard_refusal', 'product_lineage', 'product-lineage-unreachable', 'reapply implementation', policy('role_return', 'repair_evidence', 'none', 'The return lane does not contain the task implementation artifact.')),
+  classified('handoff.evidence.freshness_expired', 'F4', 'migration_recompute', 'handoff_boundary', 'return-receipt-age', 'recompute return receipt', policy('handoff', 'repair_evidence', 'none', 'Supplied handoff evidence is outside its declared freshness policy.')),
+  classified('handoff.evidence.schema_retired', 'F4', 'migration_recompute', 'handoff_boundary', 'prepared-dispatch-schema-retired', 'regenerate prepared dispatch', policy('handoff', 'repair_evidence', 'none', 'Prepared dispatch uses a retired schema and must be regenerated.')),
+  classified('handoff.evidence.revalidation_failed', 'F4', 'retained_hard_refusal', 'handoff_boundary', 'external-return-revalidation-failed', 'revalidate exact return', policy('handoff', 'repair_evidence', 'none', 'Verified return evidence no longer passes current external revalidation.')),
+  classified('handoff.evidence.ambiguous_return', 'F4', 'retained_hard_refusal', 'return_identity', 'stored-return-selection-ambiguous', 'resolve return selection', policy('handoff', 'repair_evidence', 'none', 'Stored return verification selection did not yield one current record.')),
+  classified('role_return.invalid', 'F4', 'retained_hard_refusal', 'return_identity', 'return-integrity', 'regenerate return', policy('role_return', 'repair_evidence', 'none', 'Role-return evidence is malformed or lacks trusted provenance.')),
+  classified('role_return.stale', 'F4', 'migration_recompute', 'return_identity', 'derived-freshness', 'recompute return', policy('role_return', 'repair_evidence', 'none', 'Role-return evidence no longer matches current repository facts.')),
+  classified('role_return.receipt_stale', 'F4', 'migration_recompute', 'return_identity', 'receipt-schema-migration', 'reissue receipt', policy('role_return', 'repair_evidence', 'none', 'The authenticated host receipt uses a retired schema and must be reissued.')),
+  classified('role_return.producer_mismatch', 'F4', 'retained_hard_refusal', 'return_identity', 'producer-mismatch', 'supply matching return', policy('role_return', 'repair_evidence', 'none', 'Authenticated producer evidence does not match the dispatched workflow role.')),
+  classified('attempt_return_unbound', 'F4', 'retained_hard_refusal', 'return_identity', 'attempt-binding-missing', 'supply bound return', policy('role_return', 'repair_evidence', 'none', 'Return verification does not bind a recorded execution attempt.')),
+  classified('attempt_return_ambiguous', 'F4', 'retained_hard_refusal', 'return_identity', 'attempt-binding-ambiguous', 'resolve return binding', policy('role_return', 'repair_evidence', 'none', 'Return verification binds more than one execution attempt.')),
+  classified('attempt_return_conflict', 'F4', 'retained_hard_refusal', 'return_identity', 'candidate-certification-conflict', 'resolve return conflict', policy('role_return', 'repair_evidence', 'none', 'An execution attempt has more than one return verification.')),
+  classified('attempt_terminal_conflict', 'F4', 'retained_hard_refusal', 'return_identity', 'candidate-certification-conflict', 'resolve terminal evidence', policy('role_return', 'repair_evidence', 'none', 'An execution attempt has conflicting terminal evidence.')),
+  classified('blocked_result.owner_mismatch', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'ownership-mismatch', 'use producing owner', policy('role_return', 'repair_evidence', 'none', 'A blocked result remains owned by its producing workflow role.')),
+  classified('blocked_result.redelegation_required', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'redelegation-authority-absent', 'supply redelegation', policy('role_return', 'repair_evidence', 'none', 'Changing a blocked result owner requires a current typed redelegation authority.')),
+  classified('blocked_result.redelegation_stale', 'F4', 'migration_recompute', 'blocked_result_authority', 'derived-freshness', 'reissue redelegation', policy('role_return', 'repair_evidence', 'none', 'The blocked-result redelegation authority is stale.')),
+  classified('blocked_result.redelegation_invalid', 'F4', 'single_action_mechanical_repair', 'blocked_result_authority', 'redelegation-invalid', 'repair redelegation', policy('role_return', 'repair_evidence', 'none', 'The blocked-result redelegation authority is malformed, mismatched, or unrelated.')),
+  classified('blocked_result.redelegation_untrusted', 'F4', 'retained_hard_refusal', 'blocked_result_authority', 'authorization-absent', 'supply trusted redelegation', policy('role_return', 'repair_evidence', 'human_authority_review', 'The blocked-result redelegation is not signed by the exact current operator-pinned authority.')),
+  classified('human_disposition.required', 'F4', 'material_human_decision', 'human_authority', 'human-decision-required', 'obtain disposition', policy('human_authority', 'repair_evidence', 'human_authority_review', 'A typed human disposition is required for this blocked-result recovery.')),
+  classified('human_disposition.stale', 'F4', 'migration_recompute', 'human_authority', 'derived-freshness', 'reissue disposition', policy('human_authority', 'repair_evidence', 'human_authority_review', 'The supplied human disposition is stale.')),
+  classified('human_disposition.invalid', 'F4', 'single_action_mechanical_repair', 'human_authority', 'disposition-invalid', 'repair disposition', policy('human_authority', 'repair_evidence', 'human_authority_review', 'The supplied human disposition is malformed, mismatched, or unrelated.')),
+  classified('human_disposition.untrusted', 'F4', 'retained_hard_refusal', 'human_authority', 'authorization-absent', 'supply trusted disposition', policy('human_authority', 'repair_evidence', 'human_authority_review', 'The human disposition is not signed by the exact current operator-pinned human authority.')),
 ];
 
 const F5 = [
-  classified('attribution.work_unit', 'F5', 'retained_hard_refusal', 'product_lineage', 'work-unit-attribution-integrity', 'repair attribution trailer'),
-  classified('attribution.trailer', 'F5', 'retained_hard_refusal', 'product_lineage', 'commit-task-attribution-integrity', 'repair attribution trailer'),
-  classified('attribution.role', 'F5', 'retained_hard_refusal', 'attribution_identity', 'requested-workflow-role-validity', 'repair requested role'),
-  classified('preflight.attribution', 'F5', 'retained_hard_refusal', 'github_attribution', 'github-attribution-integrity', 'repair attribution'),
+  classified('attribution.work_unit', 'F5', 'retained_hard_refusal', 'product_lineage', 'work-unit-attribution-integrity', 'repair attribution trailer', policy('attribution', 'repair_attribution_trailer', 'none', 'A work-unit commit does not carry the exact reviewed work-unit and task-set attribution.')),
+  classified('attribution.trailer', 'F5', 'retained_hard_refusal', 'product_lineage', 'commit-task-attribution-integrity', 'repair attribution trailer', policy('attribution', 'repair_attribution_trailer', 'none', 'Commit attribution trailer block is invalid.')),
+  classified('attribution.role', 'F5', 'retained_hard_refusal', 'attribution_identity', 'requested-workflow-role-validity', 'repair requested role', policy('attribution', 'repair_attribution_trailer', 'none', 'The expected commit-attribution role is not a canonical lowercase workflow role.')),
+  classified('preflight.attribution', 'F5', 'retained_hard_refusal', 'github_attribution', 'github-attribution-integrity', 'repair attribution', policy('attribution', 'repair_attribution', 'none', 'Commit attribution is invalid.')),
 ];
 
 const F6 = [
-  classified('audit.already_exists', 'F6', 'single_action_mechanical_repair', 'audit_record', 'duplicate-audit-record-prevention', 'select or rebaseline existing audit'),
-  classified('closeout.marker.stale', 'F6', 'migration_recompute', 'closeout_marker', 'closeout-marker-currentness', 'recompute closeout packet'),
-  classified('review_prepare.workspace', 'F6', 'retained_hard_refusal', 'review_workspace', 'exact-candidate-workspace-integrity', 'use exact review workspace'),
-  classified('review_prepare.stale_head', 'F6', 'migration_recompute', 'review_candidate', 'derived-review-preparation-currentness', 'regenerate review preparation'),
-  classified('review_prepare.preflight_failed', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'fresh-preflight-integrity', 'repair preflight evidence'),
-  classified('review_prepare.independent_review_policy', 'F6', 'retained_hard_refusal', 'review_policy', 'independent-review-policy-integrity', 'repair review policy'),
-  classified('review_prepare.head_unavailable', 'F6', 'migration_recompute', 'review_candidate', 'current-head-unavailable', 'restore current head and regenerate review preparation'),
-  classified('review_prepare.head_malformed', 'F6', 'migration_recompute', 'review_candidate', 'head-evidence-malformed', 'repair head evidence and regenerate review preparation'),
-  classified('review_prepare.head_refetch_failed', 'F6', 'migration_recompute', 'review_candidate', 'head-refetch-failed', 'restore head refetch and regenerate review preparation'),
-  classified('review_prepare.packet', 'F6', 'retained_hard_refusal', 'review_entry_packet', 'review-entry-packet-integrity', 'regenerate canonical review packet'),
-  classified('ready.preflight', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'exact-candidate-preflight-integrity', 'repair preflight evidence'),
-  classified('ready.review_audit', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-audit-integrity', 'obtain current independent review'),
-  classified('ready.task_identity', 'F6', 'retained_hard_refusal', 'task_identity', 'unique-task-carrier-integrity', 'repair task identity'),
-  classified('ready.cross_gate_identity', 'F6', 'retained_hard_refusal', 'candidate_certification', 'cross-gate-exact-candidate-integrity', 'reconcile certification gates'),
-  classified('review_audit.task_contract', 'F6', 'retained_hard_refusal', 'review_contract', 'independent-review-contract-integrity', 'repair review contract'),
-  classified('review_audit.failure', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-provenance-integrity', 'obtain valid independent review'),
-  classified('preflight.review_checkpoint', 'F6', 'material_human_decision', 'review_authority', 'review-round-authorization-unproven', 'record authorized review checkpoint'),
-  classified('preflight.review_history_invalid', 'F6', 'retained_hard_refusal', 'review_history', 'review-history-carrier-integrity', 'repair review history'),
-  classified('preflight.revision_resolution', 'F6', 'retained_hard_refusal', 'review_findings', 'required-finding-resolution-integrity', 'repair revision resolution'),
-  classified('preflight.review_provenance', 'F6', 'removal', 'review_provenance', 'historical-preflight-category-without-live-emitter', 'remove registry compatibility row when a live evaluator is introduced or the policy migrates'),
-  classified('review.entry.fixup_invalid', 'F6', 'retained_hard_refusal', 'review_fixup', 'fixup-disclosure-integrity', 'repair maintainer review fixup'),
-  classified('review.entry.matrix_stale', 'F6', 'migration_recompute', 'revision_resolution', 'derived-finding-resolution-currentness', 'regenerate finding-resolution matrix'),
-  classified('review.entry.persistence_conflict', 'F6', 'retained_hard_refusal', 'review_entry_receipt', 'review-entry-persistence-conflict', 'resolve review-entry conflict'),
-  classified('review.entry.persistence_carrier_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-carrier-currentness', 'regenerate review entry'),
-  classified('review.entry.persistence_write_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-write-currentness', 'regenerate review entry'),
-  classified('review.entry.persistence_refetch_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-refetch-currentness', 'regenerate review entry'),
+  classified('audit.already_exists', 'F6', 'single_action_mechanical_repair', 'audit_record', 'duplicate-audit-record-prevention', 'select or rebaseline existing audit', policy('audit', 'repair_review_audit', 'none', 'An audit record already exists for this work unit.')),
+  classified('closeout.marker.stale', 'F6', 'migration_recompute', 'closeout_marker', 'closeout-marker-currentness', 'recompute closeout packet', policy('evidence', 'repair_evidence', 'none', 'The closeout marker is stale relative to current bound state.')),
+  classified('review_prepare.workspace', 'F6', 'retained_hard_refusal', 'review_workspace', 'exact-candidate-workspace-integrity', 'use exact review workspace', policy('workspace', 'repair_review_workspace', 'none', 'The review workspace does not match the exact review artifact.')),
+  classified('review_prepare.stale_head', 'F6', 'migration_recompute', 'review_candidate', 'derived-review-preparation-currentness', 'regenerate review preparation', policy('stale_head', 'refresh_review_preparation', 'none', 'Review preparation is stale relative to the current PR head.')),
+  classified('review_prepare.preflight_failed', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'fresh-preflight-integrity', 'repair preflight evidence', policy('preflight', 'repair_preflight_gate', 'none', 'Fresh preflight evidence fails for the current review candidate.')),
+  classified('review_prepare.independent_review_policy', 'F6', 'retained_hard_refusal', 'review_policy', 'independent-review-policy-integrity', 'repair review policy', policy('review_policy', 'repair_task_policy', 'contract_reconciliation', 'The independent-review policy is invalid for review dispatch.')),
+  classified('review_prepare.head_unavailable', 'F6', 'migration_recompute', 'review_candidate', 'current-head-unavailable', 'restore current head and regenerate review preparation', policy('review_candidate', 'refresh_review_preparation', 'none', 'The current PR head is unavailable; review preparation freshness cannot be confirmed.')),
+  classified('review_prepare.head_malformed', 'F6', 'migration_recompute', 'review_candidate', 'head-evidence-malformed', 'repair head evidence and regenerate review preparation', policy('review_candidate', 'refresh_review_preparation', 'none', 'Evaluated or current PR-head evidence is malformed; review preparation freshness cannot be confirmed.')),
+  classified('review_prepare.head_refetch_failed', 'F6', 'migration_recompute', 'review_candidate', 'head-refetch-failed', 'restore head refetch and regenerate review preparation', policy('review_candidate', 'refresh_review_preparation', 'none', 'The current PR head could not be refetched; review preparation freshness cannot be confirmed.')),
+  classified('review_prepare.packet', 'F6', 'retained_hard_refusal', 'review_entry_packet', 'review-entry-packet-integrity', 'regenerate canonical review packet', policy('review_packet', 'regenerate_review_packet', 'none', 'The review preparation packet is invalid.')),
+  classified('ready.preflight', 'F6', 'retained_hard_refusal', 'candidate_evidence', 'exact-candidate-preflight-integrity', 'repair preflight evidence', policy('preflight', 'repair_preflight_gate', 'none', 'A preflight component gate failed.')),
+  classified('ready.review_audit', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-audit-integrity', 'obtain current independent review', policy('review_audit', 'repair_review_audit', 'none', 'The review-audit component gate failed.')),
+  classified('ready.task_identity', 'F6', 'retained_hard_refusal', 'task_identity', 'unique-task-carrier-integrity', 'repair task identity', policy('task_identity', 'repair_task_identity', 'none', 'Cross-carrier task identity is invalid.')),
+  classified('ready.cross_gate_identity', 'F6', 'retained_hard_refusal', 'candidate_certification', 'cross-gate-exact-candidate-integrity', 'reconcile certification gates', policy('cross_gate_identity', 'reconcile_cross_gate_identity', 'none', 'Cross-gate task identity is inconsistent.')),
+  classified('review_audit.task_contract', 'F6', 'retained_hard_refusal', 'review_contract', 'independent-review-contract-integrity', 'repair review contract', policy('task_contract', 'repair_task_record', 'contract_reconciliation', 'Task record is malformed for review audit.')),
+  classified('review_audit.failure', 'F6', 'retained_hard_refusal', 'review_provenance', 'independent-review-provenance-integrity', 'obtain valid independent review', policy('review_audit', 'repair_review_audit', 'none', 'Review audit failed.')),
+  classified('preflight.review_checkpoint', 'F6', 'material_human_decision', 'review_authority', 'review-round-authorization-unproven', 'record authorized review checkpoint', policy('review_checkpoint', 'repair_review_checkpoint', 'human_authority_review', 'A required human review checkpoint is absent for this review round.')),
+  classified('preflight.review_history_invalid', 'F6', 'retained_hard_refusal', 'review_history', 'review-history-carrier-integrity', 'repair review history', policy('review_history', 'repair_review_checkpoint', 'contract_reconciliation', 'Review history or its checkpoint carrier is malformed, fabricated, or inconsistent.')),
+  classified('preflight.revision_resolution', 'F6', 'retained_hard_refusal', 'review_findings', 'required-finding-resolution-integrity', 'repair revision resolution', policy('revision_resolution', 'repair_revision_resolution', 'none', 'Review resolution is invalid.')),
+  // Retained while the public preflight categorizer needs this compatibility
+  // label; it has no dedicated producer and is excluded from live-proof claims.
+  classified('preflight.review_provenance', 'F6', 'removal', 'review_provenance', 'historical-preflight-category-without-live-emitter', 'remove compatibility row when the public categorizer migrates', policy('review_provenance', 'repair_review_provenance', 'none', 'Review provenance is invalid.')),
+  classified('review.entry.fixup_invalid', 'F6', 'retained_hard_refusal', 'review_fixup', 'fixup-disclosure-integrity', 'repair maintainer review fixup', policy('review_entry', 'repair_review_checkpoint', 'none', 'Maintainer Review Fixup disclosure is invalid.')),
+  classified('review.entry.matrix_stale', 'F6', 'migration_recompute', 'revision_resolution', 'derived-finding-resolution-currentness', 'regenerate finding-resolution matrix', policy('review_entry', 'repair_revision_resolution', 'none', 'Finding-resolution state is stale for review entry.')),
+  classified('review.entry.persistence_conflict', 'F6', 'retained_hard_refusal', 'review_entry_receipt', 'review-entry-persistence-conflict', 'resolve review-entry conflict', policy('review_entry', 'repair_evidence', 'contract_reconciliation', 'An existing review-entry receipt conflicts with the recognized verified return.')),
+  classified('review.entry.persistence_carrier_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-carrier-currentness', 'regenerate review entry', policy('review_entry', 'repair_evidence', 'none', 'The carrier changed before the review-entry receipt could be persisted.')),
+  classified('review.entry.persistence_write_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-write-currentness', 'regenerate review entry', policy('review_entry', 'repair_evidence', 'none', 'Review-entry persistence could not establish a current atomic write.')),
+  classified('review.entry.persistence_refetch_changed', 'F6', 'migration_recompute', 'review_entry_receipt', 'review-entry-refetch-currentness', 'regenerate review entry', policy('review_entry', 'repair_evidence', 'none', 'Persisted review-entry bytes changed before their final refetch.')),
 ];
 
 const F7 = [
-  classified('compatibility.waiver_scope_retired', 'F7', 'advisory_diagnostic', 'compatibility_waiver', 'retired-waiver-scope-observation', 'retain canonical evidence requirements'),
-  classified('check.aggregate.git_probe_failed', 'F7', 'single_action_mechanical_repair', 'check_aggregate_tracking', 'aggregate-tracking-probe-unavailable', 'restore readable Git index and worktree'),
-  classified('worktree.clean_gate.failed', 'F7', 'retained_hard_refusal', 'dispatch_workspace', 'clean-dispatch-workspace-integrity', 'restore exact clean dispatch workspace'),
-  classified('state.host_local', 'F7', 'advisory_diagnostic', 'projection_provenance', 'recorded-host-local-state-observation', 'record canonical provenance'),
-  classified('projection.state.unexplained', 'F7', 'retained_hard_refusal', 'projection_provenance', 'unexplained-authority-sensitive-drift', 'reconcile authoritative projection state'),
+  classified('compatibility.waiver_scope_retired', 'F7', 'advisory_diagnostic', 'compatibility_waiver', 'retired-waiver-scope-observation', 'retain canonical evidence requirements', policy('compatibility', 'repair_evidence', 'none', 'A retired compatibility-waiver scope is ignored.')),
+  classified('check.aggregate.git_probe_failed', 'F7', 'single_action_mechanical_repair', 'check_aggregate_tracking', 'aggregate-tracking-probe-unavailable', 'restore readable Git index and worktree', policy('workspace', 'repair_command_environment', 'none', 'Git could not determine whether mutable aggregate state is tracked.')),
+  classified('worktree.clean_gate.failed', 'F7', 'retained_hard_refusal', 'dispatch_workspace', 'clean-dispatch-workspace-integrity', 'restore exact clean dispatch workspace', policy('workspace', 'repair_review_workspace', 'none', 'The clean-worktree gate failed.')),
+  classified('state.host_local', 'F7', 'advisory_diagnostic', 'projection_provenance', 'recorded-host-local-state-observation', 'record canonical provenance', policy('workspace', 'repair_review_workspace', 'none', 'Host-local or preexisting state requires classification.')),
+  classified('projection.state.unexplained', 'F7', 'retained_hard_refusal', 'projection_provenance', 'unexplained-authority-sensitive-drift', 'reconcile authoritative projection state', policy('workspace', 'repair_review_workspace', 'contract_reconciliation', 'Observed state is unclassified drift and blocks authority-sensitive conclusions.')),
 ];
 
 const F8 = [
   // These labels project readiness and preflight facts. They do not create a
   // second lifecycle authority: the cited F1--F7 evaluator facts retain their
   // existing material classifications and guards.
-  classified('readiness.mode.invalid', 'F8', 'advisory_diagnostic', 'readiness_mode', 'library-readiness-mode-validation', 'select readiness mode'),
-  classified('preflight.head_identity', 'F8', 'migration_recompute', 'candidate_identity', 'derived-preflight-head-currentness', 'refetch current PR head and rerun preflight'),
-  classified('preflight.summary_shape', 'F8', 'single_action_mechanical_repair', 'completion_summary', 'completion-summary-rendering-invalid', 'repair PR completion summary'),
-  classified('preflight.scope_deviations', 'F8', 'advisory_diagnostic', 'scope_projection', 'preflight-scope-presentation', 'repair the cited canonical scope or deviation fact'),
-  classified('preflight.task_contract', 'F8', 'advisory_diagnostic', 'task_contract_projection', 'preflight-contract-presentation', 'repair the cited canonical task-contract fact'),
-  classified('preflight.path_intent', 'F8', 'advisory_diagnostic', 'path_intent_projection', 'preflight-path-intent-presentation', 'repair the cited canonical path-intent fact'),
-  classified('preflight.generated_paths', 'F8', 'advisory_diagnostic', 'generated_path_projection', 'preflight-generated-path-presentation', 'repair the cited canonical generated-path fact'),
-  classified('preflight.dependencies', 'F8', 'advisory_diagnostic', 'dependency_projection', 'preflight-dependency-presentation', 'repair the cited canonical dependency fact'),
-  classified('preflight.evidence', 'F8', 'advisory_diagnostic', 'evidence_projection', 'preflight-evidence-presentation', 'repair the cited canonical evidence fact'),
-  classified('preflight.checks', 'F8', 'advisory_diagnostic', 'required_check_projection', 'preflight-check-presentation', 'repair the cited canonical required-check fact'),
-  classified('preflight.checks.task_contract', 'F8', 'advisory_diagnostic', 'required_check_contract_projection', 'preflight-required-check-contract-presentation', 'repair the cited canonical required-check contract'),
-  classified('preflight.task_policy', 'F8', 'advisory_diagnostic', 'task_policy_projection', 'preflight-policy-presentation', 'repair the cited canonical task-policy fact'),
-  classified('preflight.other', 'F8', 'advisory_diagnostic', 'preflight_observation', 'unclassified-preflight-presentation', 'inspect and classify the underlying preflight fact'),
-  classified('pr_body.structural', 'F8', 'single_action_mechanical_repair', 'pr_body_rendering', 'PR-body-structural-rendering-invalid', 'repair PR body structure'),
-  classified('pr_body.input', 'F8', 'single_action_mechanical_repair', 'preparation_input', 'serialized-preparation-input-invalid', 'complete preparation input'),
-  classified('pr_body.snapshot', 'F8', 'migration_recompute', 'snapshot_context', 'offline-snapshot-projection-invalid', 'regenerate PR-body snapshot'),
-  classified('pr_body.deprecation', 'F8', 'advisory_diagnostic', 'command_deprecation', 'deprecated-command-presentation', 'use the current PR-body command'),
-  classified('pr_body.local_file', 'F8', 'single_action_mechanical_repair', 'local_pr_body_file', 'local-PR-body-file-unavailable', 'restore local PR-body file'),
-  classified('pr_body.input_format', 'F8', 'single_action_mechanical_repair', 'pr_body_input_format', 'PR-body-input-format-invalid', 'repair PR-body input format'),
-  classified('cli.usage', 'F8', 'advisory_diagnostic', 'command_usage', 'public-command-usage-invalid', 'correct command usage'),
-  classified('cli.operational', 'F8', 'advisory_diagnostic', 'command_environment', 'public-command-environment-unavailable', 'repair command environment'),
-  classified('cli.unexpected', 'F8', 'advisory_diagnostic', 'command_observation', 'unexpected-public-command-observation', 'inspect public command failure'),
-  classified('projection.observation.invalid', 'F8', 'single_action_mechanical_repair', 'projection_observation', 'projection-observation-malformed', 'repair projection observation'),
-  classified('projection.carrier.not_applicable', 'F8', 'single_action_mechanical_repair', 'projection_carrier', 'projection-carrier-not-applicable', 'select applicable projection carrier'),
-  classified('projection.evidence.superseded', 'F8', 'migration_recompute', 'projection_evidence', 'projection-evidence-superseded', 'recompute projection evidence'),
-  classified('projection.fact.contradiction', 'F8', 'retained_hard_refusal', 'projection_authority', 'current-authoritative-projection-contradiction', 'reconcile authoritative projection state'),
-  classified('projection.authority.untyped', 'F8', 'advisory_diagnostic', 'projection_authority', 'untyped-projection-observation', 'record typed canonical authority'),
+  classified('readiness.mode.invalid', 'F8', 'advisory_diagnostic', 'readiness_mode', 'library-readiness-mode-validation', 'select readiness mode', policy('path_intent', 'select_readiness_mode', 'none', 'Readiness mode is invalid.')),
+  classified('preflight.head_identity', 'F8', 'migration_recompute', 'candidate_identity', 'derived-preflight-head-currentness', 'refetch current PR head and rerun preflight', policy('head_identity', 'repair_artifact_identity', 'none', 'PR artifact identity does not match the declared head.')),
+  classified('preflight.summary_shape', 'F8', 'single_action_mechanical_repair', 'completion_summary', 'completion-summary-rendering-invalid', 'repair PR completion summary', policy('summary_shape', 'repair_pr_summary', 'none', 'PR completion summary is incomplete or malformed.')),
+  classified('preflight.scope_deviations', 'F8', 'advisory_diagnostic', 'scope_projection', 'preflight-scope-presentation', 'repair the cited canonical scope or deviation fact', policy('scope_deviations', 'declare_exact_deviation', 'contract_reconciliation', 'PR paths do not match the task scope.')),
+  classified('preflight.task_contract', 'F8', 'advisory_diagnostic', 'task_contract_projection', 'preflight-contract-presentation', 'repair the cited canonical task-contract fact', policy('task_contract', 'repair_task_contract', 'contract_reconciliation', 'Task contract is invalid.')),
+  classified('preflight.path_intent', 'F8', 'advisory_diagnostic', 'path_intent_projection', 'preflight-path-intent-presentation', 'repair the cited canonical path-intent fact', policy('path_intent', 'repair_path_intent', 'contract_reconciliation', 'Task path intent is invalid.')),
+  classified('preflight.generated_paths', 'F8', 'advisory_diagnostic', 'generated_path_projection', 'preflight-generated-path-presentation', 'repair the cited canonical generated-path fact', policy('generated_paths', 'repair_generated_path_declaration', 'contract_reconciliation', 'Generated-path declaration is invalid.')),
+  classified('preflight.dependencies', 'F8', 'advisory_diagnostic', 'dependency_projection', 'preflight-dependency-presentation', 'repair the cited canonical dependency fact', policy('dependencies', 'resolve_dependency', 'dependency_escalation', 'Task dependency is unresolved.')),
+  classified('preflight.evidence', 'F8', 'advisory_diagnostic', 'evidence_projection', 'preflight-evidence-presentation', 'repair the cited canonical evidence fact', policy('evidence', 'repair_evidence', 'none', 'Required evidence is invalid.')),
+  classified('preflight.checks', 'F8', 'advisory_diagnostic', 'required_check_projection', 'preflight-check-presentation', 'repair the cited canonical required-check fact', policy('checks', 'repair_check_evidence', 'none', 'Required check evidence is invalid.')),
+  classified('preflight.checks.task_contract', 'F8', 'advisory_diagnostic', 'required_check_contract_projection', 'preflight-required-check-contract-presentation', 'repair the cited canonical required-check contract', policy('checks', 'repair_required_checks', 'contract_reconciliation', 'Task required-check declaration is invalid.')),
+  classified('preflight.task_policy', 'F8', 'advisory_diagnostic', 'task_policy_projection', 'preflight-policy-presentation', 'repair the cited canonical task-policy fact', policy('task_policy', 'repair_task_policy', 'contract_reconciliation', 'Task policy is invalid.')),
+  classified('preflight.other', 'F8', 'advisory_diagnostic', 'preflight_observation', 'unclassified-preflight-presentation', 'inspect and classify the underlying preflight fact', policy('other', 'repair_preflight_input', 'none', 'Preflight input is invalid.')),
+  classified('pr_body.structural', 'F8', 'single_action_mechanical_repair', 'pr_body_rendering', 'PR-body-structural-rendering-invalid', 'repair PR body structure', policy('pr_body', 'repair_pr_body_structure', 'none', 'PR body structure is incomplete or malformed.')),
+  classified('pr_body.input', 'F8', 'single_action_mechanical_repair', 'preparation_input', 'serialized-preparation-input-invalid', 'complete preparation input', policy('preparation_input', 'complete_pr_body_input', 'none', 'Serialized evaluation input is incomplete or malformed.')),
+  classified('pr_body.snapshot', 'F8', 'migration_recompute', 'snapshot_context', 'offline-snapshot-projection-invalid', 'regenerate PR-body snapshot', policy('snapshot_context', 'regenerate_pr_body_snapshot', 'none', 'Offline PR-body snapshot context is invalid.')),
+  classified('pr_body.deprecation', 'F8', 'advisory_diagnostic', 'command_deprecation', 'deprecated-command-presentation', 'use the current PR-body command', policy('deprecation', 'migrate_pr_body_command', 'none', 'A deprecated PR-body command form is in use.')),
+  classified('pr_body.local_file', 'F8', 'single_action_mechanical_repair', 'local_pr_body_file', 'local-PR-body-file-unavailable', 'restore local PR-body file', policy('local_file', 'repair_local_pr_body_file', 'none', 'A local PR-body input or output file is unavailable.')),
+  classified('pr_body.input_format', 'F8', 'single_action_mechanical_repair', 'pr_body_input_format', 'PR-body-input-format-invalid', 'repair PR-body input format', policy('input_format', 'repair_pr_body_input_format', 'none', 'PR-body input format is invalid.')),
+  classified('cli.usage', 'F8', 'advisory_diagnostic', 'command_usage', 'public-command-usage-invalid', 'correct command usage', policy('usage', 'correct_command_usage', 'none', 'Command usage is invalid.')),
+  classified('cli.operational', 'F8', 'advisory_diagnostic', 'command_environment', 'public-command-environment-unavailable', 'repair command environment', policy('operational_error', 'repair_command_environment', 'human_authority_review', 'A command dependency or execution environment is unavailable.')),
+  classified('cli.unexpected', 'F8', 'advisory_diagnostic', 'command_observation', 'unexpected-public-command-observation', 'inspect public command failure', policy('operational_error', 'repair_evidence', 'human_authority_review', 'The public command failed unexpectedly.')),
+  classified('projection.observation.invalid', 'F8', 'single_action_mechanical_repair', 'projection_observation', 'projection-observation-malformed', 'repair projection observation', policy('projection', 'repair_evidence', 'none', 'A backend projection observation is malformed or does not describe a canonical transition-contract fact.')),
+  classified('projection.carrier.not_applicable', 'F8', 'single_action_mechanical_repair', 'projection_carrier', 'projection-carrier-not-applicable', 'select applicable projection carrier', policy('projection', 'repair_evidence', 'none', 'The observation claims a carrier the selected backend does not project.')),
+  classified('projection.evidence.superseded', 'F8', 'migration_recompute', 'projection_evidence', 'projection-evidence-superseded', 'recompute projection evidence', policy('projection', 'repair_evidence', 'none', 'Projection evidence is stale or changed and is superseded rather than current.')),
+  classified('projection.fact.contradiction', 'F8', 'retained_hard_refusal', 'projection_authority', 'current-authoritative-projection-contradiction', 'reconcile authoritative projection state', policy('projection', 'repair_evidence', 'contract_reconciliation', 'Two current authoritative carriers report contradictory values for one fact.')),
+  classified('projection.authority.untyped', 'F8', 'advisory_diagnostic', 'projection_authority', 'untyped-projection-observation', 'record typed canonical authority', policy('projection', 'repair_evidence', 'none', 'An untyped carrier confers no lifecycle authority and is advisory only.')),
 ];
 
 const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
-// P36-01-C2 accepted commit 0ee9732 superseded the two elapsed-time F1 rows.
-// The P36-00B 199-row count is historical; this exact live catalog has 197 rows.
+// The P36F-00B 199-row count is historical; this live catalog retains 197
+// rows, including two compatibility-only internal rows with no public claim.
 const EXPECTED_CATALOG_ROW_COUNT = 197;
 const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({
   F1: 23,
@@ -876,20 +888,20 @@ const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({
   F7: 5,
   F8: 27,
 });
-const byCode = new Map();
-for (const entry of catalog) {
-  if (byCode.has(entry.code)) throw new Error(`duplicate refusal classification: ${entry.code}`);
-  byCode.set(entry.code, entry);
-}
-for (const code of Object.keys(REPAIR_POLICY)) {
-  if (!byCode.has(code)) throw new Error(`missing refusal classification: ${code}`);
-}
-for (const code of byCode.keys()) {
-  if (!Object.hasOwn(REPAIR_POLICY, code)) throw new Error(`classification has no registered diagnostic: ${code}`);
+/**
+ * The one runtime diagnostic-definition view. Classifications, tallies, and
+ * hard-boundary lists are projections of these rows. Completeness belongs to
+ * validation, not production module initialization.
+ */
+export const DIAGNOSTIC_DEFINITIONS = Object.freeze(Object.fromEntries(catalog.map(entry => [entry.code, entry])));
+export const REFUSAL_CLASSES = DIAGNOSTIC_DEFINITIONS;
+
+/** Generate the legacy repair-policy view from diagnostic definitions. */
+export function repairPolicyViewFor(definitions = DIAGNOSTIC_DEFINITIONS) {
+  return Object.freeze(Object.fromEntries(Object.entries(definitions).map(([code, entry]) => [code, entry.repairPolicy])));
 }
 
-export const REFUSAL_CLASSES = Object.freeze(Object.fromEntries(catalog.map(entry => [entry.code, entry])));
-
+/** Generate the legacy repair-policy lookup without maintaining a second registry. */
 /** Generated current classification totals; tests consume this rather than private matrix prose. */
 export const REFUSAL_FAMILY_TALLY = Object.freeze(Object.fromEntries(
   [...new Set(catalog.map(entry => entry.family))].sort().map(family => {
@@ -900,43 +912,6 @@ export const REFUSAL_FAMILY_TALLY = Object.freeze(Object.fromEntries(
     })];
   }),
 ));
-
-/** Accepted-slice entries intentionally retained at a material boundary. */
-const HARD_REFUSAL_CODES = Object.freeze([
-  'activation.capture.missing', 'activation.capture.malformed', 'activation.capture.mismatch',
-  'activation.grant.malformed', 'activation.grant.unauthenticated', 'activation.grant.revoked',
-  'activation.grant.repository_mismatch', 'activation.grant.out_of_scope',
-  'activation.binding.malformed', 'activation.binding.unauthenticated', 'activation.binding.mismatch',
-  'activation.binding.task_mismatch', 'activation.binding.repository_mismatch', 'activation.binding.stale_contract',
-  'activation.assurance.insufficient', 'activation.identity.conflict',
-  'task.contract.malformed', 'task.contract.absent', 'scope.declaration.missing',
-  'scope.declaration.duplicate', 'scope.declaration.invalid',
-  'scope.intended_creation.missing', 'scope.intended_creation.uncovered', 'scope.intent.invalid',
-  'generated.path.invalid', 'scope.glob.unmatched', 'scope.deviation.missing', 'scope.deviation.malformed',
-  'contract.baseline.invalid', 'contract.baseline.stale', 'task.body.utf8', 'task.body.identity',
-  'task.body.invalid', 'task.body.attribution', 'evidence.negative', 'task.evidence.not_in_progress',
-  'task.evidence.lineage', 'task.carrier.armed', 'task.evidence.provenance_mismatch',
-  'task.evidence.contract_drift', 'task.evidence.final_validation', 'task.record.identity_mismatch',
-  'task.mutation.unresolved', 'task.evidence.product_head', 'execution_evidence.binding_mismatch',
-  'execution_evidence.lineage_mismatch', 'dependency.unresolved', 'dispatch.attempt.budget_exhausted',
-  'task.lifecycle.not_dispatchable', 'dispatch.packet.conserved', 'dispatch.attempt.history_rewritten',
-  'capability.action.denied', 'parallel_scan.inventory.incomplete', 'parallel_scan.decomposition.invalid',
-  'handoff.evidence.replayed', 'handoff.evidence.mismatched', 'handoff.evidence.unauthenticated',
-  'return.assurance.insufficient', 'return.assurance.session_reported', 'return.lane.implementation_absent',
-  'handoff.evidence.revalidation_failed', 'handoff.evidence.ambiguous_return',
-  'role_return.invalid', 'role_return.producer_mismatch', 'attempt_return_unbound',
-  'attempt_return_ambiguous', 'attempt_return_conflict', 'attempt_terminal_conflict',
-  'blocked_result.owner_mismatch', 'blocked_result.redelegation_required',
-  'blocked_result.redelegation_untrusted', 'human_disposition.required', 'human_disposition.untrusted',
-  'attribution.work_unit', 'attribution.trailer', 'attribution.role', 'preflight.attribution',
-  'review_prepare.workspace', 'review_prepare.packet', 'review_prepare.preflight_failed',
-  'review_prepare.independent_review_policy',
-  'ready.preflight', 'ready.review_audit', 'ready.task_identity', 'ready.cross_gate_identity',
-  'review_audit.task_contract', 'review_audit.failure', 'preflight.review_checkpoint', 'preflight.review_history_invalid',
-  'preflight.revision_resolution', 'review.entry.fixup_invalid',
-  'review.entry.persistence_conflict',
-  'worktree.clean_gate.failed', 'projection.state.unexplained', 'projection.fact.contradiction',
-]);
 
 const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'activation.capture.missing': 'Material fact: no authenticated activation capture exists. scenario: activation-capture-missing-refuses-dispatch.',
@@ -997,7 +972,6 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'handoff.evidence.mismatched': 'Material fact: handoff evidence binds different identities. scenario: mismatched-handoff-cannot-authorize-transition.',
   'handoff.evidence.unauthenticated': 'Material fact: handoff evidence lacks authenticated provenance. scenario: unauthenticated-handoff-is-refused.',
   'return.assurance.insufficient': 'Material fact: return assurance is below the authorized minimum. scenario: insufficient-return-assurance-needs-decision.',
-  'return.assurance.session_reported': 'Material fact: the return producer is not authenticated. Catalog classification: retained-hard-refusal family. Installed accounting exception: the emitted session-reported diagnostic is warning-only/non-refusal and grants no authority. scenario: session-reported-return-cannot-authorize.',
   'return.lane.implementation_absent': 'Material fact: return lane lacks reachable implementation. scenario: absent-lane-artifact-blocks-return.',
   'handoff.evidence.revalidation_failed': 'Material fact: exact stored return fails current external verification. scenario: failed-return-revalidation-remains-refused.',
   'handoff.evidence.ambiguous_return': 'Material fact: current return selection is ambiguous. scenario: competing-return-records-cannot-authorize.',
@@ -1037,7 +1011,7 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
 });
 
 export const HARD_REFUSAL_ALLOWLIST = Object.freeze([
-  ...HARD_REFUSAL_CODES.map(code => {
+  ...catalog.filter(entry => ['retained_hard_refusal', 'material_human_decision'].includes(entry.refusalClass)).map(({ code }) => {
     const { factOwner, rationale, repairClass } = REFUSAL_CLASSES[code];
     return Object.freeze({
       code, factOwner, rationale, repairClass,
@@ -1048,8 +1022,8 @@ export const HARD_REFUSAL_ALLOWLIST = Object.freeze([
 
 /** Codes preserved for historical compatibility but no longer emitted by runtime producers. */
 export const HISTORICAL_PRODUCER_EXCEPTIONS = Object.freeze({
-  'scope.existing_path.missing': 'removal disposition: catalog compatibility entry with no live runtime producer',
-  'preflight.review_provenance': 'removal disposition: registered category has no live preflight producer at this artifact',
+  'scope.existing_path.missing': 'internal compatibility evaluator has no supported public claim',
+  'preflight.review_provenance': 'public preflight compatibility categorizer has no dedicated producer',
 });
 
 export function refusalClassFor(code) {
@@ -1060,11 +1034,12 @@ export function refusalClassFor(code) {
 
 /** Validate a catalog copy as well as the canonical frozen catalog. */
 export function assertRefusalClassCatalog({
-  policy = REPAIR_POLICY,
+  policy = null,
   classifications = REFUSAL_CLASSES,
   allowlist = HARD_REFUSAL_ALLOWLIST,
 } = {}) {
-  const policyCodes = Object.keys(policy).sort();
+  const resolvedPolicy = policy ?? repairPolicyViewFor(classifications);
+  const policyCodes = Object.keys(resolvedPolicy).sort();
   const classificationCodes = Object.keys(classifications).sort();
   if (classificationCodes.length !== EXPECTED_CATALOG_ROW_COUNT) {
     throw new Error(`refusal catalog row count changed: expected ${EXPECTED_CATALOG_ROW_COUNT}, received ${classificationCodes.length}`);
@@ -1083,8 +1058,10 @@ export function assertRefusalClassCatalog({
   }
   const allowlisted = new Set();
   const negativeProofs = new Set();
+  const executableProof = /(?:\btest\/[a-z0-9_./-]+\.test\.[cm]?js\b|\bF[5-8] executable probe\b)/i;
+  const preciseDisposition = /^disposition: [a-z][a-z0-9-]*; \S.+/;
   for (const entry of allowlist) {
-    if (!entry || typeof entry.code !== 'string' || !Object.hasOwn(policy, entry.code)) {
+    if (!entry || typeof entry.code !== 'string' || !Object.hasOwn(resolvedPolicy, entry.code)) {
       throw new Error(`hard-refusal allowlist has no registered diagnostic: ${entry?.code ?? '<missing>'}`);
     }
     if (allowlisted.has(entry.code)) throw new Error(`hard-refusal allowlist has duplicate diagnostic: ${entry.code}`);
@@ -1104,6 +1081,9 @@ export function assertRefusalClassCatalog({
     if (!REFUSAL_DISPOSITIONS.includes(entry.refusalClass)) {
       throw new Error(`diagnostic has unknown refusal disposition: ${code}`);
     }
+    if (!entry.repairPolicy || entry.repairPolicy !== resolvedPolicy[code]) {
+      throw new Error(`diagnostic definition lacks its registered repair policy: ${code}`);
+    }
     const accepted = ACCEPTED_REFUSAL_FAMILIES.includes(entry.family);
     if (accepted && entry.refusalClass === PENDING_CLASSIFICATION) {
       throw new Error(`accepted family has pending classification: ${code}`);
@@ -1115,8 +1095,13 @@ export function assertRefusalClassCatalog({
       entry.consumers.some(consumer => typeof consumer !== 'string' || !consumer))) {
       throw new Error(`diagnostic has invalid consumers: ${code}`);
     }
-    if (!entry.semanticInvalidators || !entry.proof) {
-      throw new Error(`diagnostic lacks disposition metadata: ${code}`);
+    if (!entry.derivedNarrative?.semanticInvalidator || !entry.derivedNarrative?.description) {
+      throw new Error(`diagnostic lacks derived classification metadata: ${code}`);
+    }
+    if (entry.semanticEvidence !== undefined &&
+      (typeof entry.semanticEvidence !== 'string' ||
+       (!executableProof.test(entry.semanticEvidence) && !preciseDisposition.test(entry.semanticEvidence)))) {
+      throw new Error(`diagnostic semantic evidence lacks an executable reference or precise disposition: ${code}`);
     }
     const hard = ['retained_hard_refusal', 'material_human_decision'].includes(entry.refusalClass);
     if (hard !== allowlisted.has(code)) {
@@ -1126,4 +1111,19 @@ export function assertRefusalClassCatalog({
   return true;
 }
 
-assertRefusalClassCatalog();
+/**
+ * Execute whole-catalog checks explicitly.  Production imports deliberately
+ * only construct projections so unrelated commands remain available while a
+ * development catalog is being repaired.
+ */
+export function validateCatalog(entries = catalog, options = {}) {
+  const byCode = new Map();
+  for (const entry of entries) {
+    if (byCode.has(entry.code)) throw new Error(`duplicate refusal classification: ${entry.code}`);
+    byCode.set(entry.code, entry);
+  }
+  return assertRefusalClassCatalog({
+    ...options,
+    classifications: options.classifications ?? Object.fromEntries(byCode),
+  });
+}

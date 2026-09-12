@@ -1,5 +1,10 @@
-/** Stable bindings for F8 material-boundary probes. Implementations execute
- * production paths in the test helper; this registry is not proof by itself. */
-export const F8_EXECUTABLE_PROOF_REGISTRY = Object.freeze([
-  { code: 'projection.fact.contradiction', probeId: 'projection-authoritative-contradiction', factOwner: 'projection_authority' },
-]);
+import { REFUSAL_CLASSES } from './refusal-classes.js';
+
+/** Probe IDs are test adapters; code ownership is derived from the catalog. */
+const PROBE_ID_BY_CODE = Object.freeze({
+  'projection.fact.contradiction': 'projection-authoritative-contradiction',
+});
+
+export const F8_EXECUTABLE_PROOF_REGISTRY = Object.freeze(Object.entries(PROBE_ID_BY_CODE).map(([code, probeId]) =>
+  Object.freeze({ code, probeId, factOwner: REFUSAL_CLASSES[code].factOwner })
+));

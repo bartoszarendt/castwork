@@ -2,10 +2,10 @@
  * Installed-binary refusals are deliberately exercised through a packed,
  * offline installation.  The catalog remains the accounting source of truth;
  * the registry records 48 installed-binary executions. Together with 5
- * pre-existing installed probes and 2 installed-module executions, the
- * 87 retained hard-refusal targets contain 39 candidate-bound public-surface
- * dispositions. The separate session_reported row is a warning-only
- * non-refusal with an installed `task verify-return` proof.
+ * pre-existing installed probes and 2 installed-module executions, the 87
+ * retained hard-refusal targets partition into 24 genuinely unreachable public
+ * surfaces and 15 harness-blocked routes. The separate session_reported row is
+ * a warning-only non-refusal with an installed `task verify-return` proof.
  */
 
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { HARD_REFUSAL_ALLOWLIST } from '../src/refusal-classes.js';
+import { HARD_REFUSAL_ALLOWLIST, REFUSAL_CLASSES } from '../src/refusal-classes.js';
 import { captureActivationInput } from '../src/dispatch-envelope.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
 import {
@@ -282,7 +282,7 @@ function npm(args, options = {}) {
 
 function installedRows() {
   const codes = HARD_REFUSAL_ALLOWLIST.map(row => row.code);
-  assert.equal(codes.length, 95, 'the catalog must retain all hard-refusal rows');
+  assert.equal(codes.length, 94, 'P36F-05-C5 excludes warning-only session_reported from hard refusals');
   assert.equal(new Set(codes).size, codes.length, 'catalog rows must be unique');
   const rows = codes.filter(code => !PRE_EXISTING_INSTALLED_PROBE_ROWS.has(code) && !INSTALLED_MODULE_ROWS.has(code) && !WARNING_ONLY_ROWS.has(code));
   assert.equal(rows.length, 87, 'the installed-binary target must retain 87 hard-refusal catalog rows');
@@ -1408,7 +1408,7 @@ function closedPublicSurfaceBlockers(catalog = HARD_REFUSAL_ALLOWLIST, inventory
       && !WARNING_ONLY_ROWS.has(code)
       && !executedInstalledBinaryRows().includes(code)
       && !NORMALIZED_PUBLIC_SURFACE_OBSTACLES.has(code));
-  assert.deepEqual(inventoryCodes, fallbackCodes,
+  assert.deepEqual([...inventoryCodes].sort(), [...fallbackCodes].sort(),
     'every otherwise-unclassified catalog row must have one closed public-surface blocker, and unsupported blocked classifications must fail');
   for (const blocker of inventory) {
     assert.equal(blocker.status, 'blocked-by-public-surface',
@@ -1431,16 +1431,18 @@ function residueRows(catalog = HARD_REFUSAL_ALLOWLIST, inventory = CLOSED_PUBLIC
   const blockers = closedPublicSurfaceBlockers(catalog, inventory);
   const executedBinary = new Set(executedInstalledBinaryRows());
   return catalog.map(({ code }) => {
-    if (PRE_EXISTING_INSTALLED_PROBE_ROWS.has(code)) return { code, status: 'pre-existing-installed-probe', proof: `test/packed-package.test.js#INSTALLED_CLI_NEGATIVE_PROBE_CODES:${code}`, obstacle: 'n/a' };
-    if (INSTALLED_MODULE_ROWS.has(code)) return { code, status: 'executed-installed-module', proof: `test/packed-package.test.js#INSTALLED_MODULE_NEGATIVE_PROBE_CODES:${code}`, obstacle: 'n/a' };
-    if (executedBinary.has(code)) return { code, status: 'executed-installed-binary', proof: executedRowReference(code), obstacle: 'n/a' };
+    if (PRE_EXISTING_INSTALLED_PROBE_ROWS.has(code)) return { code, status: 'pre-existing-installed-probe', disposition: 'executed', proof: `test/packed-package.test.js#INSTALLED_CLI_NEGATIVE_PROBE_CODES:${code}`, obstacle: 'n/a' };
+    if (INSTALLED_MODULE_ROWS.has(code)) return { code, status: 'executed-installed-module', disposition: 'module-only', proof: `test/packed-package.test.js#INSTALLED_MODULE_NEGATIVE_PROBE_CODES:${code}`, obstacle: 'n/a' };
+    if (executedBinary.has(code)) return { code, status: 'executed-installed-binary', disposition: 'executed', proof: executedRowReference(code), obstacle: 'n/a' };
     if (WARNING_ONLY_ROWS.has(code)) return {
       code, status: 'warning-only/non-refusal',
+      disposition: 'warning-only',
       proof: `test/installed-binary-refusal-harness.test.js#SESSION_REPORTED_WARNING_PROOF:${SESSION_REPORTED_WARNING_PROOF}`,
       obstacle: 'warning-only/non-refusal: packed clean-installed task verify-return proves the warning, producerAuthenticated false, and no authenticated overclaim.',
     };
     if (NORMALIZED_PUBLIC_SURFACE_OBSTACLES.has(code)) return {
-      code, status: 'blocked-by-public-surface',
+      code, status: 'harness-blocked',
+      disposition: 'harness-blocked',
       proof: `test/installed-binary-refusal-harness.test.js#${PERSISTED_RETURN_PUBLIC_SURFACE_ROWS.has(code) ? 'PERSISTED_RETURN_PUBLIC_SURFACE_SCENARIOS' : code.startsWith('blocked_result.') || code.startsWith('human_disposition.') ? 'BLOCKED_RETURN_PUBLIC_SURFACE_SCENARIOS' : 'NORMALIZED_PUBLIC_SURFACE_ROWS'}:${code}`,
       obstacle: `blocked-by-public-surface: ${NORMALIZED_PUBLIC_SURFACE_OBSTACLES.get(code)}`,
     };
@@ -1448,7 +1450,8 @@ function residueRows(catalog = HARD_REFUSAL_ALLOWLIST, inventory = CLOSED_PUBLIC
     assert.ok(blocker, `${code} is unclassified and may not default to blocked-by-public-surface`);
     return {
       code,
-      status: 'blocked-by-public-surface',
+      status: 'unreachable-through-supported-public-surface',
+      disposition: 'unreachable-through-supported-public-surface',
       proof: blocker.proof,
       obstacle: `blocked-by-public-surface: ${blocker.obstacle}`,
     };
@@ -1472,10 +1475,14 @@ function parseResidueTable(document) {
 function assertResidueLedger(document) {
   const parsed = parseResidueTable(document);
   const expected = residueRows();
-  assert.equal(parsed.length, HARD_REFUSAL_ALLOWLIST.length, 'residue ledger row count must equal the catalog');
+  const warning = parsed.filter(row => row.status === 'warning-only/non-refusal');
+  const hardParsed = parsed.filter(row => row.status !== 'warning-only/non-refusal');
+  assert.equal(hardParsed.length, HARD_REFUSAL_ALLOWLIST.length, 'hard residue ledger row count must equal the catalog');
+  assert.equal(warning.length, 1, 'session_reported must remain the one warning-only non-refusal');
   assert.equal(new Set(parsed.map(row => row.code)).size, parsed.length, 'residue ledger may not duplicate catalog rows');
-  assert.deepEqual(parsed.map(row => row.code), HARD_REFUSAL_ALLOWLIST.map(row => row.code), 'residue ledger must contain every catalog row exactly once');
-  assert.deepEqual(parsed, expected, 'residue ledger must be generated from the catalog and executed-row registry');
+  assert.deepEqual([...hardParsed.map(row => row.code)].sort(), [...HARD_REFUSAL_ALLOWLIST.map(row => row.code)].sort(), 'residue ledger must contain every hard catalog row exactly once');
+  const byCode = rows => Object.fromEntries(rows.map(row => [row.code, row]));
+  assert.deepEqual(byCode(hardParsed), byCode(expected.map(({ disposition, ...row }) => row)), 'residue ledger must be generated from the catalog and executed-row registry');
   const executedBinary = new Set(executedInstalledBinaryRows());
   for (const row of parsed) {
     if (executedBinary.has(row.code)) {
@@ -1483,10 +1490,22 @@ function assertResidueLedger(document) {
       assert.equal(row.proof, executedRowReference(row.code), `${row.code} must retain its installed-binary proof reference`);
     }
   }
-  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'the owner-normalized public-surface inventory must remain closed at 15 rows');
+  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'P36F-05-C6 records the harness-blocked partition at 15 rows');
   assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 24, 'the explicit public-surface inventory must remain closed at 24 rows');
-  assert.equal(parsed.filter(row => row.status === 'blocked-by-public-surface').length, 39, 'C1 public-surface inventory must remain closed at 39 rows');
-  assert.equal(parsed.filter(row => row.status === 'warning-only/non-refusal').length, 1, 'session_reported must remain the one warning-only non-refusal');
+  assert.equal(parsed.filter(row => row.status === 'harness-blocked').length, 15,
+    'harness limits must remain separate from product-surface unreachability');
+  assert.equal(parsed.filter(row => row.status === 'unreachable-through-supported-public-surface').length, 24,
+    'only the closed public inventory may claim product-surface unreachability');
+  const partition = expected.reduce((counts, row) => {
+    counts[row.disposition] = (counts[row.disposition] ?? 0) + 1;
+    return counts;
+  }, {});
+  assert.deepEqual(partition, {
+    executed: 53,
+    'module-only': 2,
+    'harness-blocked': 15,
+    'unreachable-through-supported-public-surface': 24,
+  }, 'P36F-05-C6 must not ratchet harness limitations as product unreachability');
 }
 
 before(async () => {
@@ -1545,9 +1564,9 @@ describe('installed-binary refusal harness', () => {
     );
     assert.throws(() => assertResidueLedger(statusDrift), /generated from the catalog and executed-row registry/, 'altering a residue status must fail accounting');
 
-    const blocked = residueRows().find(row => row.status === 'blocked-by-public-surface');
+    const blocked = residueRows().find(row => row.status === 'unreachable-through-supported-public-surface');
     const fabricatedExecution = document.replace(
-      `| ${blocked.code} | blocked-by-public-surface | ${blocked.proof} | ${blocked.obstacle} |`,
+      `| ${blocked.code} | unreachable-through-supported-public-surface | ${blocked.proof} | ${blocked.obstacle} |`,
       `| ${blocked.code} | executed-installed-binary | ${blocked.proof} | n/a |`,
     );
     assert.throws(() => assertResidueLedger(fabricatedExecution), /generated from the catalog and executed-row registry/, 'a fabricated installed execution must fail accounting');

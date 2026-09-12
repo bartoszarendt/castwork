@@ -135,8 +135,8 @@ describe('attribution/adoption hard-refusal proofs', () => {
     const allowlist = HARD_REFUSAL_ALLOWLIST.find(entry => entry.code === 'attribution.role');
     assert.equal(role.rationale, 'requested-workflow-role-validity');
     assert.equal(role.repairClass, 'repair requested role');
-    assert.equal(role.semanticInvalidators, 'the requested role is lowercase and resolves in the canonical workflow-role registry');
-    assert.match(role.proof, /code-disjointness-separates-requested-role-validity-from-final-agent-trailer/);
+    assert.equal(role.derivedNarrative.semanticInvalidator, 'the requested role is lowercase and resolves in the canonical workflow-role registry');
+    assert.match(role.semanticEvidence, /code-disjointness-separates-requested-role-validity-from-final-agent-trailer/);
     assert.match(allowlist.negativeProof, /requested commit-attribution role is invalid or not lowercase/);
   });
 });

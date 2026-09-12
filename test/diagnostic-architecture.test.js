@@ -8,15 +8,16 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, readdirSync, readFileSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 
 import {
   APPROVED_PRESENTATION_MODULES,
   CONSTRUCTOR_MODULES,
-  PUBLIC_COMMAND_MODULES,
+  discoverPublicCommandModules,
   collectDiagnosticCodeLiterals,
   collectDiagnosticEmissionSites,
   checkDiagnosticArchitecture,
@@ -27,7 +28,7 @@ import {
   loadRoleCapabilities,
   validateProjectRoleCapabilities,
 } from '../src/role-capabilities.js';
-import { ESCALATION_KINDS, REPAIR_KINDS, REPAIR_POLICY, createDiagnostic } from '../src/repair-policy.js';
+import { ESCALATION_KINDS, REPAIR_KINDS, REPAIR_POLICY, createDiagnostic, preflightDiagnosticCode } from '../src/repair-policy.js';
 import { presentDiagnostic } from '../src/diagnostic-presentation.js';
 import { commandFailure } from '../src/public-result.js';
 import { PublicCommandError } from '../src/public-error.js';
@@ -39,8 +40,10 @@ import {
   REFUSAL_FAMILY_TALLY,
   REFUSAL_CLASSES,
   assertRefusalClassCatalog,
+  repairPolicyViewFor,
+  validateCatalog,
 } from '../src/refusal-classes.js';
-import { F6_EXECUTABLE_PROOF_REGISTRY } from '../src/f6-proof-registry.js';
+import { F6_EXECUTABLE_PROOF_REGISTRY, f6ExecutableProofRegistryFor } from '../src/f6-proof-registry.js';
 import { F6_EXECUTABLE_PROBE_IDS, runF6ExecutableProbe } from './helpers/f6-executable-probes.js';
 import { F7_EXECUTABLE_PROOF_REGISTRY } from '../src/f7-proof-registry.js';
 import { F7_EXECUTABLE_PROBE_IDS, runF7ExecutableProbe } from './helpers/f7-executable-probes.js';
@@ -369,20 +372,59 @@ const F6_RUNTIME_SITES = Object.freeze({
 describe('diagnostic architecture anti-bypass enforcement', () => {
   it('finds no routing bypasses in any runtime source file', () => {
     const violations = [];
-    for (const entry of readdirSync(join(REPO_ROOT, 'src'))) {
-      if (!entry.endsWith('.js')) continue;
-      const relative = `src/${entry}`;
-      const source = readFileSync(join(REPO_ROOT, 'src', entry), 'utf8');
+    const entries = readdirSync(join(REPO_ROOT, 'src'), { recursive: true })
+      .filter(entry => entry.endsWith('.js'))
+      .map(entry => [`src/${entry}`, readFileSync(join(REPO_ROOT, 'src', entry), 'utf8')]);
+    const discovery = discoverPublicCommandModules(
+      entries,
+      readFileSync(join(REPO_ROOT, 'bin', 'agenticloop.js'), 'utf8'),
+    );
+    assert.deepEqual(discovery.unresolvedImports, [], 'public command import graph must not silently omit an edge');
+    assert.deepEqual(discovery.unresolvedBindings, [], 'public command dispatch bindings must not silently omit a handler');
+    for (const path of ['src/cli-main.js', 'src/cli.js', 'src/task-cli.js']) {
+      assert.ok(discovery.modules.has(path), `${path} must remain reachable from the binary command entry`);
+    }
+    for (const [relative, source] of entries) {
       for (const violation of checkDiagnosticArchitecture(source, {
         fileName: relative,
         presentation: APPROVED_PRESENTATION_MODULES.has(relative),
         constructorModule: CONSTRUCTOR_MODULES.has(relative),
-        publicCommandModule: PUBLIC_COMMAND_MODULES.has(relative),
+        publicCommandModule: discovery.modules.has(relative),
       })) {
         violations.push(`${relative}:${violation.line} [${violation.rule}] ${violation.detail}`);
       }
     }
     assert.deepEqual(violations, [], violations.join('\n'));
+  });
+
+  it('traverses static dispatch bindings to check nested cmd handlers and reports unresolved edges', () => {
+    const entries = [
+      ['src/cli-main.js', "import { dispatch } from './cli.js'; export function runCli() { return dispatch(); }"],
+      ['src/cli.js', "import { cmdTask } from './task-cli.js'; const COMMAND_HANDLERS = { task: cmdTask }; export function dispatch() { return COMMAND_HANDLERS['task'](); }"],
+      ['src/task-cli.js', 'export function cmdTask() { throw new Error(\'raw nested command error\'); }'],
+    ];
+    const discovery = discoverPublicCommandModules(entries, "import { runCli } from '../src/cli-main.js'; runCli();");
+    assert.deepEqual([...discovery.modules].sort(), ['src/cli-main.js', 'src/cli.js', 'src/task-cli.js']);
+    assert.deepEqual(discovery.unresolvedImports, []);
+    assert.deepEqual(discovery.unresolvedBindings, []);
+    assert.ok(checkDiagnosticArchitecture(entries[2][1], {
+      fileName: 'src/task-cli.js', publicCommandModule: discovery.modules.has('src/task-cli.js'),
+    }).some(violation => violation.rule === 'untyped-public-command-error'));
+
+    const unresolved = discoverPublicCommandModules([
+      ['src/cli-main.js', "import './missing-command.js'; export function run() {}"],
+    ], "import { run } from '../src/cli-main.js'; run();");
+    assert.deepEqual(unresolved.unresolvedImports, [{
+      from: 'src/cli-main.js', specifier: './missing-command.js', resolved: 'src/missing-command.js',
+    }]);
+
+    const dynamic = discoverPublicCommandModules([
+      ['src/cli-main.js', "import { dispatch } from './cli.js'; export function runCli() { return dispatch(); }"],
+      ['src/cli.js', 'const HANDLERS = loadHandlers(); export function dispatch(command) { return HANDLERS[command](); }'],
+    ], "import { runCli } from '../src/cli-main.js'; runCli();");
+    assert.deepEqual(dynamic.unresolvedBindings, [{
+      from: 'src/cli.js', binding: 'HANDLERS[command]', reason: 'dynamic-dispatch-lookup',
+    }]);
   });
 
   it('rejects a hand-built role-directed diagnostic literal', () => {
@@ -495,24 +537,25 @@ describe('refusal classification ratchet', () => {
   }
 
   it('classifies every registered code exactly once and exhausts accepted hard boundaries', () => {
-    assert.equal(assertRefusalClassCatalog(), true);
+    assert.equal(validateCatalog(), true);
     assert.deepEqual(Object.keys(REFUSAL_CLASSES).sort(), Object.keys(REPAIR_POLICY).sort());
     for (const [code, entry] of Object.entries(REFUSAL_CLASSES)) {
       if (!ACCEPTED_FAMILIES.has(entry.family)) continue;
       assert.notEqual(entry.refusalClass, 'pending_classification', `${code} must be classified`);
-      assert.ok(entry.factOwner, `${code} requires a fact owner`);
-      assert.ok(entry.rationale, `${code} requires an assurance rationale`);
-      assert.ok(entry.repairClass, `${code} requires a repair class`);
+       assert.ok(entry.factOwner, `${code} requires a fact owner`);
+       assert.ok(entry.rationale, `${code} requires an assurance rationale`);
+       assert.ok(entry.repairClass, `${code} requires a repair class`);
+       assert.equal(entry.repairPolicy, REPAIR_POLICY[code], `${code} must carry its repair policy in the diagnostic definition`);
       assert.ok(Array.isArray(entry.producers) || entry.producers === null, `${code} requires producers or a historical marker`);
       if (['F5', 'F6', 'F7', 'F8'].includes(entry.family) && entry.producers !== null) {
         assert.ok(Array.isArray(entry.evaluationSurfaces) && entry.evaluationSurfaces.length > 0, `${code} requires evaluation surfaces`);
       }
-      assert.ok(entry.semanticInvalidators, `${code} requires semantic invalidators`);
-      assert.ok(entry.proof, `${code} requires disposition proof`);
+       assert.ok(entry.derivedNarrative?.semanticInvalidator, `${code} requires a derived semantic description`);
+       assert.ok(entry.derivedNarrative?.description, `${code} requires a derived classification description`);
     }
     for (const entry of Object.values(REFUSAL_CLASSES).filter(item => item.refusalClass === 'pending_classification')) {
       assert.ok(entry.pendingSurfaces.length > 0, `${entry.code} requires a known pending evaluation surface`);
-      assert.equal(entry.proof, `pending_wu_b2:${entry.family}`, `${entry.code} must name its completing slice`);
+       assert.equal(entry.derivedNarrative.description, `pending_wu_b2:${entry.family}`, `${entry.code} must name its completing slice`);
     }
     assert.deepEqual(
       HARD_REFUSAL_ALLOWLIST.map(entry => entry.code).sort(),
@@ -535,6 +578,48 @@ describe('refusal classification ratchet', () => {
     assert.deepEqual(REFUSAL_FAMILY_TALLY.F8, { total: 27, pending: 0 });
   });
 
+  it('labels row-derived prose as derived narrative rather than proof', () => {
+    const rows = Object.values(REFUSAL_CLASSES);
+    const derivedOnly = rows.filter(entry => !entry.semanticEvidence);
+    assert.equal(derivedOnly.length, 158, 'P36F-05-C4 reclassifies the former templated proof/invalidator rows');
+    for (const entry of derivedOnly) {
+      assert.equal(Object.hasOwn(entry, 'proof'), false, `${entry.code} must not label row-derived prose as proof`);
+      assert.ok(entry.derivedNarrative.description);
+      assert.ok(entry.derivedNarrative.semanticInvalidator);
+    }
+  });
+
+  it('permits semantic evidence only as an executable reference or precise disposition', () => {
+    for (const entry of Object.values(REFUSAL_CLASSES)) {
+      if (!entry.semanticEvidence) continue;
+      assert.match(entry.semanticEvidence,
+        /(?:\btest\/[a-z0-9_./-]+\.test\.[cm]?js\b|\bF[5-8] executable probe\b|^disposition: [a-z][a-z0-9-]*; \S.+)/i,
+        `${entry.code} semantic evidence must be executable or an honest precise disposition`);
+    }
+    assert.throws(() => assertRefusalClassCatalog({
+      classifications: {
+        ...REFUSAL_CLASSES,
+        'execution_evidence.stale_version': {
+          ...REFUSAL_CLASSES['execution_evidence.stale_version'], semanticEvidence: 'unratcheted prose only',
+        },
+      },
+    }), /semantic evidence lacks an executable reference or precise disposition/);
+  });
+
+  it('derives repair-policy consumers from the diagnostic definitions', () => {
+    assert.deepEqual(REPAIR_POLICY, repairPolicyViewFor(REFUSAL_CLASSES));
+    const code = 'activation.capture.missing';
+    const definitions = {
+      ...REFUSAL_CLASSES,
+      [code]: {
+        ...REFUSAL_CLASSES[code],
+        repairPolicy: { ...REFUSAL_CLASSES[code].repairPolicy, description: 'definition-only policy mutation' },
+      },
+    };
+    assert.equal(repairPolicyViewFor(definitions)[code].description, 'definition-only policy mutation');
+    assert.notEqual(REPAIR_POLICY[code].description, 'definition-only policy mutation');
+  });
+
   it('rejects a scratch one-row catalog removal even when the policy is removed with it', () => {
     const removedCode = Object.keys(REFUSAL_CLASSES)[0];
     const classifications = { ...REFUSAL_CLASSES };
@@ -544,6 +629,39 @@ describe('refusal classification ratchet', () => {
     assert.throws(
       () => assertRefusalClassCatalog({ classifications, policy }),
       /refusal catalog row count changed: expected 197, received 196/,
+    );
+  });
+
+  it('keeps --version import-safe while validation rejects a genuinely inconsistent imported fixture', () => {
+    const fixture = mkdtempSync(join(REPO_ROOT, '.catalog-fixture-'));
+    cpSync(join(REPO_ROOT, 'src'), join(fixture, 'src'), { recursive: true });
+    mkdirSync(join(fixture, 'bin'));
+    writeFileSync(join(fixture, 'bin', 'agenticloop.js'), [
+      "import { REFUSAL_CLASSES } from '../src/refusal-classes.js';",
+      "if (!process.argv.includes('--version')) process.exit(2);",
+      "console.log('agenticloop fixture');",
+      'void REFUSAL_CLASSES;',
+    ].join('\n'));
+    const fixtureCatalog = join(fixture, 'src', 'refusal-classes.js');
+    writeFileSync(fixtureCatalog, readFileSync(fixtureCatalog, 'utf8').replace(
+      'const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];',
+      'const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8, F1[0]];',
+    ));
+    const version = spawnSync(process.execPath, [join(fixture, 'bin', 'agenticloop.js'), '--version'], { encoding: 'utf8' });
+    assert.equal(version.status, 0, `${version.stdout}\n${version.stderr}`);
+    const validation = spawnSync(process.execPath, ['--input-type=module', '--eval',
+      `import { validateCatalog } from ${JSON.stringify(new URL(`file://${fixtureCatalog}`).href)}; validateCatalog();`,
+    ], { encoding: 'utf8' });
+    rmSync(fixture, { recursive: true, force: true });
+    assert.notEqual(validation.status, 0);
+    assert.match(validation.stderr, /duplicate refusal classification: activation\.capture\.missing/);
+    const classifications = {
+      ...REFUSAL_CLASSES,
+      'bogus.catalog.row': { ...REFUSAL_CLASSES['activation.capture.missing'], code: 'bogus.catalog.row' },
+    };
+    assert.throws(
+      () => assertRefusalClassCatalog({ classifications }),
+      /refusal catalog row count changed: expected 197, received 198/,
     );
   });
 
@@ -623,6 +741,20 @@ describe('refusal classification ratchet', () => {
     }
   });
 
+  it('derives F6 fact owners from the catalog rather than probe bindings', () => {
+    const code = F6_EXECUTABLE_PROOF_REGISTRY[0].code;
+    const factOwner = 'catalog-only-fact-owner-mutation';
+    const definitions = {
+      ...REFUSAL_CLASSES,
+      [code]: { ...REFUSAL_CLASSES[code], factOwner },
+    };
+    assert.equal(
+      f6ExecutableProofRegistryFor(definitions).find(binding => binding.code === code).factOwner,
+      factOwner,
+    );
+    assert.notEqual(F6_EXECUTABLE_PROOF_REGISTRY.find(binding => binding.code === code).factOwner, factOwner);
+  });
+
   it('executes every F7 material-boundary probe through its real production path', async () => {
     const expected = Object.values(REFUSAL_CLASSES)
       .filter(entry => entry.family === 'F7' && HARD_CLASSES.has(entry.refusalClass))
@@ -662,6 +794,9 @@ describe('refusal classification ratchet', () => {
   });
 
   it('keeps non-allowlisted diagnostics out of a hard-refusal presentation mapping', () => {
+    assert.equal(REFUSAL_CLASSES['return.assurance.session_reported'].refusalClass, 'advisory_diagnostic',
+      'P36F-05-C5 classifies receipt-less return reporting as warning-only');
+    assert.equal(HARD_REFUSAL_ALLOWLIST.some(entry => entry.code === 'return.assurance.session_reported'), false);
     const nonAllowlisted = Object.values(REFUSAL_CLASSES)
       .filter(entry => !HARD_REFUSAL_ALLOWLIST.some(item => item.code === entry.code));
     assert.ok(nonAllowlisted.length > 0);
@@ -682,7 +817,7 @@ describe('refusal classification ratchet', () => {
       if (!ACCEPTED_FAMILIES.has(classification.family)) continue;
       if (classification.producers === null) {
         assert.ok(HISTORICAL_PRODUCER_EXCEPTIONS[code], `${code} must declare its historical absence`);
-        assert.match(classification.proof, /historical_no_live_producer/);
+        assert.match(classification.derivedNarrative.description, /historical_no_live_producer/);
         continue;
       }
       for (const emittedBy of emittedByCode.get(code) ?? []) {
@@ -725,7 +860,6 @@ describe('refusal classification ratchet', () => {
       [...Object.keys(F6_RUNTIME_SITES), 'preflight.review_provenance'].sort(),
       Object.values(REFUSAL_CLASSES).filter(entry => entry.family === 'F6').map(entry => entry.code).sort(),
     );
-    assert.equal(REFUSAL_CLASSES['preflight.review_provenance'].refusalClass, 'removal');
     assert.equal(REFUSAL_CLASSES['preflight.review_provenance'].producers, null);
     for (const [code, surfaces] of Object.entries(F6_RUNTIME_SITES)) {
       assert.ok(Object.hasOwn(REPAIR_POLICY, code), `${code} must be publicly registered`);
@@ -898,11 +1032,18 @@ describe('refusal classification ratchet', () => {
     assert.deepEqual(sites, { codes: [], dynamic: [] });
   });
 
-  it('rejects a live emitter for a removal disposition', () => {
-    const { emittedByCode } = scannedDiagnosticEmissions([
-      ['src/future-removal-regression.js', `function emit(message, code) {}\nemit('x', 'scope.existing_path.missing');`],
-    ]);
-    assert.throws(() => assertHistoricalCodesHaveNoLiveEmitters(emittedByCode), /scope\.existing_path\.missing.*live runtime emitter/);
+  it('keeps C7 compatibility-only defensive codes typed without an installed-public claim', () => {
+    for (const code of ['scope.existing_path.missing', 'preflight.review_provenance']) {
+      assert.equal(REFUSAL_CLASSES[code].producers, null, `${code} must have no direct public producer claim`);
+      assert.ok(HISTORICAL_PRODUCER_EXCEPTIONS[code], `${code} must retain an explicit internal-only disposition`);
+      assert.equal(HARD_REFUSAL_ALLOWLIST.some(entry => entry.code === code), false, `${code} must not claim installed hard-refusal coverage`);
+    }
+    const scope = createDiagnostic({ code: 'scope.existing_path.missing', evidence: { paths: ['missing.md'] } });
+    const provenance = createDiagnostic({ code: preflightDiagnosticCode('review_provenance') });
+    assert.equal(scope.category, 'path_intent');
+    assert.match(scope.message, /missing\.md/);
+    assert.equal(provenance.category, 'review_provenance');
+    assert.throws(() => createDiagnostic({ code: provenance.code, category: 'forged' }), /cannot be evaluator-supplied/);
   });
 
   it('keeps non-F5/F6/F7/F8 split consumers present without treating them as emitters', () => {

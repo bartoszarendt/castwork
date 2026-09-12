@@ -32,19 +32,165 @@ export const APPROVED_PRESENTATION_MODULES = new Set([
 
 /** The canonical fact constructor module itself may build fact literals. */
 export const CONSTRUCTOR_MODULES = new Set(['src/repair-policy.js']);
-export const PUBLIC_COMMAND_MODULES = new Set([
-  'src/audit-cli.js',
-  'src/cli-main.js',
-  'src/cli.js',
-  'src/closeout-cli.js',
-  'src/improvement-cli.js',
-  'src/task-cli.js',
-]);
 
 const ROUTING_FIELDS = new Set(['owner', 'escalationOwner', 'ownerRouting', 'nextAction', 'firstSafeRepair']);
 const PROTECTED_CONSTRUCTOR_FIELDS = new Set(['category', 'repairKind', 'escalationKind', ...ROUTING_FIELDS]);
 const DIAGNOSTIC_SHAPE_FIELDS = new Set(['message', 'category', 'code', 'level']);
 const ROLE_WORDS_RE = /\b(?:orchestrator|maintainer|engineer|auditor)\b/i;
+
+/**
+ * Discover command-facing modules by following the binary's invoked imports,
+ * then the static dispatch bindings they invoke. A dispatch lookup over a
+ * literal handler map follows every handler; a lookup without a resolvable map
+ * is reported rather than silently omitting that command surface.
+ */
+export function discoverPublicCommandModules(entries, binarySource) {
+  const byPath = new Map(entries);
+  const parse = (fileName, text) => ts.createSourceFile(fileName, text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const binary = parse('bin/agenticloop.js', binarySource);
+  const sources = new Map([...byPath].map(([path, text]) => [path, parse(path, text)]));
+  /** @type {{ from: string, specifier: string, resolved: string }[]} */
+  const unresolvedImports = [];
+  const resolveRelativeImport = (from, specifier) => {
+    const parts = from.split('/').slice(0, -1);
+    for (const part of specifier.split('/')) {
+      if (!part || part === '.') continue;
+      if (part === '..') parts.pop();
+      else parts.push(part);
+    }
+    return parts.join('/');
+  };
+  const bindingsFor = (source, from) => {
+    const imports = new Map();
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      const specifier = statement.moduleSpecifier.text;
+      if (!specifier.startsWith('.')) continue;
+      const sibling = resolveRelativeImport(from, specifier);
+      if (!byPath.has(sibling)) {
+        unresolvedImports.push({ from, specifier, resolved: sibling });
+        continue;
+      }
+      const clause = statement.importClause;
+      if (!clause) continue;
+      if (clause.name) imports.set(clause.name.text, { target: sibling, exported: 'default' });
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const item of clause.namedBindings.elements) {
+          imports.set(item.name.text, { target: sibling, exported: item.propertyName?.text ?? item.name.text });
+        }
+      }
+    }
+    return imports;
+  };
+  const exportsFor = source => {
+    const exports = new Map();
+    for (const statement of source.statements) {
+      const exported = statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword);
+      if (exported && (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+        exports.set(statement.name.text, statement.name.text);
+      }
+      if (exported && ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) exports.set(declaration.name.text, declaration.name.text);
+        }
+      }
+      if (ts.isExportDeclaration(statement) && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        for (const item of statement.exportClause.elements) exports.set(item.name.text, item.propertyName?.text ?? item.name.text);
+      }
+    }
+    return exports;
+  };
+  const moduleInfo = new Map([...sources].map(([path, source]) => [path, {
+    source,
+    imports: bindingsFor(source, path),
+    exports: exportsFor(source),
+  }]));
+  const binaryImports = bindingsFor(binary, 'bin/agenticloop.js');
+  const calledBinaryImports = new Set();
+  const collectBinaryCalls = node => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && binaryImports.has(node.expression.text)) {
+      calledBinaryImports.add(node.expression.text);
+    }
+    ts.forEachChild(node, collectBinaryCalls);
+  };
+  collectBinaryCalls(binary);
+  const modules = new Set();
+  /** @type {{ from: string, binding: string, reason: string }[]} */
+  const unresolvedBindings = [];
+  /** @type {{ target: string, exported: string }[]} */
+  const pending = [];
+  const visitedBindings = new Set();
+  const enqueueImport = binding => pending.push(binding);
+  for (const local of calledBinaryImports) enqueueImport(binaryImports.get(local));
+  const localFunctions = source => {
+    const functions = new Map();
+    /** @type {Map<string, string[]>} */
+    const handlerMaps = new Map();
+    for (const statement of source.statements) {
+      if (ts.isFunctionDeclaration(statement) && statement.name) functions.set(statement.name.text, statement);
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.initializer &&
+              (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) {
+            functions.set(declaration.name.text, declaration.initializer);
+          }
+          const object = ts.isIdentifier(declaration.name) && ts.isObjectLiteralExpression(declaration.initializer)
+            ? declaration.initializer
+            : null;
+          if (object) {
+            const handlers = object.properties
+              .filter(ts.isPropertyAssignment)
+              .map(property => property.initializer)
+              .filter(ts.isIdentifier)
+              .map(identifier => identifier.text);
+            if (handlers.length > 0) handlerMaps.set(declaration.name.text, handlers);
+          }
+        }
+      }
+    }
+    return { functions, handlerMaps };
+  };
+  while (pending.length > 0) {
+    const { target, exported } = pending.pop();
+    const info = moduleInfo.get(target);
+    const local = info?.exports.get(exported);
+    const key = `${target}:${exported}`;
+    if (visitedBindings.has(key)) continue;
+    visitedBindings.add(key);
+    if (!info || !local) {
+      unresolvedBindings.push({ from: target, binding: exported, reason: 'unresolved-export' });
+      continue;
+    }
+    modules.add(target);
+    const { functions, handlerMaps } = localFunctions(info.source);
+    const visitBinding = (name, { handler = false } = {}) => {
+      const imported = info.imports.get(name);
+      if (imported && (handler || /^(?:run|dispatch|cmd)/.test(name))) enqueueImport(imported);
+    };
+    const visit = node => {
+      if (ts.isCallExpression(node)) {
+        if (ts.isIdentifier(node.expression)) visitBinding(node.expression.text);
+        if (ts.isElementAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression)) {
+          const handlers = handlerMaps.get(node.expression.expression.text);
+          if (handlers) handlers.forEach(name => visitBinding(name, { handler: true }));
+          else unresolvedBindings.push({
+            from: target,
+            binding: node.expression.getText(info.source),
+            reason: 'dynamic-dispatch-lookup',
+          });
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    const functionNode = functions.get(local);
+    if (functionNode) visit(functionNode.body);
+  }
+  return {
+    modules,
+    unresolvedImports,
+    unresolvedBindings,
+  };
+}
 
 function propertyName(node) {
   if (!node.name) return null;
