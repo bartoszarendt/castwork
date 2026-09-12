@@ -140,10 +140,10 @@ The privacy-clean assertion log is `docs/field-assertions.md`. It derives only f
 |---|---|
 | Standard serial lifecycle through simulated review, audit, and closeout | `test/files-lifecycle-reliability.test.js`, `test/packed-package.test.js` |
 | Retained hard-refusal catalog and negatives | `test/diagnostic-architecture.test.js`, family proof suites, `test/integrated-proof.test.js`, and `test/packed-package.test.js` |
-| Existing product adoption, preserved failed-attempt history, rerun checks and review | `test/lifecycle-adoption-remediation-cli.test.js` |
+| Existing product adoption, preserved failed-attempt history, rerun checks and review | `test/lifecycle-adoption-cli.test.js` |
 | Pause and packet continuity | `test/dispatch-liveness-window.test.js`, `test/real-order-lineage.test.js` |
 | Generated-state update continuation | `test/update-generated-state-compatibility.test.js` |
-| Audit remediation under preserved authority | `test/lifecycle-adoption-remediation-cli.test.js` |
+| Adoption, revocation, and needs_revision lifecycle coverage | `test/lifecycle-adoption-cli.test.js` |
 | Source, packed archive, clean installation | `test/packed-package.test.js`, `test/integrated-proof.test.js` |
 | Synthetic chain and privacy scan | `test/integrated-proof.test.js` |
 

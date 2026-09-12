@@ -73,8 +73,8 @@ review_budget: 5
 # section and reviewer enforcement through `## Deviations From Plan`.
 # allowed_paths is a broad scope/deviation map, not a precise write promise.
 allowed_paths: []
-# Material risk classification for adoption and remediation authority. This is
-# part of the protected task contract and must remain unchanged for either path.
+# Material risk classification for adoption and in-contract review correction.
+# This is part of the protected task contract and must remain unchanged.
 risk_class: standard
 # Path intent is evaluated against an explicit base-tree inventory before review.
 # Exact literals that are not in that tree must be named here or under

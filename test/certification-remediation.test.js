@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { evaluateCertificationFreshness, evaluateRemediationAuthority } from '../src/certification-remediation.js';
+import { evaluateCertificationFreshness } from '../src/certification-remediation.js';
 import { deriveFinishCandidate } from '../src/finish-candidate.js';
 
 const BASE = 'a'.repeat(40);
@@ -38,15 +38,7 @@ function certification(overrides = {}) {
   });
 }
 
-function remediation(overrides = {}) {
-  return evaluateRemediationAuthority({
-    authorization: { contract: 'contract-1', risk: 'standard', attempt: 'attempt-1' },
-    finding: { contract: 'contract-1', risk: 'standard', widensIntent: false },
-    ...overrides,
-  });
-}
-
-describe('review, audit, and remediation', () => {
+describe('review and audit certification freshness', () => {
   it('refuses a producing role that attempts to certify its own output', () => {
     const result = certification({ review: { candidate: CANDIDATE, role: 'engineer', id: 'engineer-1' } });
     assert.equal(result.ok, false);
@@ -75,27 +67,4 @@ describe('review, audit, and remediation', () => {
     assert.deepEqual(blankAuditor.diagnostics, [{ type: 'auditor_identity_missing', evidenceState: 'malformed' }]);
   });
 
-  it('opens an in-contract remediation cycle under the existing authorization', () => {
-    const result = remediation();
-    assert.deepEqual(result, {
-      authorized: true,
-      nextOwner: null,
-      cycle: { attempt: 'attempt-1', preservesAuthorization: true, invalidates: ['review', 'audit', 'closeout'] },
-      reasons: [],
-    });
-  });
-
-  it('requires owner action when a finding would expand task intent', () => {
-    const result = remediation({ finding: { contract: 'contract-1', risk: 'standard', widensIntent: true } });
-    assert.equal(result.authorized, false);
-    assert.equal(result.nextOwner, 'owner');
-    assert.match(result.reasons.join('\n'), /widens task intent/);
-  });
-
-  it('requires an explicit non-widening determination before authorizing remediation', () => {
-    const result = remediation({ finding: { contract: 'contract-1', risk: 'standard' } });
-    assert.equal(result.authorized, false);
-    assert.equal(result.nextOwner, 'owner');
-    assert.deepEqual(result.diagnostics, [{ type: 'finding_widens_intent_unconfirmed', evidenceState: 'malformed' }]);
-  });
 });

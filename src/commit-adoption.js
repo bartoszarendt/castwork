@@ -10,6 +10,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { canonicalSha256 } from './canonical-json.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 
@@ -17,7 +18,20 @@ const INVALIDATED_CERTIFICATION = Object.freeze(['required_checks', 'review', 'a
 const REQUIRED_RERUNS = Object.freeze(['required_checks', 'review', 'audit']);
 
 export const COMMIT_ADOPTION_KIND = 'agenticloop.commit-adoption';
-export const COMMIT_ADOPTION_SCHEMA_VERSION = 1;
+export const COMMIT_ADOPTION_SCHEMA_VERSION = 2;
+export const COMMIT_ADOPTION_ASSURANCE = 'non_authenticated_claim';
+export const COMMIT_ADOPTION_ACTOR_CLASSES = Object.freeze(['operator', 'delegated-agent', 'unknown']);
+export const COMMIT_ADOPTION_CONSUMERS = Object.freeze({
+  'files-return-evidence.deriveReturnTopology': 'validates malformed display records only; never range attribution, permission, origin, or certification',
+  'dispatch-envelope.adoptionAtWorkflowHead': 'validates malformed display records only; never range attribution, permission, origin, or certification',
+  'commit-range.deriveCommitRange': 'does not consume adoption records; derives Git range and canonical trailers independently',
+});
+
+const RECORD_FIELDS = Object.freeze([
+  'kind', 'schemaVersion', 'backend', 'repositoryIdentity', 'taskId', 'taskContractDigest', 'riskClass', 'adoptedAt',
+  'assurance', 'ok', 'nextOwner', 'reasons', 'diagnostics', 'adoption', 'preserved', 'certification', 'semanticDigest',
+]);
+const ADOPTION_FUTURE_SKEW_MS = 5_000;
 
 function result(reasons, detail = {}, diagnostics = []) {
   if (reasons.length > 0) {
@@ -42,7 +56,8 @@ function gitOk(runGit, args) {
 }
 
 function validActor(actor) {
-  return actor && typeof actor.class === 'string' && actor.class.trim() && typeof actor.id === 'string' && actor.id.trim();
+  return actor && COMMIT_ADOPTION_ACTOR_CLASSES.includes(actor.class) &&
+    typeof actor.id === 'string' && actor.id.trim();
 }
 
 function matchingAuthorizationIdentity(value) {
@@ -55,25 +70,69 @@ function exactKeys(value, keys) {
     Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
 }
 
+function adoptionDigest(record) {
+  const { semanticDigest: ignored, ...projection } = record;
+  return `sha256:${COMMIT_ADOPTION_KIND}.v${COMMIT_ADOPTION_SCHEMA_VERSION}:${canonicalSha256(projection)}`;
+}
+
+function canonicalInstant(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
+  const epoch = Date.parse(value);
+  return Number.isFinite(epoch) && new Date(epoch).toISOString() === value ? epoch : null;
+}
+
 /**
- * Validate the durable attribution that permits a human commit to participate in
- * an Engineer return. This is deliberately separate from the evaluator: a
- * record at the expected path is evidence only after its immutable range,
- * authorization, and rerun obligations all revalidate.
+ * Build the only persisted adoption shape. This is integrity-bound, not an
+ * authenticated origin receipt: no shipped host can produce one for adoption.
+ */
+export function createCommitAdoptionRecord({ repositoryIdentity, taskId, taskContractDigest, riskClass, evaluation, adoptedAt = new Date().toISOString() } = {}) {
+  const record = {
+    kind: COMMIT_ADOPTION_KIND,
+    schemaVersion: COMMIT_ADOPTION_SCHEMA_VERSION,
+    backend: 'files',
+    repositoryIdentity,
+    taskId,
+    taskContractDigest,
+    riskClass,
+    adoptedAt,
+    assurance: COMMIT_ADOPTION_ASSURANCE,
+    ok: evaluation?.ok,
+    nextOwner: evaluation?.nextOwner,
+    reasons: evaluation?.reasons,
+    diagnostics: evaluation?.diagnostics,
+    adoption: evaluation?.adoption,
+    preserved: evaluation?.preserved,
+    certification: evaluation?.certification,
+    semanticDigest: null,
+  };
+  record.semanticDigest = adoptionDigest(record);
+  const checked = validateCommitAdoptionRecord(record, { repositoryIdentity });
+  if (!checked.ok) throw new TypeError(`invalid commit adoption record: ${checked.errors.join('; ')}`);
+  return Object.freeze(record);
+}
+
+/**
+ * Validate a durable, non-authenticated display claim. Its digest is unkeyed
+ * integrity, not provenance: consumers must never use this record to substitute
+ * for Git attribution, permission, origin, or renewed certification.
  */
 export function validateCommitAdoptionRecord(record, {
   taskId = null,
   taskContractDigest = null,
   baseHead = null,
   head = null,
+  repositoryIdentity = null,
+  attemptId = null,
+  now = Date.now(),
 } = {}) {
   const errors = [];
-  if (!exactKeys(record, [
-    'kind', 'schemaVersion', 'backend', 'taskId', 'taskContractDigest', 'riskClass', 'adoptedAt',
-    'ok', 'nextOwner', 'reasons', 'diagnostics', 'adoption', 'preserved', 'certification',
-  ])) return { ok: false, errors: ['commit adoption record fields must equal the closed schema'] };
+  if (!exactKeys(record, RECORD_FIELDS)) return { ok: false, errors: ['commit adoption record fields must equal the closed schema'] };
   if (record.kind !== COMMIT_ADOPTION_KIND || record.schemaVersion !== COMMIT_ADOPTION_SCHEMA_VERSION || record.backend !== 'files') {
     errors.push('commit adoption record identity is invalid');
+  }
+  if (typeof record.repositoryIdentity !== 'string' || !record.repositoryIdentity ||
+      (repositoryIdentity !== null && record.repositoryIdentity !== repositoryIdentity)) {
+    errors.push('commit adoption record repository identity does not match the current target');
   }
   if (typeof record.taskId !== 'string' || !record.taskId.trim() || (taskId !== null && record.taskId !== taskId)) {
     errors.push('commit adoption record task identity does not match the current return');
@@ -82,8 +141,15 @@ export function validateCommitAdoptionRecord(record, {
       (taskContractDigest !== null && record.taskContractDigest !== taskContractDigest)) {
     errors.push('commit adoption record protected contract does not match the current return');
   }
-  if (typeof record.riskClass !== 'string' || !record.riskClass.trim() || typeof record.adoptedAt !== 'string' || !Number.isFinite(Date.parse(record.adoptedAt))) {
+  const adoptedAt = canonicalInstant(record.adoptedAt);
+  if (typeof record.riskClass !== 'string' || !record.riskClass.trim() || adoptedAt === null) {
     errors.push('commit adoption record risk or timestamp is malformed');
+  }
+  if (!Number.isFinite(now) || (adoptedAt !== null && adoptedAt > now + ADOPTION_FUTURE_SKEW_MS)) {
+    errors.push('commit adoption record timestamp is future-dated');
+  }
+  if (record.assurance !== COMMIT_ADOPTION_ASSURANCE) {
+    errors.push('commit adoption record assurance must be explicitly non-authenticated');
   }
   if (record.ok !== true || record.nextOwner !== null || !Array.isArray(record.reasons) || record.reasons.length !== 0 || !Array.isArray(record.diagnostics)) {
     errors.push('commit adoption record must preserve one successful evaluation');
@@ -104,7 +170,8 @@ export function validateCommitAdoptionRecord(record, {
       !exactKeys(record.preserved?.attempt, ['id', 'authorization']) ||
       typeof record.preserved.attempt.id !== 'string' || !record.preserved.attempt.id ||
       typeof record.preserved.attempt.authorization !== 'string' || !record.preserved.attempt.authorization ||
-      record.preserved.originalBase !== record.adoption?.range?.base) {
+      record.preserved.originalBase !== record.adoption?.range?.base ||
+      (attemptId !== null && record.preserved.attempt.id !== attemptId)) {
     errors.push('commit adoption record does not preserve the original bounded attempt');
   }
   if (!exactKeys(record.certification, ['invalidated', 'rerun', 'maintainerReviewRequired']) ||
@@ -113,11 +180,18 @@ export function validateCommitAdoptionRecord(record, {
       record.certification.maintainerReviewRequired !== true) {
     errors.push('commit adoption record does not require renewed certification');
   }
+  if (record.semanticDigest !== adoptionDigest(record)) {
+    errors.push('commit adoption record semantic digest is invalid');
+  }
   return { ok: errors.length === 0, errors };
 }
 
-/** Resolve the one durable adoption record that can attribute this exact return range. */
-export function resolveCommitAdoption(target, { taskId, taskContractDigest, baseHead, head } = {}) {
+/**
+ * Resolve a display-only claim for an exact return range. A valid record can be
+ * shown or classified, but cannot establish commit provenance: range attribution
+ * remains independently derived from canonical Git trailers.
+ */
+export function resolveCommitAdoption(target, { taskId, taskContractDigest, baseHead, head, repositoryIdentity, attemptId, now } = {}) {
   const relPath = `.agenticloop/adoptions/commits/${String(taskId ?? '')}/${String(head ?? '')}.json`;
   const path = join(target, ...relPath.split('/'));
   if (!existsSync(path)) return { ok: true, record: null, relPath };
@@ -127,13 +201,13 @@ export function resolveCommitAdoption(target, { taskId, taskContractDigest, base
   } catch {
     return { ok: false, relPath, errors: [`commit adoption record '${relPath}' is missing or corrupt`] };
   }
-  const checked = validateCommitAdoptionRecord(record, { taskId, taskContractDigest, baseHead, head });
+  const checked = validateCommitAdoptionRecord(record, { taskId, taskContractDigest, baseHead, head, repositoryIdentity, attemptId, now });
   if (!checked.ok) return { ok: false, relPath, errors: checked.errors };
   return {
     ok: true,
     relPath,
     record,
-    attribution: { range: record.adoption.range, commits: record.adoption.commits },
+    display: record,
   };
 }
 
@@ -164,7 +238,7 @@ export function evaluateCommitAdoption(input = {}) {
     reasons.push('adoption requires the original attempt and bounded authorization identities');
   }
   if (input.executor !== 'supervisor') reasons.push('only the supervisor may execute adoption under the existing authorization');
-  if (!validActor(actor)) reasons.push('adoption requires a recorded actor class and identity');
+  if (!validActor(actor)) reasons.push(`adoption requires a claimed actor class in: ${COMMIT_ADOPTION_ACTOR_CLASSES.join(', ')}, and an identity`);
   if (typeof input.reason !== 'string' || !input.reason.trim()) reasons.push('adoption requires an explicit recorded reason');
   if (!matchingAuthorizationIdentity(protectedContract)) {
     reasons.push('protected contract identity is missing or malformed under the existing authorization');
@@ -225,6 +299,7 @@ export function evaluateCommitAdoption(input = {}) {
   if (reasons.length > 0) return result(reasons);
 
   return result([], {
+    assurance: COMMIT_ADOPTION_ASSURANCE,
     adoption: Object.freeze({
       range: Object.freeze({ base, head }), commits: Object.freeze(commits), changedPaths: Object.freeze(changedPaths),
       actor: Object.freeze({ class: actor.class, id: actor.id }), reason: input.reason.trim(),

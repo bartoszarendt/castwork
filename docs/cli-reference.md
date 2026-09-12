@@ -35,7 +35,7 @@ All commands:
 | `generate` | Generate adapter artifacts (`opencode`, `codex`, `claude-code`, `copilot`, `cursor`, `all`) |
 | `configure models` | Set per-host role model settings in `agenticloop.json` |
 | `configure import-generated-models` | Explicitly preview or import missing tracked model settings from one generated host |
-| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `measure`, `explain`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `review-attach-outcome`, `adopt-historical`, `adopt-commit`, `remediation-authority`, `abandon-attempt`, `record-tooling-failure`, `commit-message`, `prepare-product-commit`, `attempt-status`, `status`) |
+| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `measure`, `explain`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `review-attach-outcome`, `adopt-historical`, `adopt-commit`, `abandon-attempt`, `record-tooling-failure`, `commit-message`, `prepare-product-commit`, `attempt-status`, `status`) |
 | `audit` | Work-unit audit certificates (`new`, `baseline`, `report`, `status`, `gate`, `lint`, `repair-structure`, `disposition`, `override`, `resolve`) |
 | `closeout` | Composite closeout packets (`prepare`, `status`, `record`) |
 | `improvement` | Bounded improvement proposals (`new`, `lint`, `status`) |
@@ -62,8 +62,6 @@ All commands:
   work that genuinely predates canonical lifecycle evidence; `task adopt-commit`
   adopts one attributable, in-scope commit range into an existing attempt and
   requires fresh certification.
-- `task remediation-authority` opens one in-contract remediation cycle only
-  after exact-candidate independent certification checks.
 - `task abandon-attempt`, `task attempt-status`, and
   `task record-tooling-failure` respectively discard a named live attempt under
   durable authority, report whether a new packet may be minted, and persist one

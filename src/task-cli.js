@@ -206,9 +206,9 @@ import {
   historicalAdoptionRelativePath,
   projectHistoricalAdoption,
 } from './historical-adoption.js';
-import { evaluateCommitAdoption } from './commit-adoption.js';
+import { createCommitAdoptionRecord, evaluateCommitAdoption } from './commit-adoption.js';
 import { evaluateDispatchableLifecycle, taskStatusFromBody } from './dispatchability.js';
-import { evaluateCertificationFreshness, evaluateRemediationAuthority, resolveDurableCertificationEvidence } from './certification-remediation.js';
+import { evaluateCertificationFreshness, resolveDurableCertificationEvidence } from './certification-remediation.js';
 import { normalizeAuditorInvocationProvenance } from './audit-provenance.js';
 import { parseAuditorWireReport, wireReportToAuditRun } from './audit-report-schema.js';
 import {
@@ -852,7 +852,6 @@ const TASK_SUBCOMMAND_BACKENDS = Object.freeze({
   'prepare-product-commit': Object.freeze(['files']),
   'adopt-historical': Object.freeze(['files']),
   'adopt-commit': Object.freeze(['files']),
-  'remediation-authority': Object.freeze(['files']),
   measure: Object.freeze(['files']),
   explain: Object.freeze(['files']),
   'readiness-plan': Object.freeze(['files']),
@@ -5876,7 +5875,7 @@ export async function cmdTask(args, io = createIo()) {
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
       // Terminal review storage is historical evidence only.  It may preserve
-      // an already-completed review outcome, but remediation-authority always
+      // an already-completed review outcome, but the former remediation command always
       // rechecks the lifecycle and therefore cannot turn this write into a
       // resumed execution authorization.
       const terminalLifecycle = ['accepted', 'closed'].includes(taskStatusFromBody(body));
@@ -6426,11 +6425,13 @@ export async function cmdTask(args, io = createIo()) {
         return 1;
       }
       const relPath = `.agenticloop/adoptions/commits/${taskId}/${evaluation.adoption.range.head}.json`;
-      const record = {
-        kind: 'agenticloop.commit-adoption', schemaVersion: 1, backend: 'files', taskId,
-        taskContractDigest: contract.digest, riskClass: risk, adoptedAt: new Date().toISOString(),
-        ...evaluation,
-      };
+      const record = createCommitAdoptionRecord({
+        repositoryIdentity: targetRepositoryIdentity(target),
+        taskId,
+        taskContractDigest: contract.digest,
+        riskClass: risk,
+        evaluation,
+      });
       const applied = executeMutationBatch(target, [{
         // This no-op carrier write is the transaction guard for the live
         // lifecycle/authorization/attempt facts above. The kernel rechecks it
@@ -6452,195 +6453,14 @@ export async function cmdTask(args, io = createIo()) {
         return 1;
       }
       const payload = {
-        command: 'task adopt-commit', taskId, path: relPath, adoption: evaluation.adoption,
-        preserved: evaluation.preserved, certification: evaluation.certification,
+        command: 'task adopt-commit', taskId, path: relPath, assurance: evaluation.assurance,
+        adoption: evaluation.adoption, preserved: evaluation.preserved, certification: evaluation.certification,
       };
       if (asJson) io.out(JSON.stringify(payload, null, 2));
-      else io.out(`Adopted ${evaluation.adoption.range.head} for ${taskId}; required checks, Maintainer review, and audit must rerun.`);
+      else io.out(`Recorded non-authenticated claimed attribution for ${evaluation.adoption.range.head} on ${taskId}; required checks, Maintainer review, and audit must rerun.`);
       return 0;
     }
 
-    if (sub === 'remediation-authority') {
-      const taskId = positional[0];
-      const asJson = Boolean(opts.json);
-      const required = ['attempt', 'candidate', 'finding'];
-      if (!taskId || required.some(name => !opts[name])) {
-        io.err('task remediation-authority requires <id>, --attempt, --candidate, and --finding');
-        return EXIT_USAGE;
-      }
-      const filePath = taskPathForId(target, projectConfig, taskId);
-      if (!existsSync(filePath)) {
-        io.err(`Task record not found: ${relative(target, filePath).replace(/\\/g, '/')}`);
-        return 1;
-      }
-      const body = readFileSync(filePath, 'utf8');
-      const contract = taskContractDigest(body);
-      const [frontmatter] = parseFrontmatter(body);
-      const risk = String(frontmatter?.risk_class ?? '').trim();
-      const consumed = listDispatchConsumptions(target, taskId, { backend: 'files' });
-      if (!contract.ok || !consumed.ok) {
-        for (const error of consumed.errors ?? []) io.err(error);
-        io.err(contract.error ?? 'canonical dispatch consumption evidence is unavailable');
-        return 1;
-      }
-      const consumption = consumed.records.find(record => executionAttemptIdentity(record) === String(opts.attempt));
-      if (!consumption) {
-        io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}; remediation returns to the owner.`);
-        return 1;
-      }
-      const remediationLifecycleRefusal = lifecycle => {
-        const payload = {
-          command: 'task remediation-authority', taskId, lifecycle,
-          reasons: [lifecycle.reason],
-        };
-        if (asJson) io.out(JSON.stringify(payload, null, 2));
-        else io.err(`remediation refused: ${lifecycle.reason}`);
-        return 1;
-      };
-      // Review and audit certify a candidate; they do not permanently reserve
-      // an execution attempt. Resolve the current task lifecycle and the exact
-      // selected attempt before opening a new authority record, then run this
-      // same reader in the persistence transaction below.
-      const resolveCurrentRemediationLifecycle = currentBody => {
-        const currentContract = taskContractDigest(currentBody);
-        if (!currentContract.ok) {
-          return {
-            ok: false,
-            diagnostic: { type: 'live_authorization', code: 'verification.context.malformed', evidenceState: 'malformed' },
-            reason: currentContract.error,
-          };
-        }
-        const dispatchability = evaluateDispatchableLifecycle(taskStatusFromBody(currentBody));
-        if (!dispatchability.ok) {
-          return {
-            ok: false,
-            diagnostic: {
-              type: 'live_authorization', code: 'task.lifecycle.not_dispatchable', evidenceState: dispatchability.evidenceState,
-            },
-            reason: dispatchability.reason,
-          };
-        }
-        if (currentContract.digest !== consumption.taskContractDigest) {
-          return {
-            ok: false,
-            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'changed' },
-            reason: 'current protected contract differs from the selected execution attempt authorization',
-          };
-        }
-        const conservation = evaluateTaskPacketConservation(target, taskId, { backend: 'files', projectConfig });
-        const attemptId = executionAttemptIdentity(consumption);
-        const attempt = conservation.attempts?.find(item => item.attemptId === attemptId) ?? null;
-        if (!attempt || attempt.state !== 'reviewed_needs_revision') {
-          return {
-            ok: false,
-            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: attempt ? 'negative' : 'malformed' },
-            reason: attempt
-              ? `selected execution attempt '${attemptId}' is ${attempt.state}, not eligible for remediation authority`
-              : `selected execution attempt '${attemptId}' is not present in the current attempt ledger`,
-          };
-        }
-        if (!conservation.ok && conservation.code !== PACKET_CONSERVATION_DIAGNOSTIC_CODE) {
-          return {
-            ok: false,
-            diagnostic: { type: 'live_authorization', code: 'dispatch.packet.conserved', evidenceState: 'malformed' },
-            reason: conservation.reason,
-          };
-        }
-        return { ok: true, contract: currentContract, attempt };
-      };
-      const lifecycle = resolveCurrentRemediationLifecycle(body);
-      if (!lifecycle.ok) return remediationLifecycleRefusal(lifecycle);
-      let persistedCandidate;
-      let finding;
-      try {
-        persistedCandidate = readTargetJson(target, String(opts.candidate), 'persisted finish candidate');
-        finding = readTargetJson(target, String(opts.finding), 'remediation finding');
-      } catch (error) {
-        io.err(error.message);
-        return EXIT_USAGE;
-      }
-      // Protected return revalidation below re-derives the live Git topology
-      // and rejects a later scoped product mutation. The workflow head may
-      // legitimately advance as review/audit receipts are persisted, so it is
-      // not itself the candidate identity supplied to the canonical evaluator.
-      const candidate = persistedCandidate && typeof persistedCandidate === 'object'
-        ? {
-            ...persistedCandidate,
-            certificationInvalidation: {
-            ...persistedCandidate.certificationInvalidation,
-              observedCandidateHead: persistedCandidate.productRange?.head,
-            },
-          }
-        : persistedCandidate;
-      const durable = await resolveDurableCertificationEvidence({
-        target, taskId, taskRecord: body, candidate: persistedCandidate,
-        revalidateReturn: record => revalidateCertificationReturn(target, io, opts.hostTrustStore, taskId, record),
-        verifyMaintainerOutcome: input => verifyAuthenticatedMaintainerReviewOutcome(input, target, io, opts.hostTrustStore),
-        verifyAuditorRecord: input => verifyAuthenticatedAuditRecord(input, io),
-      });
-      const freshness = durable.ok
-        ? evaluateCertificationFreshness({
-            candidate,
-            persistedCandidate: durable.candidate,
-            producer: durable.producer,
-            review: durable.review,
-            audit: durable.audit,
-          })
-        : durable;
-      const authority = evaluateRemediationAuthority({
-        authorization: {
-          contract: consumption.taskContractDigest,
-          risk,
-          attempt: executionAttemptIdentity(consumption),
-        },
-        finding,
-      });
-      if (!freshness.ok || !authority.authorized || contract.digest !== consumption.taskContractDigest) {
-        const contractReasons = contract.digest === consumption.taskContractDigest
-          ? [] : ['current protected contract differs from the original bounded authorization'];
-        const payload = { command: 'task remediation-authority', taskId, freshness, authority, reasons: contractReasons };
-        if (asJson) io.out(JSON.stringify(payload, null, 2));
-        else for (const reason of [...freshness.reasons, ...authority.reasons, ...contractReasons]) io.err(`remediation refused: ${reason}`);
-        return 1;
-      }
-      const relPath = `.agenticloop/remediations/${taskId}/${canonicalSha256({ attempt: authority.cycle.attempt, candidate: persistedCandidate })}.json`;
-      const record = {
-        kind: 'agenticloop.certification-remediation', schemaVersion: 1, backend: 'files', taskId,
-        taskContractDigest: contract.digest, candidate: persistedCandidate,
-        producer: durable.producer,
-        review: { role: durable.review.role, id: durable.review.id, record: durable.records.review },
-        audit: { role: durable.audit.role, id: durable.audit.id, record: durable.records.audit },
-        finding, authority, openedAt: new Date().toISOString(),
-      };
-      let persistenceLifecycle = lifecycle;
-      const applied = executeMutationBatch(target, [{
-        // The no-op carrier write protects the current lifecycle state while
-        // the kernel creates the remediation record. The validation rereads
-        // both the task carrier and selected attempt ledger immediately before
-        // persistence, so a terminal transition or retirement cannot race a
-        // new remediation authority into durable storage.
-        type: 'write', path: relative(target, filePath).replace(/\\/g, '/'), content: body,
-        expectedDigest: taskRecordDigest(body), expectedKind: 'file',
-        validateCurrent: bytes => {
-          const current = resolveCurrentRemediationLifecycle(bytes.toString('utf8'));
-          persistenceLifecycle = current;
-          return current.ok
-            ? { ok: true }
-            : { ok: false, error: `${current.diagnostic.code}: ${current.reason}` };
-        },
-      }, {
-        type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
-      }], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
-      if (!applied.ok) {
-        if (!persistenceLifecycle.ok) return remediationLifecycleRefusal(persistenceLifecycle);
-        for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
-        return 1;
-      }
-      const payload = { command: 'task remediation-authority', taskId, path: relPath, authority: authority.cycle };
-      if (asJson) io.out(JSON.stringify(payload, null, 2));
-      else io.out(`Opened remediation cycle for ${taskId}; Maintainer review and audit remain required for the next exact candidate.`);
-      return 0;
-    }
 
     if (sub === 'adopt-historical') {
       const taskId = positional[0];

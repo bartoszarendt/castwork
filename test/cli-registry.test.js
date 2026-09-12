@@ -50,6 +50,14 @@ describe('command registry', () => {
     assert.equal(resolveCommandName('frobnicate'), null);
   });
 
+  it('does not expose the retired remediation command in registry, help, or task routing', async () => {
+    const retiredSubcommand = ['remediation', 'authority'].join('-');
+    assert.equal(COMMAND_REGISTRY.task.subcommands[retiredSubcommand], undefined);
+    assert.doesNotMatch(COMMAND_REGISTRY.task.usage, new RegExp(retiredSubcommand));
+    const result = await runCliInProcess(['task', retiredSubcommand, 'T-001', '--json']);
+    assert.equal(result.status, 2);
+  });
+
   it('parses kebab-case options into camelCase keys', () => {
     const { opts } = parseCommandArgs('init', COMMAND_REGISTRY.init, [
       '--target', '/tmp/x', '--no-agents-guidance', '--dry-run',

@@ -541,7 +541,7 @@ export const COMMAND_REGISTRY = {
   },
   task: {
     summary: 'Manage files-backed task records and canonical handoff preparation.',
-    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|adopt-commit|remediation-authority|readiness-plan|readiness-apply|measure|explain|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|review-attach-outcome|status> [options]',
+    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|adopt-commit|readiness-plan|readiness-apply|measure|explain|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|review-attach-outcome|status> [options]',
     subcommands: {
       list: {
         summary: 'List task records.',
@@ -669,28 +669,16 @@ export const COMMAND_REGISTRY = {
       },
       'adopt-commit': {
         summary: 'Adopt an attributable, in-scope commit range into an existing canonical attempt and require fresh certification.',
-        usage: 'agenticloop task adopt-commit <id> --attempt <attempt-id> --base <commit> --head <commit> --actor-class <class> --actor-id <id> --reason <text> [--json] [--target <dir>]',
+        usage: 'agenticloop task adopt-commit <id> --attempt <attempt-id> --base <commit> --head <commit> --actor-class operator --actor-id <id> --reason <text> [--json] [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
         options: [
           targetOption(),
           opt('attempt', 'string', 'Existing canonical Engineer attempt identity. Required.'),
           opt('base', 'string', 'Exact original product base commit. Required.'),
           opt('head', 'string', 'Exact adopted product head commit. Required.'),
-          opt('actor-class', 'string', 'Deliberate out-of-band actor class, such as human. Required.'),
-          opt('actor-id', 'string', 'Deliberate out-of-band actor identity. Required.'),
+          opt('actor-class', 'string', 'Claimed out-of-band actor class. Required; not authenticated.', { enum: ['operator', 'delegated-agent', 'unknown'] }),
+          opt('actor-id', 'string', 'Claimed out-of-band actor identity. Required; not authenticated.'),
           opt('reason', 'string', 'Why this bounded commit is being adopted. Required and recorded.'),
-          jsonOption,
-        ],
-      },
-      'remediation-authority': {
-        summary: 'Open an in-contract remediation cycle only after exact-candidate independent certification checks.',
-        usage: 'agenticloop task remediation-authority <id> --attempt <attempt-id> --candidate <path> --finding <path> [--json] [--target <dir>]',
-        positionals: [{ name: 'id', required: true }],
-        options: [
-          targetOption(),
-          opt('attempt', 'string', 'Existing canonical Engineer attempt identity. Required.'),
-          opt('candidate', 'string', 'Persisted canonical finish-candidate JSON, relative to target. Required.'),
-          opt('finding', 'string', 'Finding JSON with contract, risk, and explicit widensIntent:false. Required.'),
           jsonOption,
         ],
       },

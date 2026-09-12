@@ -31,7 +31,6 @@ const LIFECYCLE_AUTHORITY_PREFIXES = Object.freeze([
   '.agenticloop/lifecycle-receipt.json',
   '.agenticloop/locks/lifecycle-authority',
   '.agenticloop/project.md',
-  '.agenticloop/remediations',
   '.agenticloop/returns',
   '.agenticloop/reviews',
   '.agenticloop/task-contract-history',

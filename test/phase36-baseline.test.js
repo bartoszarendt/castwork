@@ -7,7 +7,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +58,7 @@ function candidateRepositoryFiles() {
   return [...new Set([
     ...listFiles(['ls-files', '-z']),
     ...listFiles(['ls-files', '--others', '--exclude-standard', '-z']),
-  ])];
+  ])].filter(relativePath => existsSync(join(REPO_ROOT, relativePath)));
 }
 
 function candidatePhaseViolations() {

@@ -18,10 +18,12 @@ import {
 import { validateAuditRecord } from './audit-record.js';
 import { validateExecutionEvidenceStructure } from './execution-evidence.js';
 import {
+  executionAttemptIdentity,
   executionAttemptAbandonmentRelativePath,
   listExecutionAttemptAbandonments,
   validateExecutionAttemptAbandonment,
 } from './execution-attempt.js';
+import { targetRepositoryIdentity } from './host-trust.js';
 import { parseFrontmatterStrict } from './frontmatter.js';
 import { validateManifest } from './generated-artifacts.js';
 import { validateHandoffRefreshReceipt } from './handoff-evidence-refresh.js';
@@ -181,7 +183,7 @@ function classifyCarriedPath(path, classifier) {
   return 'workflow_evidence';
 }
 
-function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier }) {
+function classifyPath(path, { target, packet, workflow, runGit, workflowHead, classifier }) {
   if (path === '.agenticloop/tmp' || path.startsWith(SCRATCH_PREFIX)) return 'scratch';
   // Agentic Loop's own output is never the product's work and is never a
   // validated workflow record either. It is named for what it is, so a toolkit
@@ -216,6 +218,8 @@ function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier
     catch { throw new VerificationContextMalformedError(`commit adoption '${path}' is not valid JSON`); }
     const checked = validateCommitAdoptionRecord(record, {
       taskId: packet.task.id, taskContractDigest: packet.task.taskContractDigest,
+      repositoryIdentity: targetRepositoryIdentity(target),
+      attemptId: executionAttemptIdentity(workflow?.lineage?.dispatchConsumption),
     });
     if (!checked.ok) {
       throw new VerificationContextMalformedError(`commit adoption '${path}' is not a validated canonical adoption record: ${checked.errors[0]}`);
@@ -376,11 +380,17 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     }
   }
 
+  const workflow = exactWorkflowPaths(target, packet, signedEvidence, runGit, workflowHead, { historicalCloseout });
+  // C7: validate a present display claim so malformed attempt-bound workflow
+  // state cannot enter a return, but never consume it as range attribution.
+  // Its unkeyed digest is integrity only, not provenance.
   const adoption = resolveCommitAdoption(target, {
     taskId: packet?.task?.id,
     taskContractDigest: packet?.task?.taskContractDigest,
     baseHead: productBaseHead,
     head: productHead,
+    repositoryIdentity: targetRepositoryIdentity(target),
+    attemptId: executionAttemptIdentity(workflow.lineage.dispatchConsumption),
   });
   if (!adoption.ok) {
     throw new VerificationContextMalformedError(
@@ -394,14 +404,12 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     taskId: packet?.task?.id,
     roleId: packet?.assignment?.roleId,
     allowedPaths: packet?.task?.allowedPaths,
-    adoption: adoption.attribution ?? null,
   });
   if (!product.ok) {
     throw product.evidenceState === 'malformed'
       ? new VerificationContextMalformedError(product.message)
       : new VerificationContextStaleError(product.message);
   }
-  const workflow = exactWorkflowPaths(target, packet, signedEvidence, runGit, workflowHead, { historicalCloseout });
   const allPaths = sortedPaths(readGit(
     runGit,
     ['diff', '--name-only', '--no-renames', `${productBaseHead}..${workflowHead}`],
@@ -424,7 +432,7 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
   const classified = new Map();
   for (const path of allPaths) {
     const category = currentPaths.has(path)
-      ? classifyPath(path, { packet, workflow, runGit, workflowHead, classifier })
+      ? classifyPath(path, { target, packet, workflow, runGit, workflowHead, classifier })
       : classifyCarriedPath(path, classifier);
     classified.set(path, category);
     if (category === 'scratch') {

@@ -347,9 +347,9 @@ test('v4 dispatch consumption preserves its persisted check-evidence output whil
   }
 });
 
-test('compatibility scope keeps the lifecycle adoption and remediation coverage title behavior-focused', () => {
-  const titleSource = readFileSync(new URL('./lifecycle-adoption-remediation-cli.test.js', import.meta.url), 'utf8');
-  assert.match(titleSource, /describe\('production lifecycle adoption and remediation commands'/);
+test('compatibility scope keeps the lifecycle adoption coverage title behavior-focused', () => {
+  const titleSource = readFileSync(new URL('./lifecycle-adoption-cli.test.js', import.meta.url), 'utf8');
+  assert.match(titleSource, /describe\('production lifecycle adoption and review-attachment commands'/);
   assert.doesNotMatch(titleSource, /P36-\d+/);
 });
 

@@ -1,4 +1,4 @@
-/** Exact-candidate certification freshness and bounded remediation authority. */
+/** Exact-candidate certification freshness. */
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -166,7 +166,7 @@ export async function resolveDurableCertificationEvidence({
   for (const record of returns.records ?? []) {
     if (record.disposition !== 'successful_current' || !sameCandidate(record.finishCandidate, candidate)) continue;
     if (typeof revalidateReturn !== 'function') {
-      reasons.push('protected return revalidation is unavailable for remediation authority');
+      reasons.push('protected return revalidation is unavailable for certification evidence');
       diagnostics.push(Object.freeze({ type: 'return_revalidation_unavailable', evidenceState: 'missing' }));
       continue;
     }
@@ -320,44 +320,4 @@ export function evaluateCertificationFreshness({ candidate, persistedCandidate, 
   return reasons.length === 0
     ? Object.freeze({ ok: true, reasons: Object.freeze([]), diagnostics: Object.freeze([]) })
     : refusal(reasons, diagnostics);
-}
-
-/**
- * A finding may start a correction cycle without reauthorization only when it
- * stays inside the frozen protected contract and risk class. The decision is an
- * authority result, not a certification: review and audit still rerun.
- */
-export function evaluateRemediationAuthority({ authorization = {}, finding = {} } = {}) {
-  const reasons = [];
-  const diagnostics = [];
-  if (typeof authorization.contract !== 'string' || !authorization.contract || typeof authorization.risk !== 'string' || !authorization.risk ||
-      typeof authorization.attempt !== 'string' || !authorization.attempt) {
-    reasons.push('existing bounded authorization identity is incomplete');
-  }
-  if (finding.widensIntent !== false) {
-    reasons.push(finding.widensIntent === true
-      ? 'finding widens task intent and requires owner action'
-      : 'finding must explicitly confirm that it does not widen task intent');
-    diagnostics.push(Object.freeze({
-      type: finding.widensIntent === true ? 'finding_widens_intent' : 'finding_widens_intent_unconfirmed',
-      evidenceState: finding.widensIntent === true ? 'changed' : 'malformed',
-    }));
-  }
-  if (finding.contract !== authorization.contract) reasons.push('finding changes the protected contract and requires owner action');
-  if (finding.risk !== authorization.risk) reasons.push('finding changes the risk class and requires owner action');
-  if (reasons.length > 0) {
-    return Object.freeze({
-      authorized: false, nextOwner: 'owner', reasons: Object.freeze(reasons), diagnostics: Object.freeze(diagnostics), cycle: null,
-    });
-  }
-  return Object.freeze({
-    authorized: true,
-    nextOwner: null,
-    cycle: Object.freeze({
-      attempt: authorization.attempt,
-      preservesAuthorization: true,
-      invalidates: Object.freeze(['review', 'audit', 'closeout']),
-    }),
-    reasons: Object.freeze([]),
-  });
 }
