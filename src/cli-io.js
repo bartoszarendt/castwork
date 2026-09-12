@@ -147,7 +147,9 @@ export function createIo(options = {}) {
     operatorActivationRoot: options.operatorActivationRoot ?? null,
     hostAuthority: options.hostAuthority ?? null,
     requiredCheckCommandRunner: options.requiredCheckCommandRunner ?? null,
+    protectedTransitionObserver: options.protectedTransitionObserver ?? null,
     fsMutationOptions: options.fsMutationOptions ?? null,
+    maintainerReviewNow: options.maintainerReviewNow ?? null,
   };
 
   io.style = (text, code) => (color ? `\u001b[${code}m${text}\u001b[0m` : text);

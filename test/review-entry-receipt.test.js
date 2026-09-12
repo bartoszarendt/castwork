@@ -26,7 +26,7 @@ function material(head = HEAD, body = BODY) {
   const loaded = {
     input: {
       prData: {
-        number: 35, headRefOid: head,
+        number: 35, baseRefOid: 'c'.repeat(40), headRefOid: head, files: [{ path: 'src/receipt.js' }],
         commits: [{ oid: head, message: 'Implement receipt\n\nTask: T-035\nAgent: engineer' }],
       },
       issueData: { number: 35, body },
@@ -54,10 +54,24 @@ describe('review-entry receipt authority', () => {
     assert.equal(validateReviewEntryReceipt(receipt, changed.loaded, changed.result).ok, false);
   });
 
-  it('rejects task/check drift and preserves engineer ownership on a failed entry', () => {
+  it('persists one authoritative GitHub finish candidate with range, paths, checks, identity, and invalidation', () => {
     const { loaded, result } = material();
     const receipt = createReviewEntryReceipt(loaded, result, { observedAt: '2026-08-07T00:00:00.000Z' });
-    const taskChanged = material(HEAD, `${BODY}\nChanged.`);
+    assert.deepEqual(receipt.finishCandidate.productRange, {
+      base: 'c'.repeat(40), head: HEAD, commits: [HEAD],
+    });
+    assert.deepEqual(receipt.finishCandidate.changedPathVerdict.productPaths, ['src/receipt.js']);
+    assert.deepEqual(receipt.finishCandidate.requiredCheckSet, ['RC-1']);
+    assert.deepEqual(receipt.finishCandidate.returnIdentity, { taskId: '35', pr: 35, head: HEAD });
+    assert.equal(receipt.finishCandidate.certificationInvalidation.state, 'current');
+  });
+
+  it('rejects protected task/check drift while allowing mutable comments and preserving engineer ownership', () => {
+    const { loaded, result } = material();
+    const receipt = createReviewEntryReceipt(loaded, result, { observedAt: '2026-08-07T00:00:00.000Z' });
+    const mutableComment = material(HEAD, `${BODY}\n\n## Comments\n\n- Rendered receipt note.`);
+    assert.equal(validateReviewEntryReceipt(receipt, mutableComment.loaded, mutableComment.result).ok, true);
+    const taskChanged = material(HEAD, BODY.replace('Receipt coverage.', 'Changed protected scope.'));
     assert.equal(validateReviewEntryReceipt(receipt, taskChanged.loaded, taskChanged.result).ok, false);
     const checksChanged = material();
     checksChanged.result.evidenceMatches[0].evidence = 'different evidence';

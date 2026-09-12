@@ -46,7 +46,9 @@ class MemoryStream {
  * @param {Function} [options.hostAuthority] Test transport for a signed host-boundary challenge response.
  * @param {Function} [options.requiredCheckCommandRunner] Test-only required-check argv runner.
  * @param {Function|null} [options.auditProvenanceVerifier] Protected test-only Auditor receipt verifier.
+ * @param {Function} [options.protectedTransitionObserver] Characterization-only protected-evaluator observer.
  * @param {object} [options.fsMutationOptions]  Injectable filesystem mutation hooks.
+ * @param {number} [options.maintainerReviewNow] Test-only clock for Maintainer outcome receipt authentication.
  * @returns {Promise<{ status: number, stdout: string, stderr: string }>}
  */
 export async function runCliInProcess(argv, options = {}) {
@@ -72,8 +74,10 @@ export async function runCliInProcess(argv, options = {}) {
     requiredCheckCommandRunner: options.requiredCheckCommandRunner,
     auditProvenanceVerifier: Object.hasOwn(options, 'auditProvenanceVerifier')
       ? options.auditProvenanceVerifier
-      : ({ reportDigest }) => ({ verified: true, reportDigest }),
+       : ({ reportDigest }) => ({ verified: true, reportDigest }),
+    protectedTransitionObserver: options.protectedTransitionObserver,
     fsMutationOptions: options.fsMutationOptions,
+    maintainerReviewNow: options.maintainerReviewNow,
   });
   return {
     status,

@@ -56,6 +56,7 @@
 import { createHash } from 'node:crypto';
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
+import { explainReasonFactOwner } from './explain-reason.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import {
   dispositionForEvidenceState,
@@ -83,6 +84,7 @@ import {
 } from './repository-state.js';
 import { evaluateTaskRecordRoot } from './task-record-root.js';
 import { validateTaskReadinessEvidence } from './task-evidence-contract.js';
+import { parseTaskReadinessDeclaration } from './task-readiness.js';
 import { taskContractDigest, validateTaskContractBaseline } from './task-contract-baseline.js';
 import {
   parseRequiredCheckInventory,
@@ -410,12 +412,11 @@ export function semanticDigest(prefix, value) {
  * orchestrator's own read was that each multi-delegation cycle exceeds the
  * window, so the packet "keeps dying".
  *
- * The clock is a backstop, not the mechanism. Every fact a packet binds - the
- * carrier digest, the repository head, readiness, the decomposition, the clean
- * state, the activation authority - is revalidated at consumption, and a real
- * change fails there semantically whatever the clock says. So the window is
- * derived from the one bound it genuinely must respect: a packet may not
- * outlive the operator authorization that a default activation grant carries.
+ * The clock is delegation metadata, not the mechanism. Every fact a packet
+ * binds - the carrier digest, the repository head, readiness, the
+ * decomposition, the clean state, and activation authority - is revalidated at
+ * consumption. A real change fails there semantically whatever the clock says;
+ * elapsed wall time alone must not retire an otherwise current packet.
  */
 export const DISPATCH_LIVENESS_WINDOW_SECONDS = DEFAULT_GRANT_TTL_SECONDS;
 
@@ -704,7 +705,7 @@ export function activationCaptureDisposition(capture, options = {}) {
  * @param {any} value
  * @param {string} taskId
  * @param {any} findings
- * @param {{ allowLegacy?: boolean }} [options]  `allowLegacy` is used only to
+ * @param {{ allowLegacy?: boolean, expectedRoute?: 'serial'|'parallel' }} [options]  `allowLegacy` is used only to
  *   authenticate a prior-version dispatch packet before reporting it stale.
  */
 export function validateDecomposition(value, taskId, findings, options = {}) {
@@ -726,6 +727,11 @@ export function validateDecomposition(value, taskId, findings, options = {}) {
   if (value?.taskId !== taskId) findings.malformed('decomposition provenance taskId must match the dispatched task');
   if (value?.authority !== 'maintainer' || value?.source !== 'task-decomposition') findings.malformed('decomposition provenance must name the canonical maintainer task-decomposition authority');
   if (!['serial', 'parallel'].includes(value?.route)) findings.malformed("decomposition route must be 'serial' or 'parallel'");
+  if (options.expectedRoute && value?.route !== options.expectedRoute) {
+    findings.negative(
+      `decomposition route '${String(value?.route)}' does not match requested '${options.expectedRoute}' dispatch route`
+    );
+  }
   if (!safeRepositoryPath(value?.sourceRef)) findings.malformed('decomposition provenance sourceRef must be a safe repository-relative path');
   if (shapeOk && value?.sourceDigest !== decompositionSourceDigest(value)) {
     findings.malformed('decomposition provenance sourceDigest does not match its exact source projection');
@@ -753,9 +759,10 @@ export function validateDecomposition(value, taskId, findings, options = {}) {
     } else if (!scan.readyTaskIds.includes(taskId)) {
       findings.negative('complete decomposition inventory does not authorize this task as ready');
     }
-    // A parallel route needs the scan to have actually found this task in a
-    // candidate pair; coupling or ownership blockers refuse the claimed route.
-    if (value?.route === 'parallel') {
+    // An explicitly parallel request needs the scan to have actually found this
+    // task in a candidate pair. Route agreement above keeps an artifact's
+    // serial label from bypassing this ownership proof.
+    if (options.expectedRoute === 'parallel') {
       const paired = (scan.candidatePairs ?? []).some(pair => pair.includes(taskId));
       if (scan.conclusion !== 'parallel_candidates' || !paired) {
         findings.negative(
@@ -1187,14 +1194,6 @@ export function validateAssignment(
   exactKeys(value?.liveness, ['cadence', 'expiry', 'stopCondition'], 'dispatch liveness', findings);
   if (typeof value?.liveness?.cadence !== 'string' || !value.liveness.cadence.trim()) findings.malformed('dispatch liveness cadence is required');
   if (!isoTimestamp(value?.liveness?.expiry, { futureAllowed: true, now })) findings.malformed('dispatch liveness expiry must be an ISO-8601 UTC instant');
-  // Judged at the evaluation instant, not the wall clock. Expiry is not
-  // retroactive: a boundary revalidating an already-consumed attempt pins this
-  // to the consumption instant, exactly as it already pins the activation
-  // authority, so repairs, review, and closeout that run long do not retire a
-  // packet that was live when the work it authorized began. A boundary
-  // authorizing *new* work supplies no instant and gets the current clock,
-  // which is what makes the window a gate on consumption at all.
-  else if (Date.parse(value.liveness.expiry) <= now) findings.stale('dispatch liveness window has expired');
   if (typeof value?.liveness?.stopCondition !== 'string' || !value.liveness.stopCondition.trim()) findings.malformed('dispatch liveness stopCondition is required');
   if (value?.cancellationBoundary !== 'return_on_cancellation') findings.malformed("dispatch cancellationBoundary must be 'return_on_cancellation'");
 }
@@ -1234,7 +1233,7 @@ export function validateCurrentTask(snapshot, findings) {
   return contract.ok ? contract : null;
 }
 
-export function validateReadiness(readiness, snapshot, findings) {
+export function validateReadiness(readiness, snapshot, findings, { serial = false } = {}) {
   exactKeys(readiness, ['evidence', 'result', 'resultDigest'], 'dispatch readiness', findings);
   const evidence = validateTaskReadinessEvidence(readiness?.evidence);
   if (!evidence.ok) for (const error of evidence.errors) findings.malformed(`dispatch readiness evidence: ${error}`);
@@ -1244,31 +1243,56 @@ export function validateReadiness(readiness, snapshot, findings) {
     findings.malformed('dispatch readiness resultDigest must equal the canonical validation-result digest');
   }
   if (readiness?.result?.ok !== true || readiness?.result?.evidenceState !== 'current' || readiness?.result?.disposition !== 'proceed') {
-    findings.negative('dispatch readiness result must be current and proceeding');
+    const readinessErrors = readiness?.result?.diagnostics?.filter(item => item.level === 'error') ?? [];
+    if (readinessErrors.length > 0) {
+      for (const diagnostic of readinessErrors) {
+        findings.add(diagnostic.evidence?.state ?? 'negative', diagnostic.message, { code: diagnostic.code });
+      }
+    } else {
+      findings.negative('dispatch readiness result must be current and proceeding');
+    }
   }
   if (readiness?.evidence?.backend !== snapshot?.backend || readiness?.evidence?.task?.id !== snapshot?.taskId ||
       readiness?.evidence?.task?.carrier !== snapshot?.carrier || readiness?.evidence?.task?.expectedDigest !== snapshot?.digest) {
     findings.changed('dispatch readiness evidence does not bind the refetched task');
   }
-  if (readiness?.evidence?.dependencies === null ||
-      !isObject(readiness?.evidence?.dependencies?.provenance) ||
+  const declaredDependencies = parseTaskReadinessDeclaration(snapshot?.body ?? '').declaration?.dependsOn ?? [];
+  const serialWithoutDependencies = serial && readiness?.evidence?.dependencies === null && declaredDependencies.length === 0;
+  const serialDirectDependencies = serial && isCanonicalSerialDependencyEvidence(readiness?.evidence?.dependencies);
+  if ((!serialWithoutDependencies && (readiness?.evidence?.dependencies === null ||
+      (!serialDirectDependencies && !isObject(readiness?.evidence?.dependencies?.provenance)))) ||
       readiness?.evidence?.trustedRecordErrors?.length !== 0) {
     findings.missing('dispatch readiness evidence lacks current dependency or trusted-contract proof');
   }
+}
+
+/** A serial route proves dependencies from current files task carriers, never a parallel snapshot. */
+function isCanonicalSerialDependencyEvidence(dependencies) {
+  const source = dependencies?.source;
+  const selector = typeof source === 'string' && source.startsWith('files:') ? source.slice('files:'.length) : null;
+  return typeof selector === 'string' &&
+    selector.includes('{taskId}') &&
+    !selector.startsWith('/') &&
+    !selector.includes('\\') &&
+    !selector.split('/').includes('..') &&
+    Array.isArray(dependencies?.revalidationArgs) &&
+    dependencies.revalidationArgs.length === 2 &&
+    dependencies.revalidationArgs[0] === '--serial-dependencies' &&
+    dependencies.revalidationArgs[1] === selector;
 }
 
 /**
  * Evaluate initial repository state and prior-gate receipts for one dispatch.
  * Returns the exact clean-state binding that is folded into the packet digest.
  */
-export function evaluateInitialState({ runGit, scopePatterns, intendedCreations, priorGateReceipts, readCarrierDigest }, findings) {
+export function evaluateInitialState({ runGit, scopePatterns, intendedCreations, priorGateReceipts, readCarrierDigest, legacyLayout = false, target = null }, findings) {
   if (typeof runGit !== 'function') {
     findings.missing('a Git reader is required to prove the initial repository state before dispatch');
     return null;
   }
   let clean;
   try {
-    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations });
+    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations, legacyLayout, target });
   } catch (error) {
     findings.missing(`initial repository state could not be evaluated: ${error.message}`);
     return null;
@@ -1495,12 +1519,12 @@ export const DISPATCH_REVALIDATION_FACT_SHAPE = 'live_dispatch';
 const CANDIDATE_FIELDS = Object.freeze({
   live_dispatch: Object.freeze([
     'factShape', 'snapshot', 'activationEvidence', 'readiness', 'repository',
-    'decomposition', 'parallelScanInventory', 'assignment', 'policy', 'returnAdapter',
+    'decomposition', 'parallelRequested', 'routeAgreementRequested', 'parallelScanInventory', 'assignment', 'policy', 'returnAdapter',
     'cleanStateObservation', 'inventoryRecheck', 'authority', 'now',
   ]),
   live_readiness: Object.freeze([
     'factShape', 'snapshot', 'authorization', 'readinessObservation', 'dependencyObservation',
-    'repository', 'decomposition', 'parallelScanInventory', 'hostRoleCapability', 'policy',
+    'repository', 'decomposition', 'parallelRequested', 'routeAgreementRequested', 'parallelScanInventory', 'hostRoleCapability', 'policy',
     'returnCapability', 'cleanStateObservation', 'inventoryRecheck', 'authority', 'now',
   ]),
   live_continuation: Object.freeze([
@@ -1516,7 +1540,7 @@ const CANDIDATE_FIELDS = Object.freeze({
 const AUTHORIZATION_DIAGNOSTIC = Object.freeze({
   present: { code: null, evidenceState: 'current' },
   missing: { code: 'activation.capture.missing', evidenceState: 'missing' },
-  expired: { code: 'activation.grant.expired', evidenceState: 'negative' },
+  unavailable: { code: 'activation.grant.revoked', evidenceState: 'missing' },
   revoked: { code: 'activation.grant.revoked', evidenceState: 'negative' },
   stale: { code: 'activation.binding.stale_contract', evidenceState: 'negative' },
   mismatched: { code: 'activation.binding.mismatch', evidenceState: 'negative' },
@@ -1641,7 +1665,7 @@ function shapeRefusal(factShape, message) {
  * differently is exactly the clean-state divergence defect.
  */
 export function observeDispatchInitialState({
-  runGit, scopePatterns, intendedCreations, priorGateReceipts = [], readCarrierDigest = null,
+  runGit, scopePatterns, intendedCreations, priorGateReceipts = [], readCarrierDigest = null, legacyLayout = false, target = null,
 }) {
   if (typeof runGit !== 'function') {
     return {
@@ -1651,7 +1675,7 @@ export function observeDispatchInitialState({
   }
   let clean;
   try {
-    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations });
+    clean = evaluateDispatchCleanState({ runGit, scopePatterns, intendedCreations, legacyLayout, target });
   } catch (error) {
     return { ok: false, clean: null, gates: null, reason: `initial repository state could not be evaluated: ${error.message}` };
   }
@@ -1836,7 +1860,8 @@ function evaluateLiveDispatch(candidate) {
 
   // 4. Readiness evidence bound to the refetched task.
   const readinessSink = dimensionFindings('readiness');
-  validateReadiness(readiness, snapshot, readinessSink);
+  const parallelRequested = candidate.parallelRequested === true;
+  validateReadiness(readiness, snapshot, readinessSink, { serial: !parallelRequested });
   ledger.absorb('readiness', readinessSink, findings);
   ledger.record('dependency_evidence', readinessSink.length === 0 ? 'satisfied' : 'refused', {
     note: 'dependency provenance is proved by the readiness evidence contract',
@@ -1847,16 +1872,38 @@ function evaluateLiveDispatch(candidate) {
   validateRepositoryBinding(boundRepository, repositorySink);
   ledger.absorb('repository_identity', repositorySink, findings);
 
-  // 6. Committed decomposition: validity, freshness, Maintainer attribution,
-  //    and this task's eligibility inside the validated scan.
-  const decompositionSink = dimensionFindings('decomposition');
-  validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now });
-  const decompositionRefused = decompositionSink.length > 0;
-  recordDecompositionDimensions(
-    ledger, decomposition, decompositionRefused,
-    decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null,
-  );
-  findings.extend(decompositionSink.items);
+  // 6. A null decomposition is the closed serial route. It does not produce a
+  // scan, synthetic one-member decomposition, or work-unit membership binding.
+  const routeAgreementRequested = candidate.routeAgreementRequested === true;
+  let decompositionRefused = false;
+  if (!parallelRequested) {
+    if (routeAgreementRequested && decomposition !== null) {
+      const decompositionSink = dimensionFindings('decomposition');
+      validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now, expectedRoute: 'serial' });
+      decompositionRefused = decompositionSink.length > 0;
+      if (decompositionRefused) {
+        recordDecompositionDimensions(ledger, decomposition, true,
+          decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null);
+        findings.extend(decompositionSink.items);
+      }
+    }
+    if (!decompositionRefused) {
+      for (const dimension of ['decomposition', 'maintainer_attribution', 'task_eligibility', 'work_unit_membership']) {
+        ledger.record(dimension, 'not_applicable', {
+          note: routeAgreementRequested && decomposition !== null
+            ? 'explicit serial route confirmed a serial decomposition artifact but binds no parallel evidence'
+            : 'serial dispatch has no parallel decomposition or work-unit membership',
+        });
+      }
+    }
+  } else {
+    const decompositionSink = dimensionFindings('decomposition');
+    validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now, expectedRoute: 'parallel' });
+    decompositionRefused = decompositionSink.length > 0;
+    recordDecompositionDimensions(ledger, decomposition, decompositionRefused,
+      decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null);
+    findings.extend(decompositionSink.items);
+  }
 
   // 7. Assignment and host-role capability.
   const assignmentSink = dimensionFindings('assignment');
@@ -1924,17 +1971,19 @@ function evaluateLiveDispatch(candidate) {
 
   // 11. Current work-unit membership over a freshly enumerated inventory.
   const membershipSink = dimensionFindings('work_unit_membership');
-  const workUnit = decideWorkUnitBinding(
-    { decomposition, parallelScanInventory, inventoryRecheck, readiness }, membershipSink,
-  );
-  if (!workUnit.evaluated) {
-    ledger.record('work_unit_membership', 'not_applicable', {
-      note: 'the bound decomposition is not a complete current-schema scan, so it authorizes no membership',
-    });
-  } else {
-    ledger.absorb('work_unit_membership', membershipSink, findings);
+  const workUnit = parallelRequested
+    ? decideWorkUnitBinding({ decomposition, parallelScanInventory, inventoryRecheck, readiness }, membershipSink)
+    : { proseDriftAccepted: false, evaluated: false };
+  if (parallelRequested) {
+    if (!workUnit.evaluated) {
+      ledger.record('work_unit_membership', 'not_applicable', {
+        note: 'the bound decomposition is not a complete current-schema scan, so it authorizes no membership',
+      });
+    } else {
+      ledger.absorb('work_unit_membership', membershipSink, findings);
+    }
+    findings.extend(membershipSink.items);
   }
-  findings.extend(membershipSink.items);
   if (findings.length) return freezeDecision({ ok: false, factShape: shape, findings, ledger });
 
   // 12. Return capability required by the effective policy.
@@ -1957,7 +2006,7 @@ function evaluateLiveDispatch(candidate) {
       contract,
       activation,
       readiness,
-      decomposition,
+      decomposition: parallelRequested ? decomposition : null,
       assignment,
       repository: boundRepository,
       cleanState,
@@ -2027,47 +2076,67 @@ function evaluateLiveReadiness(candidate) {
   });
   ledger.absorb('dependency_evidence', dependencySink, findings);
 
-  // 5. Committed decomposition, its Maintainer attribution, and this task's
-  //    eligibility inside the validated scan.
-  const decompositionSink = dimensionFindings('decomposition');
-  if (!isObject(decomposition)) {
-    // The source could not be resolved at all. Running the record validator over
-    // absent evidence would emit its whole shape cascade beside the one fact
-    // that matters, so the absence is reported once and the cascade is not run.
-    decompositionSink.missing(
-      'the committed decomposition source is absent or could not be read, so it authorizes no dispatch'
-    );
+  // 5. A null decomposition selects the serial route. It deliberately avoids
+  // every parallel scan, attribution, eligibility, and membership requirement.
+  const parallelRequested = candidate.parallelRequested === true;
+  const routeAgreementRequested = candidate.routeAgreementRequested === true;
+  let decompositionRefused = false;
+  if (!parallelRequested) {
+    if (routeAgreementRequested && decomposition !== null) {
+      const decompositionSink = dimensionFindings('decomposition');
+      validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now, expectedRoute: 'serial' });
+      decompositionRefused = decompositionSink.length > 0;
+      if (decompositionRefused) {
+        recordDecompositionDimensions(ledger, decomposition, true,
+          decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null);
+        findings.extend(decompositionSink.items);
+      }
+    }
+    if (!decompositionRefused) {
+      for (const dimension of ['decomposition', 'maintainer_attribution', 'task_eligibility', 'work_unit_membership']) {
+        ledger.record(dimension, 'not_applicable', {
+          note: routeAgreementRequested && decomposition !== null
+            ? 'explicit serial route confirmed a serial decomposition artifact but binds no parallel evidence'
+            : 'serial preflight has no parallel decomposition or work-unit membership',
+        });
+      }
+    }
   } else {
-    validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now });
-  }
-  const decompositionRefused = decompositionSink.length > 0;
-  recordDecompositionDimensions(
-    ledger, decomposition, decompositionRefused,
-    decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null,
-  );
-  findings.extend(decompositionSink.items);
+    const decompositionSink = dimensionFindings('decomposition');
+    if (!isObject(decomposition)) {
+      decompositionSink.missing(
+        'the committed decomposition source is absent or could not be read, so it authorizes no dispatch'
+      );
+    } else {
+      validateDecomposition(decomposition, snapshot?.taskId, decompositionSink, { now, expectedRoute: 'parallel' });
+    }
+    decompositionRefused = decompositionSink.length > 0;
+    recordDecompositionDimensions(ledger, decomposition, decompositionRefused,
+      decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null);
+    findings.extend(decompositionSink.items);
 
-  // 6. Current work-unit membership, re-enumerated rather than trusted, and
-  //    only over a well-formed scan.
-  const membershipSink = dimensionFindings('work_unit_membership');
-  if (decompositionRefused || !isObject(parallelScanInventory)) {
-    ledger.record('work_unit_membership', 'not_applicable', {
-      note: decompositionRefused
-        ? 'the bound decomposition is the root cause; membership derived from it would name a symptom'
-        : 'the backend inventory could not be enumerated, so no membership verdict is claimed',
-    });
-  } else {
-    const workUnit = decideWorkUnitBinding(
-      { decomposition, parallelScanInventory, inventoryRecheck, readiness: null }, membershipSink,
-    );
-    if (!workUnit.evaluated) {
+    // 6. Current work-unit membership, re-enumerated rather than trusted, and
+    // only over a well-formed parallel scan.
+    const membershipSink = dimensionFindings('work_unit_membership');
+    if (decompositionRefused || !isObject(parallelScanInventory)) {
       ledger.record('work_unit_membership', 'not_applicable', {
-        note: 'the bound decomposition is not a complete current-schema scan, so it authorizes no membership',
+        note: decompositionRefused
+          ? 'the bound decomposition is the root cause; membership derived from it would name a symptom'
+          : 'the backend inventory could not be enumerated, so no membership verdict is claimed',
       });
     } else {
-      ledger.absorb('work_unit_membership', membershipSink, findings);
+      const workUnit = decideWorkUnitBinding(
+        { decomposition, parallelScanInventory, inventoryRecheck, readiness: null }, membershipSink,
+      );
+      if (!workUnit.evaluated) {
+        ledger.record('work_unit_membership', 'not_applicable', {
+          note: 'the bound decomposition is not a complete current-schema scan, so it authorizes no membership',
+        });
+      } else {
+        ledger.absorb('work_unit_membership', membershipSink, findings);
+      }
+      findings.extend(membershipSink.items);
     }
-    findings.extend(membershipSink.items);
   }
 
   // 7. Repository and worktree identity. No assignment is bound at this
@@ -2381,21 +2450,28 @@ function evaluateSealedPacket(candidate) {
     taskId: packet?.task?.id,
     carrier: packet?.task?.carrier,
     digest: packet?.task?.dispatchCarrierDigest,
-  }, readinessSink);
+  }, readinessSink, { serial: packet?.decomposition === null });
   ledger.absorb('readiness', readinessSink, findings);
 
-  // 5. Decomposition binding, its attribution, and this task's eligibility.
-  const decompositionSink = dimensionFindings('decomposition');
-  validateDecompositionBinding(packet?.decomposition, packet?.task?.id, decompositionSink, {
-    allowLegacy: options.allowLegacyDecomposition === true,
-    ...(typeof now === 'number' && Number.isFinite(now) ? { now } : {}),
-  });
-  const decompositionRefused = decompositionSink.length > 0;
-  recordDecompositionDimensions(
-    ledger, packet?.decomposition, decompositionRefused,
-    decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null,
-  );
-  findings.extend(decompositionSink.items);
+  // 5. A null packet binding is the serial route. A non-null binding is an
+  // explicit parallel request and retains the complete binding validation.
+  if (packet?.decomposition === null) {
+    for (const dimension of ['decomposition', 'maintainer_attribution', 'task_eligibility']) {
+      ledger.record(dimension, 'not_applicable', { note: 'serial packet has no parallel decomposition binding' });
+    }
+  } else {
+    const decompositionSink = dimensionFindings('decomposition');
+    validateDecompositionBinding(packet?.decomposition, packet?.task?.id, decompositionSink, {
+      allowLegacy: options.allowLegacyDecomposition === true,
+      ...(typeof now === 'number' && Number.isFinite(now) ? { now } : {}),
+    });
+    const decompositionRefused = decompositionSink.length > 0;
+    recordDecompositionDimensions(
+      ledger, packet?.decomposition, decompositionRefused,
+      decompositionSink.primary?.evidenceState ?? null, decompositionSink.primary?.code ?? null,
+    );
+    findings.extend(decompositionSink.items);
+  }
 
   // 6. Repository binding, including the clean-state binding it was minted under.
   const repositorySink = dimensionFindings('repository_identity');
@@ -2466,6 +2542,55 @@ export function evaluateDispatchEligibility(candidate) {
   }
 }
 
+/**
+ * Canonical read-only presentation of a dispatch decision.
+ *
+ * This deliberately lives beside the decision ledger rather than at a CLI
+ * presentation boundary.  In particular, `not_applicable` means that the
+ * live-readiness evaluator has no assignment to bind yet.  It is therefore an
+ * unavailable material input for a read-only answer, not a lifecycle pass and
+ * not an explain-specific interpretation.
+ */
+export function projectReadOnlyDispatchEligibility(decision) {
+  const dimensions = decision?.dimensions ?? {};
+  const facts = DISPATCH_ELIGIBILITY_DIMENSIONS.map(dimension => {
+    const observed = dimensions[dimension];
+    return Object.freeze({
+      fact: `dispatch.${dimension}`,
+      factOwner: explainReasonFactOwner(observed?.code ?? null, 'dispatch_eligibility'),
+      observedState: observed?.state ?? 'unavailable',
+      policyCode: observed?.code ?? null,
+    });
+  });
+  const reasons = DISPATCH_ELIGIBILITY_DIMENSIONS.flatMap(dimension => {
+    const observed = dimensions[dimension];
+    if (observed?.state === 'satisfied') return [];
+    const unavailable = observed?.state === 'not_applicable' || observed?.state === 'not_reached' || !observed;
+    return [Object.freeze({
+      fact: `dispatch.${dimension}`,
+      factOwner: explainReasonFactOwner(observed?.code ?? null, 'dispatch_eligibility'),
+      observedState: observed?.state ?? 'unavailable',
+      state: unavailable ? 'unknown' : 'failed',
+      policyCode: observed?.code ?? null,
+      ...(observed?.note ? { detail: observed.note } : {}),
+    })];
+  });
+  const verdict = reasons.some(reason => reason.state === 'failed')
+    ? 'illegal'
+    : reasons.length > 0 ? 'unknown' : 'legal';
+  return Object.freeze({
+    id: 'prepare_dispatch',
+    verdict,
+    applicability: 'applicable',
+    facts: Object.freeze(facts),
+    reasons: Object.freeze(reasons),
+    prerequisites: Object.freeze(reasons.map(reason => Object.freeze({
+      fact: reason.fact,
+      condition: `canonical dispatch dimension '${reason.fact.slice('dispatch.'.length)}' must be satisfied`,
+    }))),
+  });
+}
+
 /* ── Closed candidate adapters ───────────────────────────────────────────── */
 
 /**
@@ -2479,7 +2604,7 @@ export function evaluateDispatchEligibility(candidate) {
 export function liveDispatchCandidate({
   snapshot, activationEvidence, readiness, repository, decomposition,
   parallelScanInventory, assignment, policy, returnAdapter,
-  cleanStateObservation, inventoryRecheck, authority, now,
+  cleanStateObservation, inventoryRecheck, authority, parallelRequested = false, routeAgreementRequested = false, now,
 }) {
   return {
     factShape: 'live_dispatch',
@@ -2488,6 +2613,8 @@ export function liveDispatchCandidate({
     readiness,
     repository,
     decomposition,
+    parallelRequested,
+    routeAgreementRequested,
     parallelScanInventory: parallelScanInventory ?? null,
     assignment,
     policy,
@@ -2520,7 +2647,7 @@ export function revalidationDispatchCandidate(input) {
 export function liveReadinessCandidate({
   snapshot, authorization, readinessObservation, dependencyObservation, repository,
   decomposition, parallelScanInventory, hostRoleCapability, policy, returnCapability,
-  cleanStateObservation, inventoryRecheck, authority, now,
+  cleanStateObservation, inventoryRecheck, authority, parallelRequested = false, routeAgreementRequested = false, now,
 }) {
   return {
     factShape: 'live_readiness',
@@ -2530,6 +2657,8 @@ export function liveReadinessCandidate({
     dependencyObservation: dependencyObservation ?? null,
     repository: repository ?? null,
     decomposition: decomposition ?? null,
+    parallelRequested,
+    routeAgreementRequested,
     parallelScanInventory: parallelScanInventory ?? null,
     hostRoleCapability: hostRoleCapability ?? null,
     policy: policy ?? null,

@@ -36,9 +36,18 @@ let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'al-converge-')); });
 after(() => { rmSync(temp, { recursive: true, force: true }); });
 
+function parallelFixture(name, options = {}) {
+  return createDispatchFixture(temp, name, {
+    parallel: true,
+    taskIds: ['T-001', 'T-002'],
+    decompositionTaskIds: ['T-001'],
+    ...options,
+  });
+}
+
 function preflight(root, taskId = 'T-001') {
   return evaluateHandoffPreflight({
-    target: root, taskId, backend: 'files', projectConfig: {}, io: {},
+    target: root, taskId, backend: 'files', projectConfig: {}, io: {}, route: 'parallel',
   });
 }
 
@@ -48,6 +57,7 @@ function bothBoundaries(fixture, taskId = 'T-001') {
   const body = readFileSync(fixture.taskPath, 'utf8');
   const snapshot = fixture.snapshot();
   const pr = prepare(fixture, {
+    route: 'parallel',
     refetchTask: () => ({ ...snapshot, body, digest: sha256(body) }),
   });
   return {
@@ -155,7 +165,7 @@ function setStatus(fx, status) {
 describe('a green preflight is never refused by a later boundary', () => {
   for (const [name, mutate] of Object.entries(MUTATIONS)) {
     it(`converges over unchanged facts: ${name}`, async () => {
-      const fixture = await createDispatchFixture(temp, `conv-${name.replace(/[^a-z0-9]+/gi, '-')}`);
+      const fixture = await parallelFixture( `conv-${name.replace(/[^a-z0-9]+/gi, '-')}`);
       mutate(fixture);
       const outcome = bothBoundaries(fixture);
 
@@ -176,7 +186,7 @@ describe('a green preflight is never refused by a later boundary', () => {
   it('keeps the pristine fixture dispatchable at both boundaries', async () => {
     // A convergence property is trivially satisfiable by refusing everything.
     // This is the case that stops the suite from being vacuous.
-    const fixture = await createDispatchFixture(temp, 'conv-pristine-positive');
+    const fixture = await parallelFixture( 'conv-pristine-positive');
     const outcome = bothBoundaries(fixture);
     assert.equal(outcome.preflight.ok, true, JSON.stringify(outcome.preflight.errors));
     assert.equal(outcome.prepare.ok, true, outcome.prepareErrors.join('\n'));
@@ -186,7 +196,7 @@ describe('a green preflight is never refused by a later boundary', () => {
     // Derived from the status domain rather than listed, so a new dispatchable
     // status cannot silently escape the property.
     for (const status of DISPATCHABLE_TASK_STATUSES) {
-      const fixture = await createDispatchFixture(temp, `conv-status-${status}`, { initialStatus: status });
+      const fixture = await parallelFixture( `conv-status-${status}`, { initialStatus: status });
       const outcome = bothBoundaries(fixture);
       assert.equal(outcome.preflight.ok, true, `${status}: ${JSON.stringify(outcome.preflight.errors)}`);
       assert.equal(outcome.prepare.ok, true, `${status}: ${outcome.prepareErrors.join('\n')}`);
@@ -199,7 +209,7 @@ describe('preflight enforces the dimensions it reports on', () => {
     // Preflight and dispatch have always shared
     // `evaluateDispatchCleanState`; preflight downgraded the result to a warning
     // and told the caller dispatch "may" refuse later.
-    const fixture = await createDispatchFixture(temp, 'clean-gate-enforced');
+    const fixture = await parallelFixture( 'clean-gate-enforced');
     writeFileSync(join(fixture.root, 'src', 'stray.js'), '// stray\n', 'utf8');
     const outcome = bothBoundaries(fixture);
     assert.equal(outcome.preflight.ok, false, 'a dirty relevant checkout blocks preflight');
@@ -214,7 +224,7 @@ describe('preflight enforces the dimensions it reports on', () => {
   it('permits scratch output that the clean gate already excludes', async () => {
     // The other half of the same rule: transient output written under the
     // permitted scratch prefix must not self-block the next gate.
-    const fixture = await createDispatchFixture(temp, 'clean-gate-scratch');
+    const fixture = await parallelFixture( 'clean-gate-scratch');
     mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
     writeFileSync(join(fixture.root, '.agenticloop', 'tmp', 'scratch.json'), '{}\n', 'utf8');
     const outcome = bothBoundaries(fixture);
@@ -225,7 +235,7 @@ describe('preflight enforces the dimensions it reports on', () => {
   it('reports a broken append-only contract history instead of discarding it', async () => {
     // The errors were loaded into the snapshot and dropped as
     // "optional for the preflight report", while dispatch refuses on them.
-    const fixture = await createDispatchFixture(temp, 'contract-history-enforced');
+    const fixture = await parallelFixture( 'contract-history-enforced');
     rmSync(join(fixture.root, '.agenticloop', 'task-contract-history'), { recursive: true, force: true });
     commitAll(fixture.root, 'delete contract history');
     const outcome = bothBoundaries(fixture);
@@ -242,7 +252,7 @@ describe('preflight enforces the dimensions it reports on', () => {
   it('re-enumerates work-unit membership instead of trusting the bound scan', async () => {
     // `validateDecomposition` checks the record's own shape; only
     // dispatch re-enumerated the backend, so membership drift passed preflight.
-    const fixture = await createDispatchFixture(temp, 'membership-enforced');
+    const fixture = await parallelFixture( 'membership-enforced');
     const body = readFileSync(fixture.taskPath, 'utf8').replaceAll('T-001', 'T-778');
     writeFileSync(join(fixture.root, '.agenticloop', 'tasks', 'T-778.md'), body, 'utf8');
     commitAll(fixture.root, 'add a task to the inventory');
@@ -258,7 +268,7 @@ describe('guards for interpretations the field evidence rejected', () => {
   it('does not treat an unrelated commit as invalidating readiness', async () => {
     // The disproved claim from the field session: that every HEAD change
     // invalidates decomposition. Only bound semantic inputs may.
-    const fixture = await createDispatchFixture(temp, 'guard-unrelated-commit');
+    const fixture = await parallelFixture( 'guard-unrelated-commit');
     writeFileSync(join(fixture.root, 'UNRELATED.md'), '# unrelated\n', 'utf8');
     commitAll(fixture.root, 'unrelated commit');
     const outcome = bothBoundaries(fixture);
@@ -267,7 +277,7 @@ describe('guards for interpretations the field evidence rejected', () => {
   });
 
   it('does not treat a detached HEAD as a dispatch blocker on its own', async () => {
-    const fixture = await createDispatchFixture(temp, 'guard-detached');
+    const fixture = await parallelFixture( 'guard-detached');
     git(fixture.root, ['checkout', '--detach', 'HEAD']);
     const outcome = bothBoundaries(fixture);
     assert.equal(outcome.preflight.ok, true, JSON.stringify(outcome.preflight.errors));
@@ -277,7 +287,7 @@ describe('guards for interpretations the field evidence rejected', () => {
   it('treats a material task-body change as invalidating, not incidental', async () => {
     // The other side of the same boundary: incidental motion is tolerated,
     // material contract drift is not.
-    const fixture = await createDispatchFixture(temp, 'guard-material-drift');
+    const fixture = await parallelFixture( 'guard-material-drift');
     writeFileSync(
       fixture.taskPath,
       readFileSync(fixture.taskPath, 'utf8').replace(/^ {2}- src\/\*\*$/m, '  - src/**\n  - lib/**'),

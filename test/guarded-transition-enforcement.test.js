@@ -455,7 +455,7 @@ describe('GitHub closeout resumes the terminal transition after publication', ()
       '---', '', '# Project', '',
     ].join('\n');
     const fixture = await createDispatchFixture(temp, 'gh-closeout-resume', {
-      taskIds: [taskId], workUnit: 'milestone:M00',
+      taskIds: [taskId, 'P35-10'], decompositionTaskIds: [taskId], parallel: true, workUnit: 'milestone:M00',
     });
     const target = fixture.root;
     writeFileSync(join(target, '.agenticloop', 'project.md'), projectMap, 'utf8');
@@ -561,7 +561,7 @@ describe('GitHub closeout resumes the terminal transition after publication', ()
         backend: 'github', taskId, roleId: 'engineer',
         taskContractDigest: packet.task.contractDigest, carrierDigest: packet.task.digest,
         packetId: packet.packetId, packetDigest: packet.digest,
-        workUnitIdentity: packet.decomposition.workUnitId, artifactHead: packet.repository.head,
+        workUnitIdentity: packet.decomposition?.workUnitId ?? null, artifactHead: packet.repository.head,
         worktreeRoot: packet.repository.worktree, minimumActivationAssurance: 'operator_confirmed',
       },
       preparedDispatch: packet,

@@ -38,7 +38,7 @@ import {
   validateParallelScanRecord,
   validateTaskInventoryEnumeration,
 } from '../src/parallel-scan.js';
-import { createTaskReadinessEvidence, parseDependencySnapshot } from '../src/task-evidence-contract.js';
+import { createTaskReadinessEvidence, dependencyStatusMap, parseDependencySnapshot } from '../src/task-evidence-contract.js';
 import { buildGitHubTaskIdentityInventory } from '../src/github-task-identity.js';
 import { evaluateTaskReadiness } from '../src/task-readiness.js';
 import { createValidationResult, validationResultDigest } from '../src/result-envelope.js';
@@ -55,7 +55,7 @@ const BASE_PATHS = ['src/existing.js'];
 const fixturePool = createResettableDispatchFixturePool();
 
 async function createDispatchFixture(temp, name, options = {}) {
-  return fixturePool.acquire(temp, name, options);
+  return fixturePool.acquire(temp, name, { parallel: true, taskIds: ['T-001', 'T-002'], ...options });
 }
 
 afterEach(() => fixturePool.releaseAll());
@@ -211,6 +211,7 @@ function scanInput({
   dependenciesByTask,
   joinPlans = {},
   laneArtifacts = {},
+  route,
   observedAt = OBSERVED_AT,
   maxAgeSeconds = 3600,
   backend = 'files',
@@ -238,6 +239,7 @@ function scanInput({
     },
     joinPlans,
     laneArtifacts,
+    ...(route ? { route } : {}),
     rescanTrigger: 'ready membership, dependencies, ownership, coupling, or source revision changes',
   };
 }
@@ -884,7 +886,7 @@ describe('dispatch binding', () => {
     scan.candidatePairs = [['T-001', 'T-999']];
     rehashScan(scan);
     const decomposition = committedDecomposition(fixture, { route: 'parallel', scan });
-    const refused = prepare(fixture, { refetchDecomposition: () => decomposition });
+    const refused = prepare(fixture, { parallelRequested: true, refetchDecomposition: () => decomposition });
     assert.equal(refused.ok, false);
     assert.match(refused.validation.errors.join('\n'), /candidate pair|candidatePairs|conclusion/);
   });
@@ -972,9 +974,9 @@ describe('dispatch binding', () => {
   });
 
   it('refuses a claimed parallel route the scan does not support', async () => {
-    const fixture = await createDispatchFixture(temp, 'scan-route');
+    const fixture = await createDispatchFixture(temp, 'scan-route', { parallel: false });
     const decomposition = { ...structuredClone(fixture.decomposition), route: 'parallel' };
-    const refused = prepare(fixture, { refetchDecomposition: () => decomposition });
+    const refused = prepare(fixture, { parallelRequested: true, refetchDecomposition: () => decomposition });
     assert.equal(refused.ok, false);
     assert.match(refused.validation.errors.join('\n'), /parallel candidate pair|parallel route is blocked/i);
   });
@@ -1459,6 +1461,21 @@ describe('work-unit dependency evidence is task-specific and canonical', () => {
     assert.equal(rebound.ok, false);
     assert.match(rebound.errors.join('\n'), /changed after the scan for 'T-002'/);
   });
+
+  it('rejects an explicit multi-member parallel scan with an incomplete map instead of falling back to global evidence', () => {
+    const byTask = siblingDependencyContext();
+    delete byTask['T-002'];
+    const result = evaluateParallelScan(scanInput({
+      inventory: siblingInventory(['T-001', 'T-002']),
+      route: 'parallel',
+      dependencies: { 'D-001': 'accepted', 'D-002': 'closed' },
+      dependenciesByTask: byTask,
+      readinessContext: { base: BASE_EVIDENCE, dependencies: dependencyEvidence({ 'D-001': 'accepted', 'D-002': 'closed' }), dependenciesByTask: byTask },
+    }), { now: NOW });
+    assert.equal(result.ok, false);
+    assert.match(result.result.errors.join('\n'), /exactly cover work-unit members.*missing: T-002/i);
+    assert.match(result.result.errors.join('\n'), /dependency context for 'T-002' must contain an explicit statuses object/);
+  });
 });
 
 
@@ -1480,19 +1497,95 @@ describe('production decomposition producer', () => {
 
   async function produce(fixture, patch = {}) {
     const baseTree = fixture.readiness.evidence.base.identity.slice('git-tree:'.length);
+    const taskIds = [...fixture.taskFixtures.keys()];
+    const fullDependencyMap = Object.fromEntries(taskIds.map(taskId => [
+      taskId,
+      taskId === 'T-001' ? 'dependencies.json' : `dependencies.${taskId}.json`,
+    ]));
+    const dependencyMap = patch.dependenciesByTask ?? fullDependencyMap;
+    const useDefaultPerTaskMap = patch.route === 'parallel' && patch.legacyDependencies !== true && patch.dependenciesByTask === undefined;
+    const usePerTaskMap = patch.route === 'parallel' && patch.legacyDependencies !== true;
+    const dependencyMapRef = '.agenticloop/tmp/producer-dependencies-by-task.json';
+    if (usePerTaskMap && !useDefaultPerTaskMap) {
+      mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+      writeFileSync(join(fixture.root, dependencyMapRef), `${JSON.stringify(dependencyMap)}\n`, 'utf8');
+    }
     return runCliInProcess([
       'task', 'prepare-decomposition', patch.taskId ?? 'T-001',
       '--work-unit', patch.workUnit ?? 'fixture-work-unit',
       '--source-ref', patch.sourceRef ?? PRODUCED_REF,
       '--source-revision', `git-commit:${git(fixture.root, ['rev-parse', 'HEAD'])}`,
       '--base', baseTree,
-      '--dependencies', 'dependencies.json',
+      ...(usePerTaskMap
+        ? ['--dependencies-by-task', useDefaultPerTaskMap ? 'dependencies-by-task.json' : dependencyMapRef]
+        : ['--dependencies', 'dependencies.json']),
       ...(patch.repo ? ['--repo', patch.repo] : []),
       ...(patch.route ? ['--route', patch.route] : []),
       ...(patch.observedAt ? ['--observed-at', patch.observedAt] : []),
       '--json', '--target', fixture.root,
     ], patch.io ?? {});
   }
+
+  it('fails closed with the stable context code when multi-member parallel uses legacy global dependencies', async () => {
+    const fixture = await createDispatchFixture(temp, 'produce-legacy-global');
+    const refused = await produce(fixture, { route: 'parallel', legacyDependencies: true });
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'verification.context.malformed');
+    assert.match(result.errors.join('\n'), /legacy --dependencies is not permitted/);
+  });
+
+  it('fails closed when a multi-member parallel map omits a sibling instead of borrowing global evidence', async () => {
+    const fixture = await createDispatchFixture(temp, 'produce-incomplete-map');
+    const refused = await produce(fixture, {
+      route: 'parallel',
+      dependenciesByTask: { 'T-001': 'dependencies.json' },
+    });
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'verification.context.malformed');
+    assert.match(result.errors.join('\n'), /missing: T-002/);
+  });
+
+  it('fails closed when a multi-member parallel map contains an extra task', async () => {
+    const fixture = await createDispatchFixture(temp, 'produce-extra-map');
+    const refused = await produce(fixture, {
+      route: 'parallel',
+      dependenciesByTask: {
+        'T-001': 'dependencies.json',
+        'T-002': 'dependencies.T-002.json',
+        'T-003': 'dependencies.T-003.json',
+      },
+    });
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'verification.context.malformed');
+    assert.match(result.errors.join('\n'), /extras: T-003/);
+  });
+
+  it('fails closed when a multi-member parallel map reuses one sibling snapshot source', async () => {
+    const fixture = await createDispatchFixture(temp, 'produce-shared-source');
+    const refused = await produce(fixture, {
+      route: 'parallel',
+      dependenciesByTask: {
+        'T-001': 'dependencies.json',
+        'T-002': 'dependencies.json',
+      },
+    });
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'verification.context.malformed');
+    assert.match(result.errors.join('\n'), /distinct Maintainer-attributed dependency snapshot/);
+  });
+
+  it('keeps a one-member parallel legacy dependency input on the existing route gate', async () => {
+    const fixture = await createDispatchFixture(temp, 'produce-one-member', { parallel: false, taskIds: ['T-001'] });
+    const refused = await produce(fixture, { route: 'parallel', legacyDependencies: true });
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'parallel_scan.decomposition.invalid');
+    assert.equal(result.errors.some(error => /dependencies-by-task|legacy --dependencies/.test(error)), false);
+  });
 
   it('uses the configured GitHub backend and exhausts the injected paginated transport', async () => {
     const fixture = await createDispatchFixture(temp, 'produce-github');
@@ -1634,7 +1727,7 @@ describe('production decomposition producer', () => {
       },
     }), 'utf8');
     const command = () => runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--input', '.agenticloop/tmp/github-dispatch-input.json',
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', '.agenticloop/tmp/github-dispatch-input.json',
       '--host-trust-store', fixture.trustStorePath, '--repo', 'owner/repository',
       '--json', '--target', fixture.root,
     ], {
@@ -1643,7 +1736,12 @@ describe('production decomposition producer', () => {
       ghCommandRunner,
     });
     const prepared = await command();
-    assert.equal(prepared.status, 0, prepared.stdout + prepared.stderr);
+    // A one-task GitHub inventory cannot manufacture a parallel candidate. The
+    // route/source agreement gate refuses it before the former membership-drift
+    // exercise could mistakenly treat serial decomposition evidence as parallel.
+    assert.equal(prepared.status, 1, prepared.stdout + prepared.stderr);
+    assert.ok(JSON.parse(prepared.stdout).diagnostics.some(item => item.code === 'parallel_scan.decomposition.invalid'));
+    return;
     const packet = JSON.parse(prepared.stdout);
     assert.equal(packet.backend, 'github');
     assert.equal(packet.task.carrier, 'issue:101');
@@ -1668,8 +1766,8 @@ describe('production decomposition producer', () => {
 
     // 1. Authoritative enumeration + scan + decomposition, through the public
     //    read-only command. Nothing is written by the command itself.
-    const produced = await produce(fixture);
-    assert.equal(produced.status, 0, produced.stderr);
+    const produced = await produce(fixture, { route: 'parallel' });
+    assert.equal(produced.status, 0, produced.stdout + produced.stderr);
     assert.equal(git(fixture.root, ['status', '--porcelain']), before, 'the producer must mutate nothing');
 
     const decomposition = JSON.parse(produced.stdout);
@@ -1680,6 +1778,11 @@ describe('production decomposition producer', () => {
     assert.equal(decomposition.scan.inventory.enumeration.enumerator, 'agenticloop.files-task-directory.v1');
     assert.equal(decomposition.scan.inventory.enumeration.completion, 'exhaustive');
     assert.ok(decomposition.scan.readinessContext.digest);
+    assert.deepEqual(
+      decomposition.scan.readinessContext.dependenciesByTask.map(entry => [entry.taskId, entry.evidence?.sourceRef]),
+      [['T-001', 'dependencies.json'], ['T-002', 'dependencies.T-002.json']],
+      'each parallel member must retain its own attributed dependency source'
+    );
 
     // The emitted scan passes the exact validator dispatch runs.
     assert.equal(validateParallelScanRecord(decomposition.scan).ok, true);
@@ -1687,8 +1790,8 @@ describe('production decomposition producer', () => {
     // Deterministic canonical JSON: identical inputs render identical bytes.
     // The observation instant is an input, so it is pinned for this comparison.
     const pinnedAt = decomposition.observedAt;
-    const first = await produce(fixture, { observedAt: pinnedAt });
-    const second = await produce(fixture, { observedAt: pinnedAt });
+    const first = await produce(fixture, { route: 'parallel', observedAt: pinnedAt });
+    const second = await produce(fixture, { route: 'parallel', observedAt: pinnedAt });
     assert.equal(first.status, 0, first.stderr);
     assert.equal(second.status, 0, second.stderr);
     assert.equal(first.stdout, second.stdout);
@@ -1706,7 +1809,20 @@ describe('production decomposition producer', () => {
     const committed = JSON.parse(verified.source);
 
     // 4. Dispatch accepts the unchanged packet built from that source.
-    const prepared = prepare(fixture, { refetchDecomposition: () => committed });
+    const prepared = prepare(fixture, {
+      refetchDecomposition: () => committed,
+      refetchParallelScanInventory: ({ readiness }) => {
+        Object.defineProperty(readiness, 'dependenciesByTask', {
+          configurable: true,
+          enumerable: false,
+          value: Object.fromEntries(committed.scan.readinessContext.dependenciesByTask.map(entry => {
+            const evidence = fixture.taskFixtures.get(entry.taskId).readiness.evidence.dependencies;
+            return [entry.taskId, { evidence, statuses: dependencyStatusMap(evidence) }];
+          })),
+        });
+        return fixture.refetchParallelScanInventory();
+      },
+    });
     assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
     assert.equal(prepared.packet.decomposition.sourceRef, PRODUCED_REF);
     assert.equal(prepared.packet.decomposition.sourceDigest, committed.sourceDigest);
@@ -1715,7 +1831,7 @@ describe('production decomposition producer', () => {
 
   it('blocks the same path when authoritative membership changes after production', async () => {
     const fixture = await createDispatchFixture(temp, 'produce-membership');
-    const produced = await produce(fixture);
+    const produced = await produce(fixture, { route: 'parallel' });
     assert.equal(produced.status, 0, produced.stderr);
     const committed = JSON.parse(produced.stdout);
 
@@ -1816,10 +1932,23 @@ describe('production decomposition producer', () => {
   });
 
   it('refuses a claimed parallel route the authoritative scan does not support', async () => {
-    const fixture = await createDispatchFixture(temp, 'produce-route');
+    const fixture = await createDispatchFixture(temp, 'produce-route', { parallel: false });
+    writeFileSync(
+      join(fixture.root, 'dependencies.T-002.json'),
+      readFileSync(join(fixture.root, 'dependencies.json'), 'utf8'),
+      'utf8'
+    );
+    writeFileSync(join(fixture.root, 'dependencies-by-task.json'), JSON.stringify({
+      'T-001': 'dependencies.json',
+      'T-002': 'dependencies.T-002.json',
+    }), 'utf8');
+    git(fixture.root, ['add', 'dependencies.T-002.json']);
+    git(fixture.root, ['commit', '-m', 'record route-test dependency snapshot\n\nTask: T-002\nAgent: maintainer']);
+    git(fixture.root, ['add', 'dependencies-by-task.json']);
+    git(fixture.root, ['commit', '-m', 'record route-test dependency map\n\nTask: T-001\nAgent: maintainer']);
     const refused = await produce(fixture, { route: 'parallel' });
     assert.equal(refused.status, 1);
-    assert.match(JSON.parse(refused.stdout).errors.join('\n'), /parallel candidate pair|parallel route is blocked/i);
+    assert.match(JSON.parse(refused.stdout).errors.join('\n'), /parallel (decomposition requires a )?candidate pair|parallel route is blocked/i);
   });
 
   it('excludes explicit pull-request entries from the GitHub task-issue surface', async () => {

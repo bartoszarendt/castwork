@@ -17,8 +17,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { CANCELLATION_PROVENANCE_KIND } from './cancellation-provenance.js';
 import { deriveCommitRange } from './commit-range.js';
+import { validateCommitAdoptionRecord } from './commit-adoption.js';
+import { deriveFinishCandidateForRoleReturn, finishCandidateIsCurrent } from './finish-candidate.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { deepFreeze, frozenClone } from './immutable.js';
+import { hasCurrentLayout } from './layout.js';
 import { createDiagnostic } from './repair-policy.js';
 import { receiveExceptionalVerification } from './exceptional-verification.js';
 import {
@@ -102,6 +105,7 @@ import {
   validateTaskActivationBindingShape,
 } from './activation-grant.js';
 import { ACTIVATION_MODES, MODE_MINIMUMS } from './activation-policy.js';
+import { readPrepareReturnFacts } from './task-fact-readers.js';
 
 // The canonical dispatch-eligibility evaluator and every shared dimension
 // validator it orchestrates. This module resolves facts, mints packets, and
@@ -224,13 +228,6 @@ const RETURN_INVALIDATORS = Object.freeze([
   'check_or_transport_evidence_changes',
   'initial_repository_state_changes',
 ]);
-
-function stableReadinessProjection(readiness) {
-  if (!isObject(readiness) || !isObject(readiness.evidence) || !isObject(readiness.evidence.dependencies)) return readiness;
-  const copy = structuredClone(readiness);
-  delete copy.evidence.dependencies.evaluatedAt;
-  return copy;
-}
 
 function validation(command, ok, evidenceState, disposition, findings, domain = {}) {
   const primary = ok ? null : findings?.primary ?? null;
@@ -443,6 +440,7 @@ export function createDecompositionProvenance(input = {}, options = {}) {
  *   joinPlans?: Record<string, any>,
  *   laneArtifacts?: Record<string, any>,
  *   declaredCompleteness?: 'complete'|'incomplete',
+ *   route?: 'serial'|'parallel',
  * }} input
  * @param {{ now?: number }} [options]
  * @returns {{ ok: boolean, validation: any, scan: any|null, decomposition: any|null, source: string|null }}
@@ -484,6 +482,7 @@ export function prepareDecompositionSource(input = {}, options = {}) {
       basePaths: input.basePaths,
       dependencies: input.dependencies ?? {},
       dependenciesByTask: input.dependenciesByTask,
+      route: input.route,
       readinessContext: input.readinessContext,
       rescanTrigger: input.rescanTrigger,
       joinPlans: input.joinPlans ?? {},
@@ -491,6 +490,14 @@ export function prepareDecompositionSource(input = {}, options = {}) {
     }, { now });
     if (!scanned.ok) {
       return { ok: false, validation: scanned.result, scan: scanned.scan, decomposition: null, source: null };
+    }
+    if (input.route === 'parallel' && !scanned.scan.candidatePairs.some(pair => pair.includes(input.taskId))) {
+      const findings = findingSet(command);
+      findings.negative(
+        `parallel decomposition requires a candidate pair containing '${input.taskId}'`,
+        { code: 'parallel_scan.decomposition.invalid' },
+      );
+      return { ...failure(command, findings), scan: scanned.scan, decomposition: null, source: null };
     }
     // The emitted scan is held to the exact validator dispatch runs on it, in
     // this process, before anything is rendered for commit.
@@ -708,7 +715,7 @@ function packetFromBindings({ snapshot, activation, returnAdapter, readiness, de
       derivation: activation.derivation,
     }),
     readiness: structuredClone(readiness),
-    decomposition: decompositionBinding(decomposition),
+    decomposition: decomposition === null ? null : decompositionBinding(decomposition),
     assignment: structuredClone(assignment),
     repository: structuredClone(repository),
     freshness: { invalidatedBy: [...RETURN_INVALIDATORS] },
@@ -794,7 +801,13 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       priorGateReceipts = [],
       readCarrierDigest = null,
       assignment,
+      parallelRequested: requestedParallel,
+      routeAgreementRequested: requestedRouteAgreement,
     } = input;
+    // An omitted selector is serial. Providers for a decomposition must not
+    // silently select or read parallel-only authority.
+    const parallelRequested = requestedParallel === true;
+    const routeAgreementRequested = false;
     const resolved = resolveInventory(options);
     if (!resolved.ok) return singleFailure(command, 'malformed', 'rejected', 'activation capability inventory must be an object');
     const policyCheck = normalizeAssurancePolicy(options.assurancePolicy);
@@ -804,8 +817,10 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       ['refetchTask', 'a current task refetch function is required'],
       ['refetchReadiness', 'an authoritative readiness refetch function is required'],
       ['refetchRepository', 'a current repository refetch function is required'],
-      ['refetchDecomposition', 'an authoritative decomposition refetch function is required'],
-      ['refetchParallelScanInventory', 'an authoritative parallel-scan inventory refetch function is required'],
+      ...(parallelRequested ? [
+        ['refetchDecomposition', 'an authoritative decomposition refetch function is required'],
+        ['refetchParallelScanInventory', 'an authoritative parallel-scan inventory refetch function is required'],
+      ] : []),
     ]) {
       if (typeof input[name] !== 'function') return singleFailure(command, 'missing', 'needs_context', label);
     }
@@ -829,8 +844,10 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       }
       readiness = refetchReadiness({ snapshot });
       repository = refetchRepository({ snapshot, readiness });
-      decomposition = refetchDecomposition({ snapshot, readiness, repository });
-      if (decomposition?.schemaVersion === DECOMPOSITION_SCHEMA_VERSION) {
+      decomposition = parallelRequested
+        ? refetchDecomposition({ snapshot, readiness, repository })
+        : null;
+      if (parallelRequested && decomposition?.schemaVersion === DECOMPOSITION_SCHEMA_VERSION) {
         parallelScanInventory = refetchParallelScanInventory({ snapshot, readiness, repository, decomposition });
       }
     } catch (error) {
@@ -876,25 +893,35 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       intendedCreations: scopeContract.ok ? scopeContract.projection.intended_creations ?? [] : [],
       priorGateReceipts,
       readCarrierDigest,
+      legacyLayout: !hasCurrentLayout(repository.worktree),
+      target: repository.worktree,
     });
     const inventoryRecheck = scopeContract.ok && decomposition?.scan?.workUnit?.backend
       ? {
           taskId: snapshot.taskId,
           backend: decomposition.scan.workUnit.backend,
           currentContractDigest: scopeContract.digest,
-          runGit,
-          baseEvidence: readiness?.evidence?.base ?? null,
-          dependencyEvidence: readiness?.evidence?.dependencies ?? null,
-        }
+           runGit,
+           baseEvidence: readiness?.evidence?.base ?? null,
+           dependencyEvidence: readiness?.evidence?.dependencies ?? null,
+           dependenciesByTask: readiness?.dependenciesByTask ?? null,
+         }
       : null;
 
     // ── The one canonical semantic decision ───────────────────────────────
-    const eligibility = evaluateDispatchEligibility(liveDispatchCandidate({
+    // Resolve one instant for the entire protected evaluation.  Passing `null`
+    // through here used each nested validator's own Date.now() default, so the
+    // decision could straddle a clock boundary and C5 could not bind the instant
+    // it actually evaluated.
+    const evaluationNow = options.now ?? Date.now();
+    const evaluationInput = liveDispatchCandidate({
       snapshot,
       activationEvidence,
       readiness,
       repository: { ...repository, worktree: pathIdentity(repository?.worktree).authorityPath },
       decomposition,
+      parallelRequested,
+      routeAgreementRequested,
       parallelScanInventory: parallelScanInventory ?? null,
       assignment: boundAssignment,
       policy,
@@ -906,8 +933,14 @@ export function prepareRoleDispatch(input = {}, options = {}) {
         verifyActivationSignature: options.verifyActivationSignature,
         hostRoleCapabilities: options.hostRoleCapabilities,
       },
-      now: options.now,
-    }));
+      now: evaluationNow,
+    });
+    // Characterization-only observer. The task CLI uses this to bind the exact
+    // object supplied to the authoritative evaluator before that evaluator runs.
+    // It has no verdict, persistence, or packet-generation authority.
+    options.onBeforeEligibilityEvaluation?.(evaluationInput);
+    const eligibility = evaluateDispatchEligibility(evaluationInput);
+    options.onAfterEligibilityEvaluation?.(evaluationInput, eligibility);
     if (!eligibility.ok) {
       const findings = findingSet(command);
       findings.extend(eligibility.findings);
@@ -925,7 +958,7 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       snapshot,
       activation: eligibility.bindings.activation,
       readiness,
-      decomposition,
+      decomposition: parallelRequested ? decomposition : null,
       assignment: boundAssignment,
       repository: bound,
       contract: eligibility.bindings.contract,
@@ -1113,6 +1146,10 @@ function staleNestedDegradedReportResult() {
 function validateCurrentDispatchPreparation(packet, options = {}) {
   const findings = findingSet('task prepare-dispatch');
   try {
+    // C5 observes this caller-supplied value as part of the evaluator input and
+    // digest. Packet validation deliberately retains its baseline behavior: it
+    // does not normalize or decide the caller's assurance policy here.
+    void options.assurancePolicy;
     const shapeOk = exactKeys(packet, DISPATCH_FIELDS, 'dispatch preparation', findings);
     if (packet?.kind !== DISPATCH_PREPARATION_KIND) findings.malformed(`dispatch preparation kind must be '${DISPATCH_PREPARATION_KIND}'`);
     if (packet?.schemaVersion !== DISPATCH_PREPARATION_SCHEMA_VERSION) findings.malformed(`dispatch preparation schemaVersion must be ${DISPATCH_PREPARATION_SCHEMA_VERSION}`);
@@ -1125,6 +1162,9 @@ function validateCurrentDispatchPreparation(packet, options = {}) {
     ], 'dispatch preparation task', findings);
     for (const key of ['id', 'carrier', 'scope']) {
       if (typeof packet?.task?.[key] !== 'string' || !packet.task[key]) findings.malformed(`dispatch preparation task ${key} is required`);
+    }
+    if (options.expectedTaskId !== undefined && packet?.task?.id !== options.expectedTaskId) {
+      findings.malformed('dispatch preparation task id does not match the protected requested task');
     }
     for (const key of ['outOfScope', 'acceptanceCriteria', 'independentReviewRequired']) {
       if (typeof packet?.task?.[key] !== 'string') findings.malformed(`dispatch preparation task ${key} must be a string`);
@@ -1205,6 +1245,80 @@ export function validateDispatchPreparation(packet, options = {}) {
 }
 
 /**
+ * The return-preparation owner cannot validate a packet that a read-only
+ * invocation was never given.  Expose that missing protected input as a
+ * canonical unknown rather than making a presentation layer parse a schema
+ * refusal or call the absence legal.
+ */
+export function evaluateReadOnlyPrepareReturnProjection(input = null) {
+  const context = input && typeof input === 'object' && !Array.isArray(input) &&
+    (Object.hasOwn(input, 'target') || Object.hasOwn(input, 'packet'))
+    ? input
+    : { packet: input };
+  const packet = context.packet ?? null;
+  const facts = context.target && context.taskId
+    ? readPrepareReturnFacts(context.target, context)
+    : null;
+  // `task explain` has no authenticated host-bound validator, selected
+  // check-evidence aggregate, or caller-authorized output/candidate context.
+  // A packet object alone is therefore not the protected prepare-return input:
+  // validating it with this module's permissive defaults previously made a
+  // read-only caller report `legal` while the real command would still refuse
+  // on trust, attempt, check, or candidate currency. Keep it unknown until a
+  // future caller can provide the complete canonical protected context.
+  {
+    const observedFacts = facts ? Object.freeze([
+      Object.freeze({ fact: 'return.carrier', factOwner: 'task_fact_readers', observedState: facts.carrier.state }),
+      Object.freeze({ fact: 'return.dispatch_attempt', factOwner: 'task_fact_readers', observedState: facts.attempt.state }),
+      Object.freeze({ fact: 'return.candidate', factOwner: 'task_fact_readers', observedState: facts.candidate.state }),
+      Object.freeze({ fact: 'dispatch_packet.current', factOwner: 'task_fact_readers', observedState: facts.packet.state }),
+      Object.freeze({ fact: 'required_check_evidence.current', factOwner: 'task_fact_readers', observedState: facts.checks.state }),
+    ]) : Object.freeze([]);
+    const resolvedFailures = facts
+      ? [
+          facts.carrier.state === 'current' ? null : Object.freeze({
+            fact: 'return.carrier', factOwner: 'task_fact_readers', observedState: facts.carrier.state,
+            state: 'failed', policyCode: null, detail: facts.carrier.detail ?? 'current return carrier is invalid',
+          }),
+          facts.attempt.state === 'current' ? null : Object.freeze({
+            fact: 'return.dispatch_attempt', factOwner: 'task_fact_readers', observedState: facts.attempt.state,
+            state: facts.attempt.state === 'unavailable' ? 'unknown' : 'failed', policyCode: null,
+            detail: facts.attempt.lineage?.errors?.[0] ?? facts.attempt.detail ?? 'current dispatch attempt is invalid',
+          }),
+          facts.candidate.state === 'current' ? null : Object.freeze({
+            fact: 'return.candidate', factOwner: 'task_fact_readers', observedState: facts.candidate.state,
+            state: facts.candidate.state === 'unavailable' ? 'unknown' : 'failed', policyCode: null,
+            detail: 'current task facts lack a valid committed implementation_artifact product head',
+          }),
+        ].filter(Boolean)
+      : [];
+    return Object.freeze({
+      id: 'prepare_return', verdict: 'unknown', applicability: 'applicable',
+      facts: observedFacts,
+      reasons: Object.freeze([...resolvedFailures, Object.freeze({
+        fact: 'dispatch_packet.current', factOwner: 'dispatch_envelope', observedState: facts?.packet.state ?? 'unavailable',
+        state: 'unknown', policyCode: null,
+        detail: packet === null || packet === undefined
+          ? 'the canonical prepared-dispatch validator requires an authenticated dispatch packet'
+          : 'a supplied dispatch packet is not independently authenticated without the protected caller validation context',
+      }), Object.freeze({
+        fact: 'required_check_evidence.current', factOwner: 'dispatch_envelope', observedState: facts?.checks.state ?? 'unavailable',
+        state: 'unknown', policyCode: null,
+        detail: facts?.checks.detail ?? 'the canonical return producer requires an explicit authenticated check-evidence aggregate',
+      })]),
+      prerequisites: Object.freeze([
+        Object.freeze({
+          fact: 'dispatch_packet.current', condition: 'a current authenticated dispatch packet and consumed attempt binding must be supplied',
+        }),
+        Object.freeze({
+          fact: 'required_check_evidence.current', condition: 'the exact authenticated check-evidence aggregate path must be supplied',
+        }),
+      ]),
+    });
+  }
+}
+
+/**
  * Revalidate an emitted packet against current task and repository state,
  * including the initial-state gate, immediately before receiver mutation.
  *
@@ -1214,7 +1328,7 @@ export function validateDispatchPreparation(packet, options = {}) {
 export function verifyDispatchBeforeMutation(input = {}, options = {}) {
   const command = 'dispatch receive';
   try {
-    const { packet, roleId } = input;
+    const { packet, roleId, requestedRoute = null } = input;
     const schema = validateDispatchPreparation(packet, options);
     if (!schema.ok) {
       const findings = findingSet(command);
@@ -1223,6 +1337,17 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
     }
     if (roleId !== packet.assignment.roleId) {
       return singleFailure(command, 'negative', 'rejected', 'receiving immutable role does not match packet assignment');
+    }
+    const packetRoute = packet.decomposition === null ? 'serial' : packet.decomposition?.route;
+    if (requestedRoute !== null && requestedRoute !== packetRoute) {
+      return singleFailure(
+        command,
+        'negative',
+        'rejected',
+        `requested '${requestedRoute}' dispatch route does not match packet-bound '${String(packetRoute)}' route`,
+        {},
+        'parallel_scan.decomposition.invalid'
+      );
     }
     const current = prepareRoleDispatch({
       refetchTask: input.refetchTask,
@@ -1235,6 +1360,7 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
       runGit: input.runGit,
       priorGateReceipts: input.priorGateReceipts ?? [],
       readCarrierDigest: input.readCarrierDigest ?? null,
+      parallelRequested: packetRoute === 'parallel',
       activation: packet.activation,
       assignment: packet.assignment,
     }, { ...options, assurancePolicy: options.assurancePolicy ?? packet.assurance });
@@ -1243,21 +1369,45 @@ export function verifyDispatchBeforeMutation(input = {}, options = {}) {
       const state = current.validation.evidenceState;
       // A refetch that cannot even be evaluated stays missing; anything that
       // evaluated and disagrees supersedes the packet.
-      findings.add(state, current.validation.errors[0] ?? 'dispatch preparation could not be revalidated', {
-        disposition: state === 'missing' ? 'needs_context' : 'superseded',
-      });
-      for (const error of current.validation.errors.slice(1)) findings.add(state, error, { disposition: 'superseded' });
+      // Preserve the current evaluator's stable diagnostic code. The receive
+      // boundary owns stale-packet disposition, not a replacement diagnosis of
+      // why the freshly refetched serial or parallel facts failed.
+      const diagnostics = Array.isArray(current.validation.diagnostics)
+        ? current.validation.diagnostics
+        : [];
+      if (diagnostics.length > 0) {
+        for (const diagnostic of diagnostics) {
+          findings.add(diagnostic?.evidence?.state ?? state, diagnostic?.message ?? 'dispatch preparation could not be revalidated', {
+            code: diagnostic?.code,
+            disposition: state === 'missing' ? 'needs_context' : 'superseded',
+          });
+        }
+      } else {
+        findings.add(state, current.validation.errors[0] ?? 'dispatch preparation could not be revalidated', {
+          disposition: state === 'missing' ? 'needs_context' : 'superseded',
+        });
+        for (const error of current.validation.errors.slice(1)) findings.add(state, error, { disposition: 'superseded' });
+      }
       return failure(command, findings);
     }
-    const fields = [
-      'backend', 'task', 'activation', 'activationBinding', 'assurance',
-      'returnAdapter',
-      'decomposition', 'assignment', 'repository', 'freshness',
-    ];
-    if (fields.some(field => !sameCanonical(current.packet[field], packet[field])) ||
-        !sameCanonical(stableReadinessProjection(current.packet.readiness), stableReadinessProjection(packet.readiness))) {
-      return singleFailure(command, 'changed', 'superseded', 'dispatch packet bindings changed after preparation');
+    // Product base is an action-specific protected input: consuming a packet
+    // after HEAD moved would bind an attempt to a different product range.
+    // This is deliberately not the retired packet-wide projection comparison.
+    if (current.packet.repository?.head !== packet.repository?.head) {
+      return singleFailure(
+        command,
+        'changed',
+        'superseded',
+        'prepared dispatch product base head changed after preparation',
+        {},
+        'dispatch.packet.stale',
+      );
     }
+    // The current evaluator has just validated the action-specific protected
+    // inputs.  Do not turn its newly derived packet rendering back into an
+    // authority gate: the former ten-field-plus-readiness equality made a
+    // packet stale merely because its own successful start changed the carrier.
+    // A current evaluator refusal above remains typed by its actual invariant.
     return { ok: true, packet, validation: validation(command, true, 'current', 'proceed', null) };
   } catch (error) {
     return singleFailure(command, 'malformed', 'rejected', `dispatch receive could not be evaluated: ${error.message}`);
@@ -1544,6 +1694,24 @@ export function reconstructCommitAttribution(input = {}) {
   return { range: derived.range, commits: derived.commits, changedPaths: derived.changedPaths };
 }
 
+function adoptionAtWorkflowHead(runGit, packet, wire) {
+  const path = `.agenticloop/adoptions/commits/${packet?.task?.id}/${wire?.productHead}.json`;
+  const shown = runGit(['show', `${wire?.workflowHead}:${path}`]);
+  if (!shown || shown.status !== 0) return { ok: true, adoption: null };
+  let record;
+  try { record = JSON.parse(String(shown.stdout ?? '')); }
+  catch { return { ok: false, message: `commit adoption record '${path}' is corrupt at the return workflow head` }; }
+  const checked = validateCommitAdoptionRecord(record, {
+    taskId: packet?.task?.id,
+    taskContractDigest: packet?.task?.taskContractDigest,
+    baseHead: wire?.productBaseHead,
+    head: wire?.productHead,
+  });
+  return checked.ok
+    ? { ok: true, adoption: { range: record.adoption.range, commits: record.adoption.commits } }
+    : { ok: false, message: `commit adoption record '${path}' is invalid at the return workflow head: ${checked.errors[0]}` };
+}
+
 function validateRepositoryEvidence(value, findings) {
   const shapeOk = exactKeys(value, [
     'backend', 'task', 'worktree', 'branch', 'productBaseHead', 'productLineage', 'productHead', 'workflowHead', 'candidateHead',
@@ -1602,6 +1770,7 @@ function validateReturnAgainstCurrent({
   wire, packet, snapshot, repositoryEvidence, producerEvidence, runGit,
   carrierLineage = null, returnAssurance = 'host_receipt', historicalCloseout = false,
 }, findings) {
+  let finishCandidate = null;
   validateRepositoryEvidence(repositoryEvidence, findings);
   const authoritative = authoritativePacketTaskBinding(snapshot);
   if (!authoritative.ok) {
@@ -1681,6 +1850,22 @@ function validateReturnAgainstCurrent({
   if (wire.productHead !== repositoryEvidence?.productHead || wire.workflowHead !== repositoryEvidence?.workflowHead) {
     findings.changed('role return productHead or workflowHead does not equal repository evidence');
   }
+  // Re-evaluate the complete finish projection here rather than letting each
+  // downstream consumer independently age a range, check set, and candidate.
+  // A later product candidate invalidates this return's certification evidence,
+  // while unrelated workflow evidence remains outside the candidate boundary.
+  try {
+    finishCandidate = deriveFinishCandidateForRoleReturn({
+      backend: packet.backend,
+      roleReturn: wire,
+      observedCandidateHead: repositoryEvidence?.productHead,
+    });
+    if (!finishCandidateIsCurrent(finishCandidate, repositoryEvidence?.productHead)) {
+      findings.changed('role return finish candidate is invalidated by a later product candidate');
+    }
+  } catch (error) {
+    findings.malformed(`role return finish candidate is invalid: ${error.message}`);
+  }
   for (const key of ['productLineage', 'productChangedPaths', 'workflowChangedPaths', 'productAttribution', 'pr', 'carrierLineage']) {
     if (!sameCanonical(wire[key], repositoryEvidence?.[key])) findings.changed(`role return ${key} does not match refetched repository evidence`);
   }
@@ -1729,9 +1914,14 @@ function validateReturnAgainstCurrent({
             return;
           }
         }
+        const adoption = adoptionAtWorkflowHead(runGit, packet, wire);
+        if (!adoption.ok) {
+          findings.malformed(adoption.message);
+          return;
+        }
         const derived = deriveCommitRange({
           runGit, baseHead: wire.productBaseHead, head: wire.productHead, taskId: packet.task.id, roleId: packet.assignment.roleId,
-          allowedPaths: packet.task.allowedPaths,
+          allowedPaths: packet.task.allowedPaths, adoption: adoption.adoption,
         });
         if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
         else {
@@ -1789,6 +1979,7 @@ function validateReturnAgainstCurrent({
     }
     if (![...allowedPaths].some(pattern => fileMatchesScopePattern(path, pattern))) findings.negative(`role return product changed path '${path}' is outside packet-bound task scope`);
   }
+  return finishCandidate;
 }
 
 function compareReturnAssuranceGrade(left, right) {
@@ -2056,7 +2247,7 @@ export function receiveRoleReturn(input = {}, options = {}) {
     }
     const findings = findingSet(command);
     validateCurrentTask(snapshot, findings);
-    validateReturnAgainstCurrent({
+    const finishCandidate = validateReturnAgainstCurrent({
       wire, packet, snapshot, repositoryEvidence, producerEvidence, carrierLineage, runGit,
       returnAssurance, historicalCloseout,
     }, findings);
@@ -2226,6 +2417,7 @@ export function receiveRoleReturn(input = {}, options = {}) {
     return {
       ok: true,
       roleReturn: deepFreeze(wire),
+      finishCandidate,
       returnAssurance,
       producerAuthenticated: returnAssurance === 'host_receipt',
       assurance,

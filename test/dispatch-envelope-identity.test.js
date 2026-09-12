@@ -51,8 +51,8 @@ function assuranceUnboundEnvelope(packet) {
 }
 
 describe('documented envelope identity contract', () => {
-  it('AGENTIC_LOOP.md names the exact schema versions and digests the implementation emits', async () => {
-    const doc = readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8');
+  it('the canonical lifecycle protocol names the exact schema versions and digests the implementation emits', async () => {
+    const doc = readFileSync(join(REPO_ROOT, 'commands', 'lifecycle-protocol.md'), 'utf8');
     assert.match(doc, /agenticloop\.role-preparation`, schema version\s*\n?`8`/);
     assert.match(doc, /sha256:agenticloop\.role-preparation\.v8:<64-lowercase-hex>/);
     assert.match(doc, /agenticloop\.role-return`, schema version\s*\n?`5`/);

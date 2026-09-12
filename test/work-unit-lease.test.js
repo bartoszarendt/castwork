@@ -136,18 +136,17 @@ describe('scope expansion always returns to the operator', () => {
     assert.match(verdict.reason, /records no bound work-unit scope/);
   });
 
-  it('still applies expiry, because a lease from expired intent is not intent', () => {
+  it('keeps an unchanged scope derivable after historical expiry metadata', () => {
     const verdict = evaluateWorkUnitLease({
       grant: grantFor({ expiresAt: new Date(Date.now() - 1000).toISOString() }),
       taskId: 'T-016',
       currentMembers: members,
     });
-    assert.equal(verdict.ok, false);
-    assert.equal(verdict.code, 'activation.grant.expired');
+    assert.equal(verdict.ok, true, verdict.reason);
   });
 
   it('reports refusals under codes the policy layer knows', () => {
-    for (const code of [SCOPE_EXPANSION_DIAGNOSTIC_CODE, 'activation.grant.expired']) {
+    for (const code of [SCOPE_EXPANSION_DIAGNOSTIC_CODE]) {
       assert.ok(repairPolicyFor(code), code);
     }
   });

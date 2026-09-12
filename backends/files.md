@@ -25,9 +25,11 @@ the same Agentic Loop roles, skills, and review gates.
 
 ## Shared transition contract
 
-Files projects the complete backend-neutral `agenticloop.transition-contract`
-defined in `agenticloop/AGENTIC_LOOP.md`. Its executable definition is internal
-to the installed Agentic Loop npm package and is not copied into the target.
+Files projects the complete backend-neutral `agenticloop.transition-contract`.
+Its human-readable lifecycle and transition rules are in
+`agenticloop/commands/lifecycle-protocol.md`; its executable definition is
+internal to the installed Agentic Loop npm package and is not copied into the
+target.
 Task-file frontmatter is authoritative for the
 durable task lifecycle status, append-only task-contract history is authoritative
 for contract readiness, and the backend-neutral audit record and closeout marker

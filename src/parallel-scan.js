@@ -703,8 +703,12 @@ function dependencyEvidenceProjection(evidence, errors, label) {
 }
 
 function dependencyInputForTask(input, taskId) {
-  const supplied = input?.dependenciesByTask?.[taskId];
-  if (supplied !== undefined) {
+  // Once callers select per-task evidence, every member must resolve through
+  // that map. Falling back to a global snapshot here let an omitted sibling
+  // silently borrow the initiating task's evidence.
+  if (input?.dependenciesByTask !== undefined) {
+    const supplied = input.dependenciesByTask?.[taskId];
+    if (supplied === undefined) return { invalid: true, evidence: null, statuses: {} };
     if (!isPlainObject(supplied)) return { invalid: true, evidence: null, statuses: {} };
     return {
       invalid: false,
@@ -765,6 +769,21 @@ function bindReadinessContext(input, observation, errors, members) {
   }
 
   const memberById = new Map(members.map(member => [member.taskId, member]));
+  const selectedByTask = input?.dependenciesByTask ?? supplied.dependenciesByTask;
+  const explicitMultiMemberParallel = input?.route === 'parallel' && members.length > 1;
+  if (explicitMultiMemberParallel) {
+    if (!isPlainObject(selectedByTask)) {
+      errors.push('explicit multi-member parallel scan requires an exact dependenciesByTask map; global dependency evidence is not permitted');
+    } else {
+      const expectedTaskIds = [...memberById.keys()].sort();
+      const actualTaskIds = Object.keys(selectedByTask).sort();
+      const missing = expectedTaskIds.filter(taskId => !Object.hasOwn(selectedByTask, taskId));
+      const extras = actualTaskIds.filter(taskId => !memberById.has(taskId));
+      if (missing.length || extras.length) {
+        errors.push(`explicit multi-member parallel scan dependenciesByTask must exactly cover work-unit members (missing: ${missing.join(', ') || 'none'}; extras: ${extras.join(', ') || 'none'})`);
+      }
+    }
+  }
   const dependenciesByTask = [];
   const statusesByTask = {};
   for (const member of members) {
@@ -772,7 +791,7 @@ function bindReadinessContext(input, observation, errors, members) {
     const declaredIds = [...(parsed.declaration?.dependsOn ?? [])].sort();
     const selected = dependencyInputForTask({
       ...input,
-      dependenciesByTask: input?.dependenciesByTask ?? supplied.dependenciesByTask,
+      ...(selectedByTask !== undefined ? { dependenciesByTask: selectedByTask } : {}),
     }, member.taskId);
     if (selected.invalid || !isPlainObject(selected.statuses)) {
       errors.push(`parallel scan dependency context for '${member.taskId}' must contain an explicit statuses object`);
@@ -851,6 +870,14 @@ function bindReadinessContext(input, observation, errors, members) {
   const evidenceIdentities = [...new Map(
     dependenciesByTask.filter(entry => entry.evidence).map(entry => [canonicalJson(entry.evidence), entry.evidence])
   ).values()];
+  if (explicitMultiMemberParallel) {
+    const sourceRefs = dependenciesByTask.map(entry => entry.evidence?.sourceRef ?? null);
+    if (sourceRefs.some(sourceRef => sourceRef === null)) {
+      errors.push('explicit multi-member parallel scan requires one task-specific dependency evidence source for every work-unit member');
+    } else if (new Set(sourceRefs).size !== sourceRefs.length) {
+      errors.push('explicit multi-member parallel scan dependency evidence sources must be unique per work-unit member');
+    }
+  }
   const dependencies = evidenceIdentities.length === 1 ? evidenceIdentities[0] : null;
 
   const context = {
@@ -1341,11 +1368,11 @@ export function validateParallelScanInventoryBinding(record, currentInventory, o
  * @param {any} record  The bound scan record.
  * @param {any} rawCurrentInventory  The raw refetched inventory (carries member body content).
  * @param {any} currentSnapshot  The inventory snapshot (digest-computed).
- * @param {{ taskId: string, backend: string, currentContractDigest: string|null, runGit?: Function, baseEvidence?: any, dependencyEvidence?: any }} recheck
+ * @param {{ taskId: string, backend: string, currentContractDigest: string|null, runGit?: Function, baseEvidence?: any, dependencyEvidence?: any, dependenciesByTask?: any }} recheck
  * @returns {{ ok: boolean, error?: string }}
  */
 function compareEligibilityAfterCarrierDrift(record, rawCurrentInventory, currentSnapshot, recheck) {
-  const { taskId, backend, currentContractDigest, runGit, baseEvidence, dependencyEvidence } = recheck;
+  const { taskId, backend, currentContractDigest, runGit, baseEvidence, dependencyEvidence, dependenciesByTask } = recheck;
 
   const boundEntry = (record.eligibility ?? []).find(e => e.taskId === taskId);
   if (!boundEntry?.protectedContractDigest || boundEntry.declaredDependencies === undefined) {
@@ -1419,6 +1446,7 @@ function compareEligibilityAfterCarrierDrift(record, rawCurrentInventory, curren
     freshnessPolicy: record.freshnessPolicy,
     basePaths,
     dependencies: depStatuses,
+    ...(isPlainObject(dependenciesByTask) ? { dependenciesByTask } : {}),
     readinessContext: reRunReadinessContext,
     rescanTrigger: record.rescanTrigger,
   }, { now: Date.parse(record.observedAt) || Date.now() });

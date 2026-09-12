@@ -1,18 +1,21 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import {
   parseRequiredCheckInventory,
+  REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE,
   requiredCheckEvidenceMatchesInventory,
+  validateRequiredCheckInventory,
   validateRequiredCheckEvidence,
 } from '../src/required-checks.js';
 import { receiveRoleReturn } from '../src/dispatch-envelope.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
 import {
   createDispatchFixture,
+  git,
   prepare,
   producerBinding,
   readyReturn,
@@ -45,6 +48,46 @@ describe('canonical required-check model', () => {
       '- [RC-1] command: npm test',
     ];
     for (const value of cases) assert.equal(parseRequiredCheckInventory(value).ok, false, value);
+  });
+
+  it('refuses task explain as a required check with its typed diagnostic', () => {
+    for (const command of [
+      'npx agenticloop@latest task explain T-001 --json',
+      'pnpm dlx agenticloop task explain T-001 --json',
+      'npm exec agenticloop -- task explain T-001 --json',
+    ]) {
+      const parsed = parseRequiredCheckInventory(`- [RC-1] command: \`${command}\``);
+      assert.equal(parsed.ok, false, command);
+      assert.match(parsed.errors.join('\n'), /must not invoke task explain/);
+      assert.deepEqual(parsed.diagnostics.map(item => item.code), [REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE]);
+    }
+  });
+
+  it('refuses task explain in authorized legacy command bullets with its typed diagnostic', () => {
+    const parsed = parseRequiredCheckInventory(
+      '- [RC-1] agenticloop task explain T-001',
+      { allowLegacy: true },
+    );
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.errors.join('\n'), /command required check 'RC-1' must not invoke task explain/);
+    assert.deepEqual(parsed.diagnostics.map(item => item.code), [REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE]);
+    assert.match(parsed.diagnostics[0].message, /command required check 'RC-1'/);
+  });
+
+  it('refuses task explain in persisted inventories with its typed diagnostic and check id', () => {
+    for (const command of [
+      'npx agenticloop@latest task explain T-001 --json',
+      'pnpm dlx agenticloop task explain T-001 --json',
+      'npm exec agenticloop -- task explain T-001 --json',
+    ]) {
+      const validated = validateRequiredCheckInventory([
+        { id: 'RC-7', kind: 'command', command },
+      ]);
+      assert.equal(validated.ok, false, command);
+      assert.match(validated.errors.join('\n'), /command required check 'RC-7' must not invoke task explain/);
+      assert.deepEqual(validated.diagnostics.map(item => item.code), [REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE]);
+      assert.match(validated.diagnostics[0].message, /command required check 'RC-7'/);
+    }
   });
 
   it('allows blank lines but rejects unexpected prose instead of dropping it', () => {
@@ -121,5 +164,50 @@ describe('canonical required-check model', () => {
     }, fixture.options);
     assert.equal(received.ok, false);
     assert.deepEqual(received.validation.errors, ['role return checks must use canonical RC identity order']);
+  });
+
+  it('accepts RC-1 through RC-10 through the return receiver finish projection', async () => {
+    const requiredChecksText = Array.from({ length: 10 }, (_, index) =>
+      `- [RC-${index + 1}] command: \`npm run check-${index + 1}\``
+    ).join('\n');
+    const fixture = await createDispatchFixture(temp, 'two-digit-finish-candidate', { requiredChecksText });
+    const prepared = prepare(fixture);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    assert.deepEqual(prepared.packet.task.requiredChecks.map(check => check.id),
+      Array.from({ length: 10 }, (_, index) => `RC-${index + 1}`));
+
+    const checks = prepared.packet.task.requiredChecks.map(check => ({
+      id: check.id,
+      kind: 'command',
+      command: check.command,
+      outcome: 'passed',
+      exitCode: 0,
+      evidence: `${check.id} passed`,
+    }));
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const verified = true;\n', 'utf8');
+    git(fixture.root, ['add', 'src/existing.js']);
+    git(fixture.root, ['commit', '-m', 'verify ten required checks\n\nTask: T-001\nAgent: engineer']);
+    const productHead = git(fixture.root, ['rev-parse', 'HEAD']);
+    const evidence = repositoryEvidence(prepared.packet, {
+      head: productHead,
+      changedPaths: ['src/existing.js'],
+      checks,
+    });
+    evidence.productAttribution = {
+      range: { base: prepared.packet.repository.head, head: productHead },
+      commits: [productHead],
+    };
+    const roleReturn = readyReturn(prepared.packet, evidence);
+    const received = receiveRoleReturn({
+      raw: JSON.stringify(roleReturn),
+      packet: prepared.packet,
+      refetchTask: fixture.refetchTask,
+      refetchRepositoryEvidence: () => evidence,
+      runGit: fixture.runGit,
+      ...producerBinding(fixture.trust, prepared.packet, roleReturn, evidence),
+    }, fixture.options);
+    assert.equal(received.ok, true, received.validation.errors?.join('\n'));
+    assert.deepEqual(received.finishCandidate.requiredCheckSet,
+      Array.from({ length: 10 }, (_, index) => `RC-${index + 1}`));
   });
 });

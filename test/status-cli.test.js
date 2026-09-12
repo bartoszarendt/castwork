@@ -596,7 +596,7 @@ describe('status --json orientation scenarios', () => {
     assert.equal(first.legalNextAction.type, 'repair_lifecycle_context');
   });
 
-  it('reports an expired activation as expired', async () => {
+  it('reports an unchanged activation as present after historical expiry metadata', async () => {
     const fixture = await orientationFixture('orient-expired');
     await activate(fixture);
     const grant = signGrant(fixture, {
@@ -606,10 +606,10 @@ describe('status --json orientation scenarios', () => {
     writeActivation(fixture, grant, [signBinding(fixture, grant)]);
     const snapshot = await orientation(fixture);
     const task = snapshot.tasks.find(item => item.taskId === 'T-001');
-    assert.equal(task.operatorAuthorization.state, 'expired');
-    assert.equal(snapshot.operatorAuthorizedSet.bindings.length, 0);
-    assert.equal(snapshot.candidates.length, 0);
-    assert.notEqual(snapshot.legalNextAction.type, 'prepare_dispatch');
+    assert.equal(task.operatorAuthorization.state, 'present');
+    assert.equal(snapshot.operatorAuthorizedSet.bindings.length, 1);
+    assert.equal(snapshot.candidates.length, 1);
+    assert.equal(snapshot.legalNextAction.type, 'prepare_dispatch');
   });
 
   it('reports a revoked activation as revoked', async () => {

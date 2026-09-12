@@ -30,6 +30,16 @@ export const VALID_CHECKPOINT_CAUSES = new Set([
 ]);
 export const VALID_NO_PROGRESS_DISPOSITIONS = new Set(['targeted_revision', 'split_task', 'contract_decision', 'blocked']);
 /**
+ * Stable reasons paired positionally with `evaluateReviewCheckpoint().errors`.
+ * Consumers route a valid-but-consumed authorization differently from a
+ * malformed or inconsistent checkpoint carrier without parsing prose.
+ */
+export const REVIEW_CHECKPOINT_FAILURE_KINDS = Object.freeze({
+  MISSING: 'missing_checkpoint',
+  CONSUMED: 'consumed_checkpoint',
+  INVALID: 'invalid_checkpoint_history',
+});
+/**
  * Mechanically repairable checkpoint fields.
  *
  * A field is repairable only when its correct value is derivable from
@@ -571,7 +581,7 @@ export function validateCheckpointSchema(checkpoint, options = {}) {
  *   reviewHistory?: Array<object>, reviewOutcomes?: Array<object>, checkpoint?: object|null,
  *   budget?: number, currentArtifact?: string, requireRevision?: boolean
  * }} params
- * @returns {{ authorized: boolean, errors: string[], warnings: string[] }}
+ * @returns {{ authorized: boolean, errors: string[], warnings: string[], failureKinds: string[] }}
  */
 export function evaluateReviewCheckpoint({
   reviewHistory,
@@ -583,8 +593,20 @@ export function evaluateReviewCheckpoint({
 } = {}) {
   const errors = [];
   const warnings = [];
+  const failureKinds = [];
+  const fail = (kind, message) => {
+    errors.push(message);
+    failureKinds.push(kind);
+  };
+  const result = authorized => {
+    if (errors.length !== failureKinds.length) {
+      throw new Error('review checkpoint failure discriminator is missing');
+    }
+    return { authorized, errors, warnings, failureKinds };
+  };
   if (!Number.isSafeInteger(budget) || budget < 1) {
-    return { authorized: false, errors: [`review_budget must be a positive integer, got ${budget}`], warnings };
+    fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID, `review_budget must be a positive integer, got ${budget}`);
+    return result(false);
   }
 
   const base = Array.isArray(reviewHistory)
@@ -610,65 +632,68 @@ export function evaluateReviewCheckpoint({
   // No implementation change is being authorized for a record-only re-review
   // or a terminal accepted artifact.
   if (!requireRevision && latestOutcome && currentArtifact && artifactKey(latestOutcome.artifact) === artifactKey(currentArtifact)) {
-    return { authorized: true, errors, warnings };
+    return result(true);
   }
   if (needsRevision.length < budget) {
     if (checkpointsPresent(history)) warnings.push('checkpoint present but review rounds are within budget; checkpoint is not required');
-    return { authorized: true, errors, warnings };
+    return result(true);
   }
 
   const checkpoints = history.filter(event => event.type === 'checkpoint');
   const latestCheckpoint = checkpoints.at(-1) ?? null;
   if (!latestCheckpoint) {
-    errors.push(
+    fail(REVIEW_CHECKPOINT_FAILURE_KINDS.MISSING,
       `review round budget (${budget}) exhausted (${needsRevision.length} needs_revision outcomes); ` +
       'a Review Round Checkpoint is required before the next revision'
     );
-    return { authorized: false, errors, warnings };
+    return result(false);
   }
 
   const schema = validateCheckpointSchema(latestCheckpoint, {
     artifactValidator: latestCheckpoint.carrier === 'files' ? filesArtifactError : githubArtifactError,
   });
-  errors.push(...schema.errors);
-  if (!schema.valid) return { authorized: false, errors, warnings };
+  for (const error of schema.errors) fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID, error);
+  if (!schema.valid) return result(false);
   if (latestCheckpoint.direction !== 'targeted_revision') {
-    errors.push(
+    fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID,
       `checkpoint direction is '${latestCheckpoint.direction}'; only 'targeted_revision' authorizes another implementation attempt`
     );
-    return { authorized: false, errors, warnings };
+    return result(false);
   }
 
   const precedingNeedsRevision = needsRevision.filter(event => event.sourceOrder < latestCheckpoint.sourceOrder);
   const precedingLatest = precedingNeedsRevision.at(-1) ?? null;
   if (!precedingLatest) {
-    errors.push('checkpoint occurs before any counted needs_revision review outcome');
+    fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID, 'checkpoint occurs before any counted needs_revision review outcome');
   } else {
     if (latestCheckpoint.reviewCount !== precedingNeedsRevision.length) {
-      errors.push(
+      fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID,
         `checkpoint review_count (${latestCheckpoint.reviewCount}) does not match the needs_revision count at the checkpoint (${precedingNeedsRevision.length})`
       );
     }
     if (artifactKey(latestCheckpoint.artifact) !== artifactKey(precedingLatest.artifact)) {
-      errors.push(
+      fail(REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID,
         `checkpoint artifact (${String(latestCheckpoint.artifact).slice(0, 8)}...) does not match the latest reviewed artifact (${String(precedingLatest.artifact).slice(0, 8)}...)`
       );
     }
   }
 
   const laterOutcome = outcomes.find(event => event.sourceOrder > latestCheckpoint.sourceOrder);
-  if (laterOutcome) {
+  // A malformed or contradictory checkpoint history is already fail-closed as
+  // integrity corruption; do not compound it with the distinct human-gate
+  // consumption fact from the same invalid carrier.
+  if (errors.length === 0 && laterOutcome) {
     const ambiguousGitHubOrder =
       Number.isFinite(latestCheckpoint.sourceTimestamp) &&
       latestCheckpoint.sourceTimestamp === laterOutcome.sourceTimestamp &&
       latestCheckpoint.sourceKind &&
       laterOutcome.sourceKind &&
       latestCheckpoint.sourceKind !== laterOutcome.sourceKind;
-    errors.push(ambiguousGitHubOrder
+    fail(REVIEW_CHECKPOINT_FAILURE_KINDS.CONSUMED, ambiguousGitHubOrder
       ? 'checkpoint and review outcome share an ambiguous GitHub timestamp across carrier types; the checkpoint is treated as consumed and a fresh checkpoint is required'
       : 'checkpoint has been consumed by a subsequent review outcome; a new checkpoint is required');
   }
-  return { authorized: errors.length === 0, errors, warnings };
+  return result(errors.length === 0);
 }
 
 /** Evaluate the distinct stable-finding no-progress guard before review budget. */

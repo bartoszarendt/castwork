@@ -22,6 +22,7 @@
  */
 
 import { canonicalSha256 } from './canonical-json.js';
+import { explainReasonFactOwner } from './explain-reason.js';
 // Role start authenticates the exact retained packet through the same closed
 // sealed-decision contract prepared-packet validation produces, defined one
 // layer below both so neither boundary owns a second copy of it.
@@ -117,7 +118,10 @@ export const HANDOFF_RECOGNITION_CODES = Object.freeze([
   'handoff.expectation.malformed',
   'handoff.evidence.missing',
   'handoff.evidence.malformed',
-  'handoff.evidence.stale',
+  'handoff.evidence.freshness_expired',
+  'handoff.evidence.schema_retired',
+  'handoff.evidence.revalidation_failed',
+  'handoff.evidence.ambiguous_return',
   'handoff.evidence.replayed',
   'handoff.evidence.mismatched',
   'handoff.evidence.unsupported',
@@ -496,7 +500,7 @@ function evaluateFreshness({ observedAt, maxAgeSeconds, now, label, diagnostics 
   }
   if (now - observed > maxAgeSeconds * 1000) {
     diagnostics.push(diagnostic(
-      'handoff.evidence.stale', 'stale',
+      'handoff.evidence.freshness_expired', 'stale',
       `${label} was observed at ${observedAt}, outside its ${maxAgeSeconds}s freshness policy`,
       { field: 'observedAt', observed: observedAt, maxAgeSeconds }
     ));
@@ -540,7 +544,7 @@ function recognizePreparedDispatch({
     const legacyDigest = legacyDispatchPreparationDigest(packet, packet?.schemaVersion);
     if (legacyDigest !== null && legacyDigest === packet.digest) {
       diagnostics.push(diagnostic(
-        'handoff.evidence.stale', 'stale',
+        'handoff.evidence.schema_retired', 'stale',
         `prepared dispatch uses retired schemaVersion ${packet.schemaVersion}; regenerate it as schemaVersion ${DISPATCH_PREPARATION_SCHEMA_VERSION}`,
         { field: 'schemaVersion', observed: String(packet.schemaVersion) }
       ));
@@ -590,15 +594,20 @@ function recognizePreparedDispatch({
       { field: 'packetId', observed: String(packet.packetId) }
     ));
   }
-  evaluateFreshness({
-    observedAt: packet.decomposition?.observedAt,
-    maxAgeSeconds: Number.isFinite(maxEvidenceAgeSeconds)
-      ? maxEvidenceAgeSeconds
-      : Number(packet.decomposition?.freshnessPolicy?.maxAgeSeconds),
-    now,
-    label: 'prepared dispatch',
-    diagnostics,
-  });
+  // A serial packet has no parallel scan to age. Do not manufacture a
+  // decomposition observation requirement at role start; a parallel packet
+  // retains the original freshness proof unchanged.
+  if (packet.decomposition !== null) {
+    evaluateFreshness({
+      observedAt: packet.decomposition?.observedAt,
+      maxAgeSeconds: Number.isFinite(maxEvidenceAgeSeconds)
+        ? maxEvidenceAgeSeconds
+        : Number(packet.decomposition?.freshnessPolicy?.maxAgeSeconds),
+      now,
+      label: 'prepared dispatch',
+      diagnostics,
+    });
+  }
 
   const identity = {
     backend: bind('backend', expectation.backend, packet.backend, diagnostics, 'prepared dispatch backend'),
@@ -811,7 +820,7 @@ function recognizeVerifiedReturn({
     }
     if (!checked?.ok) {
       const state = checked?.evidenceState === 'malformed' ? 'malformed' : 'stale';
-      const code = state === 'malformed' ? 'handoff.evidence.malformed' : 'handoff.evidence.stale';
+      const code = state === 'malformed' ? 'handoff.evidence.malformed' : 'handoff.evidence.revalidation_failed';
       for (const error of checked?.errors ?? ['verified return failed canonical revalidation']) {
         diagnostics.push(diagnostic(code, state, String(error), { field: 'verification' }));
       }
@@ -1024,6 +1033,52 @@ export function recognizeHandoff({
 }
 
 /**
+ * Canonical read-only projection for protected post-dispatch actions.
+ * Missing handoff evidence is epistemic: it remains `unknown` here even
+ * though the mutation-time recognition verdict correctly refuses it.
+ */
+export function projectReadOnlyHandoffRecognition(actionId, recognition, {
+  fact,
+  prerequisite,
+  inputUnavailable = false,
+} = {}) {
+  const diagnostics = Array.isArray(recognition?.diagnostics) ? recognition.diagnostics : [];
+  // A missing current return does not erase a concurrently observed malformed
+  // or stale return-store fact.  Read-only callers must retain that distinction
+  // so only genuinely unavailable inputs become `unknown`.
+  const hasObservableFailure = diagnostics.some(item => {
+    const state = item?.evidence?.state;
+    return ['malformed', 'stale', 'changed'].includes(state);
+  });
+  const unavailable = inputUnavailable ||
+    (!hasObservableFailure && (recognition?.evidenceState === 'missing' || recognition?.evidenceState === undefined));
+  const reasons = recognition?.recognized === true ? [] : diagnostics.map(diagnostic => Object.freeze({
+    fact: fact ?? 'handoff.current',
+    factOwner: explainReasonFactOwner(diagnostic?.code ?? null, 'handoff_recognition'),
+    observedState: diagnostic?.evidence?.state ?? recognition?.evidenceState ?? 'unavailable',
+    state: unavailable ? 'unknown' : 'failed',
+    policyCode: diagnostic?.code ?? null,
+    detail: diagnostic?.message ?? 'canonical handoff evaluation did not recognize the required evidence',
+  }));
+  if (reasons.length === 0 && recognition?.recognized !== true) {
+    reasons.push(Object.freeze({
+      fact: fact ?? 'handoff.current', factOwner: explainReasonFactOwner(null, 'handoff_recognition'),
+      observedState: 'unavailable', state: 'unknown', policyCode: null,
+      detail: 'canonical handoff evaluator input is unavailable',
+    }));
+  }
+  return Object.freeze({
+    id: actionId,
+    verdict: recognition?.recognized === true ? 'legal' : unavailable ? 'unknown' : 'illegal',
+    applicability: 'applicable',
+    reasons: Object.freeze(reasons),
+    prerequisites: Object.freeze(reasons.map(() => Object.freeze({
+      fact: fact ?? 'handoff.current', condition: prerequisite ?? 'the required canonical handoff evidence must be supplied',
+    }))),
+  });
+}
+
+/**
  * Recognize the current verified return for one protected transition, read from
  * the target's canonical return-verification store.
  *
@@ -1073,7 +1128,7 @@ export function recognizeStoredReturnHandoff({
     if (!selected.ok) {
       for (const error of selected.errors ?? []) {
         priorDiagnostics.push(diagnostic(
-          'handoff.evidence.stale', 'stale',
+          'handoff.evidence.ambiguous_return', 'stale',
           `no single current return verification could be selected: ${error}`, { field: 'verification' }
         ));
       }

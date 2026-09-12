@@ -56,9 +56,9 @@ let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'al-structural-')); });
 after(() => { rmSync(temp, { recursive: true, force: true }); });
 
-function preflight(root, taskId = 'T-001') {
+function preflight(root, taskId = 'T-001', route = undefined) {
   return evaluateHandoffPreflight({
-    target: root, taskId, backend: 'files', projectConfig: {}, io: {},
+    target: root, taskId, backend: 'files', projectConfig: {}, io: {}, route,
   });
 }
 
@@ -91,8 +91,8 @@ function currentReceive(fixture, packet) {
     { ...fixture, ...liveRefetchers(fixture), packet, roleId: 'engineer' }, fixture.options,
   );
 }
-function currentPrepare(fixture) {
-  return prepare(fixture, liveRefetchers(fixture));
+function currentPrepare(fixture, { parallelRequested = false } = {}) {
+  return prepare(fixture, { ...liveRefetchers(fixture), parallelRequested });
 }
 
 describe('the shared prerequisite inventory is closed', () => {
@@ -242,6 +242,32 @@ describe('all four boundaries consume the canonical evaluator', () => {
   });
 });
 
+describe('serial and parallel dispatch routes', () => {
+  it('mints a serial packet without decomposition or scan refetchers', async () => {
+    const fixture = await createDispatchFixture(temp, 'serial-without-parallel-facts');
+    const serial = prepare(fixture, {
+      parallelRequested: false,
+      refetchDecomposition: undefined,
+      refetchParallelScanInventory: undefined,
+    });
+
+    assert.equal(serial.ok, true, (serial.validation?.errors ?? []).join('\n'));
+    assert.equal(serial.packet.decomposition, null);
+  });
+
+  it('keeps decomposition and scan refetchers mandatory for an explicit parallel request', async () => {
+    const fixture = await createDispatchFixture(temp, 'parallel-requires-parallel-facts');
+    const parallel = prepare(fixture, {
+      parallelRequested: true,
+      refetchDecomposition: undefined,
+      refetchParallelScanInventory: undefined,
+    });
+
+    assert.equal(parallel.ok, false);
+    assert.match(parallel.validation.errors[0], /decomposition refetch function/);
+  });
+});
+
 describe('live-fact convergence over one shared decision', () => {
   const LIVE_MUTATIONS = {
     'lifecycle: draft': fx => setStatus(fx, 'draft'),
@@ -261,16 +287,18 @@ describe('live-fact convergence over one shared decision', () => {
 
   for (const [name, mutate] of Object.entries(LIVE_MUTATIONS)) {
     it(`refuses at preflight, preparation, and live revalidation: ${name}`, async () => {
-      const fixture = await createDispatchFixture(temp, `live-${name.replace(/[^a-z0-9]+/gi, '-')}`);
+      const fixture = await createDispatchFixture(temp, `live-${name.replace(/[^a-z0-9]+/gi, '-')}`, {
+        taskIds: ['T-001', 'T-002'], parallel: true,
+      });
       // A packet minted before the mutation, so role-start live revalidation has
       // something authentic to revalidate against changed live state.
-      const before = currentPrepare(fixture);
+      const before = currentPrepare(fixture, { parallelRequested: true });
       assert.equal(before.ok, true, (before.validation?.errors ?? []).join('\n'));
 
       mutate(fixture);
 
-      const pf = preflight(fixture.root);
-      const prepared = currentPrepare(fixture);
+      const pf = preflight(fixture.root, 'T-001', 'parallel');
+      const prepared = currentPrepare(fixture, { parallelRequested: true });
       const received = currentReceive(fixture, before.packet);
 
       assert.equal(pf.ok, false, `preflight passed a refused prerequisite: ${name}`);
@@ -283,9 +311,9 @@ describe('live-fact convergence over one shared decision', () => {
     // Every positive case below has to keep passing, or the matrix above proves
     // nothing: a validator that refuses all input satisfies "preflight never
     // passes what a later boundary refuses" trivially.
-    const fixture = await createDispatchFixture(temp, 'live-positive');
-    const pf = preflight(fixture.root);
-    const prepared = currentPrepare(fixture);
+    const fixture = await createDispatchFixture(temp, 'live-positive', { taskIds: ['T-001', 'T-002'], parallel: true });
+    const pf = preflight(fixture.root, 'T-001', 'parallel');
+    const prepared = currentPrepare(fixture, { parallelRequested: true });
     const received = currentReceive(fixture, prepared.packet);
     assert.equal(pf.ok, true, JSON.stringify(pf.errors));
     assert.equal(prepared.ok, true, (prepared.validation?.errors ?? []).join('\n'));
@@ -293,16 +321,16 @@ describe('live-fact convergence over one shared decision', () => {
   });
 
   it('accepts an unrelated commit and a detached HEAD at all three live boundaries', async () => {
-    const fixture = await createDispatchFixture(temp, 'live-incidental');
-    const prepared = currentPrepare(fixture);
+    const fixture = await createDispatchFixture(temp, 'live-incidental', { taskIds: ['T-001', 'T-002'], parallel: true });
+    const prepared = currentPrepare(fixture, { parallelRequested: true });
     assert.equal(prepared.ok, true, (prepared.validation?.errors ?? []).join('\n'));
 
     writeFileSync(join(fixture.root, 'UNRELATED.md'), '# unrelated\n', 'utf8');
     commitAll(fixture.root, 'unrelated commit');
     git(fixture.root, ['checkout', '--detach', 'HEAD']);
 
-    assert.equal(preflight(fixture.root).ok, true);
-    const again = currentPrepare(fixture);
+    assert.equal(preflight(fixture.root, 'T-001', 'parallel').ok, true);
+    const again = currentPrepare(fixture, { parallelRequested: true });
     assert.equal(again.ok, true, (again.validation?.errors ?? []).join('\n'));
   });
 });
@@ -366,8 +394,8 @@ describe('shared dimensions carry one diagnostic classification', () => {
     rmSync(join(fixture.root, '.agenticloop', 'decompositions', 'T-001.json'), { force: true });
     commitAll(fixture.root, 'delete decomposition');
 
-    const pf = preflight(fixture.root);
-    const prepared = currentPrepare(fixture);
+    const pf = preflight(fixture.root, 'T-001', 'parallel');
+    const prepared = currentPrepare(fixture, { parallelRequested: true });
     assert.equal(pf.ok, false);
     assert.equal(prepared.ok, false);
 

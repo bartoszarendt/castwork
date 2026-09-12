@@ -15,12 +15,22 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { createDispatchFixture, git } from './helpers/dispatch-fixture.js';
+import { createCloseoutCliFixture } from './helpers/closeout-cli-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { measureTaskWorkflow } from '../src/workflow-measurement.js';
+import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 
 let temp;
-before(() => { temp = mkdtempSync(join(tmpdir(), 'al-files-lifecycle-')); });
-after(() => { rmSync(temp, { recursive: true, force: true }); });
+const terminalLifecycle = createCloseoutCliFixture();
+before(() => {
+  temp = mkdtempSync(join(tmpdir(), 'al-files-lifecycle-'));
+  terminalLifecycle.setup();
+});
+after(() => {
+  rmSync(temp, { recursive: true, force: true });
+  terminalLifecycle.cleanup();
+});
 
 const TASK_ID = 'T-001';
 const DEFAULT_CHECKS = `.agenticloop/tmp/${TASK_ID}-checks.json`;
@@ -155,36 +165,11 @@ async function commitProduct(cli, root, packetPath, value) {
 }
 
 async function refreshDecomposition(cli, root, { liveAttempt = false } = {}) {
-  const blocked = await cli(['task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json']);
-  const result = JSON.parse(blocked.stdout);
-  let command;
-  if (liveAttempt) {
-    assert.equal(blocked.status, 0, 'live preflight predicts the current attempt instead of proposing fresh dispatch');
-    assert.equal(result.liveAttemptGate.nextStep, 'product_work');
-    const head = git(root, ['rev-parse', 'HEAD']);
-    const tree = git(root, ['rev-parse', 'HEAD^{tree}']);
-    command = [
-      'task', 'prepare-decomposition', TASK_ID,
-      '--work-unit', 'fixture-work-unit',
-      '--source-ref', `.agenticloop/decompositions/${TASK_ID}.json`,
-      '--source-revision', `git-commit:${head}`,
-      '--base', tree,
-      '--dependencies', 'dependencies.json',
-      '--output', `.agenticloop/decompositions/${TASK_ID}.json`,
-    ];
-  } else {
-    assert.equal(blocked.status, 1, 'the retired role-start carrier makes the committed decomposition stale');
-    assert.match(result.firstSafeRepair, /task prepare-decomposition/);
-    command = result.firstSafeRepair.replace(/^npx agenticloop /, '').split(' ');
-  }
-  assertOk(await cli([...command, '--json']), 'refresh decomposition');
-  await canonicalCommit(
-    cli,
-    root,
-    'handoff_evidence_refresh',
-    'Refresh handoff decomposition',
-    [`.agenticloop/decompositions/${TASK_ID}.json`],
-  );
+  const preflight = JSON.parse(assertOk(await cli([
+    'task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json',
+  ]), 'serial preflight').stdout);
+  if (liveAttempt) assert.equal(preflight.liveAttemptGate?.nextStep, 'product_work');
+  else assert.equal(preflight.liveAttemptGate, null);
 }
 
 async function abandon(cli, root, attemptId, disposition) {
@@ -206,7 +191,7 @@ async function abandon(cli, root, attemptId, disposition) {
   );
 }
 
-async function returnSuccessor(fixture, cli, packetPath, productHead, expectedAttemptId) {
+async function returnSuccessor(fixture, cli, packetPath, productHead, expectedAttemptId, { carriesProduct = true } = {}) {
   await publishEngineerEvidence(cli, fixture.root, packetPath, productHead);
   await runChecks(cli, fixture.root, packetPath);
   const returnPath = '.agenticloop/tmp/resumed-return.json';
@@ -217,9 +202,13 @@ async function returnSuccessor(fixture, cli, packetPath, productHead, expectedAt
   ]), 'prepare resumed return');
   const roleReturn = JSON.parse(readFileSync(join(fixture.root, returnPath), 'utf8'));
   assert.equal(roleReturn.productHead, productHead);
-  assert.ok(roleReturn.productLineage, 'successor must disclose carried lineage');
-  assert.ok(roleReturn.productLineage.attempts.some(item => item.attemptId === expectedAttemptId));
-  assert.equal(roleReturn.productBaseHead, roleReturn.productLineage.carriedBaseHead);
+  if (carriesProduct) {
+    assert.ok(roleReturn.productLineage, 'successor must disclose carried product lineage');
+    assert.ok(roleReturn.productLineage.attempts.some(item => item.attemptId === expectedAttemptId));
+    assert.equal(roleReturn.productBaseHead, roleReturn.productLineage.carriedBaseHead);
+  } else {
+    assert.equal(roleReturn.productLineage, null, 'a workflow-only failed predecessor cannot carry product lineage');
+  }
   assertOk(await cli([
     'task', 'verify-return', TASK_ID, '--packet', packetPath,
     '--return', returnPath, '--from-current-repository', '--json',
@@ -228,6 +217,63 @@ async function returnSuccessor(fixture, cli, packetPath, productHead, expectedAt
 }
 
 describe('canonical files-backend lifecycle', () => {
+  it('completes the standard serial source lifecycle through accepted review, audit, and closeout', async () => {
+    const root = await terminalLifecycle.makeVerifiedGitTarget('standard-serial-terminal');
+    const artifact = await terminalLifecycle.certify(root);
+    const history = git(root, ['rev-list', '--reverse', 'HEAD']).split(/\r?\n/).filter(Boolean);
+    const subject = commit => git(root, ['show', '-s', '--format=%s', commit]);
+    const authorizationHead = history.find(commit => subject(commit) === 'configure closeout fixture');
+    const taskContractCommit = history.find(commit => subject(commit) === 'task baseline');
+    assert.ok(authorizationHead, 'the measured fixture must retain its authorization anchor commit');
+    assert.ok(taskContractCommit, 'the measured fixture must retain its excluded task-contract commit');
+    const measurement = measureTaskWorkflow(root, TASK_ID, {
+      commitRange: 'authorization', authorizationHead, taskContractCommit,
+    });
+    const measuredRange = git(root, ['rev-list', 'HEAD', '--not', authorizationHead]).split(/\r?\n/).filter(Boolean);
+    const excludedTaskContractCommits = history.filter(commit => commit === taskContractCommit).length;
+    assert.equal(measuredRange.includes(taskContractCommit), false,
+      'the measured task-contract commit must remain outside the authorization-to-closeout lifecycle range');
+    assert.deepEqual(
+      [measurement.counters.workflowCommits, measurement.counters.productCommits, excludedTaskContractCommits],
+      [5, 1, 1],
+      'M1 must bind workflow, product, and excluded task-contract commits to the measured fixture range'
+    );
+    assert.deepEqual(
+      [measurement.counters.executionAttempts, measurement.counters.abandonedAttempts, measurement.counters.supersessions],
+      [1, 0, 0],
+      'the standard serial fixture must retain the M3 reference shape'
+    );
+
+    // M2 is measured from the durable artifacts made by the same fixture: one
+    // Engineer dispatch consumption, an accepted independent Maintainer review,
+    // and one completed Auditor record. Repair-only work has no corresponding
+    // durable artifact in this no-finding serial route.
+    const engineer = listDispatchConsumptions(root, TASK_ID, { backend: 'files' });
+    assert.equal(engineer.ok, true, engineer.errors?.join('\n'));
+    const reviewedTask = readFileSync(join(root, '.agenticloop', 'tasks', `${TASK_ID}.md`), 'utf8');
+    const audited = await terminalLifecycle.audit(['status', 'AUD-001', '--json'], root);
+    assert.equal(audited.status, 0, `${audited.stdout}\n${audited.stderr}`);
+    const ordinaryDelegations = [
+      engineer.records.length === 1,
+      /review_status: accepted/.test(reviewedTask) && /review_mode: host_subagent/.test(reviewedTask),
+      JSON.parse(audited.stdout).completed_audits === 1,
+    ].filter(Boolean).length;
+    const repairOnlyDelegations = measurement.counters.workflowRecoveries;
+    assert.deepEqual([ordinaryDelegations, repairOnlyDelegations], [3, 0],
+      'M2 must bind ordinary and repair-only delegation counts to the measured serial fixture artifacts');
+    const packet = join(root, '.agenticloop', 'tmp', 'closeout.json');
+    const prepared = await terminalLifecycle.closeout([
+      'prepare', '--work-unit', 'milestone:M00', '--artifact', artifact,
+      '--covered-tasks', 'T-001', '--output', packet,
+    ], root);
+    assert.equal(prepared.status, 0, `${prepared.stdout}\n${prepared.stderr}`);
+    const recorded = await terminalLifecycle.closeout(['record', '--packet', packet, '--yes'], root);
+    assert.equal(recorded.status, 0, `${recorded.stdout}\n${recorded.stderr}`);
+    const status = await terminalLifecycle.closeout(['status', '--work-unit', 'milestone:M00', '--json'], root);
+    assert.equal(status.status, 0, `${status.stdout}\n${status.stderr}`);
+    assert.equal(JSON.parse(status.stdout).state, 'complete');
+  }, { timeout: 300000 });
+
   it('reaches a verified return through the public canonical sequence without repair or packet churn', async () => {
     const fixture = await createDispatchFixture(temp, 'canonical-happy', {
       requiredChecksText: '- [RC-1] command: `node --version`\n- [RC-2] command: `node --version`',
@@ -328,6 +374,7 @@ describe('canonical files-backend lifecycle', () => {
     assert.equal(JSON.parse(assertOk(await cli([
       'task', 'attempt-status', TASK_ID, '--json',
     ]), 'attempt status').stdout).attempts.length, 1, 'no packet remint or replacement occurred');
+
   });
 
   it('blocks a live return sequence when post-start activation trust loss would make prepare-return fail', async () => {
@@ -391,8 +438,10 @@ describe('resumed and recovery files-backend lifecycle', () => {
       await refreshDecomposition(cli, fixture.root);
       const second = await preparePacketAndStart(fixture, cli, 'second');
       const productHead = priorProductHead ?? await commitProduct(cli, fixture.root, second.packetPath, `successor-${label}`);
-      const returned = await returnSuccessor(fixture, cli, second.packetPath, productHead, first.attemptId);
-      assert.equal(returned.productLineage.attempts[0].packetId, first.packet.packetId);
+      const returned = await returnSuccessor(fixture, cli, second.packetPath, productHead, first.attemptId, {
+        carriesProduct: scenario.priorProduct,
+      });
+      if (scenario.priorProduct) assert.equal(returned.productLineage.attempts[0].packetId, first.packet.packetId);
       const attempts = JSON.parse(assertOk(await cli([
         'task', 'attempt-status', TASK_ID, '--json',
       ]), 'final attempt status').stdout).attempts;
@@ -413,7 +462,7 @@ describe('resumed and recovery files-backend lifecycle', () => {
     await refreshDecomposition(cli, fixture.root, { liveAttempt: true });
     const second = await preparePacketAndStart(fixture, cli, 'second');
     const productHead = await commitProduct(cli, fixture.root, second.packetPath, 'successor-auto');
-    await returnSuccessor(fixture, cli, second.packetPath, productHead, first.attemptId);
+    await returnSuccessor(fixture, cli, second.packetPath, productHead, first.attemptId, { carriesProduct: false });
     const attempts = JSON.parse(assertOk(await cli([
       'task', 'attempt-status', TASK_ID, '--json',
     ]), 'automatic supersession status').stdout).attempts;

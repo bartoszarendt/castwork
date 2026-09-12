@@ -1,10 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { evaluateGitHubReviewAudit, runGitHubReviewAudit, GitHubReviewAuditError, normalizeRestReview, taskRequiresIndependentReview, validateReviewWorkspace } from '../src/github-review-audit.js';
 import { collectGitHubReviewHistory, parseReviewMarker } from '../src/review-history.js';
+import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
+import { parseRequiredChecks } from '../src/github-preflight.js';
 
 const HEAD = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
 const OLD_HEAD = 'b1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
+const BASE = 'c1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
 const LOOP_ACCOUNT = { login: 'loop-bot', type: 'User' };
 
 function marker({ status = 'accepted', mode = 'host_subagent', artifact = HEAD, humanRef = '', findings, author = LOOP_ACCOUNT, includeTrailer = true } = {}) {
@@ -24,16 +29,237 @@ function markerString(markerObj) {
   return typeof markerObj === 'string' ? markerObj : markerObj.body;
 }
 
-function data({ comments = [marker()], reviews = [], humanReviews = [], independent = false } = {}) {
+function auditIssueData({ task = 7, independent = false, requiredChecks = ['- [RC-1] `npm test`'] } = {}) {
   return {
-    prData: { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments, reviews },
-    issueData: { number: 7, body: independent ? 'AGENT_INDEPENDENT_REVIEW_REQUIRED: true' : '' },
+    number: task,
+    body: [
+      '---', 'task_id: T-007', `independent_review_required: ${independent}`, '---',
+      '# T-007', '', '## Scope', 'Audit fixture.', '', '## Out of Scope', 'None.', '',
+      '## Acceptance Criteria', 'Audit candidate.', '', '## Required Checks', ...requiredChecks,
+    ].join('\n'),
+  };
+}
+
+function auditReceipt({ pr = 42, task = 7, head = HEAD, issueData = auditIssueData({ task }) } = {}) {
+  const prData = {
+    number: pr, baseRefOid: BASE, headRefOid: head, files: [{ path: 'src/audit.js' }],
+    commits: [{ oid: head, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
+  };
+  const contract = taskContractDigest(issueData.body);
+  const requiredChecks = parseRequiredChecks(issueData.body);
+  return createReviewEntryReceipt({ input: {
+    prData, issueData, reviewHistory: { events: [], errors: [] },
+  } }, {
+    ok: true, errors: [], warnings: [],
+    requiredChecks,
+    evidenceMatches: requiredChecks.map(check => ({
+      id: check.id, check: check.text, verdict: 'passed', evidence: `${check.id} passed`,
+    })),
+    contractBaseline: { digest: contract.digest, baseline: null },
+  }, { observedAt: '2026-08-07T00:00:00.000Z' });
+}
+
+function data({ comments = [marker()], reviews = [], humanReviews = [], independent = false } = {}) {
+  const issueData = auditIssueData({ independent });
+  const prData = {
+    number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }],
+    closingIssuesReferences: [{ number: 7 }], comments, reviews,
+    commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
+  };
+  return {
+    prData, issueData, reviewEntryReceipt: auditReceipt({ issueData }),
     expectedAccount: LOOP_ACCOUNT,
     humanReviews,
   };
 }
 
+function auditRunner(prData, issueData = auditIssueData()) {
+  return (_command, args) => {
+    if (args[0] === 'api' && args[1] === 'user') {
+      return { status: 0, stdout: JSON.stringify(LOOP_ACCOUNT), stderr: '' };
+    }
+    if (args[0] === 'pr') return { status: 0, stdout: JSON.stringify(prData), stderr: '' };
+    if (args[0] === 'issue') return { status: 0, stdout: JSON.stringify(issueData), stderr: '' };
+    throw new Error(`unexpected gh call: ${args.join(' ')}`);
+  };
+}
+
+function oidAt(index) {
+  return index.toString(16).padStart(40, '0');
+}
+
 describe('GitHub review provenance audit', () => {
+  it('accepts a numeric RC-1 through RC-10 inventory against the persisted candidate', () => {
+    const issueData = auditIssueData({
+      requiredChecks: Array.from({ length: 10 }, (_, index) => `- [RC-${index + 1}] \`npm run check-${index + 1}\``),
+    });
+    const fixture = data();
+    const result = evaluateGitHubReviewAudit({
+      ...fixture,
+      issueData,
+      reviewEntryReceipt: auditReceipt({ issueData }),
+    });
+    assert.equal(result.ok, true, result.errors.join('\n'));
+  });
+
+  it('fails closed when the gh PR file snapshot reaches the unpaginated limit, including a changed 101st path', () => {
+    const fixture = data();
+    const files = Array.from({ length: 101 }, (_, index) => ({ path: `src/file-${index + 1}.js` }));
+    const result = runGitHubReviewAudit({
+      pr: 42,
+      reviewEntryReceipt: fixture.reviewEntryReceipt,
+      commandRunner: auditRunner({ ...fixture.prData, files }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.provenanceValid, false);
+    assert.match(result.errors.join('\n'), /files inventory has 101 entries.*cannot establish completeness/i);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === 'review_audit.failure'));
+  });
+
+  it('fails closed when the gh PR commit snapshot reaches the unpaginated limit, including intervening 101st-commit movement', () => {
+    const fixture = data();
+    const commits = [
+      { oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' },
+      ...Array.from({ length: 100 }, (_, index) => ({ oid: oidAt(index + 1), message: `intervening ${index + 1}` })),
+    ];
+    const result = runGitHubReviewAudit({
+      pr: 42,
+      reviewEntryReceipt: fixture.reviewEntryReceipt,
+      commandRunner: auditRunner({ ...fixture.prData, commits }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.provenanceValid, false);
+    assert.match(result.errors.join('\n'), /commits inventory has 101 entries.*cannot establish completeness/i);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === 'review_audit.failure'));
+  });
+
+  it('admits complete gh PR snapshots below the unpaginated limit', () => {
+    const fixture = data();
+    const result = runGitHubReviewAudit({
+      pr: 42,
+      reviewEntryReceipt: fixture.reviewEntryReceipt,
+      commandRunner: auditRunner(fixture.prData),
+    });
+    assert.equal(result.ok, true, result.errors.join('\n'));
+  });
+
+  it('fails closed with a typed diagnostic when gh does not provide a complete files inventory', () => {
+    const fixture = data();
+    const prData = { ...fixture.prData };
+    delete prData.files;
+    const result = runGitHubReviewAudit({
+      pr: 42,
+      reviewEntryReceipt: fixture.reviewEntryReceipt,
+      commandRunner: auditRunner(prData),
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join('\n'), /files inventory is unavailable; cannot establish completeness/i);
+    assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === 'review_audit.failure'));
+  });
+
+  it('guards every GitHub files or commits pr-view enumeration with the shared completeness check', () => {
+    for (const file of ['src/github-preflight.js', 'src/github-review-audit.js']) {
+      const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+      assert.match(source, /githubPrSnapshotCompleteness\(/, `${file} must reject incomplete gh PR list snapshots`);
+    }
+  });
+
+  it('admits only a persisted finish candidate whose live head, base, and changed paths still match', () => {
+    const current = data();
+    const admitted = evaluateGitHubReviewAudit(current);
+    assert.equal(admitted.ok, true, admitted.errors.join('\n'));
+    assert.deepEqual(admitted.finishCandidate, current.reviewEntryReceipt.finishCandidate);
+
+    const baseMoved = evaluateGitHubReviewAudit({
+      ...current,
+      prData: { ...current.prData, baseRefOid: 'd'.repeat(40) },
+    });
+    assert.equal(baseMoved.ok, false);
+    assert.match(baseMoved.errors.join('\n'), /moving finish candidate: persisted product range base/i);
+    assert.equal(baseMoved.diagnostics[0].code, 'review_audit.failure');
+
+    const pathsMoved = evaluateGitHubReviewAudit({
+      ...current,
+      prData: { ...current.prData, files: [{ path: 'src/retargeted.js' }] },
+    });
+    assert.equal(pathsMoved.ok, false);
+    assert.match(pathsMoved.errors.join('\n'), /moving finish candidate: persisted changed-path verdict/i);
+    assert.equal(pathsMoved.diagnostics[0].code, 'review_audit.failure');
+
+    const staleReceipt = structuredClone(current.reviewEntryReceipt);
+    const later = 'd'.repeat(40);
+    const stale = evaluateGitHubReviewAudit({
+      ...current,
+      prData: {
+        ...current.prData, headRefOid: later,
+        commits: [{ oid: later, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
+        comments: [marker({ artifact: later })],
+      },
+      reviewEntryReceipt: staleReceipt,
+    });
+    assert.equal(stale.ok, false);
+    assert.match(stale.errors.join('\n'), /moving finish candidate: persisted candidate head/i);
+    assert.equal(stale.diagnostics[0].code, 'review_audit.failure');
+  });
+
+  it('refuses a persisted candidate whose commit inventory differs from the complete live PR inventory', () => {
+    const current = data();
+    const admitted = evaluateGitHubReviewAudit(current);
+    assert.equal(admitted.ok, true, admitted.errors.join('\n'));
+
+    const refused = evaluateGitHubReviewAudit({
+      ...current,
+      prData: {
+        ...current.prData,
+        commits: [{ oid: 'd'.repeat(40), message: 'unrelated commit' }],
+      },
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.provenanceValid, false);
+    assert.match(refused.errors.join('\n'), /persisted product range commits do not match the live PR commit inventory/i);
+    assert.ok(refused.diagnostics.some(diagnostic => diagnostic.code === 'review_audit.failure'));
+  });
+
+  it('keeps commit-inventory comparison in validation and audit without deriving a replacement candidate', () => {
+    const receiptSource = readFileSync(new URL('../src/review-entry-receipt.js', import.meta.url), 'utf8');
+    const auditSource = readFileSync(new URL('../src/github-review-audit.js', import.meta.url), 'utf8');
+
+    assert.match(receiptSource, /finish candidate commit inventory does not match its attribution inventory/);
+    assert.match(auditSource, /productCommits:\s*Array\.isArray\(prData\?\.commits\)/);
+    assert.doesNotMatch(auditSource, /\bderiveFinishCandidate\b/, 'audit must consume the persisted candidate rather than derive a replacement');
+  });
+
+  it('refuses a persisted candidate when the live task contract and required-check inventory drift without deriving a replacement', () => {
+    const current = data();
+    const changedIssue = {
+      ...current.issueData,
+      body: `${current.issueData.body}\n- [RC-2] \`npm run typecheck\``,
+    };
+    const refused = evaluateGitHubReviewAudit({ ...current, issueData: changedIssue });
+
+    assert.equal(refused.ok, false);
+    assert.equal(refused.provenanceValid, false);
+    assert.match(refused.errors.join('\n'), /persisted task contract digest does not match the live task contract/i);
+    assert.match(refused.errors.join('\n'), /persisted required-check set does not match the live required-check inventory/i);
+    assert.ok(refused.diagnostics.some(diagnostic => diagnostic.code === 'review_audit.failure'));
+
+    const source = readFileSync(new URL('../src/github-review-audit.js', import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /\bderiveFinishCandidate\b/, 'audit must consume the persisted candidate rather than derive a replacement');
+  });
+
+  it('refuses missing and degenerate persisted review-entry finish candidates', () => {
+    const current = data();
+    const missing = evaluateGitHubReviewAudit({ ...current, reviewEntryReceipt: null });
+    assert.equal(missing.ok, false);
+    assert.match(missing.errors.join('\n'), /finish candidate is unavailable or malformed/);
+
+    const degenerate = structuredClone(current.reviewEntryReceipt);
+    degenerate.finishCandidate.returnIdentity = {};
+    const refused = evaluateGitHubReviewAudit({ ...current, reviewEntryReceipt: degenerate });
+    assert.equal(refused.ok, false);
+    assert.match(refused.errors.join('\n'), /finish candidate.*missing, degenerate, or not exact/i);
+  });
+
   it('passes a current-head accepted marker and returns stable JSON data', () => {
     const result = evaluateGitHubReviewAudit(data());
     assert.equal(result.ok, true);
@@ -49,14 +275,16 @@ describe('GitHub review provenance audit', () => {
   });
 
   it('rejects older-head, missing-mode, missing-artifact, and unsupported markers', () => {
-    assert.match(evaluateGitHubReviewAudit(data({ comments: [marker({ artifact: OLD_HEAD })] })).errors.join('\n'), /stale/);
+    const stale = evaluateGitHubReviewAudit(data({ comments: [marker({ artifact: OLD_HEAD })] }));
+    assert.match(stale.errors.join('\n'), /stale/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [{ body: `AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_ARTIFACT: ${HEAD}`, author: LOOP_ACCOUNT }] })).errors.join('\n'), /exactly one mode/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [{ body: 'AGENT_REVIEW_STATUS: accepted\nAGENT_REVIEW_MODE: host_subagent\n[[agent: maintainer]]', author: LOOP_ACCOUNT }] })).errors.join('\n'), /exactly one artifact/);
     assert.match(evaluateGitHubReviewAudit(data({ comments: [marker({ mode: 'unknown' })] })).errors.join('\n'), /unsupported review mode/);
   });
 
   it('enforces independent review from the linked task issue', () => {
-    assert.match(evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'single_agent_fallback' })] })).errors.join('\n'), /cannot accept/);
+    const invalid = evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'single_agent_fallback' })] }));
+    assert.match(invalid.errors.join('\n'), /cannot accept/);
     assert.equal(evaluateGitHubReviewAudit(data({ independent: true, comments: [marker({ mode: 'host_subagent' })] })).ok, true);
   });
 
@@ -179,7 +407,7 @@ describe('GitHub review provenance audit', () => {
         stderr: '',
       };
     };
-    assert.equal(runGitHubReviewAudit({ pr: 42, commandRunner: runner }).ok, true);
+    assert.equal(runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: fixture.reviewEntryReceipt, commandRunner: runner }).ok, true);
     assert.throws(() => runGitHubReviewAudit({ pr: 42, commandRunner: () => ({ status: 1, stderr: 'network failed' }) }), GitHubReviewAuditError);
   });
 
@@ -481,12 +709,15 @@ describe('Review marker sources from PR review bodies', () => {
   it('current independent_human marker in GraphQL reviews triggers exactly one REST review fetch', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
+      commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [],
       reviews: [marker({ mode: 'independent_human', humanRef: HUMAN_REVIEW_URL })],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     let restCallCount = 0;
     const REST_REVIEW = {
       id: 99,
@@ -508,7 +739,7 @@ describe('Review marker sources from PR review bodies', () => {
       }
       return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
     };
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.equal(restCallCount, 1);
   });
@@ -516,12 +747,15 @@ describe('Review marker sources from PR review bodies', () => {
   it('non-human marker in GraphQL reviews does not trigger REST review fetch', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
+      commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [],
       reviews: [marker({ mode: 'host_subagent' })],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = (_command, args) => {
       if (args[0] === 'api') {
         if (args[1] === 'user') return { status: 0, stdout: JSON.stringify(LOOP_ACCOUNT), stderr: '' };
@@ -529,7 +763,7 @@ describe('Review marker sources from PR review bodies', () => {
       }
       return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
     };
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
   });
 
@@ -572,7 +806,7 @@ describe('Review marker sources from PR review bodies', () => {
       comments: [{ body: 'comment body', author: LOOP_ACCOUNT }],
       reviews: [{ body: 'review body', author: LOOP_ACCOUNT }],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = (_command, args) => {
       if (args[0] === 'api') return { status: 0, stdout: JSON.stringify(LOOP_ACCOUNT), stderr: '' };
       return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
@@ -584,7 +818,7 @@ describe('Review marker sources from PR review bodies', () => {
   });
 
   it('gh pr view command requests the reviews JSON field', () => {
-    const prData = { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
+    const prData = { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }], closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
     const issueData = { number: 7, body: '' };
     let requestedFields = '';
     const runner = (_command, args) => {
@@ -601,24 +835,26 @@ describe('Review marker sources from PR review bodies', () => {
 });
 
 describe('Issue binding enforcement', () => {
-  function issueRunner(prData, issueData = { number: 7, body: '' }) {
+  function issueRunner(prData, issueData = auditIssueData()) {
     return (_command, args) => {
       if (args[0] === 'api') return { status: 0, stdout: JSON.stringify(LOOP_ACCOUNT), stderr: '' };
-      return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
+      return { status: 0, stdout: JSON.stringify(args[0] === 'pr'
+        ? { files: [], commits: [{ oid: prData?.headRefOid ?? HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }], ...prData }
+        : issueData), stderr: '' };
     };
   }
 
   it('one closing issue, no explicit issue: passes using the linked issue', () => {
-    const prData = { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: issueRunner(prData) });
+    const prData = { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }], closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt(), commandRunner: issueRunner(prData) });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.deepEqual(result.closingIssues, [7]);
     assert.equal(result.issue, 7);
   });
 
   it('one closing issue, same explicit issue: passes', () => {
-    const prData = { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
-    const result = runGitHubReviewAudit({ pr: 42, issue: 7, commandRunner: issueRunner(prData) });
+    const prData = { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }], closingIssuesReferences: [{ number: 7 }], comments: [marker()], reviews: [] };
+    const result = runGitHubReviewAudit({ pr: 42, issue: 7, reviewEntryReceipt: auditReceipt(), commandRunner: issueRunner(prData) });
     assert.equal(result.ok, true, result.errors.join('\n'));
   });
 
@@ -628,13 +864,14 @@ describe('Issue binding enforcement', () => {
   });
 
   it('multiple closing issues, no explicit issue: fails', () => {
-    const prData = { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }, { number: 8 }], comments: [marker()], reviews: [] };
+    const prData = { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }], closingIssuesReferences: [{ number: 7 }, { number: 8 }], comments: [marker()], reviews: [] };
     assert.throws(() => runGitHubReviewAudit({ pr: 42, commandRunner: issueRunner(prData) }), /closes multiple issues/);
   });
 
   it('multiple closing issues, selected member: passes', () => {
-    const prData = { number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }, { number: 8 }], comments: [marker()], reviews: [] };
-    const result = runGitHubReviewAudit({ pr: 42, issue: 8, commandRunner: issueRunner(prData) });
+    const prData = { number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/audit.js' }], closingIssuesReferences: [{ number: 7 }, { number: 8 }], comments: [marker()], reviews: [] };
+    const issueData = auditIssueData({ task: 8 });
+    const result = runGitHubReviewAudit({ pr: 42, issue: 8, reviewEntryReceipt: auditReceipt({ task: 8, issueData }), commandRunner: issueRunner(prData, issueData) });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.deepEqual(result.closingIssues, [7, 8]);
   });
@@ -907,20 +1144,24 @@ describe('runGitHubReviewAudit REST review fetching', () => {
       if (args[0] === 'repo' && args[1] === 'view') {
         return { status: 0, stdout: JSON.stringify({ nameWithOwner: repoName ?? 'o/r' }), stderr: '' };
       }
-      return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
+      return { status: 0, stdout: JSON.stringify(args[0] === 'pr'
+        ? { files: [], commits: [{ oid: prData?.headRefOid ?? HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }], ...prData }
+        : issueData), stderr: '' };
     };
   }
 
   it('independent-human path performs the REST review request', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [humanMarker()],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = makeRunner({ prData, issueData, restResponse: [[REST_REVIEW]] });
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.equal(result.provenanceValid, true);
     assert.equal(result.acceptanceReady, true);
@@ -929,24 +1170,28 @@ describe('runGitHubReviewAudit REST review fetching', () => {
   it('non-human modes do not perform the REST review request', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [marker({ mode: 'host_subagent' })],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = makeRunner({ prData, issueData, forbidRestCall: true });
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
   });
 
   it('REST failure for independent-human returns provenanceValid false without throwing', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [humanMarker()],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = makeRunner({ prData, issueData, restError: 'network failed' });
     const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
     assert.equal(result.ok, false);
@@ -958,7 +1203,9 @@ describe('runGitHubReviewAudit REST review fetching', () => {
   it('malformed REST data fails conservatively for independent-human', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [humanMarker()],
     };
@@ -990,11 +1237,13 @@ describe('runGitHubReviewAudit REST review fetching', () => {
   it('--repo is used for the REST review endpoint', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [humanMarker()],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     let requestedPath = '';
     const runner = (_command, args) => {
       if (args[0] === 'api') {
@@ -1004,9 +1253,11 @@ describe('runGitHubReviewAudit REST review fetching', () => {
           return { status: 0, stdout: JSON.stringify([[REST_REVIEW]]), stderr: '' };
         }
       }
-      return { status: 0, stdout: JSON.stringify(args[0] === 'pr' ? prData : issueData), stderr: '' };
+      return { status: 0, stdout: JSON.stringify(args[0] === 'pr'
+        ? { files: [], commits: [{ oid: prData?.headRefOid ?? HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }], ...prData }
+        : issueData), stderr: '' };
     };
-    const result = runGitHubReviewAudit({ pr: 42, repo: 'explicit/repo', commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, repo: 'explicit/repo', reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.equal(requestedPath, 'repos/explicit/repo/pulls/42/reviews');
   });
@@ -1014,13 +1265,15 @@ describe('runGitHubReviewAudit REST review fetching', () => {
   it('default repository resolution works through the injected runner', () => {
     const prData = {
       number: 42,
+      baseRefOid: BASE,
       headRefOid: HEAD,
+      files: [{ path: 'src/audit.js' }],
       closingIssuesReferences: [{ number: 7 }],
       comments: [humanMarker()],
     };
-    const issueData = { number: 7, body: '' };
+    const issueData = auditIssueData();
     const runner = makeRunner({ prData, issueData, repoName: 'resolved/repo', restResponse: [[REST_REVIEW]] });
-    const result = runGitHubReviewAudit({ pr: 42, commandRunner: runner });
+    const result = runGitHubReviewAudit({ pr: 42, reviewEntryReceipt: auditReceipt({ issueData }), commandRunner: runner });
     assert.equal(result.ok, true, result.errors.join('\n'));
   });
 });
@@ -1403,8 +1656,8 @@ describe('Independent-review requirement detection', () => {
 
   it('rejects a same-session fallback when YAML frontmatter requires independent review', () => {
     const result = evaluateGitHubReviewAudit({
-      ...data({ comments: [marker({ mode: 'single_agent_fallback' })] }),
-      issueData: { number: 7, body: yamlBody('true') },
+      ...data({ comments: [marker({ mode: 'single_agent_fallback' })], independent: true }),
+      issueData: auditIssueData({ independent: true }),
     });
     assert.equal(result.ok, false);
     assert.equal(result.independentReviewRequired, true);
@@ -1413,8 +1666,8 @@ describe('Independent-review requirement detection', () => {
 
   it('accepts a valid independent mode when YAML frontmatter requires independent review', () => {
     const result = evaluateGitHubReviewAudit({
-      ...data({ comments: [marker({ mode: 'host_subagent' })] }),
-      issueData: { number: 7, body: yamlBody('true') },
+      ...data({ comments: [marker({ mode: 'host_subagent' })], independent: true }),
+      issueData: auditIssueData({ independent: true }),
     });
     assert.equal(result.ok, true, result.errors.join('\n'));
     assert.equal(result.independentReviewRequired, true);

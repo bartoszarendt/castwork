@@ -128,8 +128,8 @@ function validGitObjectId(value) {
   return /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(value);
 }
 
-/** Validate the closed portable execution-evidence wire shape. */
-export function validateExecutionEvidence(value, { expectedBinding = null, ...options } = {}) {
+/** Validate only the closed portable execution-evidence wire shape. */
+export function validateExecutionEvidenceStructure(value, options = {}) {
   const errors = [];
   const diagnostics = [];
   if (!exactKeys(value, FIELDS)) return { ok: false, errors: ['execution evidence fields must equal the closed schema'], diagnostics };
@@ -221,79 +221,89 @@ export function validateExecutionEvidence(value, { expectedBinding = null, ...op
     }
   }
   if (value.digest !== evidenceDigest(value)) errors.push('execution evidence digest is invalid');
-  if (expectedBinding !== null) {
-    const semanticExpected = {
-      packetId: expectedBinding.packetId,
-      packetDigest: expectedBinding.packetDigest,
-      invocationId: expectedBinding.invocationId,
-      taskId: expectedBinding.taskId,
-      taskContractDigest: expectedBinding.taskContractDigest,
-      productHead: expectedBinding.productHead,
+  return { ok: errors.length === 0, errors, diagnostics };
+}
+
+function completeExecutionEvidenceBinding(expectedBinding) {
+  return expectedBinding !== null && typeof expectedBinding === 'object' && !Array.isArray(expectedBinding) &&
+    typeof expectedBinding.packetId === 'string' && /^dispatch:[0-9a-f-]{36}$/.test(expectedBinding.packetId) &&
+    typeof expectedBinding.packetDigest === 'string' && validPacketDigest(expectedBinding.packetDigest) &&
+    typeof expectedBinding.invocationId === 'string' && expectedBinding.invocationId &&
+    typeof expectedBinding.taskId === 'string' && expectedBinding.taskId &&
+    typeof expectedBinding.taskContractDigest === 'string' && validContractDigest(expectedBinding.taskContractDigest) &&
+    typeof expectedBinding.productHead === 'string' && validGitObjectId(expectedBinding.productHead);
+}
+
+/** Validate execution evidence against one complete protected dispatch binding. */
+export function validateExecutionEvidence(value, { expectedBinding, ...options } = {}) {
+  if (!completeExecutionEvidenceBinding(expectedBinding)) {
+    return {
+      ok: false,
+      errors: ['protected execution-evidence validation requires a complete expected binding'],
+      diagnostics: [{ code: 'execution_evidence.binding_mismatch', field: 'expectedBinding', repair: 'rerun' }],
     };
-    for (const [field, expected] of Object.entries(semanticExpected)) {
-      if (value.binding?.[field] === expected) continue;
-      errors.push(`execution evidence binding '${field}' does not match the expected value`);
-      diagnostics.push({
-        code: 'execution_evidence.binding_mismatch',
-        field,
-        expected,
-        observed: value.binding?.[field] ?? null,
-        repair: 'rerun',
-      });
-    }
-    const expectedCheck = {
-      id: expectedBinding.checkId,
-      command: expectedBinding.command,
-      args: expectedBinding.args,
-    };
-    for (const [field, expected] of Object.entries(expectedCheck)) {
-      if (expected === undefined) continue;
-      const observed = field === 'id' ? value.check?.id : value.check?.[field];
-      const equal = Array.isArray(expected)
-        ? Array.isArray(observed) && JSON.stringify(observed) === JSON.stringify(expected)
-        : observed === expected;
-      if (equal) continue;
-      errors.push(`execution evidence check '${field}' does not match the expected value`);
-      diagnostics.push({
-        code: 'execution_evidence.binding_mismatch', field: `check.${field}`,
-        expected, observed: observed ?? null, repair: 'rerun',
-      });
-    }
-    if (expectedBinding.currentCarrierDigest !== undefined &&
-        value.lineage?.currentCarrierDigest !== expectedBinding.currentCarrierDigest) {
-      errors.push("execution evidence lineage 'currentCarrierDigest' does not match the expected carrier");
-      diagnostics.push({
-        code: 'execution_evidence.lineage_mismatch', field: 'currentCarrierDigest',
-        expected: expectedBinding.currentCarrierDigest, observed: value.lineage?.currentCarrierDigest ?? null,
-        repair: 'workflow_lineage_repair',
-      });
-    }
-    const repositoryHeadMatches = expectedBinding.repositoryHead === undefined ||
-      value.lineage?.repositoryHead === expectedBinding.repositoryHead ||
-      (typeof options.repositoryHeadIsPermitted === 'function' &&
-        options.repositoryHeadIsPermitted(
-          value.lineage?.repositoryHead,
-          expectedBinding.repositoryHead,
-          value
-        ) === true);
-    if (!repositoryHeadMatches) {
-      errors.push("execution evidence lineage 'repositoryHead' does not match the expected product/workflow head");
-      diagnostics.push({
-        code: 'execution_evidence.lineage_mismatch', field: 'repositoryHead',
-        expected: expectedBinding.repositoryHead, observed: value.lineage?.repositoryHead ?? null,
-        repair: 'rerun',
-      });
-    }
-    if (expectedBinding.workingDirectoryAuthority !== undefined &&
-        value.locations?.workingDirectory?.authorityPath !== expectedBinding.workingDirectoryAuthority) {
-      errors.push("execution evidence working-directory authority does not match the expected value");
-      diagnostics.push({
-        code: 'execution_evidence.binding_mismatch', field: 'workingDirectoryAuthority',
-        expected: expectedBinding.workingDirectoryAuthority,
-        observed: value.locations?.workingDirectory?.authorityPath ?? null,
-        repair: 'malformed_input',
-      });
-    }
+  }
+  const structural = validateExecutionEvidenceStructure(value, options);
+  if (!structural.ok) return structural;
+  const { errors, diagnostics } = structural;
+  const semanticExpected = {
+    packetId: expectedBinding.packetId,
+    packetDigest: expectedBinding.packetDigest,
+    invocationId: expectedBinding.invocationId,
+    taskId: expectedBinding.taskId,
+    taskContractDigest: expectedBinding.taskContractDigest,
+    productHead: expectedBinding.productHead,
+  };
+  for (const [field, expected] of Object.entries(semanticExpected)) {
+    if (value.binding?.[field] === expected) continue;
+    errors.push(`execution evidence binding '${field}' does not match the expected value`);
+    diagnostics.push({
+      code: 'execution_evidence.binding_mismatch', field, expected,
+      observed: value.binding?.[field] ?? null, repair: 'rerun',
+    });
+  }
+  const expectedCheck = { id: expectedBinding.checkId, command: expectedBinding.command, args: expectedBinding.args };
+  for (const [field, expected] of Object.entries(expectedCheck)) {
+    if (expected === undefined) continue;
+    const observed = field === 'id' ? value.check?.id : value.check?.[field];
+    const equal = Array.isArray(expected)
+      ? Array.isArray(observed) && JSON.stringify(observed) === JSON.stringify(expected)
+      : observed === expected;
+    if (equal) continue;
+    errors.push(`execution evidence check '${field}' does not match the expected value`);
+    diagnostics.push({
+      code: 'execution_evidence.binding_mismatch', field: `check.${field}`,
+      expected, observed: observed ?? null, repair: 'rerun',
+    });
+  }
+  if (expectedBinding.currentCarrierDigest !== undefined &&
+      value.lineage?.currentCarrierDigest !== expectedBinding.currentCarrierDigest) {
+    errors.push("execution evidence lineage 'currentCarrierDigest' does not match the expected carrier");
+    diagnostics.push({
+      code: 'execution_evidence.lineage_mismatch', field: 'currentCarrierDigest',
+      expected: expectedBinding.currentCarrierDigest, observed: value.lineage?.currentCarrierDigest ?? null,
+      repair: 'workflow_lineage_repair',
+    });
+  }
+  const repositoryHeadMatches = expectedBinding.repositoryHead === undefined ||
+    value.lineage?.repositoryHead === expectedBinding.repositoryHead ||
+    (typeof options.repositoryHeadIsPermitted === 'function' &&
+      options.repositoryHeadIsPermitted(value.lineage?.repositoryHead, expectedBinding.repositoryHead, value) === true);
+  if (!repositoryHeadMatches) {
+    errors.push("execution evidence lineage 'repositoryHead' does not match the expected product/workflow head");
+    diagnostics.push({
+      code: 'execution_evidence.lineage_mismatch', field: 'repositoryHead',
+      expected: expectedBinding.repositoryHead, observed: value.lineage?.repositoryHead ?? null, repair: 'rerun',
+    });
+  }
+  if (expectedBinding.workingDirectoryAuthority !== undefined &&
+      value.locations?.workingDirectory?.authorityPath !== expectedBinding.workingDirectoryAuthority) {
+    errors.push("execution evidence working-directory authority does not match the expected value");
+    diagnostics.push({
+      code: 'execution_evidence.binding_mismatch', field: 'workingDirectoryAuthority',
+      expected: expectedBinding.workingDirectoryAuthority,
+      observed: value.locations?.workingDirectory?.authorityPath ?? null, repair: 'malformed_input',
+    });
   }
   return { ok: errors.length === 0, errors, diagnostics };
 }
@@ -363,7 +373,7 @@ export function produceExecutionEvidence(input = {}, {
     digest: null,
   };
   record.digest = evidenceDigest(record);
-  const checked = validateExecutionEvidence(record, pathOptions);
+  const checked = validateExecutionEvidenceStructure(record, pathOptions);
   if (!checked.ok) throw new TypeError(checked.errors.join('; '));
   return Object.freeze(record);
 }

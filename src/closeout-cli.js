@@ -128,6 +128,7 @@ function activationFailureCategory(reasons, absent = false) {
 
 function returnFailureCategory(reasons) {
   const text = reasons.join(' ').toLowerCase();
+  if (text.includes('finish candidate is invalidated')) return 'return_evidence_stale';
   if (text.includes('conflict') || text.includes('ambiguous')) return 'ambiguous_or_conflicting_evidence';
   if (text.includes('host') || text.includes('receipt') || text.includes('authentication')) return 'host_receipt_invalid';
   if (text.includes('adapter') || text.includes('key') || text.includes('trust')) return 'trust_key_adapter_mismatch';
@@ -1132,6 +1133,14 @@ export async function cmdCloseout(args, io = createIo()) {
     return EXIT_USAGE;
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
+    if (error instanceof PublicCommandError) {
+      return printGateResult(
+        `closeout ${sub}`,
+        commandFailure(`closeout ${sub}`, error, 'public_error', {}, target),
+        Boolean(opts.json),
+        io,
+      );
+    }
     io.err(error.message);
     return 1;
   }
@@ -1363,7 +1372,10 @@ export function applyFilesCloseoutTerminalTransition(target, config, packet, io)
     };
   }
 
-  const committed = executeMutationBatch(target, writes, io?.fsMutationOptions ?? {});
+  const committed = executeMutationBatch(target, writes, {
+    ...(io?.fsMutationOptions ?? {}),
+    lifecycleAuthorityTaskIds: packet.covered_tasks,
+  });
   if (!committed.ok) {
     for (const error of committed.errors) io.err(`closeout terminal transition failed: ${error}`);
     for (const error of committed.rollbackErrors) io.err(`rollback error: ${error}`);
@@ -1531,7 +1543,10 @@ function recordFilesMarker(target, config, packet, markerBody, live, mode, io) {
     expectedDigest: createHash('sha256').update(currentBytes).digest('hex'),
     expectedKind: 'file',
     validateCurrent: bytes => evaluateTaskRecordRoot(bytes.toString('utf8'), { bytes }),
-  }], io?.fsMutationOptions ?? {});
+  }], {
+    ...(io?.fsMutationOptions ?? {}),
+    lifecycleAuthorityTaskIds: packet.covered_tasks,
+  });
   if (!committed.ok) {
     for (const error of committed.errors) io.err(`closeout record failed; the carrier is unchanged: ${error}`);
     for (const error of committed.rollbackErrors) io.err(`rollback error: ${error}`);

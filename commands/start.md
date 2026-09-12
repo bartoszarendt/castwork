@@ -59,13 +59,16 @@ Path convention: toolkit source (`AGENTIC_LOOP.md`, `agents/`, `skills/`,
 dot). `.agenticloop/agents`, `.agenticloop/skills`, and
 `.agenticloop/backends` are invalid paths – canonical assets are always
 under `agenticloop/` without the dot.
+The active role contract is always under `agenticloop/agents/`.
 
 Read `.agenticloop/project.md` first. If `setup_status` is `unconfirmed` or a
 confirmed map lacks a valid human-confirmed `development_stage`, route
 `agenticloop/skills/setup-agenticloop/SKILL.md` or confirm the profile before
 selecting or creating the first task.
 
-Then read `agenticloop/AGENTIC_LOOP.md` and the canonical role contracts in `agenticloop/agents/`.
+Then read `agenticloop/AGENTIC_LOOP.md`, the lifecycle-at-a-glance section, and
+only the canonical role contract for the current action. Read the named protocol
+or skill section on demand; do not preload every role, backend, or skill.
 Keep the main session as the coordinator: it reads the selected project config
 and process docs, routes task authoring, review, acceptance, and closeout
 through the maintainer role, routes scoped implementation and revision work

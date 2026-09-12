@@ -150,6 +150,16 @@ describe('the inventory cannot go stale', () => {
     assert.equal(STORAGE_CLASSES.durable_project_evidence.committed, true);
   });
 
+  it('classifies recovery intent as material transient transaction state, not permanent evidence or scratch', () => {
+    const transaction = STORAGE_CLASSES.material_transient_transaction_state;
+    const intent = EVIDENCE_INVENTORY.role_start_recovery_intent;
+    assert.equal(intent.storageClass, transaction.id);
+    assert.equal(transaction.committed, false);
+    assert.equal(transaction.cleanGate, 'fails_closed_until_resolved');
+    assert.match(transaction.rule, /not permanent evidence or disposable scratch/i);
+    assert.match(transaction.rule, /unknown, or invalid intent must block/i);
+  });
+
   it('keeps operator material outside every repository', () => {
     const operator = STORAGE_CLASSES.operator_owned_authenticated_state;
     assert.equal(operator.committed, false);

@@ -85,14 +85,93 @@ function decompositionRegenerationCommand(target, plan) {
   const scan = source?.scan;
   const workUnit = scan?.workUnit?.id;
   const baseIdentity = scan?.readinessContext?.base?.identity;
-  const dependencyRef = scan?.readinessContext?.dependencies?.sourceRef ??
-    scan?.readinessContext?.dependenciesByTask
-      ?.find(entry => entry.taskId === plan.taskId)?.evidence?.sourceRef;
+  const dependencySources = multiMemberDependencySources(scan, source?.route);
+  if (dependencySources.defect) return null;
+  const dependencyRef = dependencySources.sources
+    ? dependencyMapPath(sourceRef)
+    : scan?.readinessContext?.dependencies?.sourceRef ??
+      scan?.readinessContext?.dependenciesByTask
+        ?.find(entry => entry.taskId === plan.taskId)?.evidence?.sourceRef;
   const head = plan?.proposed?.repository?.head;
   if (!workUnit || !baseIdentity || !dependencyRef || !head) return null;
   const base = baseIdentity.startsWith('git-tree:') ? baseIdentity.slice('git-tree:'.length) : baseIdentity;
   return `npx agenticloop task prepare-decomposition ${plan.taskId} --work-unit ${workUnit} ` +
-    `--source-ref ${sourceRef} --source-revision git-commit:${head} --base ${base} --dependencies ${dependencyRef}`;
+    `--source-ref ${sourceRef} --source-revision git-commit:${head} --base ${base} ` +
+    `${dependencySources.sources ? '--dependencies-by-task' : '--dependencies'} ${dependencyRef}`;
+}
+
+function dependencyMapPath(sourceRef) {
+  return sourceRef.endsWith('.json')
+    ? `${sourceRef.slice(0, -'.json'.length)}.dependencies-by-task.json`
+    : `${sourceRef}.dependencies-by-task.json`;
+}
+
+/**
+ * Explicit-parallel multi-member scans must retain a complete,
+ * one-distinct-source-per-member map. Keep single-member artifacts on their
+ * legacy dependency selector, but make malformed parallel maps observable so
+ * no caller can mistake them for that legacy case.
+ */
+function multiMemberDependencySources(scan, route) {
+  const taskIds = [...new Set((scan?.inventory?.members ?? [])
+    .map(member => String(member?.taskId ?? '').trim()).filter(Boolean))].sort();
+  if (route !== 'parallel' || taskIds.length <= 1) return { sources: null, defect: null };
+  const entries = scan?.readinessContext?.dependenciesByTask;
+  if (!Array.isArray(entries)) {
+    return { sources: null, defect: '[handoff.refresh.dependencies_by_task.missing_member] multi-member parallel dependency map is missing entries for: ' + taskIds.join(', ') };
+  }
+  const seen = new Set();
+  for (const [index, entry] of entries.entries()) {
+    const taskId = typeof entry?.taskId === 'string' ? entry.taskId : '';
+    if (!taskIds.includes(taskId)) {
+      return { sources: null, defect: `[handoff.refresh.dependencies_by_task.invalid_member] multi-member parallel dependency map has invalid member entry: ${taskId || '<missing>'}` };
+    }
+    if (seen.has(taskId)) {
+      return { sources: null, defect: `[handoff.refresh.dependencies_by_task.duplicate_member] multi-member parallel dependency map has duplicate member entry: ${taskId}` };
+    }
+    seen.add(taskId);
+    if (taskId !== taskIds[index]) {
+      return { sources: null, defect: `[handoff.refresh.dependencies_by_task.noncanonical_member] multi-member parallel dependency map has non-canonical member entry: ${taskId}` };
+    }
+  }
+  const byTask = new Map();
+  for (const entry of entries) {
+    const taskId = String(entry?.taskId ?? '').trim();
+    if (taskIds.includes(taskId)) byTask.set(taskId, entry?.evidence?.sourceRef);
+  }
+  const missing = taskIds.filter(taskId => !byTask.has(taskId));
+  if (missing.length > 0) {
+    return { sources: null, defect: '[handoff.refresh.dependencies_by_task.missing_member] multi-member parallel dependency map is missing entries for: ' + missing.join(', ') };
+  }
+  const unsafe = taskIds.filter(taskId => !isSafeRelativePath(byTask.get(taskId)));
+  if (unsafe.length > 0) {
+    return { sources: null, defect: '[handoff.refresh.dependencies_by_task.invalid_source] multi-member parallel dependency map has unsafe source for: ' + unsafe.join(', ') };
+  }
+  const sources = taskIds.map(taskId => byTask.get(taskId));
+  if (new Set(sources).size !== sources.length) {
+    return { sources: null, defect: '[handoff.refresh.dependencies_by_task.duplicate_source] multi-member parallel dependency map reuses a source across members' };
+  }
+  return { sources: Object.fromEntries(taskIds.map(taskId => [taskId, byTask.get(taskId)])), defect: null };
+}
+
+function dependencyMapWrite(target, scan, sourceRef, route) {
+  if (!isSafeRelativePath(sourceRef)) return null;
+  if (!scan) {
+    try {
+      const source = JSON.parse(readFileSync(join(target, sourceRef), 'utf8'));
+      scan = source?.scan ?? null;
+      route ??= source?.route;
+    } catch { return null; }
+  }
+  const result = multiMemberDependencySources(scan, route);
+  if (result.sources === null) return null;
+  const path = dependencyMapPath(sourceRef);
+  const absolute = join(target, path);
+  return {
+    path,
+    expectedDigest: existsSync(absolute) ? byteDigest(readFileSync(absolute, 'utf8')) : null,
+    content: `${canonicalJson(result.sources)}\n`,
+  };
 }
 
 function isSafeRelativePath(value) {
@@ -438,9 +517,16 @@ function attemptDependencySnapshotRefresh({ target, preflight, backend = 'files'
   } catch {
     return { ok: false, skipped: true, reason: 'decomposition source is unreadable', expectedDigest: null, content: null, path: null, snapshot: null };
   }
-  const depSourceRef = decompositionSource?.scan?.readinessContext?.dependencies?.sourceRef ??
-    decompositionSource?.scan?.readinessContext?.dependenciesByTask
-      ?.find(entry => entry.taskId === taskId)?.evidence?.sourceRef;
+  const taskId = safeTaskId(preflight?.taskId);
+  const dependencySources = multiMemberDependencySources(decompositionSource?.scan, decompositionSource?.route);
+  if (dependencySources.defect) {
+    return { ok: false, skipped: false, reason: dependencySources.defect, expectedDigest: null, content: null, path: null, snapshot: null };
+  }
+  const depSourceRef = dependencySources.sources
+    ? dependencySources.sources[taskId] ?? null
+    : decompositionSource?.scan?.readinessContext?.dependencies?.sourceRef ??
+      decompositionSource?.scan?.readinessContext?.dependenciesByTask
+        ?.find(entry => entry.taskId === taskId)?.evidence?.sourceRef;
   if (!depSourceRef) {
     return { ok: false, skipped: true, reason: 'no dependency snapshot sourceRef in decomposition readinessContext', expectedDigest: null, content: null, path: null, snapshot: null };
   }
@@ -463,7 +549,6 @@ function attemptDependencySnapshotRefresh({ target, preflight, backend = 'files'
   if (snapshot?.kind !== 'agenticloop.dependency-snapshot' || snapshot?.schemaVersion !== 1) {
     return { ok: false, skipped: false, reason: 'dependency snapshot has invalid kind or schemaVersion', expectedDigest: null, content: null, path: null, snapshot: null };
   }
-  const taskId = safeTaskId(preflight?.taskId);
   const carrierPath = join(target, '.agenticloop', 'tasks', `${taskId}.md`);
   if (!existsSync(carrierPath)) {
     return { ok: false, skipped: false, reason: `task carrier not found: ${taskId}`, expectedDigest: null, content: null, path: null, snapshot: null };
@@ -564,9 +649,15 @@ function attemptDecompositionRegeneration({
   if (!scan?.workUnit || !scan?.inventory || !scan?.decomposition) {
     return { ok: false, skipped: false, reason: 'decomposition scan is missing required fields', expectedDigest: null, content: null, path: null };
   }
-  const depSourceRef = scan?.readinessContext?.dependencies?.sourceRef ??
-    scan?.readinessContext?.dependenciesByTask
-      ?.find(entry => entry.taskId === taskId)?.evidence?.sourceRef ?? null;
+  const dependencySources = multiMemberDependencySources(scan, decompositionSource?.route);
+  if (dependencySources.defect) {
+    return { ok: false, skipped: false, reason: dependencySources.defect, expectedDigest: null, content: null, path: null };
+  }
+  const depSourceRef = dependencySources.sources
+    ? dependencySources.sources[taskId] ?? null
+    : scan?.readinessContext?.dependencies?.sourceRef ??
+      scan?.readinessContext?.dependenciesByTask
+        ?.find(entry => entry.taskId === taskId)?.evidence?.sourceRef ?? null;
   let depEvidence = null;
   let depStatusMapValue = {};
   if (depSourceRef) {
@@ -743,7 +834,13 @@ function deriveDependencySnapshotFromDecomposition(target, taskId) {
   } catch {
     return { ok: false, reason: 'decomposition is unreadable', path: null, content: null, expectedDigest: null };
   }
-  const depSourceRef = decompositionSource?.scan?.readinessContext?.dependencies?.sourceRef ?? null;
+  const dependencySources = multiMemberDependencySources(decompositionSource?.scan, decompositionSource?.route);
+  if (dependencySources.defect) {
+    return { ok: false, reason: dependencySources.defect, path: null, content: null, expectedDigest: null };
+  }
+  const depSourceRef = dependencySources.sources
+    ? dependencySources.sources[taskId] ?? null
+    : decompositionSource?.scan?.readinessContext?.dependencies?.sourceRef ?? null;
   if (!depSourceRef) {
     return { ok: false, reason: 'decomposition has no dependency snapshot sourceRef', path: null, content: null, expectedDigest: null };
   }
@@ -888,6 +985,16 @@ export function createHandoffEvidenceRefreshPlan({ target, preflight }) {
   if (decompResult.ok) {
     changedFiles.push(decompResult.path);
     additionalWrites.push({ path: decompResult.path, expectedDigest: decompResult.expectedDigest, content: decompResult.content });
+  }
+  const perTaskMapWrite = dependencyMapWrite(
+    target,
+    decompResult.decomposition?.scan ?? null,
+    preflight.decomposition?.sourceRef,
+    decompResult.decomposition?.route,
+  );
+  if (perTaskMapWrite) {
+    changedFiles.push(perTaskMapWrite.path);
+    additionalWrites.push(perTaskMapWrite);
   }
 
   // Build inputs (F4): pin derivation inputs into the plan
@@ -1114,6 +1221,10 @@ export function applyHandoffEvidenceRefresh({ target, plan, preflight }) {
     }
   }
   const regenerationCommand = decompositionRegenerationCommand(target, plan);
+  const regenerationCategory = plan.categories.find(item =>
+    item.category === 'decomposition_provenance');
+  const malformedDependencyMap = regenerationCategory?.reason
+    ?.startsWith('[handoff.refresh.dependencies_by_task.');
   return {
     ok: false,
     evidenceState: 'current',
@@ -1133,9 +1244,11 @@ export function applyHandoffEvidenceRefresh({ target, plan, preflight }) {
     attributionValidation: validateHandoffRefreshMaintainerTrailer(plan.taskId),
     nextOperation: plan.categories.some(item =>
       item.category === 'decomposition_provenance' && item.action === 'requires_maintainer_regeneration')
-      ? (regenerationCommand
+      ? (malformedDependencyMap
+        ? `Do not regenerate from this plan: ${regenerationCategory.reason}. A Maintainer must correct the multi-member dependency map before creating a new refresh plan.`
+        : regenerationCommand
         ? `Regenerate decomposition exactly with: ${regenerationCommand}. Then commit every changed file and rerun: npx agenticloop task handoff-preflight ${plan.taskId} --json`
-        : `Decomposition regeneration inputs are incomplete in this plan. Regenerate the handoff-preflight repair plan, then run its exact task prepare-decomposition command before committing and rerunning preflight.`)
+        : `Decomposition regeneration inputs are incomplete in this plan: ${plan.categories.find(item => item.category === 'decomposition_provenance')?.reason ?? 'unknown defect'}. Regenerate the handoff-preflight repair plan, then run its exact task prepare-decomposition command before committing and rerunning preflight.`)
       : `Review and commit exactly these files with the printed subject and trailer block, then rerun: npx agenticloop task handoff-preflight ${plan.taskId} --json`,
     firstSafeRepair: 'Do not dispatch from this state: the written receipt is uncommitted and clean-checkout preflight must refuse it.',
   };

@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { deriveCommitRange } from './commit-range.js';
+import { resolveCommitAdoption, validateCommitAdoptionRecord } from './commit-adoption.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
 import {
@@ -10,11 +11,12 @@ import {
   resolveCarrierLineage,
   validateDispatchConsumption,
 } from './handoff-consumption.js';
+import { classifyLifecycleCompatibility } from './lifecycle-compatibility.js';
 import {
   validateCarrierMutationReceipt,
 } from './task-evidence-contract.js';
 import { validateAuditRecord } from './audit-record.js';
-import { validateExecutionEvidence } from './execution-evidence.js';
+import { validateExecutionEvidenceStructure } from './execution-evidence.js';
 import {
   executionAttemptAbandonmentRelativePath,
   listExecutionAttemptAbandonments,
@@ -51,6 +53,26 @@ function requireAncestor(runGit, ancestor, descendant, label) {
   if (result.status !== 0) {
     throw new VerificationContextStaleError(`${label} is not an ancestor of ${descendant}`);
   }
+}
+
+function laterScopedProductPath(runGit, workflowHead, currentHead, classifier, inTaskSurface) {
+  const commits = String(readGit(
+    runGit,
+    ['rev-list', '--reverse', `${workflowHead}..${currentHead}`],
+    'historical closeout candidate commit inventory'
+  )).split(/\r?\n/).filter(Boolean);
+  for (const commit of commits) {
+    const changedPaths = sortedPaths(readGit(
+      runGit,
+      ['diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', '-m', commit],
+      `historical closeout candidate commit '${commit}' inventory`
+    ));
+    const productPath = changedPaths.find(path =>
+      classifier.classify(path) === 'product' && inTaskSurface(path)
+    );
+    if (productPath) return productPath;
+  }
+  return null;
 }
 
 function exactWorkflowPaths(target, packet, signedEvidence, runGit, workflowHead, { historicalCloseout }) {
@@ -108,12 +130,17 @@ function workflowRecordAtHead(runGit, workflowHead, path, expected) {
   } catch {
     throw new VerificationContextMalformedError(`workflow evidence '${path}' is not valid JSON`);
   }
+  const dispatchCompatibility = expected.kind === 'dispatch'
+    ? classifyLifecycleCompatibility(record, 'agenticloop.dispatch-consumption')
+    : null;
   const checked = expected.kind === 'dispatch'
-    ? validateDispatchConsumption(record, {
-        backend: expected.record.backend,
-        taskId: expected.record.taskId,
-        filename: path.split('/').at(-1),
-      })
+    ? (['current', 'readable'].includes(dispatchCompatibility.state)
+        ? validateDispatchConsumption(record, {
+          backend: expected.record.backend,
+          taskId: expected.record.taskId,
+          filename: path.split('/').at(-1),
+        }, record.schemaVersion)
+        : { ok: false })
     : expected.kind === 'abandonment'
       ? validateExecutionAttemptAbandonment(record, { taskId: expected.record.taskId })
       : validateCarrierMutationReceipt(record);
@@ -179,6 +206,22 @@ function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier
     }
     return 'workflow_evidence';
   }
+  const adoption = path.match(/^\.agenticloop\/adoptions\/commits\/([A-Za-z0-9._-]+)\/[0-9a-f]{40,64}\.json$/);
+  if (adoption) {
+    if (adoption[1] !== packet?.task?.id) {
+      throw new VerificationContextMalformedError(`commit adoption '${path}' belongs to a different task than the packet names`);
+    }
+    let record;
+    try { record = JSON.parse(readGit(runGit, ['show', `${workflowHead}:${path}`], `commit adoption '${path}'`)); }
+    catch { throw new VerificationContextMalformedError(`commit adoption '${path}' is not valid JSON`); }
+    const checked = validateCommitAdoptionRecord(record, {
+      taskId: packet.task.id, taskContractDigest: packet.task.taskContractDigest,
+    });
+    if (!checked.ok) {
+      throw new VerificationContextMalformedError(`commit adoption '${path}' is not a validated canonical adoption record: ${checked.errors[0]}`);
+    }
+    return 'workflow_evidence';
+  }
   // Proof that a required check ran is written to a tracked path by default, so
   // committing it is the intended end state rather than an anomaly - and until
   // this family was recognized, committing it aborted the next evidence refetch
@@ -198,7 +241,7 @@ function classifyPath(path, { packet, workflow, runGit, workflowHead, classifier
     } catch {
       throw new VerificationContextMalformedError(`workflow check evidence '${path}' is not valid JSON`);
     }
-    const checked = validateExecutionEvidence(record);
+    const checked = validateExecutionEvidenceStructure(record);
     if (!checked.ok) {
       throw new VerificationContextMalformedError(
         `workflow check evidence '${path}' is not a closed CLI execution artifact: ${checked.errors[0]}`
@@ -316,7 +359,34 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
   }
   requireAncestor(runGit, productBaseHead, productHead, 'productBaseHead');
   requireAncestor(runGit, productHead, workflowHead, 'productHead');
+  // Historical closeout retains the return's workflow generation so ordinary
+  // review/closeout records need not be reconstructed.  It still observes the
+  // live repository for a later scoped product mutation: that mutation is a new
+  // candidate and invalidates the old certification rather than becoming an
+  // excuse to reuse it.
+  if (historicalCloseout) {
+    const laterProductPath = laterScopedProductPath(
+      runGit, workflowHead, currentHead, classifier, inTaskSurface
+    );
+    if (laterProductPath) {
+      throw new VerificationContextStaleError(
+        `finish candidate is invalidated by later scoped product path '${laterProductPath}'; ` +
+        'historical closeout does not reconstruct unrelated workflow evidence'
+      );
+    }
+  }
 
+  const adoption = resolveCommitAdoption(target, {
+    taskId: packet?.task?.id,
+    taskContractDigest: packet?.task?.taskContractDigest,
+    baseHead: productBaseHead,
+    head: productHead,
+  });
+  if (!adoption.ok) {
+    throw new VerificationContextMalformedError(
+      `durable commit adoption attribution is invalid: ${adoption.errors.join('; ')}`
+    );
+  }
   const product = deriveCommitRange({
     runGit,
     baseHead: productBaseHead,
@@ -324,6 +394,7 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     taskId: packet?.task?.id,
     roleId: packet?.assignment?.roleId,
     allowedPaths: packet?.task?.allowedPaths,
+    adoption: adoption.attribution ?? null,
   });
   if (!product.ok) {
     throw product.evidenceState === 'malformed'

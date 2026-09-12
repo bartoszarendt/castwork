@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "kind": "agenticloop.synthetic-refusal-chain",
+  "privacy": "synthetic-only",
+  "steps": [
+    {
+      "id": "activation-expiry",
+      "observedShape": "historical signed activation grant and binding expiry with current packet liveness",
+      "syntheticResult": "authorization.continues_when_historical_activation_expiry_matches_current_semantic_inputs",
+      "execution": {
+        "command": "task role-start",
+        "result": { "status": 0, "code": "none" },
+        "authorization": {
+          "grant": "signed_historical_expiry",
+          "binding": "signed_historical_expiry",
+          "packetLiveness": "current",
+          "outcome": "continued"
+        },
+        "invariants": { "dispatchConsumptions": 1, "attempts": 1, "liveAttempt": "present", "state": "live" }
+      }
+    },
+    {
+      "id": "wrong-product-head",
+      "observedShape": "repair evidence named the wrong product identity",
+      "syntheticResult": "typed-refusal-observed:task.evidence.product_head",
+      "execution": {
+        "command": "task evidence",
+        "result": { "status": 1, "code": "task.evidence.product_head" },
+        "invariants": { "dispatchConsumptions": 1, "attempts": 1, "liveAttempt": "present", "state": "live" }
+      }
+    },
+    {
+      "id": "artifact-class-mismatch",
+      "observedShape": "evidence required a different generated artifact class",
+      "syntheticResult": "typed-refusal-observed:task.evidence.lineage",
+      "execution": {
+        "command": "task evidence",
+        "result": { "status": 1, "code": "task.evidence.lineage" },
+        "invariants": { "dispatchConsumptions": 1, "attempts": 1, "liveAttempt": "present", "state": "live" }
+      }
+    },
+    {
+      "id": "packet-liveness",
+      "observedShape": "packet liveness expired after a successful preflight",
+      "syntheticResult": "packet.revalidated_from_current_protected_inputs",
+      "execution": {
+        "command": "task role-start",
+        "result": { "status": 0, "code": "none" },
+        "invariants": { "dispatchConsumptions": 1, "attempts": 1, "liveAttempt": "present", "state": "live" }
+      }
+    },
+    {
+      "id": "recovery-supersession",
+      "observedShape": "recovery abandoned an attempt and added supersession history",
+      "syntheticResult": "attempt.history_preserved_without_protocol_attempt",
+      "execution": {
+        "command": "task abandon-attempt",
+        "result": { "status": 0, "code": "none" },
+        "invariants": { "dispatchConsumptions": 1, "attempts": 1, "liveAttempt": "absent", "state": "abandoned" }
+      }
+    },
+    {
+      "id": "generated-clean-gate",
+      "observedShape": "generated host-local files failed the clean gate after an update",
+      "syntheticResult": "host-local-state.classified_outside_product_dirty_state",
+      "execution": {
+        "command": "task prepare-dispatch",
+        "result": { "status": 0, "code": "none" },
+        "invariants": { "dispatchConsumptions": 0, "attempts": 0, "liveAttempt": "absent", "state": "none" }
+      }
+    },
+    {
+      "id": "decomposition-schema",
+      "observedShape": "decomposition schema changed during active work",
+      "syntheticResult": "schema.compatibility_or_atomic_migration",
+      "execution": {
+        "command": "task prepare-dispatch",
+        "result": { "status": 0, "code": "none" },
+        "invariants": { "dispatchConsumptions": 0, "attempts": 0, "liveAttempt": "absent", "state": "none" }
+      }
+    },
+    {
+      "id": "member-dependency-evidence",
+      "observedShape": "multi-member dependency evidence could not satisfy the per-task validator",
+      "syntheticResult": "serial-route.does_not_require_parallel_member_evidence",
+      "execution": {
+        "command": "task prepare-dispatch",
+        "result": { "status": 0, "code": "none" },
+        "invariants": { "dispatchConsumptions": 0, "attempts": 0, "liveAttempt": "absent", "state": "none" }
+      }
+    }
+  ]
+}

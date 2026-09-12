@@ -123,6 +123,15 @@ export function taskContractProjection(taskBody) {
       acceptance_criteria: section('## Acceptance Criteria'),
       required_checks: requiredChecks,
       independent_review_required: String(frontmatter.independent_review_required ?? '').trim().toLowerCase(),
+      // Risk is a distinct P36-06/P36-07 authority fact. Keep it inside the
+      // protected projection so an adoption or remediation cannot claim an
+      // unchanged contract while silently changing its risk classification.
+      // Omit an absent legacy field rather than changing every active task's
+      // existing contract digest; those tasks fail adoption/remediation closed
+      // until their owner establishes the new classification explicitly.
+      ...(String(frontmatter.risk_class ?? '').trim()
+        ? { risk_class: String(frontmatter.risk_class).trim() }
+        : {}),
       locked_decision_refs: normalizedPaths(frontmatter.locked_decision_refs ?? frontmatter.decision_refs),
       ...(activationDigest ? { activation_input_digest: activationDigest } : {}),
       ...(activationCaptureRef ? { activation_capture_ref: activationCaptureRef } : {}),

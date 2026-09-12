@@ -59,6 +59,14 @@ export const STORAGE_CLASSES = Object.freeze({
     retention: 'for the life of the project history; append-only where the class says so',
     rule: 'Evidence a later gate reads to make a decision. It must be committed by its owning role before the gate that consumes it runs; uncommitted durable evidence fails closed rather than being auto-staged.',
   }),
+  material_transient_transaction_state: Object.freeze({
+    id: 'material_transient_transaction_state',
+    location: '.agenticloop/handoffs/role-start-transactions/',
+    committed: false,
+    cleanGate: 'fails_closed_until_resolved',
+    retention: 'until its transaction reaches one consistent outcome: committed post-state or restored pre-state',
+    rule: 'Authenticated recovery intent for an in-flight transaction. It is not permanent evidence or disposable scratch: an unresolved, unknown, or invalid intent must block the transition until the exact retry resolves it or refuses it without mutation.',
+  }),
   product_task_carrier_state: Object.freeze({
     id: 'product_task_carrier_state',
     location: '.agenticloop/tasks/ and the product tree',
@@ -132,6 +140,16 @@ export const EVIDENCE_INVENTORY = Object.freeze({
     retention: 'project history; it is the only record of when an attempt began',
     storageClass: 'durable_project_evidence',
     visibleTo: Object.freeze(['orchestrator', 'maintainer', 'engineer']),
+  }),
+  role_start_recovery_intent: entry({
+    root: '.agenticloop/handoffs/role-start-transactions',
+    producer: 'role start mutation kernel',
+    consumer: 'the next role-start invocation for the exact packet',
+    decision: 'whether an interrupted role start must restore its pre-images or may retain its committed post-state',
+    derivable: false,
+    retention: 'only until the transaction reaches its exclusive consumption-record commit point or recovery restores the pre-state',
+    storageClass: 'material_transient_transaction_state',
+    visibleTo: Object.freeze(['engineer']),
   }),
   carrier_mutation_receipt: entry({
     root: '.agenticloop/handoffs/task-mutations',

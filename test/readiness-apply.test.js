@@ -38,6 +38,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 import { git } from './helpers/git-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
@@ -54,6 +55,7 @@ import { createReadinessApplyBindings } from '../src/task-cli.js';
 import { evaluateCommitAttribution, evaluateWorkUnitCommitAttribution } from '../src/commit-attribution.js';
 import { evaluateTaskReadiness } from '../src/task-readiness.js';
 import { normalizeCandidateFailure } from '../src/readiness-candidates.js';
+import { executeMutationBatch } from '../src/fs-mutation-kernel.js';
 import {
   ACTOR,
   AUTHORITY,
@@ -758,6 +760,29 @@ describe('failure injection and rollback', () => {
     assert.equal(commitCountSince(target, baseHead), 0);
     assert.match(taskBody(target, taskId), /^status: draft$/m);
     assert.equal(porcelain(target), '');
+  });
+
+  it('serializes a terminal carrier contender while readiness persists its lifecycle candidate', async () => {
+    const { target, taskId } = createReadinessTarget(temp, 'terminal-contender');
+    const { plan } = await writePlan(target, taskId);
+    let contender;
+    const applied = applyReadinessPlan({
+      target, taskId, plan, projectConfig: {},
+      ...createReadinessApplyBindings(target, {}, taskId),
+      beforeWrite: () => {
+        const carrier = taskBody(target, taskId);
+        contender = executeMutationBatch(target, [{
+          type: 'write', path: `.agenticloop/tasks/${taskId}.md`,
+          content: carrier.replace(/^status: draft$/m, 'status: closed'),
+          expectedKind: 'file',
+          expectedDigest: createHash('sha256').update(carrier, 'utf8').digest('hex'),
+        }], { lifecycleAuthorityTaskIds: [taskId] });
+      },
+    });
+    assert.equal(contender.ok, false);
+    assert.equal(contender.code, 'fs.lifecycle_lock.contended');
+    assert.equal(applied.mutationDisposition, 'committed', JSON.stringify(applied.errors));
+    assert.match(taskBody(target, taskId), /^status: agent-ready$/m);
   });
 
   it('preserves external progress and reports unresolved when a candidate path is replaced', async () => {

@@ -2,7 +2,7 @@
  * Tests for src/adapters/shared.js.
  *
  * Covers:
- *   - collectInstructionPaths dedupes and respects role/agent/backend layout
+ *   - collectInstructionPaths retains selected orientation documents only
  *   - resolveRoleModel applies adapter-local roleSettings first
  *   - resolveRoleModel falls back to legacy roles.<role>.model / reasoningEffort
  *   - buildRoleRecord reads role source files and returns description/prompt body
@@ -59,7 +59,7 @@ describe('collectInstructionPaths', () => {
     return root;
   }
 
-  it('returns canonical documents, agents, backend references, and role-delegation skill', () => {
+  it('returns selected orientation documents and the single lifecycle protocol source', () => {
     const root = seededRoot();
     try {
       const cfg = minimalConfig();
@@ -69,16 +69,16 @@ describe('collectInstructionPaths', () => {
         'IMPLEMENTATION_PLAN.md',
         'README.md',
         'agenticloop/AGENTIC_LOOP.md',
-        'agenticloop/agents/orchestrator.md',
-        'agenticloop/agents/maintainer.md',
-        'agenticloop/agents/engineer.md',
-        'agenticloop/backends/README.md',
-        'agenticloop/backends/files.md',
-        'agenticloop/backends/github.md',
-        'agenticloop/skills/role-delegation/SKILL.md',
+        'agenticloop/commands/lifecycle-protocol.md',
       ]) {
         assert.ok(paths.includes(required), `expected ${required} in ${JSON.stringify(paths)}`);
       }
+      for (const excluded of [
+        'agenticloop/agents/orchestrator.md',
+        'agenticloop/backends/files.md',
+        'agenticloop/backends/github.md',
+        'agenticloop/skills/role-delegation/SKILL.md',
+      ]) assert.ok(!paths.includes(excluded), `did not expect ${excluded} in ${JSON.stringify(paths)}`);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -104,9 +104,11 @@ describe('collectInstructionPaths', () => {
     try {
       mkdirSync(join(tmpRoot, '.agenticloop'), { recursive: true });
       mkdirSync(join(tmpRoot, 'agenticloop', 'agents'), { recursive: true });
+      mkdirSync(join(tmpRoot, 'agenticloop', 'commands'), { recursive: true });
       mkdirSync(join(tmpRoot, 'agenticloop', 'backends'), { recursive: true });
       mkdirSync(join(tmpRoot, 'agenticloop', 'skills', 'role-delegation'), { recursive: true });
       writeFileSync(join(tmpRoot, 'agenticloop', 'AGENTIC_LOOP.md'), '# Process\n');
+      writeFileSync(join(tmpRoot, 'agenticloop', 'commands', 'lifecycle-protocol.md'), '# Protocol\n');
       writeFileSync(join(tmpRoot, 'AGENTS.md'), '# Rules\n');
       writeFileSync(join(tmpRoot, 'README.md'), '# Overview\n');
       writeFileSync(join(tmpRoot, 'ROADMAP.md'), '# Plan\n');
@@ -132,20 +134,22 @@ describe('collectInstructionPaths', () => {
       const paths = collectInstructionPaths(cfg, tmpRoot);
       assert.ok(paths.includes('ROADMAP.md'), `expected ROADMAP.md in ${JSON.stringify(paths)}`);
       assert.ok(!paths.includes('IMPLEMENTATION_PLAN.md'), `did not expect IMPLEMENTATION_PLAN.md in ${JSON.stringify(paths)}`);
-      assert.ok(paths.includes('agenticloop/backends/files.md'), `expected agenticloop/backends/files.md in ${JSON.stringify(paths)}`);
-      assert.ok(!paths.includes('agenticloop/backends/github.md'), `did not expect agenticloop/backends/github.md in ${JSON.stringify(paths)}`);
+      assert.ok(paths.includes('agenticloop/commands/lifecycle-protocol.md'), `expected protocol in ${JSON.stringify(paths)}`);
+      assert.ok(!paths.includes('agenticloop/backends/files.md'), `did not expect backend in ${JSON.stringify(paths)}`);
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
 
-  it('includes both backend projections when no project map exists', () => {
+  it('does not preload either backend projection when no project map exists', () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), 'al-shared-test-no-map-'));
     try {
       mkdirSync(join(tmpRoot, 'agenticloop', 'agents'), { recursive: true });
+      mkdirSync(join(tmpRoot, 'agenticloop', 'commands'), { recursive: true });
       mkdirSync(join(tmpRoot, 'agenticloop', 'backends'), { recursive: true });
       mkdirSync(join(tmpRoot, 'agenticloop', 'skills', 'role-delegation'), { recursive: true });
       writeFileSync(join(tmpRoot, 'agenticloop', 'AGENTIC_LOOP.md'), '# Process\n');
+      writeFileSync(join(tmpRoot, 'agenticloop', 'commands', 'lifecycle-protocol.md'), '# Protocol\n');
       writeFileSync(join(tmpRoot, 'AGENTS.md'), '# Rules\n');
       writeFileSync(join(tmpRoot, 'README.md'), '# Overview\n');
       writeFileSync(join(tmpRoot, 'IMPLEMENTATION_PLAN.md'), '# Plan\n');
@@ -159,8 +163,8 @@ describe('collectInstructionPaths', () => {
 
       const cfg = minimalConfig();
       const paths = collectInstructionPaths(cfg, tmpRoot);
-      assert.ok(paths.includes('agenticloop/backends/files.md'), `expected agenticloop/backends/files.md in ${JSON.stringify(paths)}`);
-      assert.ok(paths.includes('agenticloop/backends/github.md'), `expected agenticloop/backends/github.md in ${JSON.stringify(paths)}`);
+      assert.ok(paths.includes('agenticloop/commands/lifecycle-protocol.md'), `expected protocol in ${JSON.stringify(paths)}`);
+      assert.ok(!paths.includes('agenticloop/backends/files.md'), `did not expect backend in ${JSON.stringify(paths)}`);
     } finally {
       rmSync(tmpRoot, { recursive: true, force: true });
     }

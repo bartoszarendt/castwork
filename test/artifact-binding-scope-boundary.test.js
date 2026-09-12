@@ -36,7 +36,7 @@ function functionBody(source, name) {
   return lines.slice(start, end + 1);
 }
 
-const BINDING_SOURCE = readFileSync(join(REPO_ROOT, 'src', 'task-cli.js'), 'utf8');
+const BINDING_SOURCE = readFileSync(join(REPO_ROOT, 'src', 'task-fact-readers.js'), 'utf8');
 
 describe('implementation artifact binding is scoped to the task surface', () => {
   for (const name of ['isWorkflowPath', 'createPathClassifier', 'classifyRepositoryPath']) {

@@ -12,6 +12,7 @@ import {
   validateCheckpointSchema,
   formatCheckpoint,
   DEFAULT_REVIEW_BUDGET,
+  REVIEW_CHECKPOINT_FAILURE_KINDS,
   VALID_DIRECTIONS,
 } from '../src/review-checkpoint.js';
 
@@ -348,6 +349,25 @@ describe('evaluateReviewCheckpoint', () => {
     });
     assert.equal(result.authorized, false);
     assert.ok(result.errors.some(e => /consumed|replay|review_count.*does not match/i.test(e)));
+    assert.ok(result.failureKinds.includes(REVIEW_CHECKPOINT_FAILURE_KINDS.CONSUMED));
+  });
+
+  it('does not compound an invalid checkpoint history with consumed_checkpoint', () => {
+    const result = evaluateReviewCheckpoint({
+      reviewHistory: [
+        { type: 'outcome', status: 'needs_revision', artifact: HEAD, sourceOrder: 0 },
+        {
+          type: 'checkpoint', direction: 'targeted_revision', cause: 'implementation_defect', reviewCount: 2,
+          artifact: HEAD, target: 'repair F-1', orchestratorAttribution: 'orchestrator-bot',
+          roleId: 'orchestrator', roleCarrierSchemaVersion: 1, sourceOrder: 1,
+        },
+        { type: 'outcome', status: 'needs_revision', artifact: 'b'.repeat(40), sourceOrder: 2 },
+      ],
+      budget: 1,
+      requireRevision: true,
+    });
+    assert.equal(result.authorized, false);
+    assert.deepEqual(result.failureKinds, [REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID]);
   });
 
   it('warns when checkpoint present but within budget', () => {
@@ -402,6 +422,7 @@ describe('evaluateReviewCheckpoint', () => {
     });
     assert.equal(result.authorized, false);
     assert.match(result.errors.join('\n'), /checkpoint has been consumed/i);
+    assert.deepEqual(result.failureKinds, [REVIEW_CHECKPOINT_FAILURE_KINDS.CONSUMED]);
   });
 
   it('keeps mixed canonical and legacy outcomes in chronological checkpoint accounting', () => {

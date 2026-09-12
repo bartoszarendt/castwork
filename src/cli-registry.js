@@ -177,9 +177,10 @@ export const COMMAND_REGISTRY = {
   },
   'github-review-audit': {
     summary: 'Verify artifact-bound GitHub review provenance for a PR.',
-    usage: 'agenticloop github-review-audit --pr <number> [--issue <number>] [--repo <owner/name>] [--expect-status <accepted|needs_revision>] [--expect-artifact <sha>] [--workspace <path>] [--json]',
+    usage: 'agenticloop github-review-audit --pr <number> --review-packet <path> [--issue <number>] [--repo <owner/name>] [--expect-status <accepted|needs_revision>] [--expect-artifact <sha>] [--workspace <path>] [--json]',
     options: [
       opt('pr', 'string', 'Pull request number to audit. Required.'),
+      opt('review-packet', 'string', 'Persisted github-review-prepare packet whose signed review-entry finish candidate must be consumed. Required for a passing audit.'),
       opt('issue', 'string', 'Linked task issue number (default: inferred from PR closing references).'),
       opt('repo', 'string', 'Target repository (default: gh-resolved current repo).'),
       opt('expect-status', 'string', 'Expected review status (default: accepted).', { enum: ['accepted', 'needs_revision'] }),
@@ -190,9 +191,10 @@ export const COMMAND_REGISTRY = {
   },
   'github-ready': {
     summary: 'Read-only pre-merge gate: run the evidence preflight and the review audit together and report one merge-readiness verdict.',
-    usage: 'agenticloop github-ready --pr <number> [--issue <number>] [--repo <owner/name>] [--json]',
+    usage: 'agenticloop github-ready --pr <number> --review-packet <path> [--issue <number>] [--repo <owner/name>] [--json]',
     options: [
       opt('pr', 'string', 'Pull request number to check. Required.'),
+      opt('review-packet', 'string', 'Persisted github-review-prepare packet for exact-candidate audit admission.'),
       opt('issue', 'string', 'Linked task issue number (default: inferred from PR closing references).'),
       opt('repo', 'string', 'Target repository (default: gh-resolved current repo).'),
       jsonOption,
@@ -539,7 +541,7 @@ export const COMMAND_REGISTRY = {
   },
   task: {
     summary: 'Manage files-backed task records and canonical handoff preparation.',
-    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|readiness-plan|readiness-apply|measure|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|status> [options]',
+    usage: 'agenticloop task <list|show|lint|new|materialize|establish-baseline|authorize-correction|prepare-decomposition|prepare-dispatch|role-start|handoff-preflight|refresh-handoff-receipt|refresh-handoff-evidence|commit-message|attempt-status|abandon-attempt|adopt-historical|adopt-commit|remediation-authority|readiness-plan|readiness-apply|measure|explain|prepare-return|verify-return|check-evidence-init|check-evidence-show|check-evidence-update|evidence|review-prepare|review-attach-outcome|status> [options]',
     subcommands: {
       list: {
         summary: 'List task records.',
@@ -638,6 +640,17 @@ export const COMMAND_REGISTRY = {
         positionals: [{ name: 'id', required: true }],
         options: [targetOption(), jsonOption],
       },
+      explain: {
+        summary: 'Explain bounded current task facts and action verdicts. Read-only; grants no authority and writes nothing.',
+        usage: 'agenticloop task explain <id> [--action <action-id>] [--json] [--target <dir>]',
+        receiptRevalidation: 'read-only',
+        positionals: [{ name: 'id', required: true }],
+        options: [
+          targetOption(),
+          opt('action', 'string', 'Limit the explanation to one stable action id.'),
+          jsonOption,
+        ],
+      },
       'adopt-historical': {
         summary: 'Record a truthful reduced-assurance terminal adoption for work that predates the canonical lifecycle.',
         usage: 'agenticloop task adopt-historical <id> --artifact <commit> --integration <kind:reference> --integration-commit <commit> --audit <kind:reference> --authority <kind:reference> --reason <text> --missing <class> [--json] [--target <dir>]',
@@ -651,6 +664,33 @@ export const COMMAND_REGISTRY = {
           opt('authority', 'string', 'Durable human adoption authority in <kind>:<reference> form. Required.'),
           opt('reason', 'string', 'Why canonical execution evidence does not exist. Required and recorded verbatim.'),
           opt('missing', 'string', 'One evidence class this task genuinely lacks. Repeatable and required.', { multiple: true }),
+          jsonOption,
+        ],
+      },
+      'adopt-commit': {
+        summary: 'Adopt an attributable, in-scope commit range into an existing canonical attempt and require fresh certification.',
+        usage: 'agenticloop task adopt-commit <id> --attempt <attempt-id> --base <commit> --head <commit> --actor-class <class> --actor-id <id> --reason <text> [--json] [--target <dir>]',
+        positionals: [{ name: 'id', required: true }],
+        options: [
+          targetOption(),
+          opt('attempt', 'string', 'Existing canonical Engineer attempt identity. Required.'),
+          opt('base', 'string', 'Exact original product base commit. Required.'),
+          opt('head', 'string', 'Exact adopted product head commit. Required.'),
+          opt('actor-class', 'string', 'Deliberate out-of-band actor class, such as human. Required.'),
+          opt('actor-id', 'string', 'Deliberate out-of-band actor identity. Required.'),
+          opt('reason', 'string', 'Why this bounded commit is being adopted. Required and recorded.'),
+          jsonOption,
+        ],
+      },
+      'remediation-authority': {
+        summary: 'Open an in-contract remediation cycle only after exact-candidate independent certification checks.',
+        usage: 'agenticloop task remediation-authority <id> --attempt <attempt-id> --candidate <path> --finding <path> [--json] [--target <dir>]',
+        positionals: [{ name: 'id', required: true }],
+        options: [
+          targetOption(),
+          opt('attempt', 'string', 'Existing canonical Engineer attempt identity. Required.'),
+          opt('candidate', 'string', 'Persisted canonical finish-candidate JSON, relative to target. Required.'),
+          opt('finding', 'string', 'Finding JSON with contract, risk, and explicit widensIntent:false. Required.'),
           jsonOption,
         ],
       },
@@ -740,7 +780,7 @@ export const COMMAND_REGISTRY = {
       },
       'prepare-decomposition': {
         summary: 'Enumerate the task surface, run the parallel scan, and emit a committable decomposition source. Read-only without --output; mutating with --output.',
-        usage: 'agenticloop task prepare-decomposition <id> --work-unit <id> --source-ref <path> --source-revision <ref> (--base <ref> | --base-paths <path>) --dependencies <path> [--repo <owner/name>] [--route <serial|parallel>] [--observed-at <instant>] [--max-age-seconds <n>] [--rescan-trigger <text>] [--output <path>] [--json] [--target <dir>]',
+        usage: 'agenticloop task prepare-decomposition <id> --work-unit <id> --source-ref <path> --source-revision <ref> (--base <ref> | --base-paths <path>) (--dependencies <path> | --dependencies-by-task <map.json>) [--repo <owner/name>] [--route <serial|parallel>] [--observed-at <instant>] [--max-age-seconds <n>] [--rescan-trigger <text>] [--output <path>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only-without-output',
         positionals: [{ name: 'id', required: true }],
         options: [
@@ -750,7 +790,8 @@ export const COMMAND_REGISTRY = {
           opt('source-revision', 'string', 'Exact decomposition source revision (for example git-commit:<sha>). Required.'),
           opt('base', 'string', 'Explicit Git base whose resolved tree supplies the base-path inventory.'),
           opt('base-paths', 'string', 'Explicit JSON base-tree inventory. Mutually exclusive with --base.'),
-          opt('dependencies', 'string', 'Committed Maintainer-attributed dependency-status snapshot bound to the ready set. Required.'),
+          opt('dependencies', 'string', 'Committed Maintainer-attributed dependency-status snapshot bound to the ready set.'),
+          opt('dependencies-by-task', 'string', 'Target-relative JSON object mapping every parallel inventory task id to its own committed Maintainer-attributed dependency snapshot.'),
           opt('repo', 'string', 'GitHub repository in owner/name form. Defaults to the authenticated current repository for the GitHub backend.'),
           opt('route', 'string', 'Requested route. A parallel route requires the scan to place the task in a candidate pair.', { enum: ['serial', 'parallel'] }),
           opt('observed-at', 'string', 'ISO-8601 UTC observation instant. Defaults to now.'),
@@ -762,10 +803,10 @@ export const COMMAND_REGISTRY = {
       },
       'prepare-dispatch': {
         summary: 'Refetch and bind one backend-selected role dispatch without mutating the task.',
-        usage: 'agenticloop task prepare-dispatch <id> (--host <host> --role engineer | --input <dispatch-input.json> | --packet <packet.json> --role engineer) [--output <path>] [--repo <owner/name>] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
+        usage: 'agenticloop task prepare-dispatch <id> (--host <host> --role engineer | --input <dispatch-input.json> | --packet <packet.json> --role engineer) [--route <serial|parallel>] [--output <path>] [--repo <owner/name>] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: true }],
-        options: [targetOption(), opt('host', 'string', 'Canonical generated host identity used to derive the Engineer assignment from current durable facts. Required for the ordinary no-input producer.'), opt('output', 'string', 'Optional packet output path. With --json, stdout is a closed success result and this path holds the exact packet artifact. Input/output paths are target-relative and must remain inside the selected target.'), opt('input', 'string', 'Advanced compatibility input for projects where durable source selectors are unavailable. Its route is validated normally; it may not override refetched durable authority. Path is target-relative and must remain inside the selected target.'), opt('packet', 'string', 'Existing dispatch packet to revalidate read-only before receiver mutation. Path is target-relative and must remain inside the selected target.'), opt('role', 'string', 'Immutable receiving role required for ordinary and --packet routes. The advanced --input compatibility route preserves its existing no-host invocation.', { enum: ['engineer'] }), opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('prior-receipts', 'string', 'JSON array of prior-gate or setup task-mutation receipts that must be resolved and undrifted before dispatch. Path is target-relative and must remain inside the selected target.'), opt('repo', 'string', 'GitHub repository in owner/name form. Defaults to the authenticated current repository for the GitHub backend.'), hostTrustStoreOption, jsonOption],
+        options: [targetOption(), opt('host', 'string', 'Canonical generated host identity used to derive the Engineer assignment from current durable facts. Required for the ordinary no-input producer.'), opt('route', 'string', 'Execution route. Serial is the default and carries no decomposition or parallel scan; parallel requires the committed decomposition and full safety validation.', { enum: ['serial', 'parallel'] }), opt('output', 'string', 'Optional packet output path. With --json, stdout is a closed success result and this path holds the exact packet artifact. Input/output paths are target-relative and must remain inside the selected target.'), opt('input', 'string', 'Advanced compatibility input for projects where durable source selectors are unavailable. Its route is validated normally; it may not override refetched durable authority. Path is target-relative and must remain inside the selected target.'), opt('packet', 'string', 'Existing dispatch packet to revalidate read-only before receiver mutation. Path is target-relative and must remain inside the selected target.'), opt('role', 'string', 'Immutable receiving role required for ordinary and --packet routes. The advanced --input compatibility route preserves its existing no-host invocation.', { enum: ['engineer'] }), opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('prior-receipts', 'string', 'JSON array of prior-gate or setup task-mutation receipts that must be resolved and undrifted before dispatch. Path is target-relative and must remain inside the selected target.'), opt('repo', 'string', 'GitHub repository in owner/name form. Defaults to the authenticated current repository for the GitHub backend.'), hostTrustStoreOption, jsonOption],
       },
       'role-start': {
         summary: 'Atomically combine files-backend role start (in-progress transition), dispatch consumption, and required-check evidence initialization into one guarded transaction.',
@@ -801,10 +842,10 @@ export const COMMAND_REGISTRY = {
       },
       'handoff-preflight': {
         summary: 'Read-only pre-delegation prerequisite check: report every ordinary prerequisite and one safe repair before dispatch packet assembly.',
-        usage: 'agenticloop task handoff-preflight <id> [--host <host>] [--host-trust-store <expected-path>] [--return-adapter <id>] [--repair-plan <path>] [--output <path>] [--json] [--target <dir>]',
+        usage: 'agenticloop task handoff-preflight <id> [--route <serial|parallel>] [--host <host>] [--host-trust-store <expected-path>] [--return-adapter <id>] [--repair-plan <path>] [--output <path>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: true }],
-        options: [targetOption(), opt('host', 'string', 'Canonical generated host identity for host-role capability resolution. Required when multiple adapter hosts are configured.'), hostTrustStoreOption, opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('repair-plan', 'string', 'Write a bounded derived-evidence refresh plan to this target-relative path.'), opt('output', 'string', 'Write the preflight result JSON to this target-relative path. Atomic write; directory is created if needed.'), jsonOption],
+        options: [targetOption(), opt('route', 'string', 'Execution route. Serial is the default and does not inspect parallel decomposition or scan artifacts; parallel retains their complete safety validation.', { enum: ['serial', 'parallel'] }), opt('host', 'string', 'Canonical generated host identity for host-role capability resolution. Required when multiple adapter hosts are configured.'), hostTrustStoreOption, opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('repair-plan', 'string', 'Write a bounded derived-evidence refresh plan to this target-relative path.'), opt('output', 'string', 'Write the preflight result JSON to this target-relative path. Atomic write; directory is created if needed.'), jsonOption],
       },
       'refresh-handoff-evidence': {
         summary: 'Compatibility alias for refresh-handoff-receipt.',
@@ -891,9 +932,15 @@ export const COMMAND_REGISTRY = {
       },
       'review-prepare': {
         summary: 'Prepare one files-backed review entry from a current verified return and carrier lineage.',
-        usage: 'agenticloop task review-prepare <id> [--json] [--target <dir>]',
+        usage: 'agenticloop task review-prepare <id> [--maintainer-receipt <receipt.json>] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
-        options: [targetOption(), jsonOption],
+        options: [targetOption(), opt('maintainer-receipt', 'string', 'Host-signed Maintainer outcome receipt required when the current review history contains an outcome.'), hostTrustStoreOption, jsonOption],
+      },
+      'review-attach-outcome': {
+        summary: 'Atomically attach one later host-authenticated Maintainer outcome to an already prepared files review entry.',
+        usage: 'agenticloop task review-attach-outcome <id> --return-verification <record-id> --maintainer-receipt <receipt.json> [--host-trust-store <expected-path>] [--json] [--target <dir>]',
+        positionals: [{ name: 'id', required: true }],
+        options: [targetOption(), opt('return-verification', 'string', 'Exact verified-return record id bound to the prepared review entry. Required.'), opt('maintainer-receipt', 'string', 'Fresh host-signed Maintainer outcome receipt for the exact return and current review history. Required.'), hostTrustStoreOption, jsonOption],
       },
       status: {
         summary: 'Update task status.',

@@ -32,6 +32,7 @@ import { loadHostTrustStore, targetRepositoryIdentity } from './host-trust.js';
 import { taskContractDigest } from './task-contract-baseline.js';
 import { loadFilesTaskContractRecords } from './files-task-contract.js';
 import { evaluateTaskReadiness } from './task-readiness.js';
+import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 import {
   evaluateDispatchableLifecycle,
   taskStatusFromBody,
@@ -39,6 +40,7 @@ import {
 import { parseDependencySnapshot, dependencyStatusMap } from './task-evidence-contract.js';
 import { isGitObjectId } from './git-oid.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
+import { hasCurrentLayout } from './layout.js';
 import { listAgenticLoopWorktrees, resolveGitRepositoryContext } from './worktree.js';
 import { resolveAdapterHost } from './adapter-discovery.js';
 import { loadAgenticLoopConfig } from './json.js';
@@ -60,7 +62,7 @@ import {
   executionAttemptIdentity,
 } from './execution-attempt.js';
 import { resolveCarrierLineage } from './handoff-consumption.js';
-import { deriveProductHead } from './product-lineage.js';
+import { createPathClassifier, deriveProductHead } from './product-lineage.js';
 import {
   parseRequiredCheckInventory,
   REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION,
@@ -77,6 +79,7 @@ import {
   activationCaptureDisposition,
   observeDispatchInitialState,
   evaluateDispatchEligibility,
+  projectReadOnlyDispatchEligibility,
   liveContinuationCandidate,
   liveReadinessCandidate,
 } from './dispatch-eligibility.js';
@@ -309,11 +312,17 @@ export function evaluateHandoffPreflight(input) {
     hostTrustStore,
     returnAdapter = null,
     now = new Date().toISOString(),
+    onEligibilityEvaluation = null,
   } = input;
 
   const command = 'task handoff-preflight';
   const findings = new PreflightFindings();
   const resolvedTarget = resolve(target);
+  // Parallel artifacts are not inputs to a default serial dispatch. Resolve
+  // this route before reading any decomposition-derived file so serial
+  // preflight cannot age, parse, or otherwise depend on parallel evidence.
+  const parallelRequested = input.route === 'parallel';
+  const routeAgreementRequested = false;
 
   // ── 1. Task snapshot ──────────────────────────────────────────────────
   let snapshot = null;
@@ -527,13 +536,13 @@ export function evaluateHandoffPreflight(input) {
   }
 
   // ── 1c. Decomposition source ──────────────────────────────────────────
-  // Loaded before activation and readiness because both consume it: readiness
-  // resolves its dependency snapshot through it, and an activation refusal
-  // reads the bound work unit and ready set from it so it can offer the batch
-  // and work-unit options instead of one task at a time.
+  // Parallel routing alone consumes decomposition-derived inputs: readiness
+  // resolves its dependency snapshot through them, and an activation refusal
+  // reads the bound work unit and ready set to offer batch/work-unit options.
+  // Serial preflight must not inspect a committed parallel artifact at all.
   let decompositionSource = null;
 
-  if (snapshot) {
+  if (snapshot && parallelRequested) {
     const decompositionSourceRef = `.agenticloop/decompositions/${taskId}.json`;
     const decompositionFullPath = join(resolvedTarget, decompositionSourceRef);
     if (existsSync(decompositionFullPath)) {
@@ -544,7 +553,6 @@ export function evaluateHandoffPreflight(input) {
       }
     }
   }
-
   // ── 2. Activation ─────────────────────────────────────────────────────
   let activationState = null;
   let activationAssurance = null;
@@ -559,7 +567,11 @@ export function evaluateHandoffPreflight(input) {
     const sourceRevision = decompositionSource?.scan?.decomposition?.revision ?? head ?? 'HEAD';
     const base = baseTree ?? 'HEAD';
     const dependencies = decompositionSource?.scan?.readinessContext?.dependencies?.sourceRef ?? `.agenticloop/decompositions/${taskId}.dependencies.json`;
-    return `npx agenticloop task prepare-decomposition ${taskId} --work-unit ${workUnit} --source-ref ${sourceRef} --source-revision ${sourceRevision} --base ${base} --dependencies ${dependencies} --output .agenticloop/decompositions/${taskId}.json`;
+    const memberDependencies = decompositionSource?.scan?.readinessContext?.dependenciesByTask;
+    const dependencyArgument = Array.isArray(memberDependencies) && memberDependencies.length > 1
+      ? `--dependencies-by-task .agenticloop/decompositions/${taskId}.dependencies-by-task.json`
+      : `--dependencies ${dependencies}`;
+    return `npx agenticloop task prepare-decomposition ${taskId} --work-unit ${workUnit} --source-ref ${sourceRef} --source-revision ${sourceRevision} --base ${base} ${dependencyArgument} --output .agenticloop/decompositions/${taskId}.json`;
   }
 
   try {
@@ -705,11 +717,20 @@ export function evaluateHandoffPreflight(input) {
             }
           }
 
+          const serialDependencies = backend === 'files' && !parallelRequested
+            ? resolveSerialDependencyEvidence({
+                target: resolvedTarget,
+                taskBody: snapshot.body,
+                projectConfig,
+                now: Date.parse(now),
+              })
+            : null;
+
           const evaluated = evaluateTaskReadiness({
             taskBody: snapshot.body,
             basePaths,
             mode: 'authoring',
-            dependencies: depStatuses,
+            dependencies: serialDependencies?.statuses ?? depStatuses,
           });
           readinessResult = {
             ok: evaluated.ok,
@@ -743,7 +764,7 @@ export function evaluateHandoffPreflight(input) {
               `npx agenticloop task refresh-handoff-evidence ${taskId} --json`,
               'stale'
             );
-          } else if (decompositionSource) {
+          } else if (parallelRequested) {
             if (!depSourceRef) {
               dependencyAge = { state: 'observed', evaluatedAt: now, maxAgeSeconds: null };
             } else {
@@ -771,7 +792,7 @@ export function evaluateHandoffPreflight(input) {
   let decompositionRepair = null;
   let decompositionResolutionReported = false;
 
-  if (snapshot) {
+  if (snapshot && parallelRequested) {
     const sourceRef = `.agenticloop/decompositions/${taskId}.json`;
     const fullPath = join(resolvedTarget, sourceRef);
     const head = gitText(resolvedTarget, ['rev-parse', '--verify', 'HEAD']);
@@ -908,6 +929,8 @@ export function evaluateHandoffPreflight(input) {
           runGit: args => runGit(resolvedTarget, args),
           scopePatterns: scopeContract?.ok ? scopeContract.projection.allowed_paths ?? [] : [],
           intendedCreations: scopeContract?.ok ? scopeContract.projection.intended_creations ?? [] : [],
+          legacyLayout: !hasCurrentLayout(resolvedTarget),
+          target: resolvedTarget,
         });
         cleanStateClassification = cleanStateObservation.clean?.ok === true ? 'clean' : 'dirty';
       } catch (error) {
@@ -1196,9 +1219,11 @@ export function evaluateHandoffPreflight(input) {
           authorization: authorizationFact,
           readinessObservation,
           dependencyObservation: dependencyAge,
-          repository: repositoryState,
-          decomposition: decompositionSource,
-          parallelScanInventory: currentTaskInventory,
+           repository: repositoryState,
+            decomposition: parallelRequested ? decompositionSource : null,
+           parallelRequested,
+           routeAgreementRequested,
+           parallelScanInventory: parallelRequested ? currentTaskInventory : null,
           hostRoleCapability: hostRoleCapabilityFact,
           policy: effectivePolicy
             ? { mode: effectivePolicy.mode, minimumActivation: effectivePolicy.minimumActivation }
@@ -1239,6 +1264,13 @@ export function evaluateHandoffPreflight(input) {
     }
   }
 
+  // This observer is used only by the sibling read-only projection. It sees
+  // exactly the dispatch-eligibility ledger this owner evaluated, while the
+  // protected command retains its closed public result schema.
+  if (typeof onEligibilityEvaluation === 'function') {
+    try { onEligibilityEvaluation(eligibility); } catch { /* observer has no gate authority */ }
+  }
+
   // ── 10. Build result ──────────────────────────────────────────────────
   const activation = activationState ? {
     source: activationState.source ?? null,
@@ -1276,6 +1308,7 @@ export function evaluateHandoffPreflight(input) {
         runGit: args => runGit(resolvedTarget, args),
         baseHead: lineage.dispatchConsumption.productBaseHead,
         head: repositoryState.head,
+        classifier: createPathClassifier(resolvedTarget),
       });
       derivedProductHead = product.ok ? product.productHead : null;
       if (product.ok && product.productHead === lineage.dispatchConsumption.productBaseHead) {
@@ -1451,4 +1484,17 @@ export function evaluateHandoffPreflight(input) {
     firstSafeRepair,
     dispositionOwner,
   };
+}
+
+/** Run the existing dispatch evaluator and return its canonical read-only envelope. */
+export function evaluateReadOnlyDispatchProjection(input) {
+  let eligibility = null;
+  evaluateHandoffPreflight({
+    ...input,
+    // The observer is intentionally non-authoritative and cannot alter the
+    // protected command's closed public result. It exposes the evaluator-owned
+    // ledger to this sibling read-only projection without widening that result.
+    onEligibilityEvaluation: decision => { eligibility = decision; },
+  });
+  return projectReadOnlyDispatchEligibility(eligibility);
 }

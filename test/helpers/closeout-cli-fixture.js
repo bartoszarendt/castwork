@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolveCarrierLineage } from '../../src/handoff-consumption.js';
+import { canonicalJson } from '../../src/canonical-json.js';
+import { createAuditorReturnReceipt } from '../../src/auditor-return-receipt.js';
+import { prepareAuditorReturnReportForSigning } from '../../src/audit-report-schema.js';
 import { taskStatusFromBody } from '../../src/dispatchability.js';
 import { produceExecutionEvidence } from '../../src/execution-evidence.js';
 import {
@@ -94,7 +97,7 @@ export function createCloseoutCliFixture() {
     const setupOptions = { auditEnabled, projectMap };
     const configuredCheckpoint = `configured:${sha256(JSON.stringify(setupOptions))}`;
     const fixture = await fixturePool.acquire(temp, name, {
-      workUnit: 'milestone:M00', projectMapContent: projectMap,
+      workUnit: 'milestone:M00', parallel: true, taskIds: ['T-001', 'T-002'], decompositionTaskIds: ['T-001'], projectMapContent: projectMap,
       additionalAllowedPaths: ['.agenticloop/audits/**'],
     }, { preferredCheckpoint: configuredCheckpoint, resetPaths: [join(temp, 'operator-activation')] });
     const target = fixture.root;
@@ -189,6 +192,10 @@ export function createCloseoutCliFixture() {
     reportOverrides = {},
     auditOptions = {},
     skipAudit = false,
+    // Package-boundary callers supply the installed CLI runner.  The fixture
+    // still owns only disposable target setup and deterministic Git commits;
+    // every lifecycle transition is then executed by the artifact under test.
+    command = runCliInProcess,
   } = {}) {
     const fixture = dispatchFixtures.get(target);
     assert.ok(fixture, 'certification success requires a genuine dispatch fixture');
@@ -217,6 +224,7 @@ export function createCloseoutCliFixture() {
     cacheStats.lastRestoredCheckpoint = null;
     assert.deepEqual(tasks, ['T-001']);
     const cli = { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) };
+    const invoke = args => command(args, cli);
     const taskBody = () => readFileSync(fixture.taskPath, 'utf8');
     const carrierDigest = () => sha256(taskBody());
 
@@ -244,7 +252,7 @@ export function createCloseoutCliFixture() {
 
     // 3 - role start recognized against that packet through the public
     // command, which persists the one dispatch consumption.
-    const started = await runCliInProcess([
+    const started = await invoke([
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', carrierDigest(),
       '--dispatch-packet', packetPath, '--json', '--target', target,
     ], cli);
@@ -260,7 +268,7 @@ export function createCloseoutCliFixture() {
 
     // 5 - the Engineer's own carrier evidence, written by the guarded command
     // that also records its lineage receipt.
-    const evidenced = await runCliInProcess([
+    const evidenced = await invoke([
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(), '--product-head', productHead, '--json', '--target', target,
     ], cli);
@@ -323,13 +331,17 @@ export function createCloseoutCliFixture() {
     const evidencePath = '.agenticloop/tmp/engineer-evidence.json';
     writeFileSync(join(target, returnPath), JSON.stringify(roleReturn, null, 2), 'utf8');
     writeFileSync(join(target, evidencePath), JSON.stringify(evidence, null, 2), 'utf8');
-    const verified = await runCliInProcess([
+    const verified = await invoke([
       'task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath,
       '--repository-evidence', evidencePath, '--target', target,
     ], cli);
     assert.equal(verified.status, 0, `${verified.stdout}${verified.stderr}`);
-    fixtureGit(target, ['add', '-f', '.agenticloop/returns/verifications']);
-    fixtureGit(target, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
+    const reviewPrepared = await invoke([
+      'task', 'review-prepare', 'T-001', '--json', '--target', target,
+    ]);
+    assert.equal(reviewPrepared.status, 0, `${reviewPrepared.stdout}${reviewPrepared.stderr}`);
+    fixtureGit(target, ['add', '-f', '.agenticloop/returns/verifications', '.agenticloop/reviews/entries']);
+    fixtureGit(target, ['commit', '-m', 'record return verification and review entry\n\nTask: T-001\nAgent: maintainer']);
     const returnCarrierDigest = carrierDigest();
 
     // 7 - Maintainer review provenance. This is the post-return carrier
@@ -350,7 +362,7 @@ export function createCloseoutCliFixture() {
 
     // 8 - acceptance, through the guarded transition that revalidates the
     // retained return under its own Maintainer authority.
-    const accepted = await runCliInProcess([
+    const accepted = await invoke([
       'task', 'status', 'T-001', 'accepted', '--expect-digest', carrierDigest(), '--json', '--target', target,
     ], cli);
     assert.equal(accepted.status, 0, `${accepted.stdout}${accepted.stderr}`);
@@ -360,17 +372,35 @@ export function createCloseoutCliFixture() {
 
     // 9 - audit and closeout follow acceptance, in their actual order.
     if (!skipAudit) {
-      const created = await audit([
-        'new', '--work-unit', 'milestone:M00', '--covered-tasks', tasks.join(','),
+      const created = await invoke([
+        'audit', 'new', '--work-unit', 'milestone:M00', '--covered-tasks', tasks.join(','),
         '--artifact', artifact, '--goal', 'Deliver the milestone.',
-        '--completion-oracle', 'Observable completion.', '--evidence', 'npm test (pass)',
-      ], target);
+        '--completion-oracle', 'Observable completion.', '--evidence', 'npm test (pass)', '--target', target,
+      ]);
       assert.equal(created.status, 0, `${created.stdout}${created.stderr}`);
-      fixtureGit(target, ['add', '.agenticloop/audits']);
-      fixtureGit(target, ['commit', '-m', 'record audit\n\nTask: T-001\nAgent: maintainer']);
       const reportPath = join(target, '.agenticloop', 'tmp', 'run-1.json');
-      writeFileSync(reportPath, JSON.stringify(wireReport(artifact, tasks, reportOverrides)), 'utf8');
-      const reported = await audit(['report', 'AUD-001', '--file', reportPath], target, auditOptions);
+      let report = wireReport(artifact, tasks, reportOverrides);
+      if (auditOptions.authenticatedAuditor === true) {
+        const preparedReport = prepareAuditorReturnReportForSigning(report);
+        assert.equal(preparedReport.ok, true, preparedReport.errors?.join('\n'));
+        preparedReport.report.invocation.receipt = canonicalJson(createAuditorReturnReceipt({
+          receiptId: `closeout-audit-${Math.random().toString(36).slice(2)}`,
+          adapterId: fixture.trust.adapterId,
+          keyId: fixture.trust.keyId,
+          targetRepository: fixture.trust.repositoryIdentity,
+          invocationReference: preparedReport.report.invocation.reference,
+          invocationMode: preparedReport.report.invocation.mode,
+          workUnit: grouping,
+          candidateArtifact: artifact,
+          coveredTasks: tasks,
+          reportDigest: preparedReport.digest,
+          issuedAt: new Date(Date.now() - 1_000).toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        }, fixture.trust.privateKey));
+        report = preparedReport.report;
+      }
+      writeFileSync(reportPath, JSON.stringify(report), 'utf8');
+      const reported = await invoke(['audit', 'report', 'AUD-001', '--file', reportPath, '--target', target]);
       assert.equal(reported.status, 0, `${reported.stdout}${reported.stderr}`);
       fixtureGit(target, ['add', '.agenticloop/audits']);
       fixtureGit(target, ['commit', '-m', 'record audit report\n\nTask: T-001\nAgent: maintainer']);
@@ -414,5 +444,14 @@ export function createCloseoutCliFixture() {
     cacheStats: () => ({ ...cacheStats }),
     releaseFixtures: () => fixturePool.releaseAll(),
     operatorTrustRoot: target => dispatchFixtures.get(target)?.operatorTrustRoot,
+    hostContext: target => {
+      const fixture = dispatchFixtures.get(target);
+      return fixture && {
+        operatorTrustRoot: fixture.operatorTrustRoot,
+        adapterId: fixture.trust.adapterId,
+        keyId: fixture.trust.keyId,
+        privateKey: fixture.trust.privateKey,
+      };
+    },
   };
 }

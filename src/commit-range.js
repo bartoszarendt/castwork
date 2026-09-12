@@ -62,12 +62,13 @@ function lines(result) {
  *   roleId?: string|null,
  *   requireAttribution?: boolean,
  *   allowedPaths?: string[]|null,
+ *   adoption?: { range: { base: string, head: string }, commits: string[] }|null,
  * }} input
  * @returns {{ ok: true, range: { base: string, head: string }, commits: string[], changedPaths: string[] }
  *   | { ok: false, code: string, evidenceState: string, disposition: string, message: string }}
  */
 export function deriveCommitRange(input = {}) {
-  const { runGit, baseHead, head, taskId = null, roleId = null, requireAttribution = true, allowedPaths = null } = input;
+  const { runGit, baseHead, head, taskId = null, roleId = null, requireAttribution = true, allowedPaths = null, adoption = null } = input;
   if (typeof runGit !== 'function') {
     throw new TypeError('deriveCommitRange requires a runGit function');
   }
@@ -111,6 +112,17 @@ export function deriveCommitRange(input = {}) {
     return malformed('durable commit range mixes Git object formats');
   }
 
+  const adoptedCommits = new Set();
+  if (adoption !== null) {
+    if (!adoption || adoption?.range?.base !== baseHead || adoption?.range?.head !== head ||
+        !Array.isArray(adoption.commits) || adoption.commits.length === 0 ||
+        adoption.commits.some(commit => !isGitObjectId(commit)) ||
+        JSON.stringify(adoption.commits) !== JSON.stringify(commits)) {
+      return malformed('durable commit adoption attribution does not exactly bind the current commit range');
+    }
+    for (const commit of adoption.commits) adoptedCommits.add(commit);
+  }
+
   if (requireAttribution) {
     // Attribution binds the commits that carry the task's work. A range in a
     // repository other people also commit to holds commits that are not the
@@ -131,6 +143,10 @@ export function deriveCommitRange(input = {}) {
     };
     for (const commit of commits) {
       if (!carriesTaskWork(commit)) continue;
+      // A validated adoption record is explicit, immutable attribution for an
+      // out-of-band human fix. It substitutes only for this exact adopted
+      // range; every other in-scope commit still needs normal Engineer trailers.
+      if (adoptedCommits.has(commit)) continue;
       const shown = runGit(['show', '-s', '--format=%B', commit]);
       if (!shown || shown.status !== 0) {
         return stale(`unable to read durable commit message ${commit}`);
@@ -143,7 +159,7 @@ export function deriveCommitRange(input = {}) {
         // where the defect is reported, rather than leaving each role to
         // rediscover the mechanism.
         return malformed(
-          `commit ${commit} has invalid canonical Task:/Agent: trailers: ${attribution.errors.join('; ')}. ` +
+          `commit ${commit} has neither valid canonical Task:/Agent: trailers nor durable commit-adoption attribution: ${attribution.errors.join('; ')}. ` +
           commitMessageProducerHint(taskId ?? '<task-id>')
         );
       }

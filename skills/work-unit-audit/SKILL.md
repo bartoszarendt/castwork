@@ -123,8 +123,8 @@ validation. Never record the model id or reasoning effort in the audit record;
 those stay adapter configuration.
 
 An invocation that fails without producing a report does not consume
-`audit_budget`. Repeated equivalent invocation failures stay bounded by the
-ordinary Attempt Budget in `agenticloop/AGENTIC_LOOP.md`.
+`audit_budget`. Repeated equivalent invocation failures stay bounded by
+**Attempt And Review Budgets** in `agenticloop/commands/lifecycle-protocol.md`.
 
 ## 5. Six perspectives, one execution
 

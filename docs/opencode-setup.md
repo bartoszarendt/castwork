@@ -224,8 +224,8 @@ truthful not-currently-eligible result and rescan trigger. Bounded eligible
 implementation batches use at most the configured project maximum (default five),
 which is a ceiling rather than a total-agent budget. The orchestrator should not start parallel maintainer or
 engineer sessions unless it has recorded the concurrency plan, collision
-criteria, decision scope, shared-design resolution, lease, and join condition required by `agenticloop/AGENTIC_LOOP.md`
-and `agenticloop/skills/role-delegation/SKILL.md`. Long-running parallelism has
+criteria, decision scope, shared-design resolution, lease, and join condition required by `agenticloop/skills/parallel-delegation/SKILL.md`.
+Long-running parallelism has
 stronger observability requirements than short bounded join-based batches.
 Parallel write lanes that
 mutate repository files require a separate `git worktree` and branch per lane;

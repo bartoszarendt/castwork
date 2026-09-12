@@ -27,7 +27,7 @@ let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'al-liveness-')); });
 after(() => { if (temp) rmSync(temp, { recursive: true, force: true }); });
 
-describe('the dispatch liveness window is derived, not hand-sized', () => {
+describe('dispatch liveness is delegation metadata, not an authorization timer', () => {
   it('outlasts a multi-delegation recovery cycle', () => {
     // The field cycle - preflight, abandon, refresh, remint, delegate - ran well
     // past an hour every time it was attempted.
@@ -41,17 +41,12 @@ describe('the dispatch liveness window is derived, not hand-sized', () => {
     );
   });
 
-  it('never outlives the operator authorization a default grant carries', () => {
-    // The bound it genuinely must respect: a packet cannot stay consumable
-    // longer than the authorization that permitted it.
-    assert.ok(DISPATCH_LIVENESS_WINDOW_SECONDS <= DEFAULT_GRANT_TTL_SECONDS);
-    // The window is derived, not coincidentally equal: the constant must read
-    // its value from the grant TTL so the two can never drift silently.
+  it('retains its historical default without using it as a standard gate', () => {
     assert.equal(DISPATCH_LIVENESS_WINDOW_SECONDS, DEFAULT_GRANT_TTL_SECONDS);
   });
 });
 
-describe('the window gates consumption, and stops gating once consumed', () => {
+describe('elapsed packet liveness never decides standard authorization', () => {
   /**
    * Widening the window only postpones the failure it was widened to fix. The
    * clock was also being re-applied every time an *already consumed* packet was
@@ -76,11 +71,10 @@ describe('the window gates consumption, and stops gating once consumed', () => {
     return { fixture, packet, consumedAt: Date.parse(packet.assignment.liveness.expiry) - 60_000 };
   }
 
-  it('refuses an elapsed packet when it would authorize new work', async () => {
+  it('accepts an elapsed packet when every semantic input is unchanged', async () => {
     const { fixture, packet } = await expiredPacket();
     const checked = validateDispatchPreparation(packet, fixture.options);
-    assert.equal(checked.ok, false);
-    assert.match(checked.errors.join('\n'), /dispatch liveness window has expired/);
+    assert.equal(checked.ok, true, checked.errors.join('\n'));
   });
 
   it('accepts the same packet when judged at the instant it was consumed', async () => {
@@ -89,7 +83,7 @@ describe('the window gates consumption, and stops gating once consumed', () => {
     assert.doesNotMatch(
       checked.errors.join('\n'),
       /dispatch liveness window has expired/,
-      'an attempt already authorized must not be retired for time that passed after it started'
+      'elapsed liveness cannot decide either new or already-consumed standard work'
     );
   });
 });

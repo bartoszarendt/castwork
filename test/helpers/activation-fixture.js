@@ -58,8 +58,8 @@ export function bindingFor(grant, overrides = {}) {
  * id, body, history, and decomposition, and simply loses its legacy activation
  * frontmatter. This is exactly the "existing scaffold/decomposed project" case.
  */
-export async function scaffoldFixture(temp, name) {
-  const fixture = await createDispatchFixture(temp, name, { scaffold: true });
+export async function scaffoldFixture(temp, name, options = {}) {
+  const fixture = await createDispatchFixture(temp, name, { scaffold: true, ...options });
   // The plugin-free path is the point of this fixture: no pinned host adapter
   // exists, so every command runs against an empty operator trust root.
   fixture.operatorTrustRoot = mkdtempSync(join(temp, `${name}-empty-trust-`));
@@ -101,13 +101,12 @@ export function writeSecondTask(fixture, taskId) {
 }
 
 /** Write the fixture's own dispatch input beside the target. */
-export function writeDispatchInput(fixture) {
+export function writeDispatchInput(fixture, { parallel = false } = {}) {
   writeFileSync(
     join(fixture.root, 'dispatch-input.json'),
     JSON.stringify({
-      readiness: fixture.readiness,
-      decomposition: fixture.decomposition,
       assignment: fixture.assignment,
+      ...(parallel ? { readiness: fixture.readiness, decomposition: fixture.decomposition } : {}),
     }, null, 2),
     'utf8'
   );
@@ -115,7 +114,8 @@ export function writeDispatchInput(fixture) {
 
 /** Run the real `task prepare-dispatch` command against the fixture. */
 export function runPrepareDispatch(fixture, extraArgs = []) {
-  writeDispatchInput(fixture);
+  const routeIndex = extraArgs.indexOf('--route');
+  writeDispatchInput(fixture, { parallel: routeIndex >= 0 && extraArgs[routeIndex + 1] === 'parallel' });
   return runCliInProcess([
     'task', 'prepare-dispatch', 'T-001', '--input', 'dispatch-input.json', '--target', fixture.root, ...extraArgs,
   ], {
@@ -125,8 +125,8 @@ export function runPrepareDispatch(fixture, extraArgs = []) {
 }
 
 /** Run `task prepare-dispatch` and return the emitted packet. */
-export async function prepareThroughCli(fixture) {
-  const result = await runPrepareDispatch(fixture);
+export async function prepareThroughCli(fixture, extraArgs = []) {
+  const result = await runPrepareDispatch(fixture, extraArgs);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   return JSON.parse(result.stdout);
 }

@@ -25,6 +25,7 @@
  */
 
 import { defaultGhCommandRunner, runGhJson } from './gh-helpers.js';
+import { githubPrSnapshotCompleteness } from './github-pr-snapshot.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { markdownSection, topLevelListItems, markdownLines } from './markdown.js';
 import { validateGitHubVerificationAttempts } from './verification-learning.js';
@@ -51,6 +52,7 @@ import {
   parseReviewCheckpoint,
   evaluateReviewCheckpoint,
   evaluateNoProgress,
+  REVIEW_CHECKPOINT_FAILURE_KINDS,
   DEFAULT_REVIEW_BUDGET,
   parseReviewBudgetValue,
   resolveTaskAttemptBudget,
@@ -74,6 +76,9 @@ import { resolveTrustedTaskContractActors } from './trusted-actors.js';
 import { createDiagnostic, preflightDiagnosticCode, repairPolicyFor } from './repair-policy.js';
 import { evaluateTaskRecordRoot } from './task-record-root.js';
 import { PublicCommandError } from './public-error.js';
+import { parseRequiredCheckCommand } from './execution-evidence.js';
+import { isAgenticloopExplainArgv } from './task-evidence-contract.js';
+import { REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE } from './required-checks.js';
 
 export class PreflightError extends PublicCommandError {
   constructor(message) {
@@ -83,9 +88,38 @@ export class PreflightError extends PublicCommandError {
 }
 
 const VALID_VERDICTS = new Set(['passed', 'failed', 'blocked', 'not run']);
+const PREFLIGHT_ATTRIBUTION_CODE = 'preflight.attribution';
+const PREFLIGHT_REVIEW_CHECKPOINT_CODE = 'preflight.review_checkpoint';
+const PREFLIGHT_REVIEW_HISTORY_CODE = 'preflight.review_history_invalid';
+const PREFLIGHT_REVISION_RESOLUTION_CODE = 'preflight.revision_resolution';
+// Keep every residual presentation category enumerable at its one dynamic
+// diagnostic selection site. This preserves the fallback result while allowing
+// the classification ratchet to bind the actual public producer.
+const PREFLIGHT_PRESENTATION_CODES = Object.freeze({
+  head_identity: 'preflight.head_identity',
+  summary_shape: 'preflight.summary_shape',
+  scope_deviations: 'preflight.scope_deviations',
+  task_contract: 'preflight.task_contract',
+  path_intent: 'preflight.path_intent',
+  generated_paths: 'preflight.generated_paths',
+  dependencies: 'preflight.dependencies',
+  evidence: 'preflight.evidence',
+  checks: 'preflight.checks',
+  task_policy: 'preflight.task_policy',
+  other: 'preflight.other',
+});
 const PR_EVIDENCE_ENTRY_SHAPE =
   '- Required check: <exact required check text>\n  Verdict: <passed|failed|blocked|not run>\n  Evidence: <excerpt>';
 const RESOLUTION_EXPECTED_SHAPE = RESOLUTION_ENTRY_SHAPE.replace(/^"|"$/g, '');
+
+function isExplainCommand(command) {
+  try {
+    const parsed = parseRequiredCheckCommand(command);
+    return isAgenticloopExplainArgv([parsed.command, ...parsed.args]);
+  } catch {
+    return false;
+  }
+}
 
 const PR_FIELDS = [
   'number',
@@ -289,16 +323,17 @@ export function parseRequiredChecks(issueBody) {
  * Validate task-owned required-check declarations before any evidence or
  * status-check satisfaction path runs.
  *
- * @returns {{ index: number, check: string, reason: string, category: 'task_policy' }[]}
+ * @returns {{ index: number, check: string, reason: string, category: 'task_policy', code?: string }[]}
  */
 export function validateRequiredCheckContracts(requiredChecks) {
   const checks = Array.isArray(requiredChecks) ? requiredChecks : [];
   const failures = [];
-  const add = (index, reason) => failures.push({
+  const add = (index, reason, code = undefined) => failures.push({
     index,
     check: checks[index]?.text ?? '<unknown required check>',
     reason,
     category: 'task_policy',
+    ...(code ? { code } : {}),
   });
 
   for (const [index, check] of checks.entries()) {
@@ -317,6 +352,9 @@ export function validateRequiredCheckContracts(requiredChecks) {
 
     if (kind === 'command' && !check.command) {
       add(index, "command check must declare its exact command in a backtick code span");
+    }
+    if (kind === 'command' && check.command && isExplainCommand(check.command)) {
+      add(index, 'command required check must not invoke task explain: read-only diagnostic output cannot serve as required-check evidence', REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE);
     }
     if (sources.includes('status_check') && kind !== 'command') {
       add(index, "status_check satisfaction is allowed only for proof kind 'command'");
@@ -1137,6 +1175,12 @@ export function categorizePreflightErrors(errors) {
     const errorStr = typeof error === 'string' ? error : error.message;
     const category = typeof error === 'object' && error.category ? error.category : null;
 
+    if (typeof error === 'object' &&
+      [PREFLIGHT_REVIEW_CHECKPOINT_CODE, PREFLIGHT_REVIEW_HISTORY_CODE].includes(error.code)) {
+      categories.review_checkpoint.push(errorStr);
+      continue;
+    }
+
     if (category && categories[category]) {
       categories[category].push(errorStr);
       continue;
@@ -1169,6 +1213,19 @@ export function categorizePreflightErrors(errors) {
 const UNMAPPED_PREFLIGHT_DIAGNOSTIC_CATEGORIES = PREFLIGHT_DIAGNOSTIC_CATEGORIES.filter(
   category => !repairPolicyFor(preflightDiagnosticCode(category)).repairKind
 );
+
+// A missing or consumed valid checkpoint requires fresh human authority. All
+// malformed, fabricated, or inconsistent carrier/history facts remain hard
+// integrity failures. The canonical evaluator supplies the discriminator; do
+// not infer lifecycle state from diagnostic prose.
+function reviewCheckpointDiagnostic(message, failureKind = REVIEW_CHECKPOINT_FAILURE_KINDS.INVALID) {
+  return createDiagnostic({
+    code: [REVIEW_CHECKPOINT_FAILURE_KINDS.MISSING, REVIEW_CHECKPOINT_FAILURE_KINDS.CONSUMED].includes(failureKind)
+      ? PREFLIGHT_REVIEW_CHECKPOINT_CODE
+      : PREFLIGHT_REVIEW_HISTORY_CODE,
+    message,
+  });
+}
 if (UNMAPPED_PREFLIGHT_DIAGNOSTIC_CATEGORIES.length > 0) {
   throw new Error(`preflight diagnostic categories lack repair kinds: ${UNMAPPED_PREFLIGHT_DIAGNOSTIC_CATEGORIES.join(', ')}`);
 }
@@ -1186,9 +1243,15 @@ function normalizePreflightDiagnostics(items) {
     const category = typeof item === 'object' && item.category ? item.category : inferredCategory;
     const code = typeof item === 'object' && typeof item.code === 'string'
       ? item.code
-      : category === 'checks' && /has no non-empty '## Required Checks' section/.test(message)
-        ? 'preflight.checks.task_contract'
-        : preflightDiagnosticCode(category);
+      : category === 'attribution'
+        ? PREFLIGHT_ATTRIBUTION_CODE
+        : category === 'review_checkpoint'
+          ? item?.code ?? PREFLIGHT_REVIEW_CHECKPOINT_CODE
+          : category === 'revision_resolution'
+            ? PREFLIGHT_REVISION_RESOLUTION_CODE
+              : category === 'checks' && /has no non-empty '## Required Checks' section/.test(message)
+                ? 'preflight.checks.task_contract'
+              : PREFLIGHT_PRESENTATION_CODES[category] ?? preflightDiagnosticCode(category);
     const diagnostic = createDiagnostic({
       code,
       message,
@@ -1368,6 +1431,7 @@ export function evaluatePreflight({
       errors.push({
         message,
         category: item.category,
+        ...(item.code ? { code: item.code } : {}),
       });
     } else {
       errors.push(item.reason.startsWith('unrecognized verdict ')
@@ -1527,17 +1591,17 @@ export function evaluatePreflight({
   if (carrierDerivedHistory) {
     durableHistory = carrierDerivedHistory;
     if (reviewHistory && canonicalHistoryShape(reviewHistory) !== canonicalHistoryShape(carrierDerivedHistory)) {
-      errors.push({ message: 'supplied reviewHistory is inconsistent with the raw PR comments/reviews; derive review history from those carriers rather than supplying a fabricated, stale, or empty normalized history', category: 'review_checkpoint' });
+      errors.push(reviewCheckpointDiagnostic('supplied reviewHistory is inconsistent with the raw PR comments/reviews; derive review history from those carriers rather than supplying a fabricated, stale, or empty normalized history'));
     }
   } else {
     durableHistory = reviewHistory ?? { events: [], errors: [] };
   }
   const historyEvents = Array.isArray(durableHistory?.events) ? durableHistory.events : [];
   for (const historyError of durableHistory?.errors ?? []) {
-    errors.push({ message: historyError, category: 'review_checkpoint' });
-  }
-  if (reviewBudgetError) {
-    errors.push({ message: reviewBudgetError, category: 'review_checkpoint' });
+    errors.push(reviewCheckpointDiagnostic(historyError));
+    }
+    if (reviewBudgetError) {
+      errors.push({ message: reviewBudgetError, category: 'task_policy' });
   }
   let legacyCheckpoint = null;
   if (historyEvents.length === 0 && reviewOutcomes.length > 0) {
@@ -1545,7 +1609,7 @@ export function evaluatePreflight({
       const parsed = parseReviewCheckpoint(typeof source === 'string' ? source : source?.body, { carrier: 'github' });
       if (parsed.found && parsed.errors.length === 0) legacyCheckpoint = parsed.checkpoint;
       for (const parserError of parsed.errors) {
-        errors.push({ message: parserError, category: 'review_checkpoint' });
+        errors.push(reviewCheckpointDiagnostic(parserError));
       }
     }
   }
@@ -1557,8 +1621,11 @@ export function evaluatePreflight({
       budget: reviewBudget,
       currentArtifact: headRefOid,
     });
-    for (const err of checkpointValidation.errors) {
-      errors.push({ message: err, category: 'review_checkpoint' });
+    for (let index = 0; index < checkpointValidation.errors.length; index += 1) {
+      errors.push(reviewCheckpointDiagnostic(
+        checkpointValidation.errors[index],
+        checkpointValidation.failureKinds[index],
+      ));
     }
     for (const warn of checkpointValidation.warnings) {
       warnings.push({ message: warn, category: 'review_checkpoint' });
@@ -1567,7 +1634,7 @@ export function evaluatePreflight({
 
   const noProgressValidation = evaluateNoProgress({ reviewHistory: historyEvents });
   for (const err of noProgressValidation.errors) {
-    errors.push({ message: err, category: 'review_checkpoint' });
+    errors.push(createDiagnostic({ code: PREFLIGHT_REVIEW_CHECKPOINT_CODE, message: err }));
   }
 
   // Every re-review resolves the stable finding IDs from the latest
@@ -1643,7 +1710,11 @@ export function evaluatePreflight({
       baseline: contractBaseline.baseline,
     },
     reviewHistory: { events: historyEvents.length, errors: durableHistory?.errors ?? [] },
-    checkpointValidation: checkpointValidation ? { authorized: checkpointValidation.authorized, errors: checkpointValidation.errors } : null,
+    checkpointValidation: checkpointValidation ? {
+      authorized: checkpointValidation.authorized,
+      errors: checkpointValidation.errors,
+      failureKinds: checkpointValidation.failureKinds,
+    } : null,
     noProgressValidation: {
       authorized: noProgressValidation.authorized,
       required: noProgressValidation.required,
@@ -1893,6 +1964,10 @@ export function loadPreflightInput({
   const prArgs = ['pr', 'view', String(prNumber), '--json', PR_FIELDS];
   if (repo) prArgs.push('--repo', repo);
   const prData = runGhPreflightJson(commandRunner, prArgs);
+  const snapshotCompleteness = githubPrSnapshotCompleteness(prData);
+  if (!snapshotCompleteness.ok) {
+    throw new PreflightError(snapshotCompleteness.errors.join('; '));
+  }
   // `gh pr view --json` always returns the requested list fields as arrays;
   // normalize explicitly so the preparation-input completeness policy sees
   // every category rather than a silently omitted one.

@@ -15,6 +15,11 @@ import { dirname, join } from 'node:path';
 import { activationCapabilityInventory } from '../../src/dispatch-envelope.js';
 import { canonicalJson } from '../../src/canonical-json.js';
 import {
+  MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND,
+  MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION,
+  maintainerReviewInitialAuthenticationSignaturePayload,
+} from '../../src/maintainer-review-receipt.js';
+import {
   createHostExecutionReceipt,
   createHostHandoffReceipt,
 } from '../../src/host-handoff.js';
@@ -26,6 +31,9 @@ import {
   EXECUTION_RECEIPT_REPLAY_BOUNDARY_KIND,
   EXECUTION_RECEIPT_REPLAY_BOUNDARY_SCHEMA_VERSION,
   executionReceiptReplaySignaturePayload,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND,
+  DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
   operatorTrustStorePath,
   signHostPayload,
   targetRepositoryIdentity,
@@ -90,6 +98,41 @@ export function writeHostTrustStore(operatorRoot, trust) {
 export function protectedHostBoundary(trust, observe = () => {}) {
   const replay = new Map();
   return challenge => {
+    if (challenge?.kind === DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND) {
+      observe(challenge);
+      if (challenge.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION ||
+          challenge.adapterId !== trust.adapterId || challenge.keyId !== trust.keyId ||
+          challenge.targetRepositoryIdentity !== trust.repositoryIdentity ||
+          challenge.payload?.kind !== DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND ||
+          challenge.payload?.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION ||
+          challenge.payload?.intent?.targetRepositoryIdentity !== trust.repositoryIdentity) {
+        throw new Error('protected host boundary refused an invalid durable mutation intent authentication challenge');
+      }
+      return {
+        kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND,
+        schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION,
+        adapterId: trust.adapterId,
+        keyId: trust.keyId,
+        signature: signHostPayload(challenge.payload, trust.privateKey),
+      };
+    }
+    if (challenge?.kind === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND) {
+      observe(challenge);
+      if (challenge.schemaVersion !== MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION ||
+          challenge.attestation?.authentication?.algorithm !== trust.adapter.algorithm ||
+          challenge.attestation?.authentication?.keyId !== trust.keyId) {
+        throw new Error('protected host boundary refused an invalid Maintainer initial-authentication attestation');
+      }
+      return {
+        kind: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND,
+        schemaVersion: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION,
+        attestation: challenge.attestation,
+        signature: signHostPayload(
+          maintainerReviewInitialAuthenticationSignaturePayload(challenge.attestation),
+          trust.privateKey
+        ),
+      };
+    }
     if (challenge?.kind === EXECUTION_RECEIPT_REPLAY_BOUNDARY_KIND) {
       observe(challenge);
       const binding = challenge.binding;

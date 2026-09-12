@@ -228,8 +228,8 @@ describe('dispatch preparation and receipt verification', () => {
     assert.equal(foreignScan.inventory.complete, true);
     const empty = resign({ ...structuredClone(fixture.decomposition), scan: foreignScan });
 
-    const incompleteResult = prepare(fixture, { refetchDecomposition: () => incomplete });
-    const emptyResult = prepare(fixture, { refetchDecomposition: () => empty });
+    const incompleteResult = prepare(fixture, { parallelRequested: true, refetchDecomposition: () => incomplete });
+    const emptyResult = prepare(fixture, { parallelRequested: true, refetchDecomposition: () => empty });
     assert.equal(incompleteResult.ok, false);
     assert.equal(emptyResult.ok, false);
     assert.match(incompleteResult.validation.errors.join('\n'), /incomplete/);
@@ -264,7 +264,7 @@ describe('dispatch preparation and receipt verification', () => {
       assignment: fixture.assignment,
     }), 'utf8');
     const prepared = await runCliInProcess([
-      'task', 'prepare-dispatch', 'T-001', '--input', 'dispatch-input.json', '--host-trust-store', fixture.trustStorePath, '--json', '--target', fixture.root,
+      'task', 'prepare-dispatch', 'T-001', '--route', 'parallel', '--input', 'dispatch-input.json', '--host-trust-store', fixture.trustStorePath, '--json', '--target', fixture.root,
     ], { operatorTrustRoot: fixture.operatorTrustRoot });
     assert.equal(prepared.status, 1);
     assert.match(JSON.parse(prepared.stdout).errors.join('\n'), /authenticated host-controlled IPC|unsupported.*in-process/i);

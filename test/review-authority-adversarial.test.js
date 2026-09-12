@@ -67,6 +67,7 @@ import { syntheticRecognizedVerdict } from './helpers/handoff-fixture.js';
 
 const HEAD = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0';
 const OTHER = 'b'.repeat(40);
+const BASE = 'c'.repeat(40);
 const HEAD_256 = 'c'.repeat(64);
 const LOOP = { login: 'loop-bot', type: 'User' };
 
@@ -105,8 +106,13 @@ function markerCarrier({
 
 function auditOf(comments, { expectedAccount = LOOP, headRefOid = HEAD } = {}) {
   return evaluateGitHubReviewAudit({
-    prData: { number: 42, headRefOid, closingIssuesReferences: [{ number: 7 }], comments, reviews: [], commits: [] },
-    issueData: { number: 7, body: '' },
+    prData: {
+      number: 42, baseRefOid: headRefOid.length === 64 ? 'd'.repeat(64) : BASE, headRefOid,
+      files: [{ path: 'src/review.js' }], closingIssuesReferences: [{ number: 7 }], comments, reviews: [],
+      commits: [{ oid: headRefOid, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
+    },
+    issueData: { number: 7, body: TASK_BODY },
+    reviewEntryReceipt: receiptFor({ head: headRefOid }),
     expectedAccount,
   });
 }
@@ -122,7 +128,7 @@ function material({ head = HEAD, body = TASK_BODY, reviewHistory = { events: [],
     loaded: {
       input: {
         prData: {
-          number: 42, headRefOid: head,
+          number: 42, baseRefOid: head.length === 64 ? 'd'.repeat(64) : BASE, headRefOid: head, files: [{ path: 'src/review.js' }],
           commits: [{ oid: head, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
         },
         issueData: { number: 7, body },
@@ -328,19 +334,19 @@ describe('canonical review-marker writer fails before emitting', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Defect 4, 5 & 6: packet/receipt validation and the v3 digest domain
+// Defect 4, 5 & 6: packet/receipt validation and the v5 digest domain
 // ---------------------------------------------------------------------------
 
-describe('review-entry receipt v3 identity and static validation', () => {
-  it('uses the v3 digest domain derived from the schema version', () => {
+describe('review-entry receipt v5 identity and static validation', () => {
+  it('uses the v5 digest domain derived from the schema version', () => {
     const receipt = receiptFor();
-    assert.equal(REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION, 3);
-    assert.equal(REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN, 'agenticloop.review-entry-receipt.v3');
+    assert.equal(REVIEW_ENTRY_RECEIPT_SCHEMA_VERSION, 5);
+    assert.equal(REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN, 'agenticloop.review-entry-receipt.v5');
     assert.ok(receipt.digest.startsWith(`sha256:${REVIEW_ENTRY_RECEIPT_DIGEST_DOMAIN}:`));
     assert.equal(validateReviewEntryReceiptShape(receipt).ok, true);
   });
 
-  it('rejects a v3 receipt digested in the legacy v2 domain and never reinterprets it', () => {
+  it('rejects a v5 receipt digested in the legacy v2 domain and never reinterprets it', () => {
     const receipt = structuredClone(receiptFor());
     const projection = { ...receipt };
     delete projection.digest;
@@ -401,6 +407,16 @@ describe('review-entry receipt v3 identity and static validation', () => {
       const checked = validateReviewEntryReceiptShape(redigestReceipt(receipt));
       assert.equal(checked.ok, false, JSON.stringify(receipt));
     }
+  });
+
+  it('rejects a redigested finish candidate whose commit inventory contradicts receipt attribution', () => {
+    const receipt = structuredClone(receiptFor());
+    receipt.finishCandidate.productRange.commits = ['d'.repeat(40)];
+
+    const checked = validateReviewEntryReceiptShape(redigestReceipt(receipt));
+    assert.equal(checked.ok, false);
+    assert.equal(checked.evidenceState, 'malformed');
+    assert.match(checked.errors.join('\n'), /finish candidate commit inventory does not match its attribution inventory/i);
   });
 });
 
@@ -849,10 +865,12 @@ describe('one Git object-identity policy across the review path', () => {
 
     const sha256Audit = evaluateGitHubReviewAudit({
       prData: {
-        number: 42, headRefOid: HEAD_256, closingIssuesReferences: [{ number: 7 }],
-        comments: [markerCarrier({ artifact: HEAD_256 })], reviews: [], commits: [],
+        number: 42, baseRefOid: 'd'.repeat(64), headRefOid: HEAD_256, files: [{ path: 'src/review.js' }], closingIssuesReferences: [{ number: 7 }],
+        comments: [markerCarrier({ artifact: HEAD_256 })], reviews: [],
+        commits: [{ oid: HEAD_256, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
       },
-      issueData: { number: 7, body: '' },
+      issueData: { number: 7, body: TASK_BODY },
+      reviewEntryReceipt: receiptFor({ head: HEAD_256 }),
       expectedAccount: LOOP,
       expectedArtifact: HEAD_256,
     });
@@ -860,10 +878,12 @@ describe('one Git object-identity policy across the review path', () => {
 
     const mixed = evaluateGitHubReviewAudit({
       prData: {
-        number: 42, headRefOid: HEAD, closingIssuesReferences: [{ number: 7 }],
-        comments: [markerCarrier()], reviews: [], commits: [],
+        number: 42, baseRefOid: BASE, headRefOid: HEAD, files: [{ path: 'src/review.js' }], closingIssuesReferences: [{ number: 7 }],
+        comments: [markerCarrier()], reviews: [],
+        commits: [{ oid: HEAD, message: 'impl\n\nTask: T-007\nAgent: engineer' }],
       },
-      issueData: { number: 7, body: '' },
+      issueData: { number: 7, body: TASK_BODY },
+      reviewEntryReceipt: receiptFor(),
       expectedAccount: LOOP,
       expectedArtifact: HEAD_256,
     });

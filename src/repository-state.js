@@ -17,6 +17,7 @@ import { canonicalSha256 } from './canonical-json.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 import { validateTaskMutationReceipt } from './task-evidence-contract.js';
 import { listAgenticLoopWorktrees } from './worktree.js';
+import { createPathClassifier } from './product-lineage.js';
 
 export const CLEAN_STATE_KIND = 'agenticloop.dispatch-clean-state';
 /** v2 adds the operator-owned activation state class. */
@@ -99,6 +100,13 @@ function permitted(path) {
   return PERMITTED_UNTRACKED_PREFIXES.some(prefix => path === prefix.replace(/\/$/, '') || path.startsWith(prefix));
 }
 
+// Generated host-local files are safe only when they are untracked or ignored.
+// A staged or unstaged change is still a tracked working-tree mutation and must
+// fail the clean gate even if the manifest says the path is toolkit-owned.
+function permittedUntracked(path, classifier) {
+  return permitted(path) || classifier.classify(path) === 'toolkit_generated';
+}
+
 function shared(path) {
   return SHARED_STATE_PREFIXES.some(prefix => path.startsWith(prefix));
 }
@@ -160,14 +168,17 @@ function finding(evidenceState, disposition, code, message) {
  *   scopePatterns?: string[],
  *   intendedCreations?: string[],
  *   excludedSiblingRoots?: string[],
+ *   legacyLayout?: boolean,
+ *   target?: string,
  * }} input
  * @returns {{ ok: boolean, state: object|null, identity: string|null, findings: object[] }}
  */
 export function evaluateDispatchCleanState(input = {}) {
-  const { runGit, scopePatterns = [], intendedCreations = [], excludedSiblingRoots } = input;
+  const { runGit, scopePatterns = [], intendedCreations = [], excludedSiblingRoots, legacyLayout = false, target = null } = input;
   if (typeof runGit !== 'function') throw new TypeError('evaluateDispatchCleanState requires a runGit function');
   const patterns = Array.isArray(scopePatterns) ? scopePatterns.filter(pattern => typeof pattern === 'string' && pattern) : [];
   const creations = Array.isArray(intendedCreations) ? intendedCreations.filter(path => typeof path === 'string' && path) : [];
+  const classifier = createPathClassifier(target, { legacyLayout });
 
   /** @type {object[]} */
   const findings = [];
@@ -232,13 +243,13 @@ export function evaluateDispatchCleanState(input = {}) {
   }
 
   const relevantUntracked = untracked.filter(path => {
-    if (permitted(path)) return false;
+    if (permittedUntracked(path, classifier)) return false;
     if (shared(path)) return true;
     return patterns.some(pattern => fileMatchesScopePattern(path, pattern));
   }).sort();
 
   const relevantIgnored = ignoredCandidates.filter(path => {
-    if (permitted(path)) return false;
+    if (permittedUntracked(path, classifier)) return false;
     if (shared(path)) return true;
     if (creations.includes(path)) return true;
     return patterns.some(pattern => fileMatchesScopePattern(path, pattern));

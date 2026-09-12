@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { parseRequiredCheckCommand, produceExecutionEvidence, validateExecutionEvidence } from '../src/execution-evidence.js';
+import { parseRequiredCheckCommand, produceExecutionEvidence, validateExecutionEvidence, validateExecutionEvidenceStructure } from '../src/execution-evidence.js';
 import { canonicalSha256 } from '../src/canonical-json.js';
 
 function runEvidence(overrides = {}, options = {}) {
@@ -67,7 +67,7 @@ describe('portable execution evidence', () => {
       logicalCommand: 'node', resolvedExecutable: 'node', wrapperKind: 'native', wrapperProgram: null, wrapperArgs: [],
     });
     assert.equal(evidence.binding.invocationId, 'invocation:example');
-    assert.equal(validateExecutionEvidence(evidence).ok, true);
+    assert.equal(validateExecutionEvidenceStructure(evidence).ok, true);
   });
 
   it('distinguishes true non-zero child, wrapper, and output-filter failures', () => {
@@ -91,7 +91,7 @@ describe('portable execution evidence', () => {
     const evidence = runEvidence();
     const forged = structuredClone(evidence);
     forged.locations.workingDirectory.authorityPath = '/other';
-    assert.equal(validateExecutionEvidence(forged).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(forged).ok, false);
   });
 
   function realRunner({ command, args, cwd }) {
@@ -123,7 +123,7 @@ describe('portable execution evidence', () => {
     assert.equal(evidence.execution.outcome, 'child_failed');
     assert.equal(evidence.execution.childExitCode, 3);
     assert.equal(evidence.execution.wrapperFailure, null);
-    assert.equal(validateExecutionEvidence(evidence).ok, true);
+    assert.equal(validateExecutionEvidenceStructure(evidence).ok, true);
 
     const passed = runEvidence({
       ...realLocations(),
@@ -150,7 +150,7 @@ describe('portable execution evidence', () => {
     }, { run: realRunner, pathOptions: { platform: process.platform } });
     assert.equal(evidence.execution.outcome, 'child_failed');
     assert.equal(evidence.execution.childExitCode, 4);
-    assert.equal(validateExecutionEvidence(evidence).ok, true);
+    assert.equal(validateExecutionEvidenceStructure(evidence).ok, true);
 
     const passed = runEvidence({
       ...realLocations(),
@@ -165,13 +165,13 @@ describe('portable execution evidence', () => {
     const evidence = runEvidence();
     const forged = structuredClone(evidence);
     forged.digest = 'sha256:forged' + '0'.repeat(55);
-    assert.equal(validateExecutionEvidence(forged).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(forged).ok, false);
   });
 
   it('treats schema-v2 evidence as a typed incompatible artifact rather than reinterpreting it', () => {
     const legacy = structuredClone(runEvidence());
     legacy.schemaVersion = 2;
-    const checked = validateExecutionEvidence(legacy);
+    const checked = validateExecutionEvidenceStructure(legacy);
     assert.equal(checked.ok, false);
     assert.match(checked.errors.join('; '), /schemaVersion 2 is incompatible/);
   });
@@ -211,6 +211,29 @@ describe('portable execution evidence', () => {
     }
   });
 
+  it('keeps structural validation separate from binding-required validation', () => {
+    const evidence = runEvidence();
+    assert.equal(validateExecutionEvidenceStructure(evidence).ok, true);
+    for (const expectedBinding of [null, undefined, {}, { ...evidence.binding, productHead: null }]) {
+      const checked = validateExecutionEvidence(evidence, { expectedBinding });
+      assert.equal(checked.ok, false);
+      assert.match(checked.errors.join('; '), /requires a complete expected binding/);
+    }
+    assert.equal(validateExecutionEvidence(evidence, { expectedBinding: evidence.binding }).ok, true);
+  });
+
+  it('returns closed structural findings for malformed evidence with a complete protected binding', () => {
+    const expectedBinding = runEvidence().binding;
+    for (const evidence of [null, undefined, [], { malformed: true }]) {
+      let checked;
+      assert.doesNotThrow(() => { checked = validateExecutionEvidence(evidence, { expectedBinding }); });
+      assert.equal(checked.ok, false);
+      assert.deepEqual(Object.keys(checked).sort(), ['diagnostics', 'errors', 'ok']);
+      assert.match(checked.errors.join('; '), /execution evidence fields must equal the closed schema/);
+      assert.equal(checked.diagnostics.length, 0);
+    }
+  });
+
   it('validates workflow lineage separately from immutable product identity', () => {
     const evidence = runEvidence();
     const moved = structuredClone(evidence);
@@ -232,26 +255,26 @@ describe('portable execution evidence', () => {
     const evidence = runEvidence();
     const forged = structuredClone(evidence);
     forged.timing.startedAt = '2026-01-01T00:00:00.000Z';
-    assert.equal(validateExecutionEvidence(forged).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(forged).ok, false);
   });
 
   it('rejects execution evidence with mutated execution outcome', () => {
     const evidence = runEvidence();
     const forged = structuredClone(evidence);
     forged.execution.outcome = 'child_failed';
-    assert.equal(validateExecutionEvidence(forged).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(forged).ok, false);
   });
 
   it('rejects execution evidence with extra fields', () => {
     const evidence = runEvidence();
     const forged = { ...evidence, extra: 'field' };
-    assert.equal(validateExecutionEvidence(forged).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(forged).ok, false);
   });
 
   it('rejects execution evidence with missing fields', () => {
     const evidence = runEvidence();
     const { check, ...withoutCheck } = evidence;
-    assert.equal(validateExecutionEvidence(withoutCheck).ok, false);
+    assert.equal(validateExecutionEvidenceStructure(withoutCheck).ok, false);
   });
 
   it('records exact check instruction and command identity', () => {

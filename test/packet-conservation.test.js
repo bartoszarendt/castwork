@@ -230,14 +230,14 @@ describe('attempts are grouped from durable evidence', () => {
     const consumed = consumption();
     const attemptId = executionAttemptIdentity(consumed);
     const cases = [
-      ['superseded_before_work', false, false, false, true],
-      ['tooling_failed', false, false, false, true],
-      ['tooling_failed', true, false, true, false],
-      ['superseded_by_packet', false, false, false, true],
-      ['superseded_by_maintainer_repair', true, true, false, true],
-      ['abandoned', true, true, true, false],
+      ['superseded_before_work', false, false, false, true, false],
+      ['tooling_failed', false, false, false, true, false],
+      ['tooling_failed', true, false, true, false, true],
+      ['superseded_by_packet', false, false, false, true, false],
+      ['superseded_by_maintainer_repair', true, true, false, true, true],
+      ['abandoned', true, true, true, false, true],
     ];
-    for (const [disposition, productMutationOccurred, carrierMutationOccurred, budget, recovery] of cases) {
+    for (const [disposition, productMutationOccurred, carrierMutationOccurred, budget, recovery, carriesProduct] of cases) {
       const record = abandonment(attemptId, {
         disposition, productMutationOccurred, carrierMutationOccurred,
       });
@@ -248,8 +248,8 @@ describe('attempts are grouped from durable evidence', () => {
       assert.notEqual(budget && recovery, true);
       assert.equal(
         isCarryCompatibleAttempt(attempts.records[0]),
-        true,
-        `${disposition} must remain lineage-continuous independently of budget accounting`,
+        carriesProduct,
+        `${disposition} must carry product lineage only when the abandoned attempt mutated product state`,
       );
     }
     assert.equal(isCarryCompatibleAttempt({ state: 'live', abandonment: null }), false);

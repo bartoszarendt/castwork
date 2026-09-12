@@ -37,6 +37,7 @@ import {
 } from './execution-attempt.js';
 import { listDispatchConsumptions } from './handoff-consumption.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
+import { loadManifest } from './generated-artifacts.js';
 import { hasCurrentLayout, loadBundledLayoutManifest } from './layout.js';
 
 /**
@@ -74,9 +75,11 @@ function underRoot(path, root) {
  * into a target: `toolkitOwned.sourceRoot` for the installed toolkit,
  * `generatedShims` for host adapter output, `provisionedSharedPaths` for files
  * the toolkit provisions but does not exclusively own, and `legacyRootPaths` /
- * `v2ToolkitOwnedPaths` for the canonical asset locations of older layouts. It
- * is loaded from the bundled copy rather than from the target, because the
- * question being answered is which paths *this* toolkit writes.
+ * `v2ToolkitOwnedPaths` for the canonical asset locations of older layouts.
+ * `targetOwned.productPaths` takes precedence over a broad generated shim when
+ * an adapter shares a host root with target-owned content. It is loaded from the
+ * bundled copy rather than from the target, because the question being answered
+ * is which paths *this* toolkit writes.
  *
  * `.gitattributes` is a deliberate entry in `provisionedSharedPaths` rather
  * than an implicit one. The toolkit provisions it to keep committed identity
@@ -94,6 +97,7 @@ function declaredOwnership() {
   const list = value => (Array.isArray(value) ? value.map(normalizePath).filter(Boolean) : []);
   ownership = Object.freeze({
     stateRoot: normalizePath(manifest?.targetOwned?.stateRoot) || WORKFLOW_PATH_ROOT,
+    productRoots: Object.freeze(list(manifest?.targetOwned?.productPaths)),
     toolkitRoots: Object.freeze([
       normalizePath(manifest?.toolkitOwned?.sourceRoot),
       ...list(manifest?.toolkitOwned?.sourcePaths),
@@ -109,6 +113,31 @@ function declaredOwnership() {
 let ownership = null;
 
 /**
+ * The exact file paths the generation transaction recorded for one target.
+ *
+ * Shared host roots (notably `.github/`) cannot be classified from their
+ * directory name: each successful transaction persists its write set as
+ * file-granular entries in generated-artifacts.json. Shared-config and
+ * gitignore-line entries deliberately do not appear here because they do not
+ * make the surrounding target-owned file Agentic Loop output.
+ */
+export function generatedArtifactPathsForTarget(target) {
+  if (typeof target !== 'string' || !target) return Object.freeze([]);
+  try {
+    const manifest = loadManifest(target);
+    return Object.freeze([...new Set((manifest?.entries ?? [])
+      .filter(entry => entry.kind === 'file')
+      .map(entry => normalizePath(entry.outputRoot === '.' ? entry.relPath : `${entry.outputRoot}/${entry.relPath}`))
+      .filter(Boolean))].sort());
+  } catch {
+    // An unreadable ownership record cannot safely exempt a path from the
+    // clean gate. The state-root classifier still makes the record itself
+    // relevant to the gate.
+    return Object.freeze([]);
+  }
+}
+
+/**
  * Classify one repository-relative path.
  *
  * `legacyLayout` widens the toolkit region to the canonical asset locations of
@@ -117,11 +146,13 @@ let ownership = null;
  * `agents/` or `commands/`, and misclassifying those would drop real product
  * work from lineage - a worse defect than the one this replaces.
  */
-export function classifyRepositoryPath(path, { legacyLayout = false } = {}) {
+export function classifyRepositoryPath(path, { legacyLayout = false, generatedArtifactPaths = [] } = {}) {
   const value = normalizePath(path);
   if (!value) return 'product';
   const declared = declaredOwnership();
   if (underRoot(value, declared.stateRoot)) return 'target_state';
+  if (declared.productRoots.some(root => underRoot(value, root))) return 'product';
+  if (generatedArtifactPaths.includes(value)) return 'toolkit_generated';
   if (declared.toolkitRoots.some(root => underRoot(value, root))) return 'toolkit_generated';
   if (declared.provisionedSharedPaths.includes(value)) return 'toolkit_generated';
   if (legacyLayout && declared.legacyRoots.some(root => underRoot(value, root))) return 'toolkit_generated';
@@ -132,9 +163,12 @@ export function classifyRepositoryPath(path, { legacyLayout = false } = {}) {
  * One classifier bound to one target, so the layout question is asked once per
  * operation rather than once per path.
  */
-export function createPathClassifier(target = null) {
-  const legacyLayout = typeof target === 'string' && target ? !hasCurrentLayout(target) : false;
-  const classify = path => classifyRepositoryPath(path, { legacyLayout });
+export function createPathClassifier(target = null, { legacyLayout: requestedLegacyLayout } = {}) {
+  const legacyLayout = typeof requestedLegacyLayout === 'boolean'
+    ? requestedLegacyLayout
+    : (typeof target === 'string' && target ? !hasCurrentLayout(target) : false);
+  const generatedArtifactPaths = generatedArtifactPathsForTarget(target);
+  const classify = path => classifyRepositoryPath(path, { legacyLayout, generatedArtifactPaths });
   return Object.freeze({
     legacyLayout,
     classify,
@@ -178,7 +212,11 @@ export function isCarryCompatibleAttempt(attempt) {
   return Boolean(
     attempt?.abandonment &&
     EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS.includes(attempt.state) &&
-    attempt.abandonment.disposition === attempt.state
+    attempt.abandonment.disposition === attempt.state &&
+    // A predecessor without product mutation carries no product lineage. Its
+    // workflow-only abandonment remains history, but must not pull a later
+    // adopted product range back across the later attempt's authorization base.
+    attempt.abandonment.productMutationOccurred === true
   );
 }
 

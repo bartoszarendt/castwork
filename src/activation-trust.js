@@ -32,9 +32,10 @@ import { createHash, generateKeyPairSync } from 'node:crypto';
 import { isAbsolute, join, parse, relative, resolve } from 'node:path';
 
 import { atomicCreateFile, atomicWriteFile } from './fs-mutation-kernel.js';
-import { validateActivationRevocation } from './activation-grant.js';
+import { CLI_OPERATOR_PRODUCER_ID, validateActivationRevocation } from './activation-grant.js';
 import { createDiagnostic } from './repair-policy.js';
 import {
+  durableMutationIntentSignaturePayload,
   HOST_SIGNATURE_ALGORITHM,
   exportPublicKey,
   importPublicKey,
@@ -616,6 +617,39 @@ export function signOperatorActivationPayload(payload, { key, repositoryIdentity
     algorithm: HOST_SIGNATURE_ALGORITHM,
     keyId: key.keyId,
     value: signHostPayload(payload, key.privateKey),
+  };
+}
+
+/**
+ * Create the operator-confirmed counterpart to the protected-host recovery
+ * signer. It signs only one target-bound durable mutation intent with the
+ * already-provisioned external operator key; it cannot provision a key or sign
+ * arbitrary caller payloads.
+ */
+export function createOperatorDurableMutationIntentAuthenticator(target, options = {}) {
+  const loaded = loadOperatorActivationKey(target, options);
+  if (!loaded.ok || loaded.state !== 'present' || !loaded.key) {
+    return {
+      ok: false,
+      errors: loaded.ok
+        ? ['operator activation key is unavailable for durable role-start recovery']
+        : loaded.errors,
+      intentAuthenticator: null,
+    };
+  }
+  const key = loaded.key;
+  return {
+    ok: true,
+    errors: [],
+    intentAuthenticator: Object.freeze({
+      adapterId: CLI_OPERATOR_PRODUCER_ID,
+      keyId: key.keyId,
+      publicKey: key.publicKey,
+      authenticate(intent) {
+        if (!isObject(intent) || intent.targetRepositoryIdentity !== key.repositoryIdentity) return null;
+        return signHostPayload(durableMutationIntentSignaturePayload(intent), key.privateKey);
+      },
+    }),
   };
 }
 

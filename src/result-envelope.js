@@ -187,7 +187,7 @@ function normalizedDiagnostic(diagnostic, { capabilities: explicitCapabilities =
   const allowedFields = new Set([
     'level', 'code', 'category', 'message', 'evidence', 'repairKind',
     'escalationKind', 'repairHint', 'diagnosticPrerequisites',
-    'expectedShape', 'expectedValues', 'owner', 'escalationOwner',
+    'expectedShape', 'expectedValues', 'requiredFindingIds', 'owner', 'escalationOwner',
     'nextAction', 'firstSafeRepair',
   ]);
   const unknownFields = Object.keys(result).filter(field => !allowedFields.has(field));
@@ -209,6 +209,13 @@ function normalizedDiagnostic(diagnostic, { capabilities: explicitCapabilities =
       throw new TypeError('diagnosticPrerequisites must be an array of non-empty strings');
     }
     result.diagnosticPrerequisites = [...new Set(result.diagnosticPrerequisites)].sort(compareCanonical);
+  }
+  if (result.requiredFindingIds !== undefined) {
+    if (!Array.isArray(result.requiredFindingIds) ||
+        !result.requiredFindingIds.every(item => typeof item === 'string' && item)) {
+      throw new TypeError('validation result diagnostic requiredFindingIds must be an array of non-empty strings');
+    }
+    result.requiredFindingIds = [...new Set(result.requiredFindingIds)].sort(compareCanonical);
   }
   const routingFields = ['owner', 'escalationOwner', 'nextAction', 'firstSafeRepair'];
   if (routingFields.some(field => Object.hasOwn(result, field))) {

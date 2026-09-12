@@ -1,13 +1,19 @@
 // @ts-check
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defaultGhCommandRunner, runGhJson } from './gh-helpers.js';
+import { githubPrSnapshotCompleteness } from './github-pr-snapshot.js';
 import { createDiagnostic } from './repair-policy.js';
-import { resolveIssueNumber } from './github-preflight.js';
+import { parseRequiredChecks, resolveIssueNumber } from './github-preflight.js';
 import { parseFrontmatterStrict } from './frontmatter.js';
 import { githubAttributionShape, resolveGitHubTaskIdentity } from './github-task-identity.js';
 import { filterLiveLines } from './markdown.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
+import { finishCandidateCurrentnessMismatch } from './finish-candidate.js';
+import { validateReviewEntryReceiptShape } from './review-entry-receipt.js';
+import { taskContractDigest } from './task-contract-baseline.js';
+import { compareRequiredCheckIds } from './required-checks.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
 import {
   extractReviewAuthor,
@@ -41,7 +47,8 @@ export class GitHubReviewAuditError extends PublicCommandError {
   }
 }
 
-const PR_FIELDS = ['number', 'headRefOid', 'closingIssuesReferences', 'comments', 'reviews', 'commits'].join(',');
+const PR_FIELDS = ['number', 'baseRefOid', 'headRefOid', 'files', 'closingIssuesReferences', 'comments', 'reviews', 'commits'].join(',');
+
 const ISSUE_FIELDS = ['number', 'body'].join(',');
 
 /** @param {any} source @param {any} expectedAccount */
@@ -615,21 +622,26 @@ const VALID_EXPECTED_STATUSES = new Set(['accepted', 'needs_revision']);
  * @param {object} params
  * @param {any} params.prData
  * @param {any} params.issueData
+ * @param {any} [params.reviewEntryReceipt]
  * @param {Array<any>} [params.taskPrData]
  * @param {Array<any>} [params.humanReviews]
  * @param {string} [params.expectedStatus]
  * @param {any} [params.expectedAccount]
  * @param {string|null} [params.expectedArtifact] Complete Git object identity of the dispatched artifact.
+ * @param {{ ok: boolean, errors: string[] }|null} [params.snapshotCompleteness]
  */
 export function evaluateGitHubReviewAudit({
   prData,
   issueData,
+  reviewEntryReceipt = null,
   taskPrData = [],
   humanReviews = [],
   expectedStatus = 'accepted',
   expectedAccount = null,
   expectedArtifact = null,
+  snapshotCompleteness: rawSnapshotCompleteness = null,
 }) {
+  const snapshotCompleteness = /** @type {{ ok: boolean, errors: string[] }|null} */ (rawSnapshotCompleteness);
   if (!VALID_EXPECTED_STATUSES.has(expectedStatus)) {
     return {
       ok: false,
@@ -645,8 +657,58 @@ export function evaluateGitHubReviewAudit({
     };
   }
 
+  /** @type {string[]} */
   const errors = [];
+  if (snapshotCompleteness && !snapshotCompleteness.ok) {
+    errors.push(...snapshotCompleteness.errors);
+  }
   const headRefOid = String(prData?.headRefOid ?? '');
+  // Audit consumes the persisted review-entry candidate. It intentionally does
+  // not derive a replacement from the live PR: replacing a missing or stale
+  // candidate would let a moving product revision certify itself.
+  const receiptShape = validateReviewEntryReceiptShape(reviewEntryReceipt);
+  if (!receiptShape.ok) {
+    errors.push(`GitHub audit review-entry finish candidate is unavailable or malformed: ${receiptShape.errors[0]}`);
+  } else if (reviewEntryReceipt.artifact.pr !== Number(prData?.number) ||
+    reviewEntryReceipt.task.id !== String(issueData?.number)) {
+    errors.push('GitHub audit review-entry finish candidate does not bind this PR and task');
+  } else {
+    // Audit compares the persisted candidate to current task facts; it never
+    // derives a replacement candidate from those facts.
+    const liveContract = taskContractDigest(issueData?.body);
+    if (!liveContract.ok) {
+      errors.push(`GitHub audit cannot establish the live task contract: ${liveContract.error}`);
+    } else {
+      if (reviewEntryReceipt.task.contractDigest !== liveContract.digest) {
+        errors.push('GitHub audit cannot certify a moving finish candidate: persisted task contract digest does not match the live task contract');
+      }
+      const liveRequiredCheckSet = parseRequiredChecks(issueData?.body)
+        .map(check => String(check.id ?? check.matchKey ?? check.text ?? '').trim())
+        .sort(compareRequiredCheckIds);
+      const persistedRequiredCheckSet = reviewEntryReceipt.finishCandidate.requiredCheckSet;
+      if (liveRequiredCheckSet.length !== persistedRequiredCheckSet.length ||
+          liveRequiredCheckSet.some((check, index) => check !== persistedRequiredCheckSet[index])) {
+        errors.push('GitHub audit cannot certify a moving finish candidate: persisted required-check set does not match the live required-check inventory');
+      }
+    }
+    const finishCandidateMismatch = finishCandidateCurrentnessMismatch(reviewEntryReceipt.finishCandidate, {
+      head: headRefOid,
+      base: String(prData?.baseRefOid ?? ''),
+      productPaths: (prData?.files ?? []).map((/** @type {any} */ file) => String(file?.path ?? '')),
+      productCommits: Array.isArray(prData?.commits)
+        ? prData.commits.map((/** @type {any} */ commit) => String(commit?.oid ?? ''))
+        : undefined,
+    });
+    if (finishCandidateMismatch === 'head') {
+      errors.push('GitHub audit cannot certify a moving finish candidate: persisted candidate head does not match the live PR head');
+    } else if (finishCandidateMismatch === 'base') {
+      errors.push('GitHub audit cannot certify a moving finish candidate: persisted product range base does not match the live PR base');
+    } else if (finishCandidateMismatch === 'changed_paths') {
+      errors.push('GitHub audit cannot certify a moving finish candidate: persisted changed-path verdict does not match the live PR changed-path set');
+    } else if (finishCandidateMismatch === 'commits') {
+      errors.push('GitHub audit cannot certify a moving finish candidate: persisted product range commits do not match the live PR commit inventory');
+    }
+  }
   const markers = collectReviewMarkers(prData, expectedAccount);
   const trustedMarkers = markers.filter(marker => isTrustedReviewMarker(marker, expectedAccount));
   const trustedOutcomeMarkers = trustedMarkers.filter(marker => marker.type === 'outcome');
@@ -801,6 +863,7 @@ export function evaluateGitHubReviewAudit({
     pr: prData?.number ?? null,
     issue: issueData?.number ?? null,
     headRefOid,
+    finishCandidate: receiptShape.ok ? reviewEntryReceipt.finishCandidate : null,
     independentReviewRequired: requirement.value,
     maintainerFixup: fixupPresent,
     maintainerFixupEpisodeCount: fixupEpisodes.length,
@@ -970,13 +1033,25 @@ function resolveReviewAuditIssue(prData, explicitIssue) {
  *   expectedStatus?: string,
  *   expectedArtifact?: string,
  *   workspace?: string,
+ *   reviewPacket?: string,
+ *   reviewEntryReceipt?: any,
  *   commandRunner?: Function,
  *   workspaceValidator?: Function,
  * }} [options]
  */
-export function runGitHubReviewAudit({ pr, issue, repo, expectedStatus, expectedArtifact, workspace, commandRunner = defaultGhCommandRunner, workspaceValidator = validateReviewWorkspace } = {}) {
+export function runGitHubReviewAudit({ pr, issue, repo, expectedStatus, expectedArtifact, workspace, reviewPacket, reviewEntryReceipt = null, commandRunner = defaultGhCommandRunner, workspaceValidator = validateReviewWorkspace } = {}) {
   const prNumber = Number(pr);
   if (!Number.isInteger(prNumber) || prNumber <= 0) throw new GitHubReviewAuditError('--pr must be a positive integer');
+
+  let persistedReceipt = reviewEntryReceipt;
+  if (reviewPacket !== undefined && reviewPacket !== null && reviewPacket !== '') {
+    try {
+      const parsed = JSON.parse(readFileSync(String(reviewPacket), 'utf8'));
+      persistedReceipt = parsed?.reviewEntryReceipt ?? null;
+    } catch (error) {
+      throw new GitHubReviewAuditError(`cannot read review packet: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   const reviewWorkspace = workspaceValidator({ workspace, expectedArtifact });
   if (reviewWorkspace.error) throw new GitHubReviewAuditError(reviewWorkspace.error);
@@ -997,6 +1072,7 @@ export function runGitHubReviewAudit({ pr, issue, repo, expectedStatus, expected
   const prArgs = ['pr', 'view', String(prNumber), '--json', PR_FIELDS];
   if (repo) prArgs.push('--repo', repo);
   const prData = runGh(commandRunner, prArgs);
+  const snapshotCompleteness = githubPrSnapshotCompleteness(prData);
 
   let issueNumber, closingIssues;
   try {
@@ -1071,6 +1147,6 @@ export function runGitHubReviewAudit({ pr, issue, repo, expectedStatus, expected
     }
   }
 
-  const result = evaluateGitHubReviewAudit({ prData, issueData, taskPrData, humanReviews, expectedStatus, expectedAccount, expectedArtifact });
+  const result = evaluateGitHubReviewAudit({ prData, issueData, reviewEntryReceipt: persistedReceipt, taskPrData, humanReviews, expectedStatus, expectedAccount, expectedArtifact, snapshotCompleteness });
   return { ...result, closingIssues, reviewWorkspace };
 }

@@ -12,8 +12,26 @@
  *   - [RC-2] manual: Inspect the generated adapter output.
  */
 
+import { parseRequiredCheckCommand } from './execution-evidence.js';
+import { isAgenticloopExplainArgv } from './task-evidence-contract.js';
+import { createDiagnostic } from './repair-policy.js';
+
 const CHECK_ID_RE = /^RC-([1-9]\d*)$/;
 const OUTCOMES = new Set(['passed', 'failed', 'blocked', 'not_run']);
+export const REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE = 'required_check.explain_forbidden';
+
+function isExplainCommand(command) {
+  try {
+    const parsed = parseRequiredCheckCommand(command);
+    return isAgenticloopExplainArgv([parsed.command, ...parsed.args]);
+  } catch {
+    return false;
+  }
+}
+
+function explainForbiddenMessage(id) {
+  return `command required check '${id}' must not invoke task explain: read-only diagnostic output cannot serve as required-check evidence`;
+}
 
 /**
  * Current packets bind this contract version into their semantic digest. It is
@@ -22,17 +40,23 @@ const OUTCOMES = new Set(['passed', 'failed', 'blocked', 'not_run']);
  */
 export const REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION = 2;
 
-function compareChecks(left, right) {
-  const leftId = typeof left?.id === 'string' ? left.id : '';
-  const rightId = typeof right?.id === 'string' ? right.id : '';
+/** Canonical numeric-aware identity ordering shared by every RC consumer. */
+export function compareRequiredCheckIds(leftId, rightId) {
+  leftId = typeof leftId === 'string' ? leftId : '';
+  rightId = typeof rightId === 'string' ? rightId : '';
   const leftNumber = CHECK_ID_RE.test(leftId) ? Number(leftId.slice(3)) : Number.MAX_SAFE_INTEGER;
   const rightNumber = CHECK_ID_RE.test(rightId) ? Number(rightId.slice(3)) : Number.MAX_SAFE_INTEGER;
   return leftNumber - rightNumber || leftId.localeCompare(rightId);
 }
 
+function compareChecks(left, right) {
+  return compareRequiredCheckIds(left?.id, right?.id);
+}
+
 /** Parse a complete Required Checks section into its closed canonical model. */
 export function parseRequiredCheckInventory(text, { allowEmpty = false, allowLegacy = false } = {}) {
   const errors = [];
+  const diagnostics = [];
   const checks = [];
   const seen = new Set();
   const lines = String(text ?? '').replace(/\r\n?/g, '\n').split('\n');
@@ -48,7 +72,7 @@ export function parseRequiredCheckInventory(text, { allowEmpty = false, allowLeg
 
   if (material.length === 0) {
     if (!allowEmpty) errors.push('required-check inventory must contain at least one canonical bullet');
-    return { ok: errors.length === 0, checks, errors };
+    return { ok: errors.length === 0, checks, errors, diagnostics };
   }
 
   for (const line of material) {
@@ -60,6 +84,12 @@ export function parseRequiredCheckInventory(text, { allowEmpty = false, allowLeg
         const instruction = legacy?.[2]?.replace(/^`([^`]+)`$/, '$1').trim() ?? '';
         if (legacy && instruction && !seen.has(id)) {
           seen.add(id);
+          if (isExplainCommand(instruction)) {
+            const message = explainForbiddenMessage(id);
+            errors.push(message);
+            diagnostics.push(createDiagnostic({ code: REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE, message }));
+            continue;
+          }
           checks.push({ id, kind: 'command', command: instruction });
           continue;
         }
@@ -84,6 +114,12 @@ export function parseRequiredCheckInventory(text, { allowEmpty = false, allowLeg
         errors.push(`command required check '${id}' must contain one non-empty backtick-delimited command`);
         continue;
       }
+      if (isExplainCommand(command)) {
+        const message = explainForbiddenMessage(id);
+        errors.push(message);
+        diagnostics.push(createDiagnostic({ code: REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE, message }));
+        continue;
+      }
       checks.push({ id, kind, command });
       continue;
     }
@@ -97,13 +133,14 @@ export function parseRequiredCheckInventory(text, { allowEmpty = false, allowLeg
   }
 
   checks.sort(compareChecks);
-  return { ok: errors.length === 0, checks, errors };
+  return { ok: errors.length === 0, checks, errors, diagnostics };
 }
 
 /** Validate a persisted canonical inventory without interpreting prose. */
 export function validateRequiredCheckInventory(value, { allowEmpty = false, label = 'required-check inventory' } = {}) {
   const errors = [];
-  if (!Array.isArray(value)) return { ok: false, checks: [], errors: [`${label} must be an array`] };
+  const diagnostics = [];
+  if (!Array.isArray(value)) return { ok: false, checks: [], errors: [`${label} must be an array`], diagnostics };
   if (!allowEmpty && value.length === 0) errors.push(`${label} must contain at least one check`);
   const seen = new Set();
   const checks = [];
@@ -125,6 +162,11 @@ export function validateRequiredCheckInventory(value, { allowEmpty = false, labe
     if (check.kind === 'command' && (typeof check.command !== 'string' || !check.command.trim())) {
       errors.push(`${label} command check command is required`);
     }
+    if (check.kind === 'command' && isExplainCommand(check.command)) {
+      const message = explainForbiddenMessage(check.id);
+      errors.push(message);
+      diagnostics.push(createDiagnostic({ code: REQUIRED_CHECK_EXPLAIN_REFUSAL_CODE, message }));
+    }
     if (check.kind === 'manual' && (typeof check.instruction !== 'string' || !check.instruction.trim())) {
       errors.push(`${label} manual check instruction is required`);
     }
@@ -132,7 +174,7 @@ export function validateRequiredCheckInventory(value, { allowEmpty = false, labe
   }
   const sorted = [...checks].sort(compareChecks);
   if (JSON.stringify(sorted) !== JSON.stringify(checks)) errors.push(`${label} must use canonical RC identity order`);
-  return { ok: errors.length === 0, checks: sorted, errors };
+  return { ok: errors.length === 0, checks: sorted, errors, diagnostics };
 }
 
 /** Validate the closed role-return evidence shape for required checks. */
