@@ -24,6 +24,7 @@ const TEST_NAME_INTERNAL_REFERENCE = /\b(?:p\d{2}-\d+|[rs]\d+:)\b/i;
 // unrelated numbered-phase work.
 const ALLOWED_PHASE_EVIDENCE_PATHS = new Set([
   `test/phase${36}-baseline.test.js`,
+  'test/fixtures/corrective-baseline-ledger.json',
   `test/fixtures/phase${36}-eight-step-chain/fixture.json`,
   'docs/integrated-proof.md',
   'docs/field-assertions.md',

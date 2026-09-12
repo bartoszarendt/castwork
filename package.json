@@ -53,7 +53,7 @@
   },
   "scripts": {
     "pretest": "node scripts/run-tests.js check",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test --test-reporter=tap --test-reporter=./scripts/test-materialization-reporter.js --test-reporter-destination=stdout --test-reporter-destination=stderr \"test/**/*.test.js\"",
     "test:dot": "node --test --test-reporter=dot \"test/**/*.test.js\"",
     "test:fast": "node scripts/run-tests.js fast",
     "test:e2e": "node scripts/run-tests.js e2e",

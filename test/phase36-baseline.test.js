@@ -6,8 +6,8 @@
 
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +25,11 @@ import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { protectedTransitionKey } from '../src/protected-transition-key.js';
 import { measureAdapterWords } from '../scripts/measure-adapter-words.mjs';
 import { BASELINE_SCENARIOS, createSyntheticScenarioHarness, runSyntheticScenario } from './helpers/lifecycle-scenario-harness.js';
+import { reportMaterializationAborts } from '../scripts/test-materialization-reporter.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGED_SURFACE_SNAPSHOT = JSON.parse(readFileSync(join(REPO_ROOT, 'src', 'packaged-surface-baseline.json'), 'utf8'));
+const CORRECTIVE_LEDGER = JSON.parse(readFileSync(join(REPO_ROOT, 'test', 'fixtures', 'corrective-baseline-ledger.json'), 'utf8'));
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.jsonc', '.md', '.toml', '.txt', '.yaml', '.yml']);
 // Keep this exact-file exemption synchronized with the tracked-file guard in
 // test/internal-planning-boundary.test.js. This candidate-set check includes
@@ -36,6 +38,7 @@ const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
 const PHASE_EVIDENCE_PATHS = new Set([
   'test/phase36-baseline.test.js',
+  'test/fixtures/corrective-baseline-ledger.json',
   'test/fixtures/phase36-eight-step-chain/fixture.json',
   'docs/integrated-proof.md',
   'docs/field-assertions.md',
@@ -85,6 +88,67 @@ export const NO_ATTEMPT_ID = 'none';
 export const transitionKey = protectedTransitionKey;
 
 describe('P36-00A frozen baseline', () => {
+  it('keeps one checked corrective ledger for every retained quiet Windows failure', () => {
+    assert.equal(CORRECTIVE_LEDGER.schemaVersion, 1);
+    assert.equal(CORRECTIVE_LEDGER.subject.commit, '0e9bb114a064a78e11921c0e362092ebb8ba834d');
+    assert.equal(CORRECTIVE_LEDGER.subject.phase36Artifact, 'not-green-claimed');
+    assert.deepEqual(CORRECTIVE_LEDGER.decisionBindings, ['P36F-D1', 'P36F-D7', 'P36F-D8']);
+    assert.deepEqual(CORRECTIVE_LEDGER.observedFullSuiteRuns.slice(0, 2).map(run => [run.mode, run.tests, run.pass, run.fail]), [
+      ['quiet', 4823, 4784, 28],
+      ['loaded', 4777, 4718, 48],
+    ]);
+    const failures = CORRECTIVE_LEDGER.quietFailureClusters.flatMap(cluster => cluster.failureIds.map(id => ({ id, cluster })));
+    assert.equal(failures.length, 28);
+    assert.equal(new Set(failures.map(failure => failure.id)).size, failures.length);
+    assert.deepEqual(
+      CORRECTIVE_LEDGER.quietFailureClusters.map(cluster => [cluster.id, cluster.failureIds.length]),
+      [['installed-binary-github-fixtures', 15], ['serial-dependency-lifecycle', 4], ['windows-incompatible-test-fixtures', 4], ['measurement-baselines', 3], ['integrated-proof-npm-launch', 1], ['role-start-clock', 1]]
+    );
+    assert.deepEqual(
+      CORRECTIVE_LEDGER.quietFailureClusters.map(cluster => cluster.behavior).sort(),
+      ['harness', 'harness', 'measurement', 'platform-fixture', 'production', 'timing']
+    );
+    for (const cluster of CORRECTIVE_LEDGER.quietFailureClusters) {
+      assert.match(cluster.platformApplicability, /Windows|cross-platform|Potentially/);
+      assert.match(cluster.localReproduction, /Linux/);
+    }
+  });
+
+  it('seeds duplicate representations, decision paths, and bookkeeping obligations for later classification', () => {
+    const findings = CORRECTIVE_LEDGER.structuralFindings;
+    assert.equal(findings.length, 10);
+    assert.deepEqual(new Set(findings.map(finding => finding.kind)), new Set([
+      'duplicate-representation', 'decision-path', 'bookkeeping-obligation',
+    ]));
+    assert.equal(new Set(findings.map(finding => finding.id)).size, findings.length);
+    for (const finding of findings) {
+      assert.ok(finding.references.length >= 2, `${finding.id} needs source and consumer references`);
+      for (const reference of finding.references) assert.match(reference, /^(?:src|test|scripts|commands)\/.+#?.*$/);
+    }
+    assert.equal(CORRECTIVE_LEDGER.sourceMeasurementBaseline.prePhaseCommit, 'cfc49686f48192caef3915da68f1b6bb5b1f44cb');
+    assert.equal(CORRECTIVE_LEDGER.sourceMeasurementBaseline.mergedCommit, CORRECTIVE_LEDGER.subject.commit);
+  });
+
+  it('reports cancelled descendants as an abort, not discovery drift', async () => {
+    const fixture = join(temp, 'materialization-abort.test.js');
+    writeFileSync(fixture, [
+      "import { before, describe, it } from 'node:test';",
+      "describe('aborted setup', () => {",
+      "  before(() => { throw new Error('intentional setup abort'); });",
+      "  it('first descendant', () => {});",
+      "  it('second descendant', () => {});",
+      "});",
+    ].join('\n'));
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const result = spawnSync(process.execPath, [
+      '--test', '--test-reporter=tap', '--test-reporter=./scripts/test-materialization-reporter.js',
+      '--test-reporter-destination=stdout', '--test-reporter-destination=stderr', fixture,
+    ], { cwd: REPO_ROOT, encoding: 'utf8', env });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /TEST_ABORTED_BEFORE_DESCENDANTS_MATERIALIZED/);
+    assert.match(result.stderr, /TEST_MATERIALIZATION_ABORT_SUMMARY: 2 descendant test\(s\)/);
+  });
   it('keeps the tracked and untracked candidate set within the internal planning boundary', () => {
     assert.deepEqual(candidatePhaseViolations(), []);
   });
