@@ -3642,7 +3642,7 @@ export async function cmdTask(args, io = createIo()) {
           STALE_CARRIER_DIGEST_CONTEXT
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
-      const evaluationNow = Date.now();
+      const evaluationNow = io?.fsMutationOptions?.roleStartClockForTest?.() ?? Date.now();
       // Serial starts retain their direct dependency safety proof. The current
       // evaluator rejects a changed head or unresolved dependency by its own
       // typed invariant; it no longer uses packet-wide rendering equality.
@@ -3787,12 +3787,14 @@ export async function cmdTask(args, io = createIo()) {
         actionId: 'role_start',
         protectedInputDigest: roleStartBinding.digest,
       });
+      io?.fsMutationOptions?.beforeRoleStartConsumptionForTest?.();
       const roleStartConsumption = createDispatchConsumption({
         backend: 'files', taskId, recognition: roleStartRecognition,
         currentCarrierDigest: candidateDigest,
         protectedInputDigest: roleStartBinding.digest,
         transitionKey,
         checkEvidenceOutput: checkEvidencePath.relPath,
+        now: evaluationNow,
       });
       const superseded = deriveAttemptSupersessions(target, taskId, roleStartConsumption, { backend: 'files' });
       if (!superseded.ok) {
@@ -7222,6 +7224,7 @@ export async function cmdTask(args, io = createIo()) {
       let roleStartRecognition = null;
       let roleStartBinding = null;
       let roleStartConsumption = null;
+      let roleStartNow = null;
       let attemptSupersessions = [];
       let lifecycleHandoffRecognition = null;
       if (nextStatus === 'in-progress') {
@@ -7307,6 +7310,7 @@ export async function cmdTask(args, io = createIo()) {
           }
         }
         try {
+          roleStartNow = io?.fsMutationOptions?.roleStartClockForTest?.() ?? Date.now();
           const currentDispatch = opts.dispatchPacket
             ? await verifyCurrentDispatchPacket({
                 target,
@@ -7314,6 +7318,7 @@ export async function cmdTask(args, io = createIo()) {
                 taskId,
                 packetPath: String(opts.dispatchPacket),
                 hostTrustStore: opts.hostTrustStore,
+                now: roleStartNow,
               })
             : null;
           roleStartRecognition = recognizeRoleStart({
@@ -7343,6 +7348,7 @@ export async function cmdTask(args, io = createIo()) {
             onAfterRecognitionEvaluation: (evaluatorInput, evaluatorOutcome) => observeProtectedTransitionEvaluation(
               io, 'role_start', evaluatorInput, roleStartBinding, evaluatorOutcome,
             ),
+            now: roleStartNow,
           });
         } catch (error) {
           if (error instanceof PublicCommandError) return failure(error);
@@ -7453,6 +7459,7 @@ export async function cmdTask(args, io = createIo()) {
           productBaseHead: roleStartRecognition.boundIdentity.productBaseHead,
           taskId,
         });
+        io?.fsMutationOptions?.beforeRoleStartConsumptionForTest?.();
         roleStartConsumption = createDispatchConsumption({
           backend: 'files', taskId, recognition: roleStartRecognition,
           currentCarrierDigest: candidateDigest,
@@ -7464,6 +7471,7 @@ export async function cmdTask(args, io = createIo()) {
             actionId: 'role_start',
             protectedInputDigest: roleStartBinding.digest,
           }),
+          now: roleStartNow,
         });
         // A task and role carry at most one live attempt. Consuming a fresh
         // packet retires its predecessors in the same transaction that records

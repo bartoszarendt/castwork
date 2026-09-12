@@ -29,6 +29,7 @@ opencode.jsonc
 # Per-lane parallel worktrees live inside the repo root to stay within the
 # host's workspace sandbox; never report them as untracked.
 .agenticloop/worktrees/
+.agenticloop/locks/
 .agenticloop/local/
 .agenticloop/host-role-capabilities/
 tmp/

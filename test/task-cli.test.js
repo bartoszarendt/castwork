@@ -155,6 +155,39 @@ function sha256(text) {
 }
 
 describe('status-route role-start lifecycle serialization', () => {
+  it('persists the evaluation instant after an injected scheduling delay', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'role-start-one-clock-delay');
+    const packetPath = '.agenticloop/tmp/packet.json';
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    const prepared = prepareDispatch(fixture);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    writeFileSync(join(fixture.root, packetPath), JSON.stringify(prepared.packet), 'utf8');
+    const evaluationNow = Date.now();
+    let clockReads = 0;
+    const started = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', packetPath, '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+      fsMutationOptions: {
+        roleStartClockForTest: () => {
+          clockReads += 1;
+          return evaluationNow;
+        },
+        beforeRoleStartConsumptionForTest: () => {
+          const deadline = Date.now() + 1_100;
+          while (Date.now() < deadline) { /* model an event-loop scheduling stall */ }
+        },
+      },
+    });
+    assertOk(started);
+    assert.equal(clockReads, 1);
+    const records = listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' });
+    assert.equal(records.ok, true, records.errors.join('\n'));
+    assert.equal(records.records[0].consumedAt, new Date(evaluationNow).toISOString());
+    assert.ok(Date.parse(records.records[0].consumedAt) <= Date.now(), 'persisted internal timestamp must not be future-dated');
+  });
+
   it('revalidates a terminal carrier inside the lock before creating fresh attempt evidence', async () => {
     const fixture = await createDispatchFixture(tmpDir, 'status-role-start-terminal-revalidation', {
       initialStatus: 'in-progress',

@@ -54,6 +54,7 @@ import { taskBodyDigest } from '../src/github-task-body.js';
 import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createReviewEntryReceipt } from '../src/review-entry-receipt.js';
 import {
+  EXTERNAL_DISPATCH_CONSUMPTION_CLOCK_SKEW_MS,
   createDispatchConsumption,
   currentDispatchConsumption,
   dispatchConsumptionDigest,
@@ -506,6 +507,30 @@ describe('durable dispatch consumption', () => {
     assert.equal(validateDispatchConsumption(record, {
       taskId: packet.task.id, backend: 'files', now: Date.parse('2026-08-01T12:00:01.000Z'),
     }).ok, true);
+  });
+
+  it('uses the resolved role-start instant for construction and immediate validation', () => {
+    const transitionNow = Date.parse('2026-08-01T12:00:00.000Z');
+    const record = createDispatchConsumption({
+      backend: 'files', taskId: packet.task.id, recognition: recognizedStart(),
+      currentCarrierDigest: packet.task.dispatchCarrierDigest, now: transitionNow,
+    });
+    assert.equal(record.consumedAt, '2026-08-01T12:00:00.000Z');
+    assert.equal(validateDispatchConsumption(record, {
+      taskId: packet.task.id, backend: 'files', now: transitionNow,
+    }).ok, true);
+  });
+
+  it('applies future skew only when validating persisted external consumption evidence', () => {
+    const now = Date.parse('2026-08-01T12:00:00.000Z');
+    const atBoundary = consumption({
+      consumedAt: new Date(now + EXTERNAL_DISPATCH_CONSUMPTION_CLOCK_SKEW_MS).toISOString(),
+    });
+    assert.equal(validateDispatchConsumption(atBoundary, { now }).ok, true);
+    const beyondBoundary = structuredClone(atBoundary);
+    beyondBoundary.consumedAt = new Date(now + EXTERNAL_DISPATCH_CONSUMPTION_CLOCK_SKEW_MS + 1).toISOString();
+    beyondBoundary.digest = dispatchConsumptionDigest(beyondBoundary);
+    assert.equal(validateDispatchConsumption(beyondBoundary, { now }).ok, false);
   });
 
   it('refuses caller-authored records, forged recognition, and false duplicated identity', () => {

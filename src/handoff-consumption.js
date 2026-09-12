@@ -22,7 +22,8 @@ import { producerRefusal } from './public-error.js';
 export const DISPATCH_CONSUMPTION_KIND = 'agenticloop.dispatch-consumption';
 export const DISPATCH_CONSUMPTION_SCHEMA_VERSION = 5;
 const LEGACY_DISPATCH_CONSUMPTION_SCHEMA_VERSIONS = Object.freeze([3, 4]);
-export const DISPATCH_CONSUMPTION_CLOCK_SKEW_MS = 1000;
+/** Tolerance for persisted consumption evidence observed by a later clock. */
+export const EXTERNAL_DISPATCH_CONSUMPTION_CLOCK_SKEW_MS = 1000;
 export const TASK_CARRIER_MUTATION_ROOT = '.agenticloop/handoffs/task-mutations';
 export const ROLE_START_TRANSACTION_ROOT = '.agenticloop/handoffs/role-start-transactions';
 
@@ -61,7 +62,8 @@ function dispatchConsumptionDigestForSchema(record, schemaVersion) {
 
 export function createDispatchConsumption({
   backend, taskId, recognition, currentCarrierDigest, protectedInputDigest = null,
-  transitionKey = null, checkEvidenceOutput = null, consumedAt = new Date().toISOString(),
+  transitionKey = null, checkEvidenceOutput = null, now = Date.now(),
+  consumedAt = new Date(now).toISOString(),
 }) {
   const checked = validateHandoffRecognition(recognition);
   if (!checked.ok || recognition?.recognized !== true || recognition.transition !== 'role_start' ||
@@ -117,7 +119,7 @@ export function createDispatchConsumption({
     digest: null,
   };
   record.digest = dispatchConsumptionDigest(record);
-  const validation = validateDispatchConsumption(record, { backend, taskId });
+  const validation = validateDispatchConsumption(record, { backend, taskId, now });
   if (!validation.ok) throw refuse(`invalid dispatch consumption: ${validation.errors.join('; ')}`);
   return Object.freeze(record);
 }
@@ -229,7 +231,7 @@ export function validateDispatchConsumption(record, {
   const consumedMs = Date.parse(record.consumedAt);
   if (!ISO_UTC_RE.test(String(record.consumedAt ?? '')) || !Number.isFinite(consumedMs)) {
     errors.push('dispatch consumption consumedAt must be a strict ISO-8601 UTC instant');
-  } else if (consumedMs > now + DISPATCH_CONSUMPTION_CLOCK_SKEW_MS) {
+  } else if (consumedMs > now + EXTERNAL_DISPATCH_CONSUMPTION_CLOCK_SKEW_MS) {
     errors.push('dispatch consumption consumedAt is future-dated');
   }
   if (filename !== null && filename !== `${safeSegment(record.packetId)}.json`) {

@@ -656,6 +656,95 @@ describe('lifecycle authority locks', () => {
     assert.match(refused.errors[0], /^fs\.lifecycle_lock\.contended:/);
     assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
   });
+
+  it('reclaims a live recycled PID when its process-start identity differs', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-PID-REUSE';
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const reclaimed = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true, lifecycleLockProcessIdentity: () => 'start-B',
+    });
+    assert.equal(reclaimed.ok, true, reclaimed.errors.join('\n'));
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+  });
+
+  it('reclaims a prior-boot lock even if its former PID is reported live', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-REBOOT';
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'prior-boot', lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const reclaimed = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'current-boot',
+      lifecycleLockProcessInspector: () => true, lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(reclaimed.ok, true, reclaimed.errors.join('\n'));
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+  });
+
+  it('refuses malformed lock ownership without reclaiming it', () => {
+    const t = target();
+    const taskId = 'T-MALFORMED';
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    mkdirSync(lockDir, { recursive: true });
+    const lockName = `${createHash('sha256').update(taskId).digest('hex')}.lock`;
+    writeFileSync(join(lockDir, lockName), 'not-json\n');
+    const refused = executeMutationBatch(t, [{ type: 'create', path: 'carrier.txt', content: 'accepted' }], {
+      lifecycleAuthorityTaskIds: [taskId],
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'fs.lifecycle_lock.malformed');
+    assert.equal(readFileSync(join(lockDir, lockName), 'utf8'), 'not-json\n');
+  });
+
+  it('fails closed when a live owner has no inspectable process-start identity', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-IDENTITY-UNAVAILABLE';
+    const held = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+
+    const refused = executeMutationBatch(t, [{
+      type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
+      expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+    }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true, lifecycleLockProcessIdentity: () => null,
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'fs.lifecycle_lock.inspect_failed');
+    assert.match(refused.errors[0], /manual recovery/);
+  });
+
 });
 
 describe('Windows EPERM behavior', { skip: !IS_WINDOWS }, () => {

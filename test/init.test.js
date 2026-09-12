@@ -17,6 +17,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, copyFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -529,6 +530,21 @@ describe('init - .gitignore handling', () => {
     const gi = readFileSync(join(d, '.gitignore'), 'utf-8');
     const matches = gi.split('\n').filter(l => l.trim() === '.agenticloop/worktrees/');
     assert.equal(matches.length, 1, '.agenticloop/worktrees/ should appear exactly once');
+  });
+
+  it('ignores lifecycle locks so git add -A cannot stage transient lock files', async () => {
+    const d = makeEmptyTarget();
+    await init({ target: d });
+    const runGit = args => {
+      const result = spawnSync('git', ['-C', d, ...args], { encoding: 'utf8' });
+      assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
+      return result.stdout;
+    };
+    runGit(['init']);
+    mkdirSync(join(d, '.agenticloop', 'locks', 'lifecycle-authority'), { recursive: true });
+    writeFileSync(join(d, '.agenticloop', 'locks', 'lifecycle-authority', 'held.lock'), '{"pid":1}\n');
+    runGit(['add', '-A']);
+    assert.equal(runGit(['diff', '--cached', '--name-only']).includes('.agenticloop/locks/'), false);
   });
 });
 

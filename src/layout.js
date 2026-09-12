@@ -251,6 +251,15 @@ export const WORKTREES_GITIGNORE_PATTERNS = Object.freeze([
   '/.agenticloop/worktrees/',
 ]);
 
+/** Lifecycle locks are transient coordination state, never repository evidence. */
+export const LOCKS_DIRECTORY_RELATIVE_PATH = '.agenticloop/locks';
+export const LOCKS_GITIGNORE_PATTERNS = Object.freeze([
+  '.agenticloop/locks',
+  '.agenticloop/locks/',
+  '/.agenticloop/locks',
+  '/.agenticloop/locks/',
+]);
+
 export const TASK_REQUIRED_SECTION_HEADINGS = Object.freeze([
   '## Task',
   '## Source Documents Reviewed',

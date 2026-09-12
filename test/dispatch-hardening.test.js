@@ -320,6 +320,18 @@ describe('initial repository state binds the dispatch', () => {
     // packet emitted there is no valid return to verify.
   });
 
+  it('keeps ignored lifecycle locks visible to the clean-state gate', () => {
+    const evaluated = evaluateDispatchCleanState({
+      runGit: args => ({
+        status: 0,
+        stdout: args.includes('--ignored') ? '.agenticloop/locks/lifecycle-authority/held.lock\n' : '',
+      }),
+      scopePatterns: ['src/**'],
+    });
+    assert.equal(evaluated.ok, false);
+    assert.deepEqual(evaluated.state.ignoredRelevantPaths, ['.agenticloop/locks/lifecycle-authority/held.lock']);
+  });
+
   it('blocks dispatch when an ignored file shadows an intended creation or shared state', async () => {
     const fixture = await createDispatchFixture(temp, 'ignored-creation');
     writeFileSync(join(fixture.root, '.gitignore'), 'src/new.js\n.agenticloop/owned.json\n', 'utf8');
