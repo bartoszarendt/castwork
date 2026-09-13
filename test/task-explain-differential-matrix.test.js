@@ -1,5 +1,5 @@
 /**
- * Independent P36-09A differential matrix.
+ * Independent protected-action differential matrix.
  *
  * Expected states come from protected evaluator inputs and decisions, never
  * from task-explain, its routing map, or its dependency index.  The dispatch
@@ -71,7 +71,7 @@ function assertActualCodedReasonOwners(action, observedCodes) {
   }
 }
 
-describe('P36-09A protected dispatch differential matrix', () => {
+describe('protected dispatch differential matrix', () => {
   it('perturbs every declared dispatch dimension through the protected evaluator and never projects it legal', async () => {
     const fixture = await createDispatchFixture(temp, 'all-dispatch-dimensions', {
       parallel: true,
@@ -128,7 +128,7 @@ describe('P36-09A protected dispatch differential matrix', () => {
   });
 });
 
-describe('P36-09A post-dispatch protected-command differential matrix', () => {
+describe('post-dispatch protected-command differential matrix', () => {
   it('uses protected command outcomes for role start, return, review, and audit without promoting unavailable or failed facts', async () => {
     const fixture = await createDispatchFixture(temp, 'post-dispatch-actions');
     const observedCodes = new Set();

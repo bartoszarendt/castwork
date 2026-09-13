@@ -10,13 +10,13 @@ import { runExecutedEightStepChain } from './helpers/lifecycle-scenario-harness.
 import { runNpm } from './helpers/npm-runner.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const fixture = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', `phase${36}-eight-step-chain`, 'fixture.json'), 'utf8'));
+const fixture = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', 'lifecycle-refusal-chain', 'fixture.json'), 'utf8'));
 const proof = readFileSync(join(ROOT, 'docs', 'integrated-proof.md'), 'utf8');
 const fieldAssertions = readFileSync(join(ROOT, 'docs', 'field-assertions.md'), 'utf8');
 const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const SERIAL_FIXTURE_MEASUREMENTS = Object.freeze({
   M3: [1, 0, 0],
-  M4: 6193,
+  M4: 6377,
   M5: [4632, 4097, 2362],
   M6: 2071,
    M7: [76, 18, 94],
@@ -80,12 +80,12 @@ describe('integrated lifecycle proof', () => {
 
   it('pins reported non-Git serial-fixture measurements to their exact value', () => {
     assert.deepEqual(SERIAL_FIXTURE_MEASUREMENTS, {
-      M3: [1, 0, 0], M4: 6193,
+      M3: [1, 0, 0], M4: 6377,
        M5: [4632, 4097, 2362], M6: 2071, M7: [76, 18, 94],
     });
     for (const value of [
       '1 attempt, 0 abandonments, 0 supersessions',
-      '6,193 canonical words', 'Maintainer 4,632; Engineer 4,097; Auditor 2,362 canonical words',
+      '6,377 canonical words', 'Maintainer 4,632; Engineer 4,097; Auditor 2,362 canonical words',
        '2,071 canonical words', '76 retained hard refusals and 18 material human decisions',
     ]) assert.match(proof, new RegExp(value));
   });

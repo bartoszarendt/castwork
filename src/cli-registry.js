@@ -641,13 +641,13 @@ export const COMMAND_REGISTRY = {
         options: [targetOption(), jsonOption],
       },
       explain: {
-        summary: 'Explain bounded current task facts and action verdicts. Read-only; grants no authority and writes nothing.',
+        summary: 'Files-only availability explanation for bounded current task facts and action verdicts. Read-only; grants no authority and writes nothing.',
         usage: 'agenticloop task explain <id> [--action <action-id>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: true }],
         options: [
           targetOption(),
-          opt('action', 'string', 'Limit the explanation to one stable action id.'),
+          opt('action', 'string', 'Limit the files-only availability explanation to prepare_dispatch, role_start, prepare_return, review, or audit. Missing protected inputs report unknown; they do not decide legality.'),
           jsonOption,
         ],
       },

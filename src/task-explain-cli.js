@@ -14,7 +14,7 @@ export function runTaskExplain({ target, positional, opts, io }) {
     explanation = explainTask(target, taskId, { action: opts.action ?? null, io });
   } catch (error) {
     io.err(error instanceof Error ? error.message : String(error));
-    return opts.action ? EXIT_USAGE : 1;
+    return error instanceof CliUsageError ? EXIT_USAGE : 1;
   }
   if (opts.json) io.out(serializeValidationResult(createValidationResult({ command: 'task explain', ok: true, ...explanation })));
   else io.out(renderTaskExplanation(explanation));

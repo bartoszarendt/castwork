@@ -111,7 +111,7 @@ describe('dispatch acting-context measurement', () => {
     // delegated role wrapper before packet/task evidence, while retaining the
     // same generated component measurement for auditability.
     const orientation = measure('orchestrator');
-    assert.equal(orientation.totalCanonicalWords, 6193, JSON.stringify(orientation));
+    assert.equal(orientation.totalCanonicalWords, 6377, JSON.stringify(orientation));
     assert.equal(orientation.actualInputTokens, 'unavailable');
     const delegated = {};
     for (const role of ['maintainer', 'engineer', 'auditor']) {

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { COMMAND_REGISTRY, isReceiptRevalidationArgv } from '../src/cli-registry.js';
+import { taskSubcommandBackends } from '../src/task-cli.js';
 import { createDispatchFixture } from './helpers/dispatch-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
@@ -13,6 +14,7 @@ import { loadProjectMap } from '../src/project-map.js';
 import {
   TASK_EXPLAIN_ACTION_IDS,
   TASK_EXPLAIN_ACTION_EVALUATORS,
+  TASK_EXPLAIN_SUPPORT,
 } from '../src/task-explain.js';
 import { DISPATCH_ELIGIBILITY_DIMENSIONS } from '../src/dispatch-eligibility.js';
 import { evaluateReadOnlyDispatchProjection } from '../src/handoff-preflight.js';
@@ -124,6 +126,56 @@ describe('task explain canonical action projections', () => {
       'evaluateReadOnlyPrepareReturnProjection', 'evaluateReadOnlyReviewProjection',
       'evaluateReadOnlyAuditProjection',
     ]);
+  });
+
+  it('declares the files-only action and protected-selector reachability matrix', () => {
+    assert.deepEqual(Object.keys(TASK_EXPLAIN_SUPPORT), TASK_EXPLAIN_ACTION_IDS);
+    assert.deepEqual(taskSubcommandBackends('explain'), ['files']);
+    for (const [action, support] of Object.entries(TASK_EXPLAIN_SUPPORT)) {
+      assert.deepEqual(support.backends, ['files'], action);
+      assert.ok(support.protectedInputs.length > 0, action);
+      assert.match(support.unknownMeaning, /availability/i, action);
+    }
+    assert.deepEqual(TASK_EXPLAIN_SUPPORT.prepare_dispatch.protectedInputs, [
+      '--host <host> and --role engineer, or --input <dispatch-input.json>, or --packet <packet.json> and --role engineer',
+    ]);
+    assert.deepEqual(TASK_EXPLAIN_SUPPORT.role_start.protectedInputs, ['--packet <packet.json>']);
+    assert.deepEqual(TASK_EXPLAIN_SUPPORT.prepare_return.protectedInputs, [
+      '--packet <packet.json>', '--check-evidence <path>', '--outcome <outcome>', '--output <path>',
+    ]);
+  });
+
+  it('uses usage exit 2 only for invalid action syntax, not operational explain failures', async () => {
+    const fixture = await createDispatchFixture(temp, 'exit-matrix');
+    const invalidAction = await runCliInProcess([
+      'task', 'explain', 'T-001', '--action', 'not_an_action', '--target', fixture.root,
+    ]);
+    assert.equal(invalidAction.status, 2, invalidAction.stderr);
+
+    const missingTask = await runCliInProcess([
+      'task', 'explain', 'missing-task', '--action', 'review', '--target', fixture.root,
+    ]);
+    assert.equal(missingTask.status, 1, missingTask.stderr);
+
+    const projectPath = join(fixture.root, '.agenticloop', 'project.md');
+    writeFileSync(projectPath, readFileSync(projectPath, 'utf8').replace('task_backend: files', 'task_backend: unavailable'));
+    const unavailableBackend = await runCliInProcess([
+      'task', 'explain', 'T-001', '--action', 'review', '--target', fixture.root,
+    ]);
+    assert.equal(unavailableBackend.status, 1, unavailableBackend.stderr);
+
+    writeFileSync(projectPath, readFileSync(projectPath, 'utf8').replace('task_backend: unavailable', 'task_backend: github'));
+    const unsupportedBackend = await runCliInProcess([
+      'task', 'explain', 'T-001', '--action', 'review', '--target', fixture.root,
+    ]);
+    assert.equal(unsupportedBackend.status, 2, unsupportedBackend.stderr);
+
+    const missingRepository = await createDispatchFixture(temp, 'missing-explain-repository');
+    rmSync(join(missingRepository.root, '.git'), { recursive: true, force: true });
+    const missingRepoResult = await runCliInProcess([
+      'task', 'explain', 'T-001', '--action', 'review', '--target', missingRepository.root,
+    ]);
+    assert.equal(missingRepoResult.status, 1, missingRepoResult.stderr);
   });
 
   it('renders the direct canonical result for every action without changing target state', async () => {

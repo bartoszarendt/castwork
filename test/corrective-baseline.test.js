@@ -1,7 +1,7 @@
 /**
- * P36-00A characterization only. These fixtures define a proposed transition
- * identity and exercise the existing derived measurement; they do not alter
- * production lifecycle behavior.
+ * Frozen characterization fixtures define a proposed transition identity and
+ * exercise the existing derived measurement; they do not alter production
+ * lifecycle behavior.
  */
 
 import { after, before, describe, it } from 'node:test';
@@ -31,18 +31,10 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGED_SURFACE_SNAPSHOT = JSON.parse(readFileSync(join(REPO_ROOT, 'src', 'packaged-surface-baseline.json'), 'utf8'));
 const CORRECTIVE_LEDGER = JSON.parse(readFileSync(join(REPO_ROOT, 'test', 'fixtures', 'corrective-baseline-ledger.json'), 'utf8'));
 const TEXT_EXTENSIONS = new Set(['.js', '.json', '.jsonc', '.md', '.toml', '.txt', '.yaml', '.yml']);
-// Keep this exact-file exemption synchronized with the tracked-file guard in
-// test/internal-planning-boundary.test.js. This candidate-set check includes
-// untracked non-ignored files so a commit cannot introduce a latent violation.
-const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
+// This candidate-set check includes untracked non-ignored files so a commit
+// cannot introduce a latent planning-boundary violation.
+const PHASE_NUMBER_IN_FILENAME = /\b(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)\b/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
-const PHASE_EVIDENCE_PATHS = new Set([
-  'test/phase36-baseline.test.js',
-  'test/fixtures/corrective-baseline-ledger.json',
-  'test/fixtures/phase36-eight-step-chain/fixture.json',
-  'docs/integrated-proof.md',
-  'docs/field-assertions.md',
-]);
 const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
   opencode: { generatedPayload: 16128, agentDefinitions: 15120, activationSurface: 1008, referenceLibrary: 0 },
   codex: { generatedPayload: 76849, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60100 },
@@ -64,7 +56,6 @@ function candidateRepositoryFiles() {
 function candidatePhaseViolations() {
   const violations = [];
   for (const relativePath of candidateRepositoryFiles()) {
-    if (PHASE_EVIDENCE_PATHS.has(relativePath)) continue;
     const file = join(REPO_ROOT, relativePath);
     if (PHASE_NUMBER_IN_FILENAME.test(basename(file))) {
       violations.push(`${relativePath}: numbered phase in filename`);
@@ -87,7 +78,7 @@ export const NO_ATTEMPT_ID = 'none';
 
 export const transitionKey = protectedTransitionKey;
 
-describe('P36-00A frozen baseline', () => {
+describe('frozen corrective baseline', () => {
   it('keeps one checked corrective ledger for every retained quiet Windows failure', () => {
     assert.equal(CORRECTIVE_LEDGER.schemaVersion, 1);
     assert.equal(CORRECTIVE_LEDGER.subject.commit, '0e9bb114a064a78e11921c0e362092ebb8ba834d');

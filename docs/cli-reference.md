@@ -54,14 +54,25 @@ All commands:
 
 ### Task lifecycle additions
 
-- `task explain <id>` derives bounded current task facts and action verdicts;
-  it is read-only and grants no authority.
+- `task explain <id> [--action <action-id>]` is files-only and derives bounded
+  current task availability for `prepare_dispatch`, `role_start`,
+  `prepare_return`, `review`, and `audit`. It is read-only, grants no authority,
+  and writes nothing. The protected action inputs are, respectively: dispatch
+  host/role or advanced input/packet selection; a role-start packet; return
+  packet, check evidence, outcome, and output; a current verified return; and,
+  when audit is enabled, a current work-unit candidate with coverage. `unknown`
+  explains unavailable protected inputs; it is not a complete legality decision.
+  Invalid action syntax exits `2`; a missing task, repository, or configured
+  backend exits `1`; an `unknown` projection for an existing readable task exits
+  `0`.
 - `task measure <id>` reports bounded derived operational measurement without
   storing it.
 - `task adopt-historical` records a reduced-assurance terminal adoption for
   work that genuinely predates canonical lifecycle evidence; `task adopt-commit`
-  adopts one attributable, in-scope commit range into an existing attempt and
-  requires fresh certification.
+  records a `non_authenticated_claim` for one attributable, in-scope commit
+  range into an existing attempt. The latter preserves bounded attempt context
+  but never authenticates claimed origin or substitutes for permission, Git
+  attribution, or fresh required-check, review, and audit certification.
 - `task abandon-attempt`, `task attempt-status`, and
   `task record-tooling-failure` respectively discard a named live attempt under
   durable authority, report whether a new packet may be minted, and persist one

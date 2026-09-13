@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
@@ -16,27 +16,17 @@ const TEXT_EXTENSIONS = new Set([
   '.yaml',
   '.yml',
 ]);
-const PHASE_NUMBER_IN_FILENAME = /(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)/i;
+const PHASE_NUMBER_IN_FILENAME = /\b(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)\b/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
 const TEST_NAME_INTERNAL_REFERENCE = /\b(?:p\d{2}-\d+|[rs]\d+:)\b/i;
-// These bounded evidence artifacts retain their source-plan identifier so the
-// integrated proof remains traceable without opening the planning boundary to
-// unrelated numbered-phase work.
-const ALLOWED_PHASE_EVIDENCE_PATHS = new Set([
-  `test/phase${36}-baseline.test.js`,
-  'test/fixtures/corrective-baseline-ledger.json',
-  `test/fixtures/phase${36}-eight-step-chain/fixture.json`,
-  'docs/integrated-proof.md',
-  'docs/field-assertions.md',
-]);
 
 function repositoryFiles() {
-  return execFileSync('git', ['ls-files', '-z'], {
+  const list = args => execFileSync('git', ['ls-files', ...args, '-z'], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
-  })
-    .split('\0')
-    .filter(Boolean)
+  }).split('\0').filter(Boolean);
+  return [...new Set([...list([]), ...list(['--others', '--exclude-standard'])])]
+    .filter(file => existsSync(join(REPO_ROOT, file)))
     .map(file => join(REPO_ROOT, file));
 }
 
@@ -50,7 +40,6 @@ describe('internal planning boundary', () => {
 
     for (const file of repositoryFiles()) {
       const relativePath = repoRelative(file);
-      if (ALLOWED_PHASE_EVIDENCE_PATHS.has(relativePath)) continue;
       if (PHASE_NUMBER_IN_FILENAME.test(basename(file))) {
         violations.push(`${relativePath}: numbered phase in filename`);
       }

@@ -27,6 +27,29 @@ each action preserves the evaluator's facts, verdict, applicability, reasons,
 and prerequisites. It does not create evidence and no receipt or required check
 may invoke it as mutation evidence.
 
+### `task explain` availability matrix
+
+`task explain <id> [--action <action-id>]` supports the **files** backend only.
+Its action IDs are `prepare_dispatch`, `role_start`, `prepare_return`, `review`,
+and `audit`. `--action` narrows the read-only output; omitting it shows all five.
+The action names describe the existing protected commands, not a new evaluator
+or a route that grants a transition.
+
+| Explain action | Protected action availability inputs |
+| --- | --- |
+| `prepare_dispatch` | `--host <host>` with `--role engineer`, or `--input <dispatch-input.json>`, or `--packet <packet.json>` with `--role engineer` |
+| `role_start` | `--packet <packet.json>` |
+| `prepare_return` | `--packet <packet.json>`, `--check-evidence <path>`, `--outcome <outcome>`, and `--output <path>` |
+| `review` | A current verified return record |
+| `audit` | When audit is enabled, a current work-unit candidate and covered-task evidence |
+
+`unknown` is an availability explanation: the read-only projection cannot select,
+authenticate, or validate all protected inputs. It is not a complete legality
+decision, and intentionally absent packet, check aggregate, verified return, or
+candidate stays `unknown`. Invalid action syntax exits `2`; a missing task,
+repository, or configured backend exits `1`; a successful availability
+projection exits `0`.
+
 ## Canonical Lifecycle
 
 1. **Contract and readiness.** The Maintainer owns durable task scope and

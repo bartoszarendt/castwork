@@ -13,6 +13,19 @@
   a repeated-refusal validator-diagnosis stop rule.
 
 ### Fixed
+- Removed the unconsumed `task remediation-authority` command and durable state;
+  remediation eligibility continues to derive from current authenticated review
+  state rather than a decorative authority record.
+- `task adopt-commit` now labels adopted actor attribution as the explicit
+  `non_authenticated_claim` assurance grade and requires renewed certification;
+  it no longer implies authenticated human or supervisor provenance.
+- Consolidated the refusal catalog into one declarative diagnostic definition;
+  catalog accounting now runs in validation and tests instead of at production
+  module import, and warning-only return reporting is not counted as a hard
+  refusal.
+- `task explain` now documents its files-only action availability and protected
+  inputs, preserves `unknown` for unavailable inputs, and distinguishes action
+  syntax failures (exit `2`) from operational context failures (exit `1`).
 - P36 remediation now documents the complete shipped task-command surface,
   resolves installed methodology routes to copied destinations, and aligns
   refusal-catalog terminology with installed warning-only accounting.

@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 import { lifecycleOrientationSnapshot } from './lifecycle-orientation.js';
 import { loadProjectMap } from './project-map.js';
@@ -15,10 +16,46 @@ import {
 import { evaluateReadOnlyPrepareReturnProjection } from './dispatch-envelope.js';
 import { evaluateReadOnlyAuditProjection } from './audit-record.js';
 import { createReadOnlyLifecycleProjection } from './lifecycle-projection.js';
+import { CliUsageError } from './cli-io.js';
 
 export const TASK_EXPLAIN_ACTION_IDS = Object.freeze([
   'prepare_dispatch', 'role_start', 'prepare_return', 'review', 'audit',
 ]);
+
+/**
+ * Public reachability documentation for the bounded availability projection.
+ * These are protected-command inputs, not new explain selectors or evaluator
+ * authority: absent inputs remain an honest `unknown` availability result.
+ */
+export const TASK_EXPLAIN_SUPPORT = Object.freeze({
+  prepare_dispatch: Object.freeze({
+    backends: Object.freeze(['files']),
+    protectedInputs: Object.freeze([
+      '--host <host> and --role engineer, or --input <dispatch-input.json>, or --packet <packet.json> and --role engineer',
+    ]),
+    unknownMeaning: 'Availability explanation only: explain cannot select or authenticate the protected dispatch inputs.',
+  }),
+  role_start: Object.freeze({
+    backends: Object.freeze(['files']),
+    protectedInputs: Object.freeze(['--packet <packet.json>']),
+    unknownMeaning: 'Availability explanation only: without a packet, explain does not decide role-start legality.',
+  }),
+  prepare_return: Object.freeze({
+    backends: Object.freeze(['files']),
+    protectedInputs: Object.freeze(['--packet <packet.json>', '--check-evidence <path>', '--outcome <outcome>', '--output <path>']),
+    unknownMeaning: 'Availability explanation only: absent packet or check evidence never becomes a return-legality decision.',
+  }),
+  review: Object.freeze({
+    backends: Object.freeze(['files']),
+    protectedInputs: Object.freeze(['a current verified return record']),
+    unknownMeaning: 'Availability explanation only: without a verified return, explain does not decide review legality.',
+  }),
+  audit: Object.freeze({
+    backends: Object.freeze(['files']),
+    protectedInputs: Object.freeze(['a current work-unit candidate and covered-task evidence when audit is enabled']),
+    unknownMeaning: 'Availability explanation only: absent candidate or coverage does not become an audit-legality decision.',
+  }),
+});
 
 // This is presentation coverage only.  Each named function owns its action's
 // observation, applicability, prerequisites, reasons, and verdict; explain
@@ -50,6 +87,11 @@ export const TASK_EXPLAIN_ACTION_DEPENDENCIES = Object.freeze({
 });
 
 function factsForTask(target, taskId, io) {
+  try {
+    execFileSync('git', ['-C', target, 'rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' });
+  } catch {
+    throw new Error(`Task explain requires a readable Git repository: ${target}`);
+  }
   const orientation = lifecycleOrientationSnapshot(target, { io });
   const lifecycle = orientation.tasks.find(task => task.taskId === taskId);
   if (!lifecycle) throw new Error(`Task record not found: ${taskId}`);
@@ -83,7 +125,7 @@ function canonicalAction(id, context) {
 /** Build a bounded explanation by invoking the existing canonical owners only. */
 export function explainTask(target, taskId, { action = null, io = null } = {}) {
   if (action !== null && !TASK_EXPLAIN_ACTION_IDS.includes(action)) {
-    throw new Error(`Unknown task explain action '${action}'; expected one of: ${TASK_EXPLAIN_ACTION_IDS.join(', ')}`);
+    throw new CliUsageError(`Unknown task explain action '${action}'; expected one of: ${TASK_EXPLAIN_ACTION_IDS.join(', ')}`);
   }
   const context = factsForTask(target, taskId, io);
   return createReadOnlyLifecycleProjection({

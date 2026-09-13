@@ -6,7 +6,7 @@ import { recognizeHandoff } from '../src/handoff-recognition.js';
 import { validateTaskStatusTransition } from '../src/task-transition.js';
 import { pathIdentity } from '../src/path-identity.js';
 
-describe('P35-E49 privacy-clean synthetic regressions', () => {
+describe('privacy-clean synthetic regressions', () => {
   it('raw dispatch and return bypass cannot create an authenticated role start', () => {
     const result = recognizeHandoff({ transition: 'role_start', expectation: { taskId: 'T-001', roleId: 'engineer' } });
     assert.equal(result.authenticated, false);
