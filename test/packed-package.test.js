@@ -672,16 +672,9 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     assert.ok(existsSync(installedScript), 'the measurement script must be measured from the clean offline installation');
   });
 
-  it('ships the immutable packaged-surface snapshot without requiring Git metadata', () => {
+  it('keeps the test-only packaged-surface snapshot out of the installed artifact', () => {
     const snapshotPath = join(packedRoot, 'src', 'packaged-surface-baseline.json');
-    assert.ok(existsSync(snapshotPath));
-    assert.equal(existsSync(join(packedRoot, '.git')), false);
-    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
-    assert.equal(snapshot.kind, 'agenticloop.packaged-surface-baseline');
-    assert.equal(snapshot.measurementImplementation.identityKind, 'content');
-    assert.match(snapshot.measurementImplementation.contentDigest, /^sha256:[a-f0-9]{64}$/);
-    assert.equal(snapshot.observedArtifact.baseCommit, '3427b97de8392521153b58ec593164d4ae3877ac');
-    assert.equal(snapshot.adapters.opencode.generatedPayload.canonicalWords, 16120);
+    assert.equal(existsSync(snapshotPath), false);
   });
 
   it('ships documented data, security modules, and maintenance helpers', async () => {
@@ -700,7 +693,6 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       'src/canonical-word-count.js',
       'src/measurement-implementation-identity.js',
       'src/protected-transition-inputs.js',
-      'src/packaged-surface-baseline.json',
       'scripts/sign-blocked-authority.mjs',
     ]) {
       assert.ok(existsSync(join(packedRoot, ...path.split('/'))), `${path} must be shipped`);

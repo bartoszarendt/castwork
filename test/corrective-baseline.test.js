@@ -173,6 +173,13 @@ describe('frozen corrective baseline', () => {
     assert.ok(Object.values(current).every(categories => Object.values(categories).every(Number.isFinite)));
   });
 
+  it('keeps the test-only packaged-surface snapshot out of published source', () => {
+    const packageFiles = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')).files;
+    assert.ok(packageFiles.includes('src/*.js'));
+    assert.ok(!packageFiles.includes('src/'));
+    assert.ok(!packageFiles.includes('src/packaged-surface-baseline.json'));
+  });
+
   it('re-measures the named clean detached subject when its Git object is available', t => {
     const { commit, tree } = PACKAGED_SURFACE_SNAPSHOT.subject;
     const availability = spawnSync('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' });
