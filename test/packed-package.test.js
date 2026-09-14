@@ -45,7 +45,11 @@ import { fakeExecutableEnv, sanitizedChildEnv, writeNodeBackedExecutable } from 
 import { runNpm } from './helpers/npm-runner.js';
 import { runProcess } from './helpers/process-runner.js';
 import { createHash } from 'node:crypto';
+import { evaluateMeasurementBudget } from '../scripts/measure-adapter-words.mjs';
+import { resolveOpencodeAgentPath, resolveOpencodeCommandPath } from '../src/adapters/opencode.js';
 import { HARD_REFUSAL_ALLOWLIST } from '../src/refusal-classes.js';
+import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
+import { runCliInProcess } from './helpers/run-cli.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PACKED_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AGENTICLOOP_PACKED_CONCURRENCY ?? '4', 10) || 4);
@@ -53,6 +57,7 @@ const PACKED_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AGENTICLOOP_P
 let tmpBase;
 let packedBin;
 let packedRoot;
+let packedArchive;
 let installPrefix;
 let protectedBoundaryWrapper;
 let fakeGhBin;
@@ -116,6 +121,7 @@ before(async () => {
     assert.ok(tarball, 'npm pack must produce a tarball');
     archivePath = join(packDir, tarball);
   }
+  packedArchive = archivePath;
 
   installPrefix = join(tmpBase, 'prefix');
   const installed = await npm([
@@ -160,6 +166,33 @@ function runPacked(args, options = {}) {
     ...runOptions,
     env: sanitizedChildEnv(env),
   });
+}
+
+function measurementProjection(measurement) {
+  return {
+    measurementMethod: measurement.measurementMethod,
+    canonicalTextMethod: measurement.canonicalTextMethod,
+    normalization: measurement.normalization,
+    encoding: measurement.encoding,
+    packetSerialization: measurement.packetSerialization,
+    components: measurement.components.map(({ kind, bytes, canonicalWords, utf8Bytes, characters, method }) => (
+      { kind, bytes, canonicalWords, utf8Bytes, characters, method }
+    )),
+    totalCanonicalWords: measurement.totalCanonicalWords,
+    totalUtf8Bytes: measurement.totalUtf8Bytes,
+    totalCharacters: measurement.totalCharacters,
+    actualInputTokens: measurement.actualInputTokens,
+  };
+}
+
+function measureContext(script, packet, roleWrapper, activationWrapper, reference) {
+  return runProcess(process.execPath, [
+    script,
+    '--packet', packet,
+    '--role-wrapper', roleWrapper,
+    '--activation-wrapper', activationWrapper,
+    '--reference', reference,
+  ]);
 }
 
 const INSTALLED_CLI_NEGATIVE_PROBE_CODES = new Set([
@@ -546,23 +579,97 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     assert.equal(result.failure, null, 'an expected CLI failure must not be reported as a spawn failure');
   });
 
-  it('runs the installed acting-context measurement script', async () => {
-    const target = mkdtempSync(join(tmpBase, 'acting-context-'));
-    const packet = join(target, 'packet.json');
-    const role = join(target, 'role.md');
-    const activation = join(target, 'activation.md');
-    writeFileSync(packet, JSON.stringify({ task: 'T-001' }), 'utf8');
-    writeFileSync(role, 'role\n', 'utf8');
-    writeFileSync(activation, 'activation\n', 'utf8');
-    const result = await runProcess(process.execPath, [
-      join(packedRoot, 'scripts', 'measure-dispatch-context.mjs'),
-      '--packet', packet,
-      '--role-wrapper', role,
-      '--activation-wrapper', activation,
-    ], { cwd: target });
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).packetSerialization, 'canonicalJson');
-    assert.equal(JSON.parse(result.stdout).actualInputTokens, 'unavailable');
+  it('measures M4 and M5 from source artifacts and the clean offline installation of the packed archive', async () => {
+    const sourceFixture = await createDispatchFixture(tmpBase, 'source-acting-context');
+    const sourcePacket = join(sourceFixture.root, '.agenticloop', 'tmp', 'source-packet.json');
+    const sourcePrepared = await runCliInProcess([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', '.agenticloop/tmp/source-packet.json', '--json', '--target', sourceFixture.root,
+    ], {
+      operatorTrustRoot: sourceFixture.operatorTrustRoot,
+      operatorActivationRoot: sourceFixture.operatorActivationRoot,
+      hostAuthority: protectedHostBoundary(sourceFixture.trust),
+    });
+    assert.equal(sourcePrepared.status, 0, sourcePrepared.stderr);
+
+    const sourceTarget = mkdtempSync(join(tmpBase, 'source-generated-context-'));
+    const sourceInit = await runProcess(process.execPath, [
+      join(REPO_ROOT, 'bin', 'agenticloop.js'), 'init', '--adapter', 'opencode', '--target', sourceTarget,
+    ]);
+    assert.equal(sourceInit.status, 0, sourceInit.stderr);
+
+    const installedTarget = mkdtempSync(join(tmpBase, 'clean-offline-installed-context-'));
+    const installedInit = await runPacked(['init', '--adapter', 'opencode', '--target', installedTarget]);
+    assert.equal(installedInit.status, 0, installedInit.stderr);
+
+    const installedOpencode = await import(pathToFileURL(join(packedRoot, 'src', 'adapters', 'opencode.js')).href);
+    const sourceReference = join(sourceTarget, 'agenticloop', 'commands', 'lifecycle-protocol.md');
+    const installedReference = join(installedTarget, 'agenticloop', 'commands', 'lifecycle-protocol.md');
+    const sourceScript = join(REPO_ROOT, 'scripts', 'measure-dispatch-context.mjs');
+    const installedScript = join(packedRoot, 'scripts', 'measure-dispatch-context.mjs');
+    const sourceMeasure = role => measureContext(
+      sourceScript,
+      sourcePacket,
+      resolveOpencodeAgentPath(sourceTarget, role),
+      resolveOpencodeCommandPath(sourceTarget),
+      sourceReference,
+    );
+    const installedMeasure = role => measureContext(
+      installedScript,
+      // The source CLI packet is the source-stage artifact carried through the
+      // local pack and clean-install boundary. The installed script, wrapper,
+      // activation command, reference, and target below are all produced by
+      // the archive installed with npm --offline in this suite's before hook.
+      sourcePacket,
+      installedOpencode.resolveOpencodeAgentPath(installedTarget, role),
+      installedOpencode.resolveOpencodeCommandPath(installedTarget),
+      installedReference,
+    );
+
+    const sourceM4 = await sourceMeasure('orchestrator');
+    const installedM4 = await installedMeasure('orchestrator');
+    assert.equal(sourceM4.status, 0, sourceM4.stderr);
+    assert.equal(installedM4.status, 0, installedM4.stderr);
+    const sourceOrientation = JSON.parse(sourceM4.stdout);
+    const installedOrientation = JSON.parse(installedM4.stdout);
+    assert.deepEqual(measurementProjection(installedOrientation), measurementProjection(sourceOrientation));
+    assert.equal(installedOrientation.actualInputTokens, 'unavailable');
+    assert.deepEqual(evaluateMeasurementBudget({ orientation: {
+      method: installedOrientation.canonicalTextMethod,
+      canonicalWords: installedOrientation.totalCanonicalWords,
+    } }, { components: { orientation: { previous: 6377, upperBound: 7000 } } }), { ok: true, errors: [] });
+
+    for (const role of ['maintainer', 'engineer', 'auditor']) {
+      const sourceM5 = await sourceMeasure(role);
+      const installedM5 = await installedMeasure(role);
+      assert.equal(sourceM5.status, 0, sourceM5.stderr);
+      assert.equal(installedM5.status, 0, installedM5.stderr);
+      const sourceWrapper = JSON.parse(sourceM5.stdout).components.find(item => item.kind === 'generated_role_wrapper');
+      const installedWrapper = JSON.parse(installedM5.stdout).components.find(item => item.kind === 'generated_role_wrapper');
+      assert.deepEqual(
+        { method: installedWrapper.method, canonicalWords: installedWrapper.canonicalWords, utf8Bytes: installedWrapper.utf8Bytes, characters: installedWrapper.characters },
+        { method: sourceWrapper.method, canonicalWords: sourceWrapper.canonicalWords, utf8Bytes: sourceWrapper.utf8Bytes, characters: sourceWrapper.characters },
+      );
+      assert.deepEqual(evaluateMeasurementBudget({ [role]: {
+        method: installedWrapper.method,
+        canonicalWords: installedWrapper.canonicalWords,
+      } }, { components: { [role]: {
+        previous: { maintainer: 4632, engineer: 4097, auditor: 2362 }[role],
+        upperBound: { maintainer: 5000, engineer: 4500, auditor: 3000 }[role],
+      } } }), { ok: true, errors: [] });
+    }
+
+    const prePhase = Object.freeze({
+      availability: 'unavailable',
+      reason: 'No retained pre-phase M4/M5 observation was produced through this lifecycle.',
+    });
+    assert.deepEqual(prePhase, {
+      availability: 'unavailable',
+      reason: 'No retained pre-phase M4/M5 observation was produced through this lifecycle.',
+    });
+    assert.ok(existsSync(packedArchive), 'the locally packed archive must exist before clean offline installation');
+    assert.ok(packedRoot.startsWith(`${installPrefix}/`) || packedRoot.startsWith(`${installPrefix}\\`));
+    assert.ok(existsSync(installedScript), 'the measurement script must be measured from the clean offline installation');
   });
 
   it('ships the immutable packaged-surface snapshot without requiring Git metadata', () => {
@@ -603,6 +710,11 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     assert.equal(boundary.PROTECTED_KEY_DESCRIPTOR, 3);
     assert.equal(boundary.readProtectedHostSigningKey, undefined);
     assert.equal(boundary.createInheritedDescriptorHostBoundary, undefined);
+    const canonicalWordCount = await import(pathToFileURL(join(packedRoot, 'src', 'canonical-word-count.js')).href);
+    assert.deepEqual(Object.keys(canonicalWordCount).sort(), ['countCanonicalWords', 'measureCanonicalText']);
+    assert.equal(canonicalWordCount.CANONICAL_TEXT_MEASUREMENT_METHOD, undefined);
+    assert.equal(canonicalWordCount.normalizeCanonicalText, undefined);
+    assert.equal(canonicalWordCount.evaluateMeasurementBudget, undefined);
   });
 
   it('resolves documented exports, deep imports, and shipped data files', async () => {

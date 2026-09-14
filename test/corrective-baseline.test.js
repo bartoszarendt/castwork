@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 import { canonicalJson, canonicalSha256 } from '../src/canonical-json.js';
 import { assertPrivacyClean } from '../src/workflow-measurement.js';
-import { countCanonicalWords } from '../src/canonical-word-count.js';
+import { countCanonicalWords, measureCanonicalText } from '../src/canonical-word-count.js';
 import {
   PACKAGED_SURFACE_MEASUREMENT_SCHEMA,
   PACKAGED_SURFACE_MEASUREMENT_SOURCES,
@@ -35,13 +35,24 @@ const TEXT_EXTENSIONS = new Set(['.js', '.json', '.jsonc', '.md', '.toml', '.txt
 // cannot introduce a latent planning-boundary violation.
 const PHASE_NUMBER_IN_FILENAME = /\b(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)\b/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
-const FROZEN_ADAPTER_WORD_COUNTS = Object.freeze({
-  opencode: { generatedPayload: 16128, agentDefinitions: 15120, activationSurface: 1008, referenceLibrary: 0 },
-  codex: { generatedPayload: 76849, agentDefinitions: 15458, activationSurface: 1291, referenceLibrary: 60100 },
-  'claude-code': { generatedPayload: 57492, agentDefinitions: 13941, activationSurface: 2219, referenceLibrary: 41332 },
-  copilot: { generatedPayload: 74884, agentDefinitions: 15187, activationSurface: 1345, referenceLibrary: 58352 },
-  cursor: { generatedPayload: 74636, agentDefinitions: 15185, activationSurface: 1099, referenceLibrary: 58352 },
-});
+const CANONICAL_TEXT_MEASUREMENT_METHOD = measureCanonicalText('').method;
+
+function snapshotHostPlatform(snapshot) {
+  if (snapshot.subject.platform === 'Linux/HP') return 'linux';
+  throw new Error(`unsupported historical snapshot platform '${snapshot.subject.platform}'`);
+}
+
+function compareHistoricalSnapshot(snapshot, measured) {
+  assert.ok(Object.values(measured.adapters).every(adapter =>
+    adapter.intendedPlatformComponents.every(item => item.intendedPlatformSpecific)
+  ));
+  if (measured.hostPlatform !== snapshotHostPlatform(snapshot)) return false;
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(measured.adapters).map(([adapter, value]) => [adapter, value.components])),
+    snapshot.adapters
+  );
+  return true;
+}
 
 function candidateRepositoryFiles() {
   const listFiles = args => execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' })
@@ -144,17 +155,31 @@ describe('frozen corrective baseline', () => {
     assert.deepEqual(candidatePhaseViolations(), []);
   });
 
-  it('pins generated adapter word counts to the pre-change baseline', () => {
-    assert.deepEqual(
-      measureAdapterWords(),
-      FROZEN_ADAPTER_WORD_COUNTS,
-      'the pre-change baseline requires deliberate re-measurement with evidence'
-    );
+  it('keeps the historical surface snapshot descriptive rather than an executable exact-value budget', () => {
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.schemaVersion, 2);
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.subject.platform, 'Linux/HP');
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.subject.sourceRevision, PACKAGED_SURFACE_SNAPSHOT.subject.commit);
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.measurementImplementation.schema, PACKAGED_SURFACE_MEASUREMENT_SCHEMA);
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.measurementMethod, CANONICAL_TEXT_MEASUREMENT_METHOD);
+    assert.deepEqual(PACKAGED_SURFACE_SNAPSHOT.normalization, { lineEndings: 'LF', pathSeparators: '/' });
+    assert.ok(Object.keys(PACKAGED_SURFACE_SNAPSHOT.componentTaxonomy).length >= 4);
+    for (const adapter of Object.values(PACKAGED_SURFACE_SNAPSHOT.adapters)) {
+      for (const measurement of Object.values(adapter)) {
+        assert.equal(measurement.method, CANONICAL_TEXT_MEASUREMENT_METHOD);
+        assert.equal(measurement.actualInputTokens, 'unavailable');
+      }
+    }
+    const current = measureAdapterWords();
+    assert.ok(Object.values(current).every(categories => Object.values(categories).every(Number.isFinite)));
   });
 
-  it('re-measures the named clean detached subject when its Git object is available', () => {
+  it('re-measures the named clean detached subject when its Git object is available', t => {
     const { commit, tree } = PACKAGED_SURFACE_SNAPSHOT.subject;
-    assert.equal(execFileSync('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }), '');
+    const availability = spawnSync('git', ['cat-file', '-e', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' });
+    if (availability.status !== 0) {
+      t.skip(`historical subject ${commit} is absent; package/install validation never resolves Git history`);
+      return;
+    }
     assert.equal(execFileSync('git', ['rev-parse', `${commit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(), tree);
     assert.equal(
       execFileSync('git', ['rev-parse', `${PACKAGED_SURFACE_SNAPSHOT.observedArtifact.baseCommit}^{tree}`], { cwd: REPO_ROOT, encoding: 'utf8' }).trim(),
@@ -178,10 +203,38 @@ describe('frozen corrective baseline', () => {
         cwd: subject,
         encoding: 'utf8',
       });
-      assert.deepEqual(JSON.parse(result), PACKAGED_SURFACE_SNAPSHOT.adapters);
+      const measured = JSON.parse(result);
+      assert.equal(measured.hostPlatform, process.platform);
+      assert.equal(
+        compareHistoricalSnapshot(PACKAGED_SURFACE_SNAPSHOT, measured),
+        process.platform === snapshotHostPlatform(PACKAGED_SURFACE_SNAPSHOT)
+      );
+      assert.ok(measured.adapters.opencode.intendedPlatformComponents.every(item => item.intendedPlatformSpecific));
     } finally {
       rmSync(subject, { recursive: true, force: true });
     }
+  });
+
+  it('does not compare Windows-shaped aggregates against the Linux/HP historical snapshot', () => {
+    const windowsShaped = {
+      hostPlatform: 'win32',
+      adapters: {
+        opencode: {
+          components: {
+            ...PACKAGED_SURFACE_SNAPSHOT.adapters.opencode,
+            generatedPayload: {
+              ...PACKAGED_SURFACE_SNAPSHOT.adapters.opencode.generatedPayload,
+              canonicalWords: PACKAGED_SURFACE_SNAPSHOT.adapters.opencode.generatedPayload.canonicalWords + 1,
+            },
+          },
+          intendedPlatformComponents: [{
+            kind: 'shell-operating-fact', path: '.opencode/agents/engineer.md',
+            value: 'PowerShell 7+', intendedPlatformSpecific: true,
+          }],
+        },
+      },
+    };
+    assert.equal(compareHistoricalSnapshot(PACKAGED_SURFACE_SNAPSHOT, windowsShaped), false);
   });
 
   it('pins canonical methodology to the P36-M6 measurement', () => {
@@ -302,6 +355,41 @@ describe('frozen corrective baseline', () => {
         assert.match(result.unavailableReason, /missing command:/);
         assert.equal(result.refusal, null);
       }
+    }
+  });
+
+  it('classifies the before/after semantic inventory without claiming an evaluator or a runtime registry', () => {
+    const inventory = CORRECTIVE_LEDGER.semanticInventory;
+    assert.equal(inventory.relativeTo, CORRECTIVE_LEDGER.subject.commit);
+    assert.match(inventory.scope, /measurement|generated|dispatch|lifecycle/i);
+    assert.match(inventory.classificationMethod, /reviewed source and call-path traces/i);
+    assert.deepEqual(inventory.unresolvedSites, []);
+    const removedRemediationAuthority = inventory.entries.find(entry => entry.id === 'remediation-authority');
+    assert.deepEqual(removedRemediationAuthority.references, [
+      'historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority (removed by P36F-04)',
+      'historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation (renamed to test/lifecycle-adoption-cli.test.js)',
+      'src/certification-remediation.js#resolveDurableCertificationEvidence',
+      'test/lifecycle-adoption-cli.test.js',
+    ]);
+    const dispatchConsumptionArtifact = inventory.entries.find(entry => entry.id === 'dispatch-consumption-artifact');
+    assert.deepEqual(dispatchConsumptionArtifact.references, [
+      'src/handoff-consumption.js#listDispatchConsumptions',
+      'src/files-return-evidence.js#refetchFilesReturnEvidence',
+    ]);
+    assert.match(
+      readFileSync(join(REPO_ROOT, 'src', 'files-return-evidence.js'), 'utf8'),
+      /export function refetchFilesReturnEvidence\(/,
+      'the current dispatch-consumption trace resolves to its producer/consumer symbol',
+    );
+    assert.ok(inventory.entries.length >= CORRECTIVE_LEDGER.structuralFindings.length);
+    const allowed = new Set([
+      'independent-protected-fact', 'faithful-derived-projection', 'legitimate-repeated-evaluator-call',
+      'independent-decision-implementation', 'durable-artifact-consumer', 'bookkeeping-context-interpretation',
+    ]);
+    for (const entry of inventory.entries) {
+      assert.ok(allowed.has(entry.classification), `${entry.id}: unknown classification`);
+      assert.ok(entry.references.length >= 2, `${entry.id}: source and consumer trace required`);
+      assert.match(entry.disposition, /^(?:resolved|retained|unresolved-with-reason)$/);
     }
   });
 });

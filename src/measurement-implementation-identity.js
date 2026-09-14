@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { canonicalJson } from './canonical-json.js';
 
-export const PACKAGED_SURFACE_MEASUREMENT_SCHEMA = 'agenticloop.packaged-surface-baseline/v1';
+export const PACKAGED_SURFACE_MEASUREMENT_SCHEMA = 'agenticloop.packaged-surface-baseline/v2';
 export const PACKAGED_SURFACE_MEASUREMENT_SOURCES = Object.freeze([
   'scripts/measure-adapter-words.mjs',
   'src/canonical-word-count.js',

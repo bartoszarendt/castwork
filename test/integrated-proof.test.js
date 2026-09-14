@@ -16,10 +16,8 @@ const fieldAssertions = readFileSync(join(ROOT, 'docs', 'field-assertions.md'), 
 const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const SERIAL_FIXTURE_MEASUREMENTS = Object.freeze({
   M3: [1, 0, 0],
-  M4: 6377,
-  M5: [4632, 4097, 2362],
   M6: 2071,
-   M7: [76, 18, 94],
+  M7: [76, 18, 94],
 });
 const syntheticRoot = mkdtempSync(join(tmpdir(), 'agenticloop-eight-step-proof-'));
 after(() => rmSync(syntheticRoot, { recursive: true, force: true }));
@@ -78,16 +76,16 @@ describe('integrated lifecycle proof', () => {
     assert.deepEqual([hard.length, human.length, HARD_REFUSAL_ALLOWLIST.length], SERIAL_FIXTURE_MEASUREMENTS.M7);
   });
 
-  it('pins reported non-Git serial-fixture measurements to their exact value', () => {
+  it('keeps non-context serial-fixture measurements exact while context measurements name their method and limitation', () => {
     assert.deepEqual(SERIAL_FIXTURE_MEASUREMENTS, {
-      M3: [1, 0, 0], M4: 6377,
-       M5: [4632, 4097, 2362], M6: 2071, M7: [76, 18, 94],
+      M3: [1, 0, 0], M6: 2071, M7: [76, 18, 94],
     });
     for (const value of [
       '1 attempt, 0 abandonments, 0 supersessions',
-      '6,377 canonical words', 'Maintainer 4,632; Engineer 4,097; Auditor 2,362 canonical words',
-       '2,071 canonical words', '76 retained hard refusals and 18 material human decisions',
+      '2,071 canonical words', '76 retained hard refusals and 18 material human decisions',
     ]) assert.match(proof, new RegExp(value));
+    assert.match(proof, /agenticloop\.dispatch-context\/v3/);
+    assert.match(proof, /retained pre-phase observation is unavailable, so no reduction determination is made/);
   });
 
   it('binds M1 and M2 to the measured terminal fixture rather than local literals', () => {

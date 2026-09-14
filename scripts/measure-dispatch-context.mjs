@@ -5,6 +5,9 @@ import { resolve } from 'node:path';
 import { canonicalJson } from '../src/canonical-json.js';
 import { measureCanonicalText } from '../src/canonical-word-count.js';
 
+const DISPATCH_CONTEXT_MEASUREMENT_METHOD = 'agenticloop.dispatch-context/v3';
+const CANONICAL_TEXT_MEASUREMENT_METHOD = measureCanonicalText('').method;
+
 function usage() {
   return [
     'Usage: node scripts/measure-dispatch-context.mjs',
@@ -36,7 +39,7 @@ function parseArgs(argv) {
 function component(kind, path, text) {
   const measurement = measureCanonicalText(text);
   // Schema v1 exposed `bytes`; retain it while adding the more specific name.
-  return { kind, path, bytes: measurement.utf8Bytes, ...measurement };
+  return { kind, path: path.replaceAll('\\', '/'), bytes: measurement.utf8Bytes, ...measurement };
 }
 
 try {
@@ -55,7 +58,11 @@ try {
   if (uniquePaths.size !== components.length) throw new Error('the same context component was supplied more than once');
   const totalUtf8Bytes = components.reduce((total, item) => total + item.utf8Bytes, 0);
   process.stdout.write(`${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 3,
+    measurementMethod: DISPATCH_CONTEXT_MEASUREMENT_METHOD,
+    canonicalTextMethod: CANONICAL_TEXT_MEASUREMENT_METHOD,
+    normalization: { lineEndings: 'LF', pathSeparators: '/' },
+    intendedPlatformComponents: [],
     encoding: 'utf8',
     packetSerialization: 'canonicalJson',
     components,

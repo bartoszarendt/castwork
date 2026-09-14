@@ -128,5 +128,25 @@
     {"id": "phase-numbered-test-obfuscation", "kind": "bookkeeping-obligation", "finding": "permanent phase-numbered tests use interpolation or concatenation to evade the planning-boundary matcher", "references": ["scripts/test-groups.js#MANIFEST", "test/corrective-baseline.test.js#candidatePhaseViolations"]},
     {"id": "task-explain-files-only-exit-two", "kind": "decision-path", "finding": "task explain is files-only and reports operational failures as usage exit 2", "references": ["src/task-explain-cli.js#runTaskExplain", "test/task-explain.test.js"]},
     {"id": "changelog-protocol-command-gaps", "kind": "bookkeeping-obligation", "finding": "new public commands and schemas are not consistently represented in changelog and lifecycle protocol", "references": ["src/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]}
-  ]
+  ],
+  "semanticInventory": {
+    "relativeTo": "0e9bb114a064a78e11921c0e362092ebb8ba834d",
+    "scope": "Affected measurement, generated payload, dispatch context, diagnostic evidence, and standard lifecycle bookkeeping surfaces.",
+    "classificationMethod": "Manual classification from reviewed source and call-path traces; mechanically derived test views only, with no runtime registry or general evaluator.",
+    "unresolvedSites": [],
+    "entries": [
+      {"id": "remediation-authority", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority (removed by P36F-04)", "historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation (renamed to test/lifecycle-adoption-cli.test.js)", "src/certification-remediation.js#resolveDurableCertificationEvidence", "test/lifecycle-adoption-cli.test.js"]},
+      {"id": "commit-adoption-assurance", "classification": "independent-protected-fact", "disposition": "retained", "references": ["src/commit-adoption.js#evaluateCommitAdoption", "src/evidence-inventory.js#EVIDENCE_INVENTORY"]},
+      {"id": "diagnostic-definition-projection", "classification": "faithful-derived-projection", "disposition": "resolved", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "src/repair-policy.js#repairPolicyViewFor"]},
+      {"id": "installed-refusal-execution", "classification": "legitimate-repeated-evaluator-call", "disposition": "retained", "references": ["test/installed-binary-refusal-harness.test.js#installedRows", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
+      {"id": "harness-blocked-partition", "classification": "bookkeeping-context-interpretation", "disposition": "resolved", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
+      {"id": "session-reported-warning", "classification": "bookkeeping-context-interpretation", "disposition": "resolved", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "test/installed-binary-refusal-harness.test.js#makeSessionReportedWarningFixture"]},
+      {"id": "lifecycle-lock-owner", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["src/fs-mutation-kernel.js#lifecycleLockOwnerIsLive", "test/fs-mutation-kernel.test.js#lifecycle locks"]},
+      {"id": "planning-boundary-check", "classification": "bookkeeping-context-interpretation", "disposition": "resolved", "references": ["scripts/test-groups.js#MANIFEST", "test/corrective-baseline.test.js#candidatePhaseViolations"]},
+      {"id": "task-explain-availability", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["src/task-explain-cli.js#runTaskExplain", "test/task-explain.test.js#task explain"]},
+      {"id": "protocol-inventory-documentation", "classification": "faithful-derived-projection", "disposition": "resolved", "references": ["src/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]},
+      {"id": "dispatch-consumption-artifact", "classification": "durable-artifact-consumer", "disposition": "retained", "references": ["src/handoff-consumption.js#listDispatchConsumptions", "src/files-return-evidence.js#refetchFilesReturnEvidence"]},
+      {"id": "acting-context-measurement", "classification": "bookkeeping-context-interpretation", "disposition": "retained", "references": ["scripts/measure-dispatch-context.mjs#component", "test/dispatch-context-measurement.test.js#dispatch acting-context measurement"]}
+    ]
+  }
 }

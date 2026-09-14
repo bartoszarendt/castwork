@@ -1,22 +1,24 @@
 {
   "kind": "agenticloop.packaged-surface-baseline",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "subject": {
     "commit": "cfc49686f48192caef3915da68f1b6bb5b1f44cb",
-    "tree": "511f34af5b15484cca2fa216c89b5bbc0d20a172"
+    "tree": "511f34af5b15484cca2fa216c89b5bbc0d20a172",
+    "platform": "Linux/HP",
+    "sourceRevision": "cfc49686f48192caef3915da68f1b6bb5b1f44cb"
   },
   "measurementImplementation": {
     "identityKind": "content",
-    "contentDigest": "sha256:9038db930b52d8c62368cc046a7840653f756d3398af9a0faf5a481777654e8e",
-    "schema": "agenticloop.packaged-surface-baseline/v1",
+    "contentDigest": "sha256:b5c102691eb3e8c5fb7f855402e22cdb28a3a01bb033511468567f68c1f5db91",
+    "schema": "agenticloop.packaged-surface-baseline/v2",
     "sources": [
       {
         "path": "scripts/measure-adapter-words.mjs",
-        "sha256": "sha256:de75e1ff73be972d3b9e0c1720ecceb7b646a999696b91f3bd3210c30662e29e"
+        "sha256": "sha256:18ac1b5e88b2ef18cafa9173bbf7cd763f62e45c7174d4747e65ff856fa61ea2"
       },
       {
         "path": "src/canonical-word-count.js",
-        "sha256": "sha256:c41ff0faa9a99197681a04c63230827965cd1b04e6fe788fee21db6ef6fe2be8"
+        "sha256": "sha256:c6a00feadd00ebec7cdd9543ded7af0f44ef37836c501ad854b0c4a65dece8ce"
       }
     ]
   },
@@ -24,8 +26,10 @@
     "baseCommit": "3427b97de8392521153b58ec593164d4ae3877ac",
     "baseTree": "ba2bb2bbb2ce9d2638b2af609943a357475b87a2",
     "state": "uncommitted_corrective_candidate",
-    "measurementImplementationContentDigest": "sha256:9038db930b52d8c62368cc046a7840653f756d3398af9a0faf5a481777654e8e"
+    "measurementImplementationContentDigest": "sha256:b5c102691eb3e8c5fb7f855402e22cdb28a3a01bb033511468567f68c1f5db91"
   },
+  "measurementMethod": "agenticloop.canonical-text/v2",
+  "normalization": { "lineEndings": "LF", "pathSeparators": "/" },
   "componentTaxonomy": {
     "generatedPayload": "all generated Markdown, TOML, YAML, and YML files beneath the adapter output roots",
     "agentDefinitions": "generatedPayload files beneath an agents directory, excluding references",
@@ -34,34 +38,34 @@
   },
   "adapters": {
     "opencode": {
-      "generatedPayload": { "canonicalWords": 16120, "utf8Bytes": 122886, "characters": 122870, "actualInputTokens": "unavailable" },
-      "agentDefinitions": { "canonicalWords": 15143, "utf8Bytes": 115606, "characters": 115592, "actualInputTokens": "unavailable" },
-      "activationSurface": { "canonicalWords": 977, "utf8Bytes": 7280, "characters": 7278, "actualInputTokens": "unavailable" },
-      "referenceLibrary": { "canonicalWords": 0, "utf8Bytes": 0, "characters": 0, "actualInputTokens": "unavailable" }
+      "generatedPayload": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 16120, "utf8Bytes": 122886, "characters": 122870, "actualInputTokens": "unavailable" },
+      "agentDefinitions": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 15143, "utf8Bytes": 115606, "characters": 115592, "actualInputTokens": "unavailable" },
+      "activationSurface": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 977, "utf8Bytes": 7280, "characters": 7278, "actualInputTokens": "unavailable" },
+      "referenceLibrary": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 0, "utf8Bytes": 0, "characters": 0, "actualInputTokens": "unavailable" }
     },
     "codex": {
-      "generatedPayload": { "canonicalWords": 76885, "utf8Bytes": 580033, "characters": 579887, "actualInputTokens": "unavailable" },
-      "agentDefinitions": { "canonicalWords": 15482, "utf8Bytes": 129128, "characters": 129114, "actualInputTokens": "unavailable" },
-      "activationSurface": { "canonicalWords": 1260, "utf8Bytes": 9535, "characters": 9533, "actualInputTokens": "unavailable" },
-      "referenceLibrary": { "canonicalWords": 60143, "utf8Bytes": 441370, "characters": 441240, "actualInputTokens": "unavailable" }
+      "generatedPayload": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 76885, "utf8Bytes": 580033, "characters": 579887, "actualInputTokens": "unavailable" },
+      "agentDefinitions": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 15482, "utf8Bytes": 129128, "characters": 129114, "actualInputTokens": "unavailable" },
+      "activationSurface": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 1260, "utf8Bytes": 9535, "characters": 9533, "actualInputTokens": "unavailable" },
+      "referenceLibrary": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 60143, "utf8Bytes": 441370, "characters": 441240, "actualInputTokens": "unavailable" }
     },
     "claude-code": {
-      "generatedPayload": { "canonicalWords": 57503, "utf8Bytes": 429676, "characters": 429550, "actualInputTokens": "unavailable" },
-      "agentDefinitions": { "canonicalWords": 13964, "utf8Bytes": 110096, "characters": 110082, "actualInputTokens": "unavailable" },
-      "activationSurface": { "canonicalWords": 2157, "utf8Bytes": 16204, "characters": 16200, "actualInputTokens": "unavailable" },
-      "referenceLibrary": { "canonicalWords": 41382, "utf8Bytes": 303376, "characters": 303268, "actualInputTokens": "unavailable" }
+      "generatedPayload": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 57503, "utf8Bytes": 429676, "characters": 429550, "actualInputTokens": "unavailable" },
+      "agentDefinitions": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 13964, "utf8Bytes": 110096, "characters": 110082, "actualInputTokens": "unavailable" },
+      "activationSurface": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 2157, "utf8Bytes": 16204, "characters": 16200, "actualInputTokens": "unavailable" },
+      "referenceLibrary": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 41382, "utf8Bytes": 303376, "characters": 303268, "actualInputTokens": "unavailable" }
     },
     "copilot": {
-      "generatedPayload": { "canonicalWords": 74914, "utf8Bytes": 558924, "characters": 558778, "actualInputTokens": "unavailable" },
-      "agentDefinitions": { "canonicalWords": 15210, "utf8Bytes": 119473, "characters": 119459, "actualInputTokens": "unavailable" },
-      "activationSurface": { "canonicalWords": 1314, "utf8Bytes": 10385, "characters": 10383, "actualInputTokens": "unavailable" },
-      "referenceLibrary": { "canonicalWords": 58390, "utf8Bytes": 429066, "characters": 428936, "actualInputTokens": "unavailable" }
+      "generatedPayload": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 74914, "utf8Bytes": 558924, "characters": 558778, "actualInputTokens": "unavailable" },
+      "agentDefinitions": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 15210, "utf8Bytes": 119473, "characters": 119459, "actualInputTokens": "unavailable" },
+      "activationSurface": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 1314, "utf8Bytes": 10385, "characters": 10383, "actualInputTokens": "unavailable" },
+      "referenceLibrary": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 58390, "utf8Bytes": 429066, "characters": 428936, "actualInputTokens": "unavailable" }
     },
     "cursor": {
-      "generatedPayload": { "canonicalWords": 74666, "utf8Bytes": 557458, "characters": 557312, "actualInputTokens": "unavailable" },
-      "agentDefinitions": { "canonicalWords": 15208, "utf8Bytes": 120030, "characters": 120016, "actualInputTokens": "unavailable" },
-      "activationSurface": { "canonicalWords": 1068, "utf8Bytes": 8362, "characters": 8360, "actualInputTokens": "unavailable" },
-      "referenceLibrary": { "canonicalWords": 58390, "utf8Bytes": 429066, "characters": 428936, "actualInputTokens": "unavailable" }
+      "generatedPayload": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 74666, "utf8Bytes": 557458, "characters": 557312, "actualInputTokens": "unavailable" },
+      "agentDefinitions": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 15208, "utf8Bytes": 120030, "characters": 120016, "actualInputTokens": "unavailable" },
+      "activationSurface": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 1068, "utf8Bytes": 8362, "characters": 8360, "actualInputTokens": "unavailable" },
+      "referenceLibrary": { "method": "agenticloop.canonical-text/v2", "canonicalWords": 58390, "utf8Bytes": 429066, "characters": 428936, "actualInputTokens": "unavailable" }
     }
   }
 }

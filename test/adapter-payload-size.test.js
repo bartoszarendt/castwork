@@ -18,8 +18,11 @@ import { generateClaudeCodeArtifacts } from '../src/adapters/claude-code.js';
 import { generateCopilotArtifacts } from '../src/adapters/copilot.js';
 import { generateCursorArtifacts } from '../src/adapters/cursor.js';
 import { loadAgenticLoopConfig } from '../src/json.js';
-import { countCanonicalWords } from '../src/canonical-word-count.js';
+import { measureCanonicalText } from '../src/canonical-word-count.js';
 import { seedTargetLayout } from './helpers/layout-fixture.js';
+import { evaluateMeasurementBudget, measureAdapterSurface } from '../scripts/measure-adapter-words.mjs';
+
+const CANONICAL_TEXT_MEASUREMENT_METHOD = measureCanonicalText('').method;
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -419,21 +422,7 @@ function walk(dir, acc = []) {
   return acc;
 }
 function measure(adapter) {
-  const fx = mkdtempSync(join(tmpDir, `${adapter.name}-fx-`));
-  seedTargetLayout(REPO_ROOT, fx, { includeDocs: false, includeScratch: false });
-  const out = mkdtempSync(join(tmpDir, `${adapter.name}-out-`));
-  adapter.generate(loadAgenticLoopConfig(join(fx, 'agenticloop.json')), fx, out);
-  const counts = { generatedPayload: 0, agentDefinitions: 0, activationSurface: 0, referenceLibrary: 0 };
-  for (const dir of adapter.dirs) for (const file of walk(join(out, dir))) {
-    if (!/\.(md|toml|ya?ml)$/.test(file)) continue;
-    const words = countCanonicalWords(readFileSync(file, 'utf-8'));
-    counts.generatedPayload += words;
-    const p = file.replace(/\\/g, '/');
-    if (p.includes('/references/')) counts.referenceLibrary += words;
-    else if (/\/agents\//.test(p)) counts.agentDefinitions += words;
-    else counts.activationSurface += words;
-  }
-  return counts;
+  return measureAdapterSurface().adapters[adapter.name].components;
 }
 
 describe('generated adapter payload-size budgets', () => {
@@ -444,8 +433,9 @@ describe('generated adapter payload-size budgets', () => {
       // Reductions are always acceptable: only the upper bound is enforced, and
       // the message reports the headroom so a future rebaseline decision has the
       // measured numbers in front of it.
-      assert.ok(counts[category] <= budget,
-        `${adapter.name} ${category} grew to ${counts[category]} words, exceeding the ${budget}-word generated-artifact budget (baseline ${baseline} +${Math.round(TOLERANCE * 100)}%, headroom ${budget - counts[category]}). Reduce the artifact, or deliberately rebaseline and add a BASELINE_RATIONALE record with previous, measured, delta, reason, and evidence.`);
+      assert.equal(counts[category].method, CANONICAL_TEXT_MEASUREMENT_METHOD);
+      assert.ok(counts[category].canonicalWords <= budget,
+        `${adapter.name} ${category} grew to ${counts[category].canonicalWords} words, exceeding the ${budget}-word generated-artifact budget (baseline ${baseline} +${Math.round(TOLERANCE * 100)}%, headroom ${budget - counts[category].canonicalWords}). Reduce the artifact, or deliberately rebaseline and add a BASELINE_RATIONALE record with previous, measured, delta, reason, and evidence.`);
     }
   });
 
@@ -506,6 +496,26 @@ describe('generated adapter payload-size budgets', () => {
         assert.ok(CATEGORIES.includes(category), `${adapter.name} declares unknown category '${category}'`);
       }
     }
+  });
+
+  it('normalizes incidental platform text and separately reports intended platform facts', () => {
+    const first = measureAdapterSurface();
+    const second = measureAdapterSurface();
+    assert.deepEqual(second, first, 'two quiet runs must be byte-identical on one supported platform');
+    assert.deepEqual(first.normalization, { lineEndings: 'LF', pathSeparators: '/' });
+    assert.ok(first.adapters.opencode.intendedPlatformComponents.every(component =>
+      component.kind === 'shell-operating-fact' && component.intendedPlatformSpecific === true
+    ));
+  });
+
+  it('rejects only the portable budget-policy failure modes and accepts reductions', () => {
+    const policy = { components: { generatedPayload: { previous: 10, upperBound: 12 } } };
+    const measured = { generatedPayload: { method: CANONICAL_TEXT_MEASUREMENT_METHOD, canonicalWords: 8 } };
+    assert.deepEqual(evaluateMeasurementBudget(measured, policy), { ok: true, errors: [] });
+    assert.match(evaluateMeasurementBudget({}, policy).errors.join('\n'), /missing component/);
+    assert.match(evaluateMeasurementBudget({ generatedPayload: { method: 'wrong', canonicalWords: 8 } }, policy).errors.join('\n'), /invalid measurement method/);
+    assert.match(evaluateMeasurementBudget({ generatedPayload: { method: CANONICAL_TEXT_MEASUREMENT_METHOD, canonicalWords: 13 } }, policy).errors.join('\n'), /exceeded upper bound/);
+    assert.match(evaluateMeasurementBudget({ generatedPayload: { method: CANONICAL_TEXT_MEASUREMENT_METHOD, canonicalWords: 11 } }, policy).errors.join('\n'), /unexplained regression/);
   });
 
   it('does not project the retired generated-guidance literal into any adapter target', () => {

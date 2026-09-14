@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -21,6 +21,7 @@ import { runCliInProcess } from './helpers/run-cli.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCRIPT = join(REPO_ROOT, 'scripts', 'measure-dispatch-context.mjs');
+const CANONICAL_TEXT_MEASUREMENT_METHOD = measureCanonicalText('').method;
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'agenticloop-context-measure-')); });
 after(() => { rmSync(temp, { recursive: true, force: true }); });
@@ -32,7 +33,11 @@ function run(args) {
 describe('dispatch acting-context measurement', () => {
   it('reports deterministic exact UTF-8 component bytes and rejects duplicates', () => {
     const packet = join(temp, 'packet.json');
-    const role = join(temp, 'role.md');
+    // A literal backslash is legal in a POSIX filename and models the separator
+    // a Windows-resolved component path contributes to the portable report.
+    const platformShapedDirectory = join(temp, 'platform-shaped\\component');
+    mkdirSync(platformShapedDirectory, { recursive: true });
+    const role = join(platformShapedDirectory, 'role.md');
     const activation = join(temp, 'activation.md');
     const reference = join(temp, 'reference.md');
     const packetValue = { z: 1, a: 'żółć' };
@@ -53,12 +58,18 @@ describe('dispatch acting-context measurement', () => {
     assert.equal(second.stdout, first.stdout);
     const result = JSON.parse(first.stdout);
     assert.equal(result.packetSerialization, 'canonicalJson');
+    assert.equal(result.measurementMethod, 'agenticloop.dispatch-context/v3');
+    assert.equal(result.canonicalTextMethod, CANONICAL_TEXT_MEASUREMENT_METHOD);
+    assert.equal(result.lifecycle, undefined);
+    assert.deepEqual(result.normalization, { lineEndings: 'LF', pathSeparators: '/' });
+    assert.deepEqual(result.intendedPlatformComponents, []);
     assert.deepEqual(result.components.map(item => item.kind), [
       'canonical_packet',
       'generated_role_wrapper',
       'generated_activation_wrapper',
       'canonical_reference',
     ]);
+    assert.ok(result.components.every(item => !item.path.includes('\\')), 'component paths use normalized slash separators');
     const expected = [canonicalJson(packetValue), 'role\n', 'activation\n', 'reference\n'].map(measureCanonicalText);
     assert.deepEqual(result.components.map(({ kind, path, bytes, ...measurement }) => measurement), expected);
     assert.deepEqual(result.components.map(item => item.bytes), expected.map(item => item.utf8Bytes));
@@ -70,9 +81,13 @@ describe('dispatch acting-context measurement', () => {
     const duplicate = run([...args, '--reference', role]);
     assert.equal(duplicate.status, 2);
     assert.match(duplicate.stderr, /same context component/);
+
+    const callerSuppliedLifecycle = run([...args, '--lifecycle', 'source-package-clean-offline-install']);
+    assert.equal(callerSuppliedLifecycle.status, 2);
+    assert.match(callerSuppliedLifecycle.stderr, /unknown option '--lifecycle'/);
   });
 
-  it('measures actual OpenCode orientation and ordinary-role wrappers from generated artifacts', async t => {
+  it('measures generated source artifacts without claiming a package/install lifecycle', async () => {
     const fixture = await createDispatchFixture(temp, 'generated-opencode-packet');
     const prepared = await runCliInProcess([
       'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
@@ -107,46 +122,15 @@ describe('dispatch acting-context measurement', () => {
       return JSON.parse(result.stdout);
     };
 
-    // M4 counts the concrete initial-supervisor bundle. M5 counts only each
-    // delegated role wrapper before packet/task evidence, while retaining the
-    // same generated component measurement for auditability.
+    // This source-level check covers the component method only. The packed
+    // package boundary owns the M4/M5 lifecycle observation.
     const orientation = measure('orchestrator');
-    assert.equal(orientation.totalCanonicalWords, 6377, JSON.stringify(orientation));
     assert.equal(orientation.actualInputTokens, 'unavailable');
-    const delegated = {};
     for (const role of ['maintainer', 'engineer', 'auditor']) {
       const measurement = measure(role);
       const wrapper = measurement.components.find(item => item.kind === 'generated_role_wrapper');
       assert.ok(wrapper, `${role} must have a generated role wrapper component`);
-      assert.equal(wrapper.canonicalWords, {
-        maintainer: 4632,
-        engineer: 4097,
-        auditor: 2362,
-      }[role], `${role} M5 measurement drifted`);
       assert.equal(measurement.actualInputTokens, 'unavailable');
-      delegated[role] = {
-        canonicalWords: wrapper.canonicalWords,
-        utf8Bytes: wrapper.utf8Bytes,
-        characters: wrapper.characters,
-      };
     }
-    const canonicalPacket = orientation.components.find(item => item.kind === 'canonical_packet');
-    const rawPacket = readFileSync(packet, 'utf8');
-    t.diagnostic(JSON.stringify({
-      M4: {
-        canonicalWords: orientation.totalCanonicalWords,
-        utf8Bytes: orientation.totalUtf8Bytes,
-        characters: orientation.totalCharacters,
-        actualInputTokens: orientation.actualInputTokens,
-      },
-      M5: delegated,
-      packetConstruction: {
-        serialization: orientation.packetSerialization,
-        rawUtf8Bytes: Buffer.byteLength(rawPacket, 'utf8'),
-        canonicalUtf8Bytes: canonicalPacket.utf8Bytes,
-        rawEndsWithNewline: rawPacket.endsWith('\n'),
-        canonicalPacketEndsWithNewline: false,
-      },
-    }, null, 2));
   });
 });
