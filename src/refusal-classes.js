@@ -875,7 +875,7 @@ const F8 = [
 ];
 
 const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
-// The P36F-00B 199-row count is historical; this live catalog retains 197
+// The former 199-row corrective baseline is historical; this live catalog retains 197
 // rows, including two compatibility-only internal rows with no public claim.
 const EXPECTED_CATALOG_ROW_COUNT = 197;
 const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({

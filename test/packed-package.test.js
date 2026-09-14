@@ -41,7 +41,7 @@ import { taskContractDigest } from '../src/task-contract-baseline.js';
 import { createDispatchFixture, git, prepare } from './helpers/dispatch-fixture.js';
 import { createCloseoutCliFixture } from './helpers/closeout-cli-fixture.js';
 import { createTestHostTrust, writeHostTrustStore } from './helpers/host-trust-fixture.js';
-import { fakeExecutableEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
+import { fakeExecutableEnv, isolatedHomeEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
 import { runNpm } from './helpers/npm-runner.js';
 import { runProcess } from './helpers/process-runner.js';
 import { createHash } from 'node:crypto';
@@ -178,6 +178,15 @@ function measurementProjection(measurement) {
     components: measurement.components.map(({ kind, bytes, canonicalWords, utf8Bytes, characters, method }) => (
       { kind, bytes, canonicalWords, utf8Bytes, characters, method }
     )),
+    commonCanonicalWords: measurement.commonCanonicalWords,
+    commonUtf8Bytes: measurement.commonUtf8Bytes,
+    commonCharacters: measurement.commonCharacters,
+    intendedPlatformCanonicalWords: measurement.intendedPlatformCanonicalWords,
+    intendedPlatformUtf8Bytes: measurement.intendedPlatformUtf8Bytes,
+    intendedPlatformCharacters: measurement.intendedPlatformCharacters,
+    completeCanonicalWords: measurement.completeCanonicalWords,
+    completeUtf8Bytes: measurement.completeUtf8Bytes,
+    completeCharacters: measurement.completeCharacters,
     totalCanonicalWords: measurement.totalCanonicalWords,
     totalUtf8Bytes: measurement.totalUtf8Bytes,
     totalCharacters: measurement.totalCharacters,
@@ -213,7 +222,7 @@ const INSTALLED_MODULE_NEGATIVE_PROBE_CODES = new Set([
 ]);
 
 function installedNegativeCoverage(catalog) {
-  assert.equal(catalog.length, 94, 'P36F-05-C5 excludes the warning-only session_reported row from hard refusals');
+  assert.equal(catalog.length, 94, 'the warning-only session_reported row is excluded from hard refusals');
   const codes = catalog.map(entry => entry.code);
   assert.equal(new Set(codes).size, codes.length, 'the installed hard-refusal catalog must not duplicate rows');
 
@@ -228,7 +237,7 @@ function installedNegativeCoverage(catalog) {
     ...INSTALLED_MODULE_NEGATIVE_PROBE_CODES,
   ]);
   assert.deepEqual([...covered].sort(), [...codes].sort(), 'every catalog row must have one installed-boundary disposition');
-  assert.equal(installed.length, 87, 'P36F-05-C5 keeps 87 hard-refusal installed targets');
+  assert.equal(installed.length, 87, 'the installed boundary keeps 87 hard-refusal targets');
   assert.equal(INSTALLED_CLI_NEGATIVE_PROBE_CODES.size, 5, 'the existing installed probes must execute exactly five rows');
   assert.equal(INSTALLED_MODULE_NEGATIVE_PROBE_CODES.size, 2, 'only reconciliation rows may use installed-module coverage');
   return Object.freeze({ installed, probes: [...INSTALLED_CLI_NEGATIVE_PROBE_CODES], modules: [...INSTALLED_MODULE_NEGATIVE_PROBE_CODES] });
@@ -382,7 +391,7 @@ async function populatedStatusTarget() {
   const fixture = await createDispatchFixture(tmpBase, 'packed-status-parity-populated', { scaffold: true });
   const operatorHome = mkdtempSync(join(tmpBase, 'packed-status-home-'));
   const operatorActivationRoot = join(operatorHome, '.agenticloop', 'operator-activation');
-  const env = { ...process.env, HOME: operatorHome, USERPROFILE: operatorHome };
+  const env = isolatedHomeEnv(operatorHome);
   const provision = await runProcess(process.execPath, [
     join(REPO_ROOT, 'bin', 'agenticloop.js'), 'activation', 'provision-key', '--target', fixture.root,
   ], { env });
@@ -461,7 +470,7 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     // adjusting an accounting total or a fixture registry.
     assert.throws(
       () => installedNegativeCoverage(installed.HARD_REFUSAL_ALLOWLIST.slice(1)),
-      /excludes the warning-only session_reported row/
+      /warning-only session_reported row is excluded/
     );
   });
 
@@ -606,7 +615,6 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     const sourceReference = join(sourceTarget, 'agenticloop', 'commands', 'lifecycle-protocol.md');
     const installedReference = join(installedTarget, 'agenticloop', 'commands', 'lifecycle-protocol.md');
     const sourceScript = join(REPO_ROOT, 'scripts', 'measure-dispatch-context.mjs');
-    const installedScript = join(packedRoot, 'scripts', 'measure-dispatch-context.mjs');
     const sourceMeasure = role => measureContext(
       sourceScript,
       sourcePacket,
@@ -615,11 +623,9 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       sourceReference,
     );
     const installedMeasure = role => measureContext(
-      installedScript,
-      // The source CLI packet is the source-stage artifact carried through the
-      // local pack and clean-install boundary. The installed script, wrapper,
-      // activation command, reference, and target below are all produced by
-      // the archive installed with npm --offline in this suite's before hook.
+      sourceScript,
+      // Repository-owned measurement tooling observes the source packet and
+      // the wrappers/reference produced by the clean offline installation.
       sourcePacket,
       installedOpencode.resolveOpencodeAgentPath(installedTarget, role),
       installedOpencode.resolveOpencodeCommandPath(installedTarget),
@@ -634,30 +640,45 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     const installedOrientation = JSON.parse(installedM4.stdout);
     assert.deepEqual(measurementProjection(installedOrientation), measurementProjection(sourceOrientation));
     assert.equal(installedOrientation.actualInputTokens, 'unavailable');
+    const intendedWords = process.platform === 'win32' ? 24 : 15;
+    assert.equal(installedOrientation.intendedPlatformCanonicalWords, intendedWords);
+    assert.equal(installedOrientation.completeCanonicalWords, installedOrientation.commonCanonicalWords + intendedWords);
+    assert.equal(installedOrientation.completeUtf8Bytes, installedOrientation.commonUtf8Bytes + installedOrientation.intendedPlatformUtf8Bytes);
+    assert.equal(installedOrientation.completeCharacters, installedOrientation.commonCharacters + installedOrientation.intendedPlatformCharacters);
     assert.deepEqual(evaluateMeasurementBudget({ orientation: {
       method: installedOrientation.canonicalTextMethod,
-      canonicalWords: installedOrientation.totalCanonicalWords,
+      canonicalWords: installedOrientation.commonCanonicalWords,
     } }, { components: { orientation: { previous: 6377, upperBound: 7000 } } }), { ok: true, errors: [] });
 
+    const roleBudgetErrors = [];
     for (const role of ['maintainer', 'engineer', 'auditor']) {
       const sourceM5 = await sourceMeasure(role);
       const installedM5 = await installedMeasure(role);
       assert.equal(sourceM5.status, 0, sourceM5.stderr);
       assert.equal(installedM5.status, 0, installedM5.stderr);
       const sourceWrapper = JSON.parse(sourceM5.stdout).components.find(item => item.kind === 'generated_role_wrapper');
-      const installedWrapper = JSON.parse(installedM5.stdout).components.find(item => item.kind === 'generated_role_wrapper');
+      const sourceReport = JSON.parse(sourceM5.stdout);
+      const installedReport = JSON.parse(installedM5.stdout);
+      const installedWrapper = installedReport.components.find(item => item.kind === 'generated_role_wrapper');
       assert.deepEqual(
         { method: installedWrapper.method, canonicalWords: installedWrapper.canonicalWords, utf8Bytes: installedWrapper.utf8Bytes, characters: installedWrapper.characters },
         { method: sourceWrapper.method, canonicalWords: sourceWrapper.canonicalWords, utf8Bytes: sourceWrapper.utf8Bytes, characters: sourceWrapper.characters },
       );
-      assert.deepEqual(evaluateMeasurementBudget({ [role]: {
+      const platformProjection = report => report.intendedPlatformComponents.map(({ path: _path, ...component }) => component);
+      assert.deepEqual(platformProjection(installedReport), platformProjection(sourceReport));
+      assert.equal(installedReport.intendedPlatformComponents.length, 1);
+      const commonWords = installedWrapper.canonicalWords;
+      assert.equal(installedWrapper.canonicalWords + installedReport.intendedPlatformCanonicalWords, commonWords + intendedWords);
+      const budget = evaluateMeasurementBudget({ [role]: {
         method: installedWrapper.method,
         canonicalWords: installedWrapper.canonicalWords,
       } }, { components: { [role]: {
-        previous: { maintainer: 4632, engineer: 4097, auditor: 2362 }[role],
+        previous: { maintainer: 4617, engineer: 4082, auditor: 2347 }[role],
         upperBound: { maintainer: 5000, engineer: 4500, auditor: 3000 }[role],
-      } } }), { ok: true, errors: [] });
+      } } });
+      roleBudgetErrors.push(...budget.errors.map(error => `${role}: ${error}`));
     }
+    assert.deepEqual(roleBudgetErrors, []);
 
     const prePhase = Object.freeze({
       availability: 'unavailable',
@@ -669,12 +690,21 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     });
     assert.ok(existsSync(packedArchive), 'the locally packed archive must exist before clean offline installation');
     assert.ok(packedRoot.startsWith(`${installPrefix}/`) || packedRoot.startsWith(`${installPrefix}\\`));
-    assert.ok(existsSync(installedScript), 'the measurement script must be measured from the clean offline installation');
+    assert.equal(existsSync(join(packedRoot, 'scripts', 'measure-dispatch-context.mjs')), false);
+    assert.equal(existsSync(join(packedRoot, 'src', 'canonical-word-count.js')), false);
   });
 
   it('keeps the test-only packaged-surface snapshot out of the installed artifact', () => {
     const snapshotPath = join(packedRoot, 'src', 'packaged-surface-baseline.json');
     assert.equal(existsSync(snapshotPath), false);
+    assert.equal(existsSync(join(packedRoot, 'src', 'measurement-implementation-identity.js')), false);
+    assert.equal(existsSync(join(packedRoot, 'src', 'evidence-inventory.js')), false);
+    assert.equal(existsSync(join(packedRoot, 'scripts', 'measure-dispatch-context.mjs')), false);
+    assert.equal(existsSync(join(packedRoot, 'scripts', 'canonical-word-count.mjs')), false);
+    assert.equal(existsSync(join(packedRoot, 'scripts', 'measure-adapter-words.mjs')), false);
+    for (const name of ['f6-proof-registry.js', 'f7-proof-registry.js', 'f8-proof-registry.js']) {
+      assert.equal(existsSync(join(packedRoot, 'src', name)), false, `${name} is test-only`);
+    }
   });
 
   it('ships documented data, security modules, and maintenance helpers', async () => {
@@ -689,9 +719,6 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       'src/activation-resolution.js',
       'src/host-trust-cli.js',
       'src/protected-host-boundary.js',
-      'scripts/measure-dispatch-context.mjs',
-      'src/canonical-word-count.js',
-      'src/measurement-implementation-identity.js',
       'src/protected-transition-inputs.js',
       'scripts/sign-blocked-authority.mjs',
     ]) {
@@ -702,11 +729,6 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     assert.equal(boundary.PROTECTED_KEY_DESCRIPTOR, 3);
     assert.equal(boundary.readProtectedHostSigningKey, undefined);
     assert.equal(boundary.createInheritedDescriptorHostBoundary, undefined);
-    const canonicalWordCount = await import(pathToFileURL(join(packedRoot, 'src', 'canonical-word-count.js')).href);
-    assert.deepEqual(Object.keys(canonicalWordCount).sort(), ['countCanonicalWords', 'measureCanonicalText']);
-    assert.equal(canonicalWordCount.CANONICAL_TEXT_MEASUREMENT_METHOD, undefined);
-    assert.equal(canonicalWordCount.normalizeCanonicalText, undefined);
-    assert.equal(canonicalWordCount.evaluateMeasurementBudget, undefined);
   });
 
   it('resolves documented exports, deep imports, and shipped data files', async () => {
@@ -1281,7 +1303,11 @@ describe('packed public handoff lifecycle', () => {
     }
   });
 
-  it('returns one installed authoritative handoff verdict for all five adapters', { timeout: 300000 }, async () => {
+  // Five independent installed adapter lifecycles run serially here. Each
+  // subprocess remains individually bounded by runPacked; the aggregate test
+  // allows loaded Windows scheduling to delay completion without converting a
+  // still-progressing child into a cancellation.
+  it('returns one installed authoritative handoff verdict for all five adapters', { timeout: 600000 }, async () => {
     const verdicts = {};
     const successfulVerdicts = {};
     for (const adapter of ['opencode', 'codex', 'claude-code', 'copilot', 'cursor']) {

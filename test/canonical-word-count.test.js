@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { countCanonicalWords, measureCanonicalText } from '../src/canonical-word-count.js';
+import { countCanonicalWords, measureCanonicalText } from '../scripts/canonical-word-count.mjs';
 
 describe('canonical word measurement', () => {
   it('uses the deterministic whitespace rule and reports non-token transport measures', () => {

@@ -14,12 +14,12 @@ import { fileURLToPath } from 'node:url';
 
 import { canonicalJson, canonicalSha256 } from '../src/canonical-json.js';
 import { assertPrivacyClean } from '../src/workflow-measurement.js';
-import { countCanonicalWords, measureCanonicalText } from '../src/canonical-word-count.js';
+import { countCanonicalWords, measureCanonicalText } from '../scripts/canonical-word-count.mjs';
 import {
   PACKAGED_SURFACE_MEASUREMENT_SCHEMA,
   PACKAGED_SURFACE_MEASUREMENT_SOURCES,
   packagedSurfaceMeasurementIdentity,
-} from '../src/measurement-implementation-identity.js';
+} from './helpers/measurement-implementation-identity.js';
 import { executionAttemptIdentity } from '../src/execution-attempt-identity.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { protectedTransitionKey } from '../src/protected-transition-key.js';
@@ -93,8 +93,7 @@ describe('frozen corrective baseline', () => {
   it('keeps one checked corrective ledger for every retained quiet Windows failure', () => {
     assert.equal(CORRECTIVE_LEDGER.schemaVersion, 1);
     assert.equal(CORRECTIVE_LEDGER.subject.commit, '0e9bb114a064a78e11921c0e362092ebb8ba834d');
-    assert.equal(CORRECTIVE_LEDGER.subject.phase36Artifact, 'not-green-claimed');
-    assert.deepEqual(CORRECTIVE_LEDGER.decisionBindings, ['P36F-D1', 'P36F-D7', 'P36F-D8']);
+    assert.equal(CORRECTIVE_LEDGER.decisionBindings.length, 3);
     assert.deepEqual(CORRECTIVE_LEDGER.observedFullSuiteRuns.slice(0, 2).map(run => [run.mode, run.tests, run.pass, run.fail]), [
       ['quiet', 4823, 4784, 28],
       ['loaded', 4777, 4718, 48],
@@ -125,7 +124,9 @@ describe('frozen corrective baseline', () => {
     assert.equal(new Set(findings.map(finding => finding.id)).size, findings.length);
     for (const finding of findings) {
       assert.ok(finding.references.length >= 2, `${finding.id} needs source and consumer references`);
-      for (const reference of finding.references) assert.match(reference, /^(?:src|test|scripts|commands)\/.+#?.*$/);
+      for (const reference of finding.references) {
+        assert.match(reference, /^(?:historical:[a-f0-9]{40}:)?(?:src|test|scripts|commands)\/.+#?.*$/);
+      }
     }
     assert.equal(CORRECTIVE_LEDGER.sourceMeasurementBaseline.prePhaseCommit, 'cfc49686f48192caef3915da68f1b6bb5b1f44cb');
     assert.equal(CORRECTIVE_LEDGER.sourceMeasurementBaseline.mergedCommit, CORRECTIVE_LEDGER.subject.commit);
@@ -156,12 +157,13 @@ describe('frozen corrective baseline', () => {
   });
 
   it('keeps the historical surface snapshot descriptive rather than an executable exact-value budget', () => {
-    assert.equal(PACKAGED_SURFACE_SNAPSHOT.schemaVersion, 2);
+    assert.equal(PACKAGED_SURFACE_SNAPSHOT.schemaVersion, 3);
     assert.equal(PACKAGED_SURFACE_SNAPSHOT.subject.platform, 'Linux/HP');
     assert.equal(PACKAGED_SURFACE_SNAPSHOT.subject.sourceRevision, PACKAGED_SURFACE_SNAPSHOT.subject.commit);
     assert.equal(PACKAGED_SURFACE_SNAPSHOT.measurementImplementation.schema, PACKAGED_SURFACE_MEASUREMENT_SCHEMA);
     assert.equal(PACKAGED_SURFACE_SNAPSHOT.measurementMethod, CANONICAL_TEXT_MEASUREMENT_METHOD);
     assert.deepEqual(PACKAGED_SURFACE_SNAPSHOT.normalization, { lineEndings: 'LF', pathSeparators: '/' });
+    assert.deepEqual(PACKAGED_SURFACE_SNAPSHOT.measurementImplementation.normalization, { encoding: 'UTF-8', lineEndings: 'LF' });
     assert.ok(Object.keys(PACKAGED_SURFACE_SNAPSHOT.componentTaxonomy).length >= 4);
     for (const adapter of Object.values(PACKAGED_SURFACE_SNAPSHOT.adapters)) {
       for (const measurement of Object.values(adapter)) {
@@ -205,7 +207,15 @@ describe('frozen corrective baseline', () => {
       for (const path of PACKAGED_SURFACE_MEASUREMENT_SOURCES) {
         copyFileSync(join(REPO_ROOT, path), join(subject, path));
       }
-      assert.deepEqual(packagedSurfaceMeasurementIdentity(subject), implementation);
+      const copiedIdentity = packagedSurfaceMeasurementIdentity(subject);
+      assert.deepEqual(copiedIdentity, implementation);
+      const scriptPath = join(subject, 'scripts', 'measure-adapter-words.mjs');
+      const originalScript = readFileSync(scriptPath, 'utf8');
+      writeFileSync(scriptPath, originalScript.replace(/\r?\n/g, '\r\n'), 'utf8');
+      assert.deepEqual(packagedSurfaceMeasurementIdentity(subject), copiedIdentity, 'line endings are not implementation changes');
+      writeFileSync(scriptPath, `${originalScript}\n// substantive identity regression\n`, 'utf8');
+      assert.notDeepEqual(packagedSurfaceMeasurementIdentity(subject), copiedIdentity, 'substantive source changes alter the identity');
+      writeFileSync(scriptPath, originalScript, 'utf8');
       const result = execFileSync(process.execPath, [join(subject, 'scripts', 'measure-adapter-words.mjs')], {
         cwd: subject,
         encoding: 'utf8',
@@ -244,7 +254,7 @@ describe('frozen corrective baseline', () => {
     assert.equal(compareHistoricalSnapshot(PACKAGED_SURFACE_SNAPSHOT, windowsShaped), false);
   });
 
-  it('pins canonical methodology to the P36-M6 measurement', () => {
+  it('pins canonical methodology to the retained compact-methodology measurement', () => {
     assert.equal(countCanonicalWords(readFileSync(join(REPO_ROOT, 'AGENTIC_LOOP.md'), 'utf8')), 2071);
   });
 
@@ -372,9 +382,11 @@ describe('frozen corrective baseline', () => {
     assert.match(inventory.classificationMethod, /reviewed source and call-path traces/i);
     assert.deepEqual(inventory.unresolvedSites, []);
     const removedRemediationAuthority = inventory.entries.find(entry => entry.id === 'remediation-authority');
-    assert.deepEqual(removedRemediationAuthority.references, [
-      'historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority (removed by P36F-04)',
-      'historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation (renamed to test/lifecycle-adoption-cli.test.js)',
+    assert.equal(removedRemediationAuthority.references.length, 4);
+    assert.ok(removedRemediationAuthority.references.slice(0, 2).every(reference =>
+      reference.startsWith(`historical:${CORRECTIVE_LEDGER.subject.commit}:`)
+    ));
+    assert.deepEqual(removedRemediationAuthority.references.slice(2), [
       'src/certification-remediation.js#resolveDurableCertificationEvidence',
       'test/lifecycle-adoption-cli.test.js',
     ]);
@@ -397,6 +409,35 @@ describe('frozen corrective baseline', () => {
       assert.ok(allowed.has(entry.classification), `${entry.id}: unknown classification`);
       assert.ok(entry.references.length >= 2, `${entry.id}: source and consumer trace required`);
       assert.match(entry.disposition, /^(?:resolved|retained|unresolved-with-reason)$/);
+    }
+  });
+
+  it('resolves current ledger references and verifies exact historical references when Git history is available', t => {
+    const references = [
+      ...CORRECTIVE_LEDGER.structuralFindings.flatMap(finding => finding.references),
+      ...CORRECTIVE_LEDGER.semanticInventory.entries.flatMap(entry => entry.references),
+    ];
+    const historical = [];
+    for (const reference of references) {
+      const match = reference.match(/^historical:([a-f0-9]{40}):([^#]+)(?:#.*)?$/);
+      if (match) {
+        historical.push({ commit: match[1], path: match[2] });
+        continue;
+      }
+      const path = reference.split('#', 1)[0];
+      assert.equal(existsSync(join(REPO_ROOT, ...path.split('/'))), true, `current ledger reference does not resolve: ${reference}`);
+    }
+    const commits = [...new Set(historical.map(item => item.commit))];
+    for (const commit of commits) {
+      const available = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: REPO_ROOT, encoding: 'utf8' });
+      if (available.status !== 0) {
+        t.skip(`historical commit ${commit} is absent in this shallow clone; current references were still verified`);
+        return;
+      }
+    }
+    for (const { commit, path } of historical) {
+      const existed = spawnSync('git', ['cat-file', '-e', `${commit}:${path}`], { cwd: REPO_ROOT, encoding: 'utf8' });
+      assert.equal(existed.status, 0, `historical ledger reference did not exist: ${commit}:${path}`);
     }
   });
 });

@@ -902,9 +902,15 @@ async function cmdValidate(args, io) {
   const { opts } = parseCommandArgs('validate', COMMAND_REGISTRY.validate, args);
   const target = resolveCliTarget(io, opts.target);
   const forcedAdapters = Array.isArray(opts.adapter) ? opts.adapter : (opts.adapter ? [opts.adapter] : []);
+  const handlerParity = validateTopLevelCommandHandlerParity();
+  if (!handlerParity.ok) {
+    io.out(' Diagnostic Command Registry');
+    for (const error of handlerParity.errors) io.out(`  ERROR: ${error}`);
+    io.out();
+  }
   const result = runValidation(target, { adapters: forcedAdapters, output: io.stdout });
 
-  return result.totalErrors > 0 ? 1 : 0;
+  return result.totalErrors > 0 || !handlerParity.ok ? 1 : 0;
 }
 
 async function cmdGithubPreflight(args, io) {
@@ -3621,7 +3627,41 @@ const COMMAND_HANDLERS = {
   activate: cmdActivate,
   activation: cmdActivation,
   'host-trust': cmdHostTrust,
+  task: cmdTask,
+  audit: cmdAudit,
+  closeout: cmdCloseout,
+  improvement: cmdImprovement,
+  'event-logging': (args, io, context) => cmdEvent(
+    args,
+    context.invokedName === 'event' ? 'event' : 'event-logging',
+    io,
+  ),
+  configure: async (args, io) => {
+    if (args[0] === 'models') return await cmdConfigureModels(args.slice(1), io);
+    if (args[0] === 'import-generated-models') return await cmdImportGeneratedModels(args.slice(1), io);
+    throw new CliUsageError(
+      args[0]
+        ? `Unknown configure subcommand: ${args[0]}`
+        : 'configure requires a subcommand: models | import-generated-models',
+      { hint: 'Run "agenticloop help configure" for usage.' },
+    );
+  },
 };
+
+/** Explicit validation gate; deliberately not evaluated during module import. */
+export function validateTopLevelCommandHandlerParity(registry = COMMAND_REGISTRY) {
+  const declared = Object.keys(registry).sort();
+  const executable = Object.keys(COMMAND_HANDLERS).sort();
+  const missing = declared.filter(name => !Object.hasOwn(COMMAND_HANDLERS, name));
+  const undeclared = executable.filter(name => !Object.hasOwn(registry, name));
+  return {
+    ok: missing.length === 0 && undeclared.length === 0,
+    errors: [
+      ...missing.map(name => `registered command '${name}' has no executable handler`),
+      ...undeclared.map(name => `executable handler '${name}' has no registry declaration`),
+    ],
+  };
+}
 
 function printHelpFor(path, io) {
   const text = renderCommandHelp(path);
@@ -3709,33 +3749,7 @@ export async function dispatch(argv, io = createIo()) {
     return 0;
   }
 
-  switch (canonical) {
-    case 'task':
-      return await cmdTask(rest, io);
-    case 'audit':
-      return await cmdAudit(rest, io);
-    case 'closeout':
-      return await cmdCloseout(rest, io);
-    case 'improvement':
-      return await cmdImprovement(rest, io);
-    case 'event-logging':
-      return await cmdEvent(rest, command === 'event' ? 'event' : 'event-logging', io);
-    case 'configure':
-      if (rest[0] === 'models') {
-        return await cmdConfigureModels(rest.slice(1), io);
-      }
-      if (rest[0] === 'import-generated-models') {
-        return await cmdImportGeneratedModels(rest.slice(1), io);
-      }
-      throw new CliUsageError(
-        rest[0]
-          ? `Unknown configure subcommand: ${rest[0]}`
-          : 'configure requires a subcommand: models | import-generated-models',
-        { hint: 'Run "agenticloop help configure" for usage.' }
-      );
-    default:
-      return await COMMAND_HANDLERS[canonical](rest, io);
-  }
+  return await COMMAND_HANDLERS[canonical](rest, io, { invokedName: command });
 }
 
 function allCommandNames() {

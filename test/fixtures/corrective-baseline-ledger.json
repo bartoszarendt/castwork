@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "task": "P36F-00",
+  "task": "corrective-baseline",
   "subject": {
     "commit": "0e9bb114a064a78e11921c0e362092ebb8ba834d",
-    "phase36Artifact": "not-green-claimed"
+    "baselineArtifactStatus": "not-green-claimed"
   },
-  "decisionBindings": ["P36F-D1", "P36F-D7", "P36F-D8"],
+  "decisionBindings": ["stabilize-before-expanding", "measure-simplification-across-the-product", "portable-budget-baselines"],
   "observedFullSuiteRuns": [
     {
       "platform": "Windows/Dell (owner-retained)",
@@ -39,7 +39,7 @@
       "skipped": 22,
       "todo": 0,
       "durationMs": 526940.019012,
-      "phase36Artifact": "not-green-claimed"
+      "baselineArtifactStatus": "not-green-claimed"
     }
   ],
   "quietFailureClusters": [
@@ -118,16 +118,16 @@
     ]
   },
   "structuralFindings": [
-    {"id": "remediation-authority-unconsumed", "kind": "decision-path", "finding": "remediation-authority record is not consumed by a protected transition", "references": ["src/certification-remediation.js#evaluateRemediationAuthority", "test/lifecycle-adoption-remediation-cli.test.js#remediation"]},
+    {"id": "remediation-authority-unconsumed", "kind": "decision-path", "finding": "remediation-authority record is not consumed by a protected transition", "references": ["historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority", "historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation"]},
     {"id": "commit-adoption-self-asserted-actor", "kind": "decision-path", "finding": "adoption accepts caller-supplied actor class and identity without an authenticated producer receipt", "references": ["src/commit-adoption.js#evaluateCommitAdoption", "test/commit-adoption.test.js#adoption"]},
-    {"id": "refusal-catalog-import-invariants", "kind": "duplicate-representation", "finding": "catalog-wide refusal invariants execute at module import", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "test/diagnostic-architecture.test.js"]},
+    {"id": "refusal-catalog-import-invariants", "kind": "duplicate-representation", "finding": "catalog-wide refusal invariants execute at module import", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/diagnostic-architecture.test.js"]},
     {"id": "parallel-diagnostic-metadata-inventories", "kind": "duplicate-representation", "finding": "diagnostic proof and semantic-invalidator text are parallel metadata inventories", "references": ["src/refusal-classes.js#HARD_REFUSAL_ALLOWLIST", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
     {"id": "harness-blocked-miscounted-unreachable", "kind": "bookkeeping-obligation", "finding": "15 harness-blocked installed rows are counted as product-unreachable", "references": ["test/installed-binary-refusal-harness.test.js#installedRows", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
     {"id": "session-reported-warning-hard-refusal", "kind": "bookkeeping-obligation", "finding": "session_reported warning behavior is classified as a hard refusal", "references": ["test/installed-binary-refusal-harness.test.js#makeSessionReportedWarningFixture", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
     {"id": "pid-liveness-and-committable-locks", "kind": "decision-path", "finding": "Windows/macOS locks rely on PID liveness and lock files are committable", "references": ["src/fs-mutation-kernel.js#lifecycleLockOwnerIsLive", "test/fs-mutation-kernel.test.js"]},
     {"id": "phase-numbered-test-obfuscation", "kind": "bookkeeping-obligation", "finding": "permanent phase-numbered tests use interpolation or concatenation to evade the planning-boundary matcher", "references": ["scripts/test-groups.js#MANIFEST", "test/corrective-baseline.test.js#candidatePhaseViolations"]},
     {"id": "task-explain-files-only-exit-two", "kind": "decision-path", "finding": "task explain is files-only and reports operational failures as usage exit 2", "references": ["src/task-explain-cli.js#runTaskExplain", "test/task-explain.test.js"]},
-    {"id": "changelog-protocol-command-gaps", "kind": "bookkeeping-obligation", "finding": "new public commands and schemas are not consistently represented in changelog and lifecycle protocol", "references": ["src/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]}
+    {"id": "changelog-protocol-command-gaps", "kind": "bookkeeping-obligation", "finding": "new public commands and schemas are not consistently represented in changelog and lifecycle protocol", "references": ["test/helpers/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]}
   ],
   "semanticInventory": {
     "relativeTo": "0e9bb114a064a78e11921c0e362092ebb8ba834d",
@@ -135,8 +135,8 @@
     "classificationMethod": "Manual classification from reviewed source and call-path traces; mechanically derived test views only, with no runtime registry or general evaluator.",
     "unresolvedSites": [],
     "entries": [
-      {"id": "remediation-authority", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority (removed by P36F-04)", "historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation (renamed to test/lifecycle-adoption-cli.test.js)", "src/certification-remediation.js#resolveDurableCertificationEvidence", "test/lifecycle-adoption-cli.test.js"]},
-      {"id": "commit-adoption-assurance", "classification": "independent-protected-fact", "disposition": "retained", "references": ["src/commit-adoption.js#evaluateCommitAdoption", "src/evidence-inventory.js#EVIDENCE_INVENTORY"]},
+      {"id": "remediation-authority", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:src/certification-remediation.js#evaluateRemediationAuthority", "historical:0e9bb114a064a78e11921c0e362092ebb8ba834d:test/lifecycle-adoption-remediation-cli.test.js#remediation", "src/certification-remediation.js#resolveDurableCertificationEvidence", "test/lifecycle-adoption-cli.test.js"]},
+      {"id": "commit-adoption-assurance", "classification": "independent-protected-fact", "disposition": "retained", "references": ["src/commit-adoption.js#evaluateCommitAdoption", "test/helpers/evidence-inventory.js#EVIDENCE_INVENTORY"]},
       {"id": "diagnostic-definition-projection", "classification": "faithful-derived-projection", "disposition": "resolved", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "src/repair-policy.js#repairPolicyViewFor"]},
       {"id": "installed-refusal-execution", "classification": "legitimate-repeated-evaluator-call", "disposition": "retained", "references": ["test/installed-binary-refusal-harness.test.js#installedRows", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
       {"id": "harness-blocked-partition", "classification": "bookkeeping-context-interpretation", "disposition": "resolved", "references": ["src/refusal-classes.js#REFUSAL_CLASSES", "test/installed-binary-refusal-harness.test.js#executedInstalledBinaryRows"]},
@@ -144,7 +144,7 @@
       {"id": "lifecycle-lock-owner", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["src/fs-mutation-kernel.js#lifecycleLockOwnerIsLive", "test/fs-mutation-kernel.test.js#lifecycle locks"]},
       {"id": "planning-boundary-check", "classification": "bookkeeping-context-interpretation", "disposition": "resolved", "references": ["scripts/test-groups.js#MANIFEST", "test/corrective-baseline.test.js#candidatePhaseViolations"]},
       {"id": "task-explain-availability", "classification": "independent-decision-implementation", "disposition": "resolved", "references": ["src/task-explain-cli.js#runTaskExplain", "test/task-explain.test.js#task explain"]},
-      {"id": "protocol-inventory-documentation", "classification": "faithful-derived-projection", "disposition": "resolved", "references": ["src/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]},
+      {"id": "protocol-inventory-documentation", "classification": "faithful-derived-projection", "disposition": "resolved", "references": ["test/helpers/evidence-inventory.js#EVIDENCE_INVENTORY", "commands/lifecycle-protocol.md#Lifecycle Protocol"]},
       {"id": "dispatch-consumption-artifact", "classification": "durable-artifact-consumer", "disposition": "retained", "references": ["src/handoff-consumption.js#listDispatchConsumptions", "src/files-return-evidence.js#refetchFilesReturnEvidence"]},
       {"id": "acting-context-measurement", "classification": "bookkeeping-context-interpretation", "disposition": "retained", "references": ["scripts/measure-dispatch-context.mjs#component", "test/dispatch-context-measurement.test.js#dispatch acting-context measurement"]}
     ]

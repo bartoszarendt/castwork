@@ -7,9 +7,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { canonicalJson } from '../src/canonical-json.js';
-import { measureCanonicalText } from '../src/canonical-word-count.js';
+import { measureCanonicalText } from '../scripts/canonical-word-count.mjs';
 import {
   generateOpencodeArtifacts,
+  opencodeShellOperatingFact,
   resolveOpencodeAgentPath,
   resolveOpencodeCommandPath,
 } from '../src/adapters/opencode.js';
@@ -58,7 +59,8 @@ describe('dispatch acting-context measurement', () => {
     assert.equal(second.stdout, first.stdout);
     const result = JSON.parse(first.stdout);
     assert.equal(result.packetSerialization, 'canonicalJson');
-    assert.equal(result.measurementMethod, 'agenticloop.dispatch-context/v3');
+    assert.equal(result.measurementMethod, 'agenticloop.dispatch-context/v5');
+    assert.equal(result.schemaVersion, 5);
     assert.equal(result.canonicalTextMethod, CANONICAL_TEXT_MEASUREMENT_METHOD);
     assert.equal(result.lifecycle, undefined);
     assert.deepEqual(result.normalization, { lineEndings: 'LF', pathSeparators: '/' });
@@ -76,6 +78,12 @@ describe('dispatch acting-context measurement', () => {
     assert.equal(result.totalCanonicalWords, expected.reduce((sum, item) => sum + item.canonicalWords, 0));
     assert.equal(result.totalUtf8Bytes, expected.reduce((sum, item) => sum + item.utf8Bytes, 0));
     assert.equal(result.totalCharacters, expected.reduce((sum, item) => sum + item.characters, 0));
+    assert.equal(result.commonCanonicalWords, result.totalCanonicalWords);
+    assert.equal(result.intendedPlatformCanonicalWords, 0);
+    assert.equal(result.completeCanonicalWords, result.commonCanonicalWords + result.intendedPlatformCanonicalWords);
+    assert.equal(result.completeUtf8Bytes, result.commonUtf8Bytes + result.intendedPlatformUtf8Bytes);
+    assert.equal(result.completeCharacters, result.commonCharacters + result.intendedPlatformCharacters);
+    assert.equal(result.totalBytes, result.completeBytes);
     assert.equal(result.actualInputTokens, 'unavailable');
 
     const duplicate = run([...args, '--reference', role]);
@@ -85,6 +93,45 @@ describe('dispatch acting-context measurement', () => {
     const callerSuppliedLifecycle = run([...args, '--lifecycle', 'source-package-clean-offline-install']);
     assert.equal(callerSuppliedLifecycle.status, 2);
     assert.match(callerSuppliedLifecycle.stderr, /unknown option '--lifecycle'/);
+  });
+
+  it('separates common wrapper content from intended platform shell facts', () => {
+    const packet = join(temp, 'platform-packet.json');
+    const activation = join(temp, 'platform-activation.md');
+    const reference = join(temp, 'platform-reference.md');
+    writeFileSync(packet, '{}\n');
+    writeFileSync(activation, 'activation\n');
+    writeFileSync(reference, 'reference\n');
+    const reports = {};
+    for (const [shape, platform] of [['posix', 'linux'], ['win32', 'win32']]) {
+      const role = join(temp, `${shape}-role.md`);
+      writeFileSync(role, `common wrapper\n\n${opencodeShellOperatingFact(platform)}\n`);
+      const measured = run(['--packet', packet, '--role-wrapper', role, '--activation-wrapper', activation, '--reference', reference]);
+      assert.equal(measured.status, 0, measured.stderr);
+      reports[shape] = JSON.parse(measured.stdout);
+    }
+    const common = report => report.components.find(item => item.kind === 'generated_role_wrapper');
+    assert.deepEqual(
+      { ...common(reports.win32), path: null },
+      { ...common(reports.posix), path: null },
+    );
+    assert.equal(reports.posix.intendedPlatformComponents[0].canonicalWords, 15);
+    assert.equal(reports.win32.intendedPlatformComponents[0].canonicalWords, 24);
+    assert.equal(
+      reports.win32.intendedPlatformComponents[0].canonicalWords - reports.posix.intendedPlatformComponents[0].canonicalWords,
+      9,
+    );
+    assert.equal(reports.posix.intendedPlatformCanonicalWords, 15);
+    assert.equal(reports.win32.intendedPlatformCanonicalWords, 24);
+    for (const report of Object.values(reports)) {
+      assert.equal(report.completeCanonicalWords, report.commonCanonicalWords + report.intendedPlatformCanonicalWords);
+      assert.equal(report.completeUtf8Bytes, report.commonUtf8Bytes + report.intendedPlatformUtf8Bytes);
+      assert.equal(report.completeCharacters, report.commonCharacters + report.intendedPlatformCharacters);
+      assert.equal(report.totalCanonicalWords, report.completeCanonicalWords);
+      assert.equal(report.totalUtf8Bytes, report.completeUtf8Bytes);
+      assert.equal(report.totalBytes, report.completeBytes);
+      assert.equal(report.totalCharacters, report.completeCharacters);
+    }
   });
 
   it('measures generated source artifacts without claiming a package/install lifecycle', async () => {
@@ -130,6 +177,7 @@ describe('dispatch acting-context measurement', () => {
       const measurement = measure(role);
       const wrapper = measurement.components.find(item => item.kind === 'generated_role_wrapper');
       assert.ok(wrapper, `${role} must have a generated role wrapper component`);
+      assert.equal(measurement.intendedPlatformComponents.length, 1);
       assert.equal(measurement.actualInputTokens, 'unavailable');
     }
   });

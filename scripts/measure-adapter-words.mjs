@@ -10,7 +10,7 @@ import { generateCopilotArtifacts } from '../src/adapters/copilot.js';
 import { generateCursorArtifacts } from '../src/adapters/cursor.js';
 import { generateOpencodeArtifacts } from '../src/adapters/opencode.js';
 import { loadAgenticLoopConfig } from '../src/json.js';
-import { measureCanonicalText } from '../src/canonical-word-count.js';
+import { measureCanonicalText } from './canonical-word-count.mjs';
 import { seedTargetLayout } from '../test/helpers/layout-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));

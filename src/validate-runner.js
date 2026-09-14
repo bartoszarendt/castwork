@@ -30,6 +30,7 @@ import {
 import { validateLinks, formatLinkErrors } from './link-validator.js';
 import { validateProjectRoleCapabilities } from './role-capabilities.js';
 import { diagnoseLifecycleCompatibility, compatibilityMessage } from './lifecycle-compatibility.js';
+import { validateCatalog } from './refusal-classes.js';
 
 /**
  * @param {{ write(s: string): void }} output
@@ -77,6 +78,7 @@ function formatValidationOptions(options = {}) {
  *   eventLogErrors: string[],
  *   eventLogWarnings: string[],
  *   lifecycleCompatibilityErrors: string[],
+ *   diagnosticCatalogErrors: string[],
  *   linkErrors: object[],
  * }}
  */
@@ -218,8 +220,22 @@ export function runValidation(target, options = {}) {
     writeLine(output);
   }
 
+  const diagnosticCatalogErrors = [];
+  try {
+    validateCatalog();
+  } catch (error) {
+    diagnosticCatalogErrors.push(error instanceof Error ? error.message : String(error));
+  }
+  if (diagnosticCatalogErrors.length > 0) {
+    writeLine(output, '='.repeat(70));
+    writeLine(output, ' Diagnostic Catalog');
+    writeLine(output, '='.repeat(70));
+    for (const error of diagnosticCatalogErrors) writeLine(output, `  ERROR: ${error}`);
+    writeLine(output);
+  }
+
   const totalErrors = errorCount(skillReport) + configErrors.length + activationErrors.length + eventLogErrors.length +
-    roleCapabilityErrors.length + lifecycleCompatibilityErrors.length;
+    roleCapabilityErrors.length + lifecycleCompatibilityErrors.length + diagnosticCatalogErrors.length;
   const totalWarnings = warningCount(skillReport) + configWarnings.length + activationWarnings.length + eventLogWarnings.length +
     roleCapabilityWarnings.length;
 
@@ -236,6 +252,7 @@ export function runValidation(target, options = {}) {
     eventLogErrors,
     eventLogWarnings,
     lifecycleCompatibilityErrors,
+    diagnosticCatalogErrors,
     linkErrors,
   };
 }

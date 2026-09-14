@@ -23,10 +23,19 @@
   catalog accounting now runs in validation and tests instead of at production
   module import, and warning-only return reporting is not counted as a hard
   refusal.
+- Replaced the repository-wide diagnostic AST analyzer with direct command
+  registry/handler parity, adapter generation/validation, result-boundary, and
+  catalog producer checks; removed the parser-only TypeScript dependency.
+- Installed test children now pin all case-insensitive Windows home selectors,
+  and lifecycle-lock contention uses a same-process fast path plus bounded
+  fail-closed retries for transient foreign-process inspection failures.
+- Dispatch-context measurement now separates common generated wrapper content
+  from intended platform shell facts, so Windows PowerShell guidance is not
+  misreported as a semantic context regression.
 - `task explain` now documents its files-only action availability and protected
   inputs, preserves `unknown` for unavailable inputs, and distinguishes action
   syntax failures (exit `2`) from operational context failures (exit `1`).
-- P36 remediation now documents the complete shipped task-command surface,
+- Corrective lifecycle work now documents the complete shipped task-command surface,
   resolves installed methodology routes to copied destinations, and aligns
   refusal-catalog terminology with installed warning-only accounting.
 - **Breaking:** mutable check aggregate paths are now confined to

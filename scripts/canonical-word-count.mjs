@@ -1,5 +1,5 @@
 /**
- * Deterministic whitespace-word measurement shared by all budget surfaces.
+ * Deterministic whitespace-word measurement for repository-owned tooling.
  *
  * This is intentionally not a tokenizer estimate. Measurements canonicalize
  * line endings so a checked-out text file has the same result on supported

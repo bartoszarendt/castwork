@@ -145,7 +145,7 @@ const MANIFEST = {
     'test/configure-models.test.js',
     'test/context-discipline.test.js',
     'test/contract-ownership.test.js',
-    'test/diagnostic-architecture.test.js',
+    'test/diagnostic-boundaries.test.js',
     'test/decomposition-eligibility.test.js',
     'test/dispatch-context-measurement.test.js',
     'test/dispatch-hardening.test.js',

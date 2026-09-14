@@ -51,7 +51,17 @@ export function createCloseoutWorkflowDeltaFixture() {
   }
 
   function cleanup() {
-    rmSync(temp, { recursive: true, force: true });
+    fixturePool.releaseAll();
+    try {
+      // Node's bounded recursive removal retries Windows EBUSY, EMFILE,
+      // ENFILE, ENOTEMPTY, and EPERM failures with linear backoff.
+      rmSync(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error) {
+      const failure = new Error(`closeout fixture cleanup failed for '${temp}': ${error.message}`, { cause: error });
+      failure.code = error.code;
+      failure.path = error.path ?? temp;
+      throw failure;
+    }
   }
 
   async function makeGitTarget(name) {

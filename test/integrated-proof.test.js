@@ -69,7 +69,7 @@ describe('integrated lifecycle proof', () => {
   it('keeps every retained hard refusal and material human decision bound to a negative proof', () => {
     const hard = HARD_REFUSAL_ALLOWLIST.filter(({ code }) => REFUSAL_CLASSES[code].refusalClass === 'retained_hard_refusal');
     const human = HARD_REFUSAL_ALLOWLIST.filter(({ code }) => REFUSAL_CLASSES[code].refusalClass === 'material_human_decision');
-    assert.equal(hard.length, 76, 'P36F-05-C5 classifies session_reported as warning-only');
+    assert.equal(hard.length, 76, 'session_reported is warning-only');
     assert.equal(human.length, 18);
     assert.equal(hard.length + human.length, HARD_REFUSAL_ALLOWLIST.length);
     for (const entry of HARD_REFUSAL_ALLOWLIST) assert.match(entry.negativeProof, /\S/);
@@ -84,7 +84,7 @@ describe('integrated lifecycle proof', () => {
       '1 attempt, 0 abandonments, 0 supersessions',
       '2,071 canonical words', '76 retained hard refusals and 18 material human decisions',
     ]) assert.match(proof, new RegExp(value));
-    assert.match(proof, /agenticloop\.dispatch-context\/v3/);
+    assert.match(proof, /agenticloop\.dispatch-context\/v5/);
     assert.match(proof, /retained pre-phase observation is unavailable, so no reduction determination is made/);
   });
 

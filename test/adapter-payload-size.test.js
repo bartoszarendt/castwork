@@ -18,7 +18,7 @@ import { generateClaudeCodeArtifacts } from '../src/adapters/claude-code.js';
 import { generateCopilotArtifacts } from '../src/adapters/copilot.js';
 import { generateCursorArtifacts } from '../src/adapters/cursor.js';
 import { loadAgenticLoopConfig } from '../src/json.js';
-import { measureCanonicalText } from '../src/canonical-word-count.js';
+import { measureCanonicalText } from '../scripts/canonical-word-count.mjs';
 import { seedTargetLayout } from './helpers/layout-fixture.js';
 import { evaluateMeasurementBudget, measureAdapterSurface } from '../scripts/measure-adapter-words.mjs';
 

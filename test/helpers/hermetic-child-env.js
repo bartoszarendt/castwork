@@ -11,6 +11,22 @@ export function sanitizedChildEnv(overrides = {}) {
   return env;
 }
 
+/**
+ * Pins every standard home selector used by supported Node child platforms.
+ * HOMEDRIVE/HOMEPATH are removed rather than inherited so they cannot point a
+ * Windows child back at the operator profile.
+ */
+export function isolatedHomeEnv(home, overrides = {}) {
+  if (typeof home !== 'string' || !home) throw new TypeError('isolated home must be a non-empty path');
+  const env = sanitizedChildEnv(overrides);
+  for (const key of Object.keys(env)) {
+    if (/^(?:HOME|USERPROFILE|HOMEDRIVE|HOMEPATH)$/i.test(key)) delete env[key];
+  }
+  env.HOME = home;
+  env.USERPROFILE = home;
+  return env;
+}
+
 export function fakeExecutableEnv(executableDir, overrides = {}) {
   return sanitizedChildEnv({ ...overrides, PATH: executableDir });
 }

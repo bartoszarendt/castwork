@@ -1,6 +1,6 @@
 {
   "kind": "agenticloop.packaged-surface-baseline",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "subject": {
     "commit": "cfc49686f48192caef3915da68f1b6bb5b1f44cb",
     "tree": "511f34af5b15484cca2fa216c89b5bbc0d20a172",
@@ -8,17 +8,21 @@
     "sourceRevision": "cfc49686f48192caef3915da68f1b6bb5b1f44cb"
   },
   "measurementImplementation": {
-    "identityKind": "content",
-    "contentDigest": "sha256:b5c102691eb3e8c5fb7f855402e22cdb28a3a01bb033511468567f68c1f5db91",
-    "schema": "agenticloop.packaged-surface-baseline/v2",
+    "identityKind": "canonical-text",
+    "contentDigest": "sha256:0694a29210657e966fa63a0a420424708ae7c3ca2fc570d23c0895524aa7e43f",
+    "normalization": {
+      "encoding": "UTF-8",
+      "lineEndings": "LF"
+    },
+    "schema": "agenticloop.packaged-surface-baseline/v3",
     "sources": [
       {
         "path": "scripts/measure-adapter-words.mjs",
-        "sha256": "sha256:18ac1b5e88b2ef18cafa9173bbf7cd763f62e45c7174d4747e65ff856fa61ea2"
+        "sha256": "sha256:066271138eb0c0933d32544ec09791fff01689f7dd837ad3e337a3a1b73800ca"
       },
       {
-        "path": "src/canonical-word-count.js",
-        "sha256": "sha256:c6a00feadd00ebec7cdd9543ded7af0f44ef37836c501ad854b0c4a65dece8ce"
+        "path": "scripts/canonical-word-count.mjs",
+        "sha256": "sha256:a42c2c619e6d1064546b73c2f6047f7a85786d0c5fb5ccf687d8f75bff5e4235"
       }
     ]
   },
@@ -26,7 +30,7 @@
     "baseCommit": "3427b97de8392521153b58ec593164d4ae3877ac",
     "baseTree": "ba2bb2bbb2ce9d2638b2af609943a357475b87a2",
     "state": "uncommitted_corrective_candidate",
-    "measurementImplementationContentDigest": "sha256:b5c102691eb3e8c5fb7f855402e22cdb28a3a01bb033511468567f68c1f5db91"
+    "measurementImplementationContentDigest": "sha256:0694a29210657e966fa63a0a420424708ae7c3ca2fc570d23c0895524aa7e43f"
   },
   "measurementMethod": "agenticloop.canonical-text/v2",
   "normalization": { "lineEndings": "LF", "pathSeparators": "/" },

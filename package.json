@@ -60,7 +60,6 @@
     "test:groups": "node scripts/run-tests.js check",
     "test:changed": "node scripts/affected-tests.js",
     "test:profile": "node scripts/profile-tests.js",
-    "measure:dispatch-context": "node scripts/measure-dispatch-context.mjs",
     "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "files": [
@@ -68,7 +67,6 @@
     "src/*.js",
     "src/adapters/",
     ".claude-plugin/",
-    "scripts/measure-dispatch-context.mjs",
     "scripts/sign-blocked-authority.mjs",
     "AGENTIC_LOOP.md",
     "agents/",
@@ -99,7 +97,6 @@
   ],
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "ts5": "npm:typescript@^5.9.2",
     "typescript": "^7.0.2"
   }
 }

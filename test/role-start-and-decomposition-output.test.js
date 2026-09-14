@@ -1227,7 +1227,7 @@ describe('N7: role-start behavioral tests', () => {
     const root = fixture.root;
     const prepared = prepareRoleDispatch({ ...fixture, parallelRequested: true }, fixture.options);
     assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
-    assert.equal(prepared.packet.decomposition?.route, 'parallel', 'fixture must preserve P36-05 parallel guards');
+    assert.equal(prepared.packet.decomposition?.route, 'parallel', 'fixture must preserve parallel-route guards');
     const packetPath = join(root, '.agenticloop', 'tmp', 'packet.json');
     mkdirSync(dirname(packetPath), { recursive: true });
     writeFileSync(packetPath, JSON.stringify(prepared.packet, null, 2), 'utf8');

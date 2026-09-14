@@ -35,7 +35,7 @@ import { produceExecutionEvidence } from '../src/execution-evidence.js';
 import { resolveCarrierLineage } from '../src/handoff-consumption.js';
 import { createDispatchFixture, git, repositoryEvidence } from './helpers/dispatch-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
-import { fakeExecutableEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
+import { fakeExecutableEnv, isolatedHomeEnv, sanitizedChildEnv, writeNodeBackedExecutable } from './helpers/hermetic-child-env.js';
 import { runNpm } from './helpers/npm-runner.js';
 import { runProcess } from './helpers/process-runner.js';
 import { runCliInProcess, scriptedPromptFactory } from './helpers/run-cli.js';
@@ -282,7 +282,7 @@ function npm(args, options = {}) {
 
 function installedRows() {
   const codes = HARD_REFUSAL_ALLOWLIST.map(row => row.code);
-  assert.equal(codes.length, 94, 'P36F-05-C5 excludes warning-only session_reported from hard refusals');
+  assert.equal(codes.length, 94, 'warning-only session_reported is excluded from hard refusals');
   assert.equal(new Set(codes).size, codes.length, 'catalog rows must be unique');
   const rows = codes.filter(code => !PRE_EXISTING_INSTALLED_PROBE_ROWS.has(code) && !INSTALLED_MODULE_ROWS.has(code) && !WARNING_ONLY_ROWS.has(code));
   assert.equal(rows.length, 87, 'the installed-binary target must retain 87 hard-refusal catalog rows');
@@ -635,7 +635,7 @@ async function makeOperatorActivationFixture(kind) {
   return {
     fixture,
     args: ['task', 'handoff-preflight', 'T-001', '--json', '--target', fixture.root],
-    env: { ...process.env, HOME: home },
+    env: isolatedHomeEnv(home),
     codes: expected[kind],
   };
 }
@@ -716,7 +716,7 @@ async function makeSessionReportedWarningFixture() {
   assert.equal(activated.status, 0, `fixture activation failed:\n${activated.stdout}\n${activated.stderr}`);
   commit(fixture.root, 'activate the receipt-less return fixture');
 
-  const env = { ...process.env, HOME: home };
+  const env = isolatedHomeEnv(home);
   const packet = '.agenticloop/tmp/session-reported-dispatch.json';
   const checks = '.agenticloop/tmp/T-001-checks.json';
   const roleReturn = '.agenticloop/tmp/session-reported-return.json';
@@ -1490,7 +1490,7 @@ function assertResidueLedger(document) {
       assert.equal(row.proof, executedRowReference(row.code), `${row.code} must retain its installed-binary proof reference`);
     }
   }
-  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'P36F-05-C6 records the harness-blocked partition at 15 rows');
+  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'the harness-blocked partition contains 15 rows');
   assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 24, 'the explicit public-surface inventory must remain closed at 24 rows');
   assert.equal(parsed.filter(row => row.status === 'harness-blocked').length, 15,
     'harness limits must remain separate from product-surface unreachability');
@@ -1505,7 +1505,7 @@ function assertResidueLedger(document) {
     'module-only': 2,
     'harness-blocked': 15,
     'unreachable-through-supported-public-surface': 24,
-  }, 'P36F-05-C6 must not ratchet harness limitations as product unreachability');
+  }, 'harness limitations must not be ratcheted as product unreachability');
 }
 
 before(async () => {

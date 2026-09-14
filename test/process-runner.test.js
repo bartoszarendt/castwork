@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 
 import { runProcess } from './helpers/process-runner.js';
 
@@ -10,22 +11,80 @@ let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'agenticloop-process-runner-')); });
 after(() => { rmSync(temp, { recursive: true, force: true }); });
 
-function pidIsAlive(pid) {
+function classifyWindowsTasklist(result, pid) {
+  if (result.error || result.status !== 0) {
+    return { state: 'unknown', diagnostic: result.error?.message ?? `tasklist exited with status ${result.status}` };
+  }
+  const output = String(result.stdout ?? '').trim();
+  if (/^INFO:\s+No tasks are running which match the specified criteria\.?$/i.test(output)) {
+    return { state: 'absent', diagnostic: null };
+  }
+  const rows = output.split(/\r?\n/).filter(Boolean);
+  if (rows.length > 0 && rows.every(line => /^"(?:[^"]|"")*","\d+",/.test(line))) {
+    return rows.some(line => line.split(',')[1] === `"${pid}"`)
+      ? { state: 'live', diagnostic: null }
+      : { state: 'absent', diagnostic: null };
+  }
+  return { state: 'unknown', diagnostic: `tasklist returned unrecognized output: ${output || '<empty>'}` };
+}
+
+function pidLiveness(pid) {
+  if (process.platform === 'win32') {
+    // A filtered no-match exits nonzero on some Windows versions, which cannot
+    // prove absence. A complete CSV snapshot has a recognized success shape;
+    // only a missing exact PID in that snapshot is classified absent.
+    const listed = spawnSync('tasklist', ['/fo', 'csv', '/nh'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5000,
+    });
+    const tasklist = classifyWindowsTasklist(listed, pid);
+    if (tasklist.state !== 'unknown') return tasklist;
+    // Some constrained Windows runners deny tasklist entirely. A direct OS
+    // PID probe is an independent observation; tasklist failure alone never
+    // becomes absence.
+    try {
+      process.kill(pid, 0);
+      return { state: 'live', diagnostic: `tasklist unavailable (${tasklist.diagnostic}); direct PID probe reports live` };
+    } catch (error) {
+      if (error.code === 'ESRCH') {
+        return { state: 'absent', diagnostic: `tasklist unavailable (${tasklist.diagnostic}); direct PID probe reports absent` };
+      }
+      return { state: 'unknown', diagnostic: `${tasklist.diagnostic}; direct PID probe failed: ${error.message}` };
+    }
+  }
   try {
     process.kill(pid, 0);
-    return true;
+    return { state: 'live', diagnostic: null };
   } catch (error) {
-    return error.code !== 'ESRCH';
+    if (error.code === 'ESRCH') return { state: 'absent', diagnostic: null };
+    return { state: 'unknown', diagnostic: `process inspection failed: ${error.message}` };
   }
 }
 
 async function waitForExit(pid) {
-  const deadline = Date.now() + 1000;
-  while (pidIsAlive(pid) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
-  return !pidIsAlive(pid);
+  // Windows taskkill may return before the process table stops reporting a
+  // just-terminated descendant under full-suite load. The bounded poll still
+  // fails if the tree remains genuinely live.
+  const deadline = Date.now() + 5000;
+  let observation = pidLiveness(pid);
+  while (observation.state !== 'absent' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    observation = pidLiveness(pid);
+  }
+  return observation;
 }
 
 describe('process runner', () => {
+  it('treats failed or unrecognized Windows process inspection as unknown', () => {
+    const pid = 1234;
+    assert.equal(classifyWindowsTasklist({ status: null, error: new Error('timed out'), stdout: '' }, pid).state, 'unknown');
+    assert.equal(classifyWindowsTasklist({ status: 1, stdout: '' }, pid).state, 'unknown');
+    assert.equal(classifyWindowsTasklist({ status: 0, stdout: 'unexpected output' }, pid).state, 'unknown');
+    assert.equal(classifyWindowsTasklist({ status: 0, stdout: 'INFO: No tasks are running which match the specified criteria.' }, pid).state, 'absent');
+    assert.equal(classifyWindowsTasklist({ status: 0, stdout: `"node.exe","${pid}","Console","1","10,000 K"` }, pid).state, 'live');
+  });
+
   it('returns normal, nonzero, signal, and spawn outcomes without a shell', async () => {
     const cwd = mkdtempSync(join(temp, 'cwd-'));
     const success = await runProcess(process.execPath, ['-e', 'process.stdout.write(JSON.stringify([process.cwd(), process.env.RUNNER_VALUE]))'], {
@@ -94,7 +153,9 @@ describe('process runner', () => {
     } finally {
       if (existsSync(pidPath)) {
         const pid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10);
-        if (Number.isInteger(pid) && pid > 0 && pidIsAlive(pid)) process.kill(pid, 'SIGKILL');
+        if (Number.isInteger(pid) && pid > 0) {
+          try { process.kill(pid, 'SIGKILL'); } catch {}
+        }
       }
     }
   });
@@ -146,9 +207,12 @@ describe('process runner', () => {
       }
       descendantPid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10);
       assert.ok(Number.isInteger(descendantPid) && descendantPid > 0);
-      assert.equal(await waitForExit(descendantPid), true, 'timed-out descendants must be cleaned up');
+      const exitObservation = await waitForExit(descendantPid);
+      assert.equal(exitObservation.state, 'absent', exitObservation.diagnostic ?? 'timed-out descendants must be cleaned up');
     } finally {
-      if (descendantPid && pidIsAlive(descendantPid)) process.kill(descendantPid, 'SIGKILL');
+      if (descendantPid) {
+        try { process.kill(descendantPid, 'SIGKILL'); } catch {}
+      }
     }
   });
 });

@@ -42,7 +42,6 @@ import {
 } from '../src/host-handoff.js';
 import {
   generateHostSigningKey,
-  HOST_TRUST_FILE,
   parseHostTrustStore,
   signHostPayload,
 } from '../src/host-trust.js';
@@ -996,10 +995,10 @@ describe('host receipt trust boundary', () => {
   it('does not let a committed repository-local adapter or key authorize capture or return', async () => {
     const fixture = await createDispatchFixture(temp, 'repository-forgery');
     const forged = createTestHostTrust({ adapterId: 'repository.attacker.v1', target: fixture.root });
-    const localTrustPath = join(fixture.root, HOST_TRUST_FILE);
+    const localTrustPath = join(fixture.root, '.agenticloop/host-trust.json');
     mkdirSync(join(fixture.root, '.agenticloop'), { recursive: true });
     writeFileSync(localTrustPath, `${JSON.stringify(forged.document)}\n`, 'utf8');
-    git(fixture.root, ['add', HOST_TRUST_FILE]);
+    git(fixture.root, ['add', '.agenticloop/host-trust.json']);
     git(fixture.root, ['commit', '-m', 'forge local adapter\n\nTask: T-001\nAgent: engineer']);
 
     const forgedCapture = activation(forged);

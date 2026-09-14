@@ -48,6 +48,13 @@ function target() {
   return mkdtempSync(join(tmpBase, 't-'));
 }
 
+function foreignizePrimaryLock(root, taskId) {
+  const path = join(root, '.agenticloop', 'locks', 'lifecycle-authority', `${createHash('sha256').update(taskId).digest('hex')}.lock`);
+  const owner = JSON.parse(readFileSync(path, 'utf8'));
+  owner.pid = process.pid + 100000;
+  writeFileSync(path, `${JSON.stringify(owner)}\n`);
+}
+
 describe('kernel path validation', () => {
   it('rejects drive-qualified paths', () => {
     assert.throws(() => assertSafeRelativePath('C:/escape'), /drive-qualified/);
@@ -372,6 +379,7 @@ describe('lifecycle authority locks', () => {
       lifecycleLockBootIdentity: () => 'test-boot',
     });
     assert.equal(interrupted.ok, true, interrupted.errors.join('\n'));
+    foreignizePrimaryLock(t, 'T-CRASH');
 
     const reclaimed = executeMutationBatch(t, [{
       type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
@@ -398,6 +406,7 @@ describe('lifecycle authority locks', () => {
         lifecycleLockBootIdentity: () => 'test-boot',
       });
       assert.equal(held.ok, true, `${phase}: ${held.errors.join('\n')}`);
+      foreignizePrimaryLock(t, `T-RECLAIM-${phase}`);
 
       const interrupted = executeMutationBatch(t, [{
         type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
@@ -438,6 +447,7 @@ describe('lifecycle authority locks', () => {
       lifecycleLockBootIdentity: () => 'test-boot',
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
+    foreignizePrimaryLock(t, taskId);
 
     // Seed the dead R0 that reclaimer B will inspect and attempt to reclaim.
     const interruptedR0 = executeMutationBatch(t, [{
@@ -502,6 +512,7 @@ describe('lifecycle authority locks', () => {
       lifecycleLockBootIdentity: () => 'test-boot',
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
+    foreignizePrimaryLock(t, taskId);
 
     const interruptedR0 = executeMutationBatch(t, [{
       type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
@@ -604,6 +615,7 @@ describe('lifecycle authority locks', () => {
       lifecycleLockBootIdentity: () => 'test-boot',
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
+    foreignizePrimaryLock(t, 'T-RECLAIM-LIVE');
 
     const interrupted = executeMutationBatch(t, [{
       type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file',
@@ -630,31 +642,97 @@ describe('lifecycle authority locks', () => {
     assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
   });
 
-  it('refuses a live lock owner with a typed contention diagnostic', () => {
+  it('refuses an active nested same-process lock without invoking an external inspector', () => {
     const t = target();
     writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    let inspectorCalls = 0;
+    let refused;
     const held = executeMutationBatch(t, [{
-      type: 'write', path: 'carrier.txt', content: 'in-progress',
+      type: 'write', path: 'carrier.txt', content: 'outer',
       expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
     }], {
       lifecycleAuthorityTaskIds: ['T-LIVE'],
-      retainLifecycleAuthorityLocksForTest: true,
       lifecycleLockBootIdentity: () => 'test-boot',
+      afterValidation: () => {
+        refused = executeMutationBatch(t, [{
+          type: 'write', path: 'carrier.txt', content: 'nested',
+          expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
+        }], {
+          lifecycleAuthorityTaskIds: ['T-LIVE'],
+          lifecycleLockBootIdentity: () => 'test-boot',
+          lifecycleLockProcessInspector: () => { inspectorCalls += 1; throw new Error('same-PID inspector must not run'); },
+          lifecycleLockProcessIdentity: () => { inspectorCalls += 1; throw new Error('same-PID identity inspector must not run'); },
+        });
+      },
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
-
-    const refused = executeMutationBatch(t, [{
-      type: 'write', path: 'carrier.txt', content: 'accepted',
-      expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
-    }], {
-      lifecycleAuthorityTaskIds: ['T-LIVE'],
-      lifecycleLockBootIdentity: () => 'test-boot',
-      lifecycleLockProcessInspector: () => true,
-    });
     assert.equal(refused.ok, false);
     assert.equal(refused.code, 'fs.lifecycle_lock.contended');
     assert.match(refused.errors[0], /^fs\.lifecycle_lock\.contended:/);
-    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+    assert.equal(inspectorCalls, 0);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'outer');
+  });
+
+  it('reclaims a stale same-PID lock when the process-start identity differs', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress', 'utf8');
+    const taskId = 'T-SAME-PID-REUSE';
+    const held = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'old-start',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+    let inspectorCalls = 0;
+    const reclaimed = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => { inspectorCalls += 1; return true; },
+      lifecycleLockProcessIdentity: () => { inspectorCalls += 1; return 'new-start'; },
+    });
+    assert.equal(reclaimed.ok, true, reclaimed.errors.join('\n'));
+    assert.equal(inspectorCalls > 0, true);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
+  });
+
+  for (const lockId of [undefined, '']) {
+    it(`refuses same-PID ownership with ${lockId === undefined ? 'missing' : 'malformed'} lockId`, () => {
+      const t = target();
+      const taskId = `T-BAD-LOCK-ID-${lockId === undefined ? 'MISSING' : 'EMPTY'}`;
+      const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+      mkdirSync(lockDir, { recursive: true });
+      const lockPath = join(lockDir, `${createHash('sha256').update(taskId).digest('hex')}.lock`);
+      const owner = { taskId, pid: process.pid, bootIdentity: 'test-boot', processIdentity: 'old-start' };
+      if (lockId !== undefined) owner.lockId = lockId;
+      writeFileSync(lockPath, `${JSON.stringify(owner)}\n`);
+      const refused = executeMutationBatch(t, [{ type: 'create', path: 'carrier.txt', content: 'accepted' }], {
+        lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+        lifecycleLockProcessInspector: () => true, lifecycleLockProcessIdentity: () => 'new-start',
+      });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.code, 'fs.lifecycle_lock.malformed');
+      assert.equal(existsSync(lockPath), true);
+    });
+  }
+
+  it('keeps a same-PID liveness-only historical lock fail-closed', () => {
+    const t = target();
+    const taskId = 'T-SAME-PID-LIVENESS-ONLY';
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    mkdirSync(lockDir, { recursive: true });
+    const lockPath = join(lockDir, `${createHash('sha256').update(taskId).digest('hex')}.lock`);
+    writeFileSync(lockPath, `${JSON.stringify({
+      taskId, pid: process.pid, bootIdentity: 'test-boot', processIdentity: null,
+      processIdentityAssurance: 'pid-liveness-only', lockId: 'historical-lock-id',
+    })}\n`);
+    let inspectorCalls = 0;
+    const refused = executeMutationBatch(t, [{ type: 'create', path: 'carrier.txt', content: 'accepted' }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => { inspectorCalls += 1; return true; },
+      lifecycleLockProcessIdentity: () => { throw new Error('historical liveness-only lock must not claim process-start evidence'); },
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'fs.lifecycle_lock.contended');
+    assert.equal(inspectorCalls, 1);
+    assert.equal(existsSync(lockPath), true);
   });
 
   it('reclaims a live recycled PID when its process-start identity differs', () => {
@@ -669,6 +747,7 @@ describe('lifecycle authority locks', () => {
       lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'start-A',
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
+    foreignizePrimaryLock(t, taskId);
 
     const reclaimed = executeMutationBatch(t, [{
       type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
@@ -733,6 +812,13 @@ describe('lifecycle authority locks', () => {
     });
     assert.equal(held.ok, true, held.errors.join('\n'));
 
+    const lockDir = join(t, '.agenticloop', 'locks', 'lifecycle-authority');
+    const lockName = `${createHash('sha256').update(taskId).digest('hex')}.lock`;
+    const lockPath = join(lockDir, lockName);
+    const foreignOwner = JSON.parse(readFileSync(lockPath, 'utf8'));
+    foreignOwner.pid = process.pid + 100000;
+    writeFileSync(lockPath, `${JSON.stringify(foreignOwner)}\n`);
+
     const refused = executeMutationBatch(t, [{
       type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file',
       expectedDigest: fingerprintTargetPath(t, 'carrier.txt'),
@@ -743,6 +829,66 @@ describe('lifecycle authority locks', () => {
     assert.equal(refused.ok, false);
     assert.equal(refused.code, 'fs.lifecycle_lock.inspect_failed');
     assert.match(refused.errors[0], /manual recovery/);
+  });
+
+  it('retries transient foreign process inspection and fails closed after exhaustion', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress');
+    const taskId = 'T-TRANSIENT-INSPECTION';
+    const held = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+    const lockPath = join(t, '.agenticloop', 'locks', 'lifecycle-authority', `${createHash('sha256').update(taskId).digest('hex')}.lock`);
+    const owner = JSON.parse(readFileSync(lockPath, 'utf8'));
+    owner.pid = process.pid + 100000;
+    writeFileSync(lockPath, `${JSON.stringify(owner)}\n`);
+
+    let calls = 0;
+    const eventuallyLive = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => {
+        calls += 1;
+        if (calls < 3) throw Object.assign(new Error('busy'), { code: 'ETIMEDOUT' });
+        return true;
+      },
+      lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(eventuallyLive.code, 'fs.lifecycle_lock.contended');
+    assert.equal(calls, 3);
+
+    calls = 0;
+    const exhausted = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => { calls += 1; throw Object.assign(new Error('busy'), { code: 'ETIMEDOUT' }); },
+      lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(exhausted.code, 'fs.lifecycle_lock.inspect_failed');
+    assert.equal(calls, 3);
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+  });
+
+  it('records and conservatively handles a current writer with unavailable start identity', () => {
+    const t = target();
+    const taskId = 'T-CURRENT-IDENTITY';
+    const result = executeMutationBatch(t, [{ type: 'create', path: 'carrier.txt', content: 'accepted' }], {
+      lifecycleAuthorityTaskIds: ['T-CURRENT-IDENTITY'],
+      lifecycleLockProcessIdentity: () => null,
+      retainLifecycleAuthorityLocksForTest: true,
+    });
+    assert.equal(result.ok, true, result.errors.join('\n'));
+    const lockPath = join(t, '.agenticloop', 'locks', 'lifecycle-authority', `${createHash('sha256').update(taskId).digest('hex')}.lock`);
+    const owner = JSON.parse(readFileSync(lockPath, 'utf8'));
+    assert.equal(owner.processIdentity, null);
+    assert.equal(owner.processIdentityAssurance, 'pid-liveness-only');
+    foreignizePrimaryLock(t, taskId);
+    const contender = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'changed', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId],
+      lifecycleLockProcessInspector: () => true,
+    });
+    assert.equal(contender.code, 'fs.lifecycle_lock.contended');
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'accepted');
   });
 
 });

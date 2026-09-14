@@ -350,7 +350,7 @@ test('v4 dispatch consumption preserves its persisted check-evidence output whil
 test('compatibility scope keeps the lifecycle adoption coverage title behavior-focused', () => {
   const titleSource = readFileSync(new URL('./lifecycle-adoption-cli.test.js', import.meta.url), 'utf8');
   assert.match(titleSource, /describe\('production lifecycle adoption and review-attachment commands'/);
-  assert.doesNotMatch(titleSource, /P36-\d+/);
+  assert.doesNotMatch(titleSource, /\bP[0-9]{2}-[0-9]+\b/i);
 });
 
 function cleanGateRunner({ staged = '', unstaged = '', untracked = '', ignored = '' } = {}) {

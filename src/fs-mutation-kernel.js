@@ -622,20 +622,60 @@ function lifecycleProcessIdentity(pid) {
       ], { encoding: 'utf8', timeout: 1_000, windowsHide: true })).trim();
       return start ? `win32:${start}` : null;
     }
-  } catch { /* Unavailable identity readers fail closed below. */ }
+  } catch (error) {
+    if (recognizedTransientInspectionFailure(error)) throw error;
+    // An unavailable current-writer identity is recorded explicitly below and
+    // receives the conservative PID-liveness-only recovery policy.
+  }
   return null;
 }
 
-function lifecycleLockOwnerIsLive(owner, { bootIdentity, inspectProcess, inspectProcessIdentity }) {
+const TRANSIENT_INSPECTION_RETRY_DELAYS_MS = Object.freeze([10, 25]);
+const ACTIVE_LIFECYCLE_LOCK_WITNESSES = new Map();
+
+function recognizedTransientInspectionFailure(error) {
+  return error?.code === 'ETIMEDOUT' || error?.code === 'EAGAIN' || error?.code === 'EBUSY';
+}
+
+function inspectWithBoundedRetry(inspector, args) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return inspector(...args);
+    } catch (error) {
+      if (!recognizedTransientInspectionFailure(error) || attempt >= TRANSIENT_INSPECTION_RETRY_DELAYS_MS.length) throw error;
+      Atomics.wait(
+        new Int32Array(new SharedArrayBuffer(4)),
+        0,
+        0,
+        TRANSIENT_INSPECTION_RETRY_DELAYS_MS[attempt],
+      );
+    }
+  }
+}
+
+function lifecycleLockOwnerIsLive(owner, { taskId, lockPath, bootIdentity, inspectProcess, inspectProcessIdentity }) {
   if (!owner || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) {
     return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, reason: 'lock ownership metadata has no valid process id' };
+  }
+  if (owner.taskId !== taskId) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, reason: 'lock ownership metadata names a different task' };
+  }
+  if (lockPath !== undefined && (typeof owner.lockId !== 'string' || !owner.lockId)) {
+    return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, reason: 'lock ownership metadata has no valid lock id' };
   }
   // A lock written during an earlier boot cannot name a currently live owner.
   if (bootIdentity && typeof owner.bootIdentity === 'string' && owner.bootIdentity !== bootIdentity) {
     return { ok: false, stale: true, reason: 'lock owner belongs to an earlier system boot' };
   }
+  // Only an exact in-memory witness proves that a same-PID lock is owned by
+  // this live process. A persisted same-PID record alone may be stale after
+  // PID reuse and must follow normal process-start inspection.
+  const activeWitness = lockPath === undefined ? null : ACTIVE_LIFECYCLE_LOCK_WITNESSES.get(lockPath);
+  if (owner.pid === process.pid && activeWitness && activeWitness.lockId === owner.lockId && activeWitness.taskId === taskId) {
+    return { ok: true };
+  }
   try {
-    const live = inspectProcess(owner.pid, owner);
+    const live = inspectWithBoundedRetry(inspectProcess, [owner.pid, owner]);
     if (!live) return { ok: false, stale: true, reason: `owner process ${owner.pid} no longer exists` };
   } catch (error) {
     if (error?.code === 'ESRCH') return { ok: false, stale: true, reason: `owner process ${owner.pid} no longer exists` };
@@ -651,7 +691,7 @@ function lifecycleLockOwnerIsLive(owner, { bootIdentity, inspectProcess, inspect
   }
   let observedIdentity;
   try {
-    observedIdentity = inspectProcessIdentity(owner.pid, owner);
+    observedIdentity = inspectWithBoundedRetry(inspectProcessIdentity, [owner.pid, owner]);
   } catch (error) {
     return { ok: false, code: LIFECYCLE_LOCK_CODES.inspectFailed, reason: `could not inspect owner process-start identity: ${error.message}` };
   }
@@ -678,6 +718,18 @@ function releaseLifecycleAuthorityLock(root, lock) {
     // A disappeared lock is already released.  Other failures must not turn a
     // successful mutation into an exception from cleanup.
     if (error?.code !== 'ENOENT') return;
+  } finally {
+    const activeWitness = ACTIVE_LIFECYCLE_LOCK_WITNESSES.get(lock.path);
+    if (activeWitness?.lockId === lock.lockId && activeWitness.taskId === lock.taskId) {
+      ACTIVE_LIFECYCLE_LOCK_WITNESSES.delete(lock.path);
+    }
+  }
+}
+
+function forgetLifecycleAuthorityLockWitness(lock) {
+  const activeWitness = ACTIVE_LIFECYCLE_LOCK_WITNESSES.get(lock.path);
+  if (activeWitness?.lockId === lock.lockId && activeWitness.taskId === lock.taskId) {
+    ACTIVE_LIFECYCLE_LOCK_WITNESSES.delete(lock.path);
   }
 }
 
@@ -729,7 +781,7 @@ function recoverTransferredLifecycleClaims(reclaimPath, taskId, {
     }
 
     if (authoritativeContent === undefined) {
-      const inspected = lifecycleLockOwnerIsLive(transferred, { bootIdentity, inspectProcess, inspectProcessIdentity });
+      const inspected = lifecycleLockOwnerIsLive(transferred, { taskId, bootIdentity, inspectProcess, inspectProcessIdentity });
       if (inspected.ok) {
         try {
           // `rename` replaces a destination on POSIX, so an absence observation
@@ -771,7 +823,7 @@ function recoverTransferredLifecycleClaims(reclaimPath, taskId, {
       return { ok: true, retry: true };
     }
 
-    const inspected = lifecycleLockOwnerIsLive(authoritative, { bootIdentity, inspectProcess, inspectProcessIdentity });
+    const inspected = lifecycleLockOwnerIsLive(authoritative, { taskId, bootIdentity, inspectProcess, inspectProcessIdentity });
     if (inspected.ok) {
       // The authoritative claim was published after this entry was transferred,
       // so it is the newer live owner. The private predecessor is safe to clean.
@@ -807,7 +859,7 @@ function reclaimInterruptedLifecycleClaim(reclaimPath, taskId, {
   if (existing?.taskId !== taskId || typeof existing?.reclaimId !== 'string' || !existing.reclaimId) {
     return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has malformed reclaim ownership metadata` };
   }
-  const inspected = lifecycleLockOwnerIsLive(existing, { bootIdentity, inspectProcess, inspectProcessIdentity });
+  const inspected = lifecycleLockOwnerIsLive(existing, { taskId, bootIdentity, inspectProcess, inspectProcessIdentity });
   if (inspected.ok) {
     return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' reclamation is owned by live process ${existing.pid}` };
   }
@@ -853,7 +905,7 @@ function reclaimInterruptedLifecycleClaim(reclaimPath, taskId, {
 }
 
 function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
-  if (taskIds === undefined) return { ok: true, release: () => {} };
+  if (taskIds === undefined) return { ok: true, release: () => {}, forgetLocalWitnesses: () => {} };
   if (!Array.isArray(taskIds) || taskIds.some(taskId => typeof taskId !== 'string' || !taskId)) {
     return { ok: false, code: LIFECYCLE_LOCK_CODES.invalidInput, error: 'lifecycle authority task ids must be a non-empty string array' };
   }
@@ -864,15 +916,22 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
     return true;
   });
   const inspectProcessIdentity = options.lifecycleLockProcessIdentity ?? lifecycleProcessIdentity;
-  let processIdentity = null;
-  try { processIdentity = inspectProcessIdentity(process.pid); } catch { /* Fail closed only when inspecting a live owner. */ }
+  let processIdentity;
+  let processIdentityResolved = false;
+  const currentProcessIdentity = () => {
+    if (!processIdentityResolved) {
+      processIdentityResolved = true;
+      try { processIdentity = inspectWithBoundedRetry(inspectProcessIdentity, [process.pid]); }
+      catch { processIdentity = null; }
+    }
+    return typeof processIdentity === 'string' && processIdentity ? processIdentity : null;
+  };
   for (const taskId of [...new Set(taskIds)].sort()) {
     const token = createHash('sha256').update(taskId).digest('hex');
     const relPath = `.agenticloop/locks/lifecycle-authority/${token}.lock`;
     const lockPath = resolveTargetPath(root, relPath);
     const reclaimPath = `${lockPath}.reclaim`;
     const lockId = randomUUID();
-    const owner = { taskId, pid: process.pid, bootIdentity, processIdentity, lockId };
     let acquiredHere = false;
     for (let attempt = 0; attempt < 3 && !acquiredHere; attempt += 1) {
       const transferRecovered = recoverTransferredLifecycleClaims(reclaimPath, taskId, {
@@ -903,16 +962,28 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
         // a handoff whose authority state we have not re-observed.
         continue;
       }
-      try {
-        mkdirSync(dirname(lockPath), { recursive: true });
-        writeFileSync(lockPath, `${JSON.stringify(owner)}\n`, { flag: 'wx' });
-        acquired.push({ path: lockPath, lockId });
-        acquiredHere = true;
-        continue;
-      } catch (error) {
-        if (error?.code !== 'EEXIST') {
-          for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
-          return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' is currently locked: ${error.message}` };
+      if (!existsSync(lockPath)) {
+        const identity = currentProcessIdentity();
+        const owner = {
+          taskId,
+          pid: process.pid,
+          bootIdentity,
+          processIdentity: identity,
+          processIdentityAssurance: identity ? 'process-start' : 'pid-liveness-only',
+          lockId,
+        };
+        try {
+          mkdirSync(dirname(lockPath), { recursive: true });
+          writeFileSync(lockPath, `${JSON.stringify(owner)}\n`, { flag: 'wx' });
+          ACTIVE_LIFECYCLE_LOCK_WITNESSES.set(lockPath, { lockId, taskId });
+          acquired.push({ path: lockPath, lockId, taskId });
+          acquiredHere = true;
+          continue;
+        } catch (error) {
+          if (error?.code !== 'EEXIST') {
+            for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+            return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' is currently locked: ${error.message}` };
+          }
         }
       }
 
@@ -923,7 +994,7 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
         for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
         return { ok: false, code: LIFECYCLE_LOCK_CODES.malformed, error: `${LIFECYCLE_LOCK_CODES.malformed}: task lifecycle authority '${taskId}' has unreadable ownership metadata: ${error.message}` };
       }
-      const inspected = lifecycleLockOwnerIsLive(existing, { bootIdentity, inspectProcess, inspectProcessIdentity });
+      const inspected = lifecycleLockOwnerIsLive(existing, { taskId, lockPath, bootIdentity, inspectProcess, inspectProcessIdentity });
       if (inspected.ok) {
         for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
         return { ok: false, code: LIFECYCLE_LOCK_CODES.contended, error: `${LIFECYCLE_LOCK_CODES.contended}: task lifecycle authority '${taskId}' is currently locked by live process ${existing.pid}` };
@@ -943,7 +1014,15 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
       let handoffCompleted = false;
       try {
         reclaimId = randomUUID();
-        writeFileSync(reclaimPath, `${JSON.stringify({ taskId, reclaimId, pid: process.pid, bootIdentity, processIdentity })}\n`, { flag: 'wx' });
+        const identity = currentProcessIdentity();
+        writeFileSync(reclaimPath, `${JSON.stringify({
+          taskId,
+          reclaimId,
+          pid: process.pid,
+          bootIdentity,
+          processIdentity: identity,
+          processIdentityAssurance: identity ? 'process-start' : 'pid-liveness-only',
+        })}\n`, { flag: 'wx' });
       } catch (error) {
         for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
         // Another reclaimer may have won after our pre-create observation. Let
@@ -960,7 +1039,7 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
         if (!simulatedInterruption) {
           const current = JSON.parse(readFileSync(lockPath, 'utf8'));
           if (current?.lockId !== existing?.lockId) continue;
-          const rechecked = lifecycleLockOwnerIsLive(current, { bootIdentity, inspectProcess, inspectProcessIdentity });
+          const rechecked = lifecycleLockOwnerIsLive(current, { taskId, lockPath, bootIdentity, inspectProcess, inspectProcessIdentity });
           if (rechecked.ok || !rechecked.stale) continue;
           rmSync(lockPath, { force: true });
           handoffCompleted = true;
@@ -993,6 +1072,9 @@ function acquireLifecycleAuthorityLocks(root, taskIds, options = {}) {
     ok: true,
     release: () => {
       for (const lock of acquired.reverse()) releaseLifecycleAuthorityLock(root, lock);
+    },
+    forgetLocalWitnesses: () => {
+      for (const lock of acquired) forgetLifecycleAuthorityLockWitness(lock);
     },
   };
 }
@@ -1036,7 +1118,8 @@ export function executeMutationBatch(targetRoot, mutations, options = {}) {
   } finally {
     // Test seam only: model an uncatchable process interruption after the
     // owner created its lock.  Production callers never set this option.
-    if (options.retainLifecycleAuthorityLocksForTest !== true) locks.release();
+    if (options.retainLifecycleAuthorityLocksForTest === true) locks.forgetLocalWitnesses();
+    else locks.release();
   }
 }
 

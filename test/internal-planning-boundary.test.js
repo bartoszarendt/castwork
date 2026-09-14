@@ -19,6 +19,7 @@ const TEXT_EXTENSIONS = new Set([
 const PHASE_NUMBER_IN_FILENAME = /\b(?:phase[ _-]?\d+|p\d{2}-(?:d)?\d+)\b/i;
 const INTERNAL_PHASE_REFERENCE = /\b(?:phase[ _-]?\d{2}|p\d{2}-d\d+)\b/i;
 const TEST_NAME_INTERNAL_REFERENCE = /\b(?:p\d{2}-\d+|[rs]\d+:)\b/i;
+const PERMANENT_PLANNING_IDENTIFIER = /\bp36f(?:[- _]?[a-z0-9]+)*\b|\bp36(?:[- _][a-z0-9]+)+\b/i;
 
 function repositoryFiles() {
   const list = args => execFileSync('git', ['ls-files', ...args, '-z'], {
@@ -49,6 +50,9 @@ describe('internal planning boundary', () => {
       for (const [index, line] of lines.entries()) {
         if (INTERNAL_PHASE_REFERENCE.test(line)) {
           violations.push(`${relativePath}:${index + 1}: numbered internal phase reference`);
+        }
+        if (PERMANENT_PLANNING_IDENTIFIER.test(line)) {
+          violations.push(`${relativePath}:${index + 1}: permanent planning identifier`);
         }
         if (
           relativePath.startsWith('test/')

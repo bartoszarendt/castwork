@@ -41,7 +41,7 @@ function transition(actionId, attemptScope, consultedValues) {
 }
 
 /**
- * P36 characterization input contract. This is a tracked baseline definition,
+ * Protected-transition characterization input contract. This is a tracked baseline definition,
  * not a lifecycle evaluator or a compatibility shim.
  */
 export const PROTECTED_TRANSITION_INPUTS = Object.freeze([

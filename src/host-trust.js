@@ -26,7 +26,6 @@ export const HOST_TRUST_KIND = 'agenticloop.host-trust';
 export const HOST_TRUST_SCHEMA_VERSION = 1;
 export const HOST_TRUST_AUTHORITY_SCHEMA_VERSION = 2;
 // This repository-local manifest is portable data only. It never grants trust.
-export const HOST_TRUST_FILE = '.agenticloop/host-trust.json';
 export const HOST_SIGNATURE_ALGORITHM = 'ed25519';
 export const OPERATOR_TRUST_DIRECTORY = '.agenticloop/host-trust';
 export const HOST_TRUST_BOUNDARY_CHALLENGE_KIND = 'agenticloop.protected-host-trust-challenge';

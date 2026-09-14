@@ -3553,7 +3553,7 @@ export async function cmdTask(args, io = createIo()) {
           record => record.packetId === dispatchPacket.packetId
         );
         // A packet id locates the prior accepted result, but replay authority is
-        // the persisted P36 transition key. Do not regenerate an old protected
+        // the persisted protected-transition key. Do not regenerate an old protected
         // input digest (its recognition instant is intentionally non-replayable)
         // or compare a newly rendered packet and hope it is the same result.
         const matchingConsumption = packetConsumption

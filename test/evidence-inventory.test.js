@@ -1,30 +1,26 @@
 /** Direct checks for the retained durable-evidence inventory. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
-
 import {
   EVIDENCE_INVENTORY,
-  INVENTORY_ROLES,
   STORAGE_CLASSES,
-  evidenceVisibleToRole,
   validateEvidenceInventory,
-} from '../src/evidence-inventory.js';
+} from './helpers/evidence-inventory.js';
+import { DEFAULT_GENERATED_ARTIFACTS_PATH, LOCAL_GENERATED_ARTIFACTS_PATH } from '../src/generated-artifacts.js';
+import { OPERATOR_TRUST_DIRECTORY } from '../src/host-trust.js';
+import { LOCAL_CONFIG_RELATIVE_PATH } from '../src/hydration.js';
+import {
+  AUDITS_DIRECTORY_RELATIVE_PATH,
+  CHECK_EVIDENCE_DIRECTORY_RELATIVE_PATH,
+  FILES_TASK_CONTRACT_HISTORY_DIRECTORY,
+  IMPROVEMENTS_DIRECTORY_RELATIVE_PATH,
+  LOGS_DIRECTORY_RELATIVE_PATH,
+  PROJECT_MAP_RELATIVE_PATH,
+  TASKS_DIRECTORY_RELATIVE_PATH,
+} from '../src/layout.js';
 import { PERMITTED_SCRATCH_PREFIXES } from '../src/repository-state.js';
+import { WORKTREE_PARENT } from '../src/worktree.js';
 
-const SRC_DIR = fileURLToPath(new URL('../src/', import.meta.url));
-
-/** Small source trace for target-local roots with exported production constants. */
-function declaredStorageRoots() {
-  const roots = new Set();
-  for (const name of readdirSync(SRC_DIR).filter(file => file.endsWith('.js'))) {
-    const source = readFileSync(join(SRC_DIR, name), 'utf8');
-    for (const match of source.matchAll(/^export const [A-Z_]*ROOT = '(\.agenticloop\/[^']+)'/gm)) roots.add(match[1]);
-  }
-  return roots;
-}
 
 describe('the inventory satisfies its own contract', () => {
   it('gives every class a producer, consumer, decision, retention, storage class, and projection', () => {
@@ -65,10 +61,24 @@ describe('the inventory satisfies its own contract', () => {
 });
 
 describe('the inventory traces retained product storage directly', () => {
-  it('accounts for every exported target-local storage root', () => {
+  it('accounts for the canonical writer and consumer paths', () => {
     const inventoried = new Set(Object.values(EVIDENCE_INVENTORY).map(item => item.root));
-    const unaccounted = [...declaredStorageRoots()].filter(root => !inventoried.has(root)).sort();
-    assert.deepEqual(unaccounted, [], `these persisted roots have no inventory entry: ${unaccounted.join(', ')}`);
+    const authorities = [
+      PROJECT_MAP_RELATIVE_PATH,
+      TASKS_DIRECTORY_RELATIVE_PATH,
+      FILES_TASK_CONTRACT_HISTORY_DIRECTORY,
+      AUDITS_DIRECTORY_RELATIVE_PATH,
+      IMPROVEMENTS_DIRECTORY_RELATIVE_PATH,
+      LOGS_DIRECTORY_RELATIVE_PATH,
+      CHECK_EVIDENCE_DIRECTORY_RELATIVE_PATH,
+      DEFAULT_GENERATED_ARTIFACTS_PATH,
+      LOCAL_GENERATED_ARTIFACTS_PATH,
+      LOCAL_CONFIG_RELATIVE_PATH,
+      `~/${OPERATOR_TRUST_DIRECTORY}`,
+      WORKTREE_PARENT,
+      '.agenticloop/reviews/entries',
+    ];
+    assert.deepEqual(authorities.filter(root => !inventoried.has(root)), []);
   });
 
   it('keeps the lifecycle writer roots visible in the inventory', () => {
@@ -88,6 +98,16 @@ describe('the inventory traces retained product storage directly', () => {
     assert.match(commit.consumer, /independently derives attribution/);
     assert.match(commit.consumer, /no consumer uses the claim for permission, origin, or certification/);
     assert.doesNotMatch(JSON.stringify(EVIDENCE_INVENTORY), /remediation-authority/i);
+  });
+
+  it('records corrected producer and machine-local workspace semantics', () => {
+    assert.match(EVIDENCE_INVENTORY.review_entry_receipt.producer, /review-prepare/);
+    assert.match(EVIDENCE_INVENTORY.review_entry_receipt.producer, /review-attach-outcome/);
+    assert.equal(EVIDENCE_INVENTORY.local_hydration_configuration.producer, 'operator or local configuration author');
+    assert.equal(EVIDENCE_INVENTORY.local_hydration_configuration.consumer, 'hydration and configuration resolution');
+    assert.equal(EVIDENCE_INVENTORY.worktree_summary, undefined);
+    assert.match(EVIDENCE_INVENTORY.worktree_workspace_state.decision, /machine-local task workspaces/);
+    assert.equal(EVIDENCE_INVENTORY.repository_host_trust_manifest, undefined);
   });
 
   it('keeps an artifact kind only where its inventory row explains its durable storage', () => {
@@ -126,40 +146,10 @@ describe('the inventory traces retained product storage directly', () => {
   });
 });
 
-describe('each role receives a bounded projection', () => {
-  it('keeps activation, audit, and closeout internals out of the Engineer view', () => {
-    const engineer = evidenceVisibleToRole('engineer');
-    for (const withheld of [
-      'activation_grant', 'closeout_waiver', 'historical_adoption', 'return_verification',
-      'task_contract_history', 'execution_attempt_abandonment', 'operator_activation_key',
-    ]) assert.equal(engineer.includes(withheld), false, `engineer must not receive '${withheld}'`);
-  });
-
-  it('gives the Engineer exactly what implementation needs', () => {
-    const engineer = evidenceVisibleToRole('engineer');
-    for (const needed of ['task_record', 'dispatch_consumption', 'carrier_mutation_receipt', 'scratch']) {
-      assert.ok(engineer.includes(needed), `engineer needs '${needed}'`);
-    }
-  });
-
-  it('gives no workflow role the operator key material', () => {
-    for (const role of INVENTORY_ROLES) assert.equal(evidenceVisibleToRole(role).includes('operator_activation_key'), false);
+describe('inventory visibility metadata', () => {
+  it('documents audiences without pretending to enforce runtime projection', () => {
     assert.ok(EVIDENCE_INVENTORY.operator_activation_key.visibilityNote);
-  });
-
-  it('lets the Auditor see what it must audit without scratch decisions', () => {
-    const auditor = evidenceVisibleToRole('auditor');
-    assert.ok(auditor.includes('return_verification'));
-    assert.ok(auditor.includes('task_contract_history'));
-    assert.ok(auditor.includes('historical_adoption'));
-    assert.equal(auditor.includes('activation_grant'), false);
-  });
-
-  it('rejects an unknown role rather than returning an empty projection', () => {
-    assert.throws(() => evidenceVisibleToRole('enginer'), /unknown workflow role/);
-  });
-
-  it('gives every role a non-empty projection', () => {
-    for (const role of INVENTORY_ROLES) assert.ok(evidenceVisibleToRole(role).length > 0, `${role} receives nothing`);
+    assert.deepEqual(EVIDENCE_INVENTORY.operator_activation_key.visibleTo, []);
+    assert.match(STORAGE_CLASSES.operator_owned_authenticated_state.rule, /never inside a target repository/i);
   });
 });

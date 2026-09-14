@@ -15,17 +15,16 @@
  * A record kept because it might be useful later is a record nobody maintains
  * and everybody has to reason about. So each class below names its producer,
  * its consumer, the decision it changes, whether it could be derived instead,
- * how long it must survive, which storage class it belongs to, and the bounded
- * projection each role receives.
+ * how long it must survive, which storage class it belongs to, and the intended
+ * audience for documentation and context assembly.
  *
- * The last field is the one that does work at runtime. An Engineer does not
- * need activation internals, audit records, or closeout state to implement a
- * bounded change; handing them over enlarges the context it must reason about
- * and the surface it might act on, for no implementation benefit. `visibleTo`
- * is that boundary, stated per class rather than per call site.
+ * `visibleTo` is descriptive inventory metadata, not a runtime authorization or
+ * projection policy. Operator-only material remains protected by its external
+ * storage and authentication boundaries, not by this table.
  *
- * This inventory is checked against the source's own storage roots, so it
- * cannot quietly go stale while the code grows a new class.
+ * This is a reviewed canonical writer/consumer inventory. It is maintained as
+ * test and documentation tooling; it is not runtime authority or an automatic
+ * exhaustive discovery mechanism.
  */
 
 /**
@@ -399,6 +398,67 @@ export const EVIDENCE_INVENTORY = Object.freeze({
     storageClass: 'machine_local_operator_state',
     visibleTo: Object.freeze(['orchestrator', 'maintainer']),
   }),
+  review_entry_receipt: entry({
+    root: '.agenticloop/reviews/entries',
+    producer: 'task review-prepare (initial record); task review-attach-outcome (outcome update)',
+    consumer: 'review outcome replay, task status, audit, and closeout',
+    decision: 'whether one verified return has one durable Maintainer review outcome',
+    derivable: false,
+    retention: 'project history; the receipt binds the reviewed return and outcome',
+    storageClass: 'durable_project_evidence',
+    visibleTo: Object.freeze(['orchestrator', 'maintainer', 'auditor']),
+  }),
+  tracked_generated_artifact_manifest: entry({
+    root: '.agenticloop/generated-artifacts.json',
+    producer: 'adapter generation and tracked update',
+    consumer: 'generated-artifact ownership, update, validation, and removal',
+    decision: 'which tracked generated paths are owned and may be refreshed or removed',
+    derivable: false,
+    retention: 'until the next tracked generation transaction replaces it',
+    storageClass: 'durable_project_evidence',
+    visibleTo: Object.freeze([...ROLES]),
+  }),
+  local_generated_artifact_manifest: entry({
+    root: '.agenticloop/local/generated-artifacts.json',
+    producer: 'clone-local hydration',
+    consumer: 'clone-local update, validation, and removal',
+    decision: 'which ignored host artifacts are owned in this clone',
+    derivable: false,
+    retention: 'until clone-local hydration or removal replaces it',
+    storageClass: 'machine_local_operator_state',
+    visibleTo: Object.freeze(['orchestrator', 'maintainer']),
+  }),
+  local_hydration_configuration: entry({
+    root: '.agenticloop/local/config.json',
+    producer: 'operator or local configuration author',
+    consumer: 'hydration and configuration resolution',
+    decision: 'which host adapter is hydrated in this clone',
+    derivable: false,
+    retention: 'for the life of the clone-local hydration',
+    storageClass: 'machine_local_operator_state',
+    visibleTo: Object.freeze(['orchestrator', 'maintainer']),
+  }),
+  external_operator_host_trust: entry({
+    root: '~/.agenticloop/host-trust',
+    producer: 'operator host-trust provisioning',
+    consumer: 'protected host-boundary challenge verification',
+    decision: 'whether a host key can authenticate a protected boundary response',
+    derivable: false,
+    retention: 'for the life of the operator-managed host key',
+    storageClass: 'operator_owned_authenticated_state',
+    visibleTo: Object.freeze([]),
+    visibilityNote: 'operator-only key material is never projected to a workflow role',
+  }),
+  worktree_workspace_state: entry({
+    root: '.agenticloop/worktrees',
+    producer: 'worktree lifecycle commands',
+    consumer: 'worktree status, guard, repair, and removal',
+    decision: 'which machine-local task workspaces exist and whether their state is safe to operate on',
+    derivable: false,
+    retention: 'until the machine-local worktree is removed',
+    storageClass: 'machine_local_operator_state',
+    visibleTo: Object.freeze(['orchestrator', 'maintainer', 'engineer']),
+  }),
   scratch: entry({
     root: '.agenticloop/tmp',
     producer: 'any command',
@@ -487,23 +547,3 @@ export function validateEvidenceInventory(inventory = EVIDENCE_INVENTORY) {
   }
   return { ok: errors.length === 0, errors };
 }
-
-/**
- * The bounded set of evidence classes one role may receive.
- *
- * Used to keep activation, audit, and closeout internals out of an Engineer's
- * context: implementing a bounded change needs the contract, the packet
- * lineage, and its own receipts - not the authority machinery around them.
- */
-export function evidenceVisibleToRole(roleId, inventory = EVIDENCE_INVENTORY) {
-  if (!ROLES.includes(roleId)) throw new TypeError(`unknown workflow role '${String(roleId)}'`);
-  return Object.freeze(
-    Object.entries(inventory)
-      .filter(([, item]) => item.visibleTo.includes(roleId))
-      .map(([name]) => name)
-      .sort()
-  );
-}
-
-/** Every workflow role this inventory is expressed over. */
-export const INVENTORY_ROLES = Object.freeze([...ROLES]);

@@ -212,7 +212,7 @@ function assertEveryRealHandlerInputPerturbsEvaluator(event, actionId) {
   }
 }
 
-describe('P36 C5 protected evaluator bindings', () => {
+describe('protected evaluator input bindings', () => {
   it('rejects missing and extra fields against independently declared evaluator contracts', () => {
     for (const actionId of Object.keys(EVALUATOR_CONTRACTS)) {
       const values = valuesFor(actionId);

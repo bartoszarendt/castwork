@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, it } from 'node:test';
 
-import { fakeExecutableEnv, sanitizedChildEnv } from './helpers/hermetic-child-env.js';
+import { fakeExecutableEnv, isolatedHomeEnv, sanitizedChildEnv } from './helpers/hermetic-child-env.js';
 
-const P36F01_DENIAL_CLASSIFICATION = Object.freeze({
+const NETWORK_DENIAL_CLASSIFICATION = Object.freeze({
   kernelNetworkNamespace: Object.freeze({
     classification: 'owner-gated',
     attemptedWhenAvailable: true,
@@ -53,16 +56,44 @@ describe('hermetic child environment', () => {
     assert.equal(env.unrelated, 'retained', 'sanitization must not nuke unrelated environment keys');
   });
 
+  it('pins os.homedir to the fixture home and removes inherited Windows home fragments', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hermetic-child-home-'));
+    try {
+      const env = isolatedHomeEnv(home, {
+        home: 'C:\\caller-home',
+        UserProfile: 'C:\\caller-profile',
+        HOMEDRIVE: 'C:',
+        homepath: '\\operator-profile',
+        unrelated: 'retained',
+      });
+      assert.equal(env.HOME, home);
+      assert.equal(env.USERPROFILE, home);
+      assert.deepEqual(
+        Object.keys(env).filter(key => /^(?:HOME|USERPROFILE)$/i.test(key)).sort(),
+        ['HOME', 'USERPROFILE'],
+      );
+      assert.deepEqual(Object.keys(env).filter(key => /^HOME(?:DRIVE|PATH)$/i.test(key)), []);
+      assert.equal(env.unrelated, 'retained');
+      const child = spawnSync(process.execPath, ['-e', "process.stdout.write(require('node:os').homedir())"], {
+        env, encoding: 'utf8',
+      });
+      assert.equal(child.status, 0, child.stderr);
+      assert.equal(child.stdout, home);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+
+  });
   it('records denial-by-construction while keeping kernel network isolation owner-gated', () => {
-    assert.equal(P36F01_DENIAL_CLASSIFICATION.achieved.form, 'denial-by-construction');
-    assert.deepEqual(P36F01_DENIAL_CLASSIFICATION.achieved.invariants, [
+    assert.equal(NETWORK_DENIAL_CLASSIFICATION.achieved.form, 'denial-by-construction');
+    assert.deepEqual(NETWORK_DENIAL_CLASSIFICATION.achieved.invariants, [
       'fixture-only PATH for fake gh children',
       'GitHub credentials are sanitized case-insensitively',
       'fake gh requires and records its sentinel',
       'missing or malformed stubs cannot reach a real gh',
     ]);
-    assert.equal(P36F01_DENIAL_CLASSIFICATION.kernelNetworkNamespace.classification, 'owner-gated');
-    assert.equal(P36F01_DENIAL_CLASSIFICATION.kernelNetworkNamespace.installedProofClaim, 'not claimed for this host');
+    assert.equal(NETWORK_DENIAL_CLASSIFICATION.kernelNetworkNamespace.classification, 'owner-gated');
+    assert.equal(NETWORK_DENIAL_CLASSIFICATION.kernelNetworkNamespace.installedProofClaim, 'not claimed for this host');
 
     const childEnv = fakeExecutableEnv('/fixture-only/fake-gh');
     assert.equal(childEnv.PATH, '/fixture-only/fake-gh');
