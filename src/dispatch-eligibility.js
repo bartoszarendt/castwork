@@ -78,6 +78,7 @@ import { HOST_SIGNATURE_ALGORITHM, targetRepositoryIdentity } from './host-trust
 import {
   CLEAN_DISPATCH_STATE_IDENTITY,
   PERMITTED_OPERATOR_STATE_PREFIXES,
+  PERMITTED_MACHINE_LOCAL_PREFIXES,
   PERMITTED_SCRATCH_PREFIXES,
   evaluateDispatchCleanState,
   evaluatePriorGateReceipts,
@@ -161,7 +162,7 @@ export const CONTRACT_DIGEST_RE = /^sha256:v1:[a-f0-9]{64}$/;
 
 export const SEMANTIC_DIGEST_RE = /^sha256:agenticloop\.[a-z-]+\.v[1-9]\d*:[a-f0-9]{64}$/;
 
-export const CLEAN_STATE_IDENTITY_RE = /^sha256:agenticloop\.dispatch-clean-state\.v3:[a-f0-9]{64}$/;
+export const CLEAN_STATE_IDENTITY_RE = /^sha256:agenticloop\.dispatch-clean-state\.v4:[a-f0-9]{64}$/;
 
 export const INTEGRITY_STATES = new Set(['verified', 'missing', 'mismatch']);
 
@@ -1053,6 +1054,7 @@ export function validateDispatchAssurance(value, { activationBinding, activation
 export function validateCleanStateBinding(value, findings, label = 'dispatch clean-state binding') {
   const shapeOk = exactKeys(value, [
     'identity', 'permittedScratchPrefixes', 'permittedOperatorStatePrefixes',
+    'permittedMachineLocalPrefixes',
     'ignoredFilesPermitted', 'priorGates',
   ], label, findings);
   if (!CLEAN_STATE_IDENTITY_RE.test(value?.identity ?? '')) {
@@ -1065,6 +1067,9 @@ export function validateCleanStateBinding(value, findings, label = 'dispatch cle
   }
   if (!sameCanonical(value?.permittedOperatorStatePrefixes, [...PERMITTED_OPERATOR_STATE_PREFIXES])) {
     findings.malformed(`${label} permittedOperatorStatePrefixes must equal the canonical permitted inventory`);
+  }
+  if (!sameCanonical(value?.permittedMachineLocalPrefixes, [...PERMITTED_MACHINE_LOCAL_PREFIXES])) {
+    findings.malformed(`${label} permittedMachineLocalPrefixes must equal the canonical permitted inventory`);
   }
   if (value?.ignoredFilesPermitted !== true) findings.malformed(`${label} must declare the ignored-file exception explicitly`);
   if (!Array.isArray(value?.priorGates)) {
@@ -1305,6 +1310,7 @@ export function evaluateInitialState({ runGit, scopePatterns, intendedCreations,
     identity: clean.identity,
     permittedScratchPrefixes: [...PERMITTED_SCRATCH_PREFIXES],
     permittedOperatorStatePrefixes: [...PERMITTED_OPERATOR_STATE_PREFIXES],
+    permittedMachineLocalPrefixes: [...PERMITTED_MACHINE_LOCAL_PREFIXES],
     ignoredFilesPermitted: true,
     priorGates: gates.gates,
   };
@@ -1703,6 +1709,7 @@ function decideCleanState(observation, sink) {
     identity: observation.clean.identity,
     permittedScratchPrefixes: [...PERMITTED_SCRATCH_PREFIXES],
     permittedOperatorStatePrefixes: [...PERMITTED_OPERATOR_STATE_PREFIXES],
+    permittedMachineLocalPrefixes: [...PERMITTED_MACHINE_LOCAL_PREFIXES],
     ignoredFilesPermitted: true,
     priorGates: observation.gates.gates,
   };

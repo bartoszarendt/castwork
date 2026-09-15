@@ -388,6 +388,51 @@ test('generated-local paths are permitted only by canonical manifest ownership',
   assert.match(tracked.findings[0].message, /unstaged tracked changes/);
 });
 
+test('the dispatch clean gate permits the toolkit own machine-local and generated state', () => {
+  const root = mkdtempSync(join(tmpdir(), 'al-machine-local-clean-gate-'));
+  // The exact shape that deadlocked a real target: hydration writes the host-role
+  // capability sidecar and the clone-local manifest, gitignores both, and the gate
+  // then refused every dispatch over files only the toolkit had produced. Removing
+  // them was no repair, because the next hydration wrote them straight back.
+  const sidecar = '.agenticloop/host-role-capabilities/opencode.json';
+  try {
+    const transaction = executeGenerationPlan(root, {
+      outputRoot: '.',
+      adapters: ['opencode'],
+      files: [sidecar],
+      actions: [{ type: 'write-file', adapter: 'opencode', relPath: sidecar, content: '{}\n' }],
+    });
+    assert.equal(transaction.ok, true, transaction.errors.join('\n'));
+
+    const classifier = createPathClassifier(root);
+    assert.equal(classifier.classify(sidecar), 'toolkit_generated',
+      'a manifest-recorded file under the state root is toolkit output, not target state');
+
+    const machineLocal = [
+      '.agenticloop/local/generated-artifacts.json',
+      '.agenticloop/local/config.json',
+    ];
+    const permitted = evaluateDispatchCleanState({
+      runGit: cleanGateRunner({
+        ignored: `${[sidecar, ...machineLocal].join('\n')}\n`,
+      }),
+      scopePatterns: ['src/**'], target: root,
+    });
+    assert.equal(permitted.ok, true, JSON.stringify(permitted.state.ignoredRelevantPaths));
+
+    // Worktrees stay outside the permitted set deliberately: unlike a lock file or
+    // the generation manifest, leftover worktree content can hold real role work,
+    // so the gate surfaces it instead of passing it silently.
+    const worktree = evaluateDispatchCleanState({
+      runGit: cleanGateRunner({ ignored: '.agenticloop/worktrees/lane-a/src/app.js\n' }),
+      scopePatterns: ['src/**'], target: root,
+    });
+    assert.equal(worktree.ok, false, 'leftover worktree content must still reach the gate');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('the clean gate uses the generation transaction write set for shared GitHub paths in both layouts', () => {
   const root = mkdtempSync(join(tmpdir(), 'al-generated-github-ownership-'));
   const generatedPaths = [

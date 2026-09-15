@@ -53,6 +53,7 @@ import {
 import { targetRepositoryIdentity } from '../src/host-trust.js';
 import {
   CLEAN_DISPATCH_STATE_IDENTITY,
+  PERMITTED_MACHINE_LOCAL_PREFIXES,
   PERMITTED_OPERATOR_STATE_PREFIXES,
   PERMITTED_UNTRACKED_PREFIXES,
 } from '../src/repository-state.js';
@@ -329,8 +330,11 @@ describe('durable activation storage', () => {
     ]);
     assert.deepEqual([...PERMITTED_UNTRACKED_PREFIXES], [
       '.agenticloop/tmp/', '.agenticloop/activations/', '.agenticloop/returns/verifications/', '.agenticloop/closeout-waivers/',
+      '.agenticloop/local/',
     ]);
-    assert.match(CLEAN_DISPATCH_STATE_IDENTITY, /^sha256:agenticloop\.dispatch-clean-state\.v3:[a-f0-9]{64}$/);
+    assert.ok(ignored.includes('.agenticloop/local/'), 'the toolkit ignores its own clone-local state');
+    assert.deepEqual([...PERMITTED_MACHINE_LOCAL_PREFIXES], ['.agenticloop/local/']);
+    assert.match(CLEAN_DISPATCH_STATE_IDENTITY, /^sha256:agenticloop\.dispatch-clean-state\.v4:[a-f0-9]{64}$/);
   });
 
   it('surfaces a malformed revocation record as an unusable entry', () => {

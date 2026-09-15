@@ -221,7 +221,17 @@ function preflightRepairHint(finding, context) {
   if (code.startsWith('task.contract.') || code.startsWith('task.record.') || code.startsWith('task.body.')) {
     return 'Repair the task record frontmatter, then rerun.';
   }
-  return `npx agenticloop task readiness ${taskId}`;
+  if (code === 'dependency.unresolved') {
+    return 'Resolve the declared dependency before dispatch: the dependency task must reach an ' +
+      `accepted contract state, or a Maintainer must correct the depends_on declaration on ${taskId}. ` +
+      'Then rerun this preflight.';
+  }
+  // No command-specific repair exists for this code. The diagnostic still carries
+  // its repairKind, owner, and nextAction, which are accurate and backend-neutral.
+  // Naming a command here is worse than naming none: a command that does not exist
+  // sends the caller into a dead end instead of to the fact owner, and a files-only
+  // command would be wrong on the github backend this command also serves.
+  return null;
 }
 
 /**

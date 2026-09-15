@@ -23,6 +23,7 @@ import {
   renderFirstUse,
   renderFullHelp,
   resolveCommandName,
+  resolveSubcommand,
   suggestName,
 } from '../src/cli-registry.js';
 import { CliUsageError } from '../src/cli-io.js';
@@ -594,6 +595,59 @@ describe('emitted command consistency', () => {
     }
     assert.ok(checked > 50, `expected meaningful extraction coverage, only ${checked} invocations found`);
     assert.deepEqual(offenders, [], `documented invocations rejected by the registry parser:\n${offenders.join('\n')}`);
+  });
+
+  /**
+   * Repair hints, guidance, and error messages name commands the caller is told
+   * to run. Their operands are usually interpolated, so the shape check above
+   * skips them entirely - but the part that actually strands a caller is the
+   * command path, and that is checkable on its own. A preflight hint naming
+   * "task readiness" (no such subcommand) left an agent with the diagnostic
+   * owner and repair kind as its only usable facts.
+   */
+  it('every agenticloop command path emitted from source resolves in the registry', () => {
+    const SKIP = new Set(['help', 'version']);
+    const PREFIX = 'agenticloop ';
+    const isPlainWord = token => /^[a-z][a-z0-9-]*$/.test(token);
+    // cli-registry.js renders help from the registry itself, so its command
+    // names are the registry and cannot disagree with it.
+    const sourceFiles = readdirSync(join(REPO_ROOT, 'src'))
+      .filter(entry => entry.endsWith('.js') && entry !== 'cli-registry.js')
+      .map(entry => join(REPO_ROOT, 'src', entry));
+
+    const offenders = [];
+    let checked = 0;
+    for (const file of sourceFiles) {
+      for (const segment of readFileSync(file, 'utf-8').split(/["'`\n]/)) {
+        // 'npx agenticloop ...' is unambiguously an invocation, so an unknown
+        // command there is a defect. A bare mention is not: printed headings and
+        // prose share the shape, so those are checked only once the command name
+        // resolves, which is enough to catch a bad subcommand under a real one.
+        const runner = segment.lastIndexOf('npx ' + PREFIX);
+        const invocation = runner >= 0
+          ? segment.slice(runner + ('npx ' + PREFIX).length)
+          : (segment.startsWith(PREFIX) ? segment.slice(PREFIX.length) : null);
+        if (invocation === null) continue;
+        const [command, sub] = invocation.trim().split(/\s+/);
+        if (!command || SKIP.has(command) || !isPlainWord(command)) continue;
+        const resolved = resolveCommandName(command);
+        if (!resolved) {
+          if (runner >= 0) {
+            checked += 1;
+            offenders.push(`${file}: 'agenticloop ${command}' names no such command`);
+          }
+          continue;
+        }
+        checked += 1;
+        const spec = COMMAND_REGISTRY[resolved];
+        if (!spec.subcommands || !sub || !isPlainWord(sub)) continue;
+        if (!resolveSubcommand(resolved, sub)) {
+          offenders.push(`${file}: 'agenticloop ${resolved} ${sub}' names no such subcommand`);
+        }
+      }
+    }
+    assert.ok(checked > 20, `expected meaningful command-path coverage, only ${checked} found`);
+    assert.deepEqual(offenders, [], `emitted command paths missing from the registry:\n${offenders.join('\n')}`);
   });
 
   it('registry usage strings parse as complete valid invocation shapes', () => {

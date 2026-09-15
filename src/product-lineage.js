@@ -150,7 +150,13 @@ export function classifyRepositoryPath(path, { legacyLayout = false, generatedAr
   const value = normalizePath(path);
   if (!value) return 'product';
   const declared = declaredOwnership();
-  if (underRoot(value, declared.stateRoot)) return 'target_state';
+  // A file the generation transaction recorded is Agentic Loop output wherever it
+  // landed, including under the state root. Letting the state-root test answer
+  // first shadowed that record for the host-role capability sidecars, which the
+  // toolkit writes and gitignores itself: the dispatch clean gate then refused
+  // every dispatch over its own generated files, and no repair could clear them
+  // because hydration recreates them.
+  if (underRoot(value, declared.stateRoot) && !generatedArtifactPaths.includes(value)) return 'target_state';
   if (declared.productRoots.some(root => underRoot(value, root))) return 'product';
   if (generatedArtifactPaths.includes(value)) return 'toolkit_generated';
   if (declared.toolkitRoots.some(root => underRoot(value, root))) return 'toolkit_generated';

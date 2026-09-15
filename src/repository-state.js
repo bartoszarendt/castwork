@@ -21,7 +21,7 @@ import { createPathClassifier } from './product-lineage.js';
 
 export const CLEAN_STATE_KIND = 'agenticloop.dispatch-clean-state';
 /** v2 adds the operator-owned activation state class. */
-export const CLEAN_STATE_SCHEMA_VERSION = 3;
+export const CLEAN_STATE_SCHEMA_VERSION = 4;
 
 /**
  * Bounded scratch state a dispatch may carry. `.agenticloop/tmp/` is the
@@ -63,10 +63,30 @@ export const PERMITTED_OPERATOR_STATE_PREFIXES = Object.freeze([
 /** Shared workflow state whose untracked additions are always relevant. */
 export const SHARED_STATE_PREFIXES = Object.freeze(['.agenticloop/']);
 
+/**
+ * Machine-local toolkit state a dispatch may carry untracked.
+ *
+ * `.agenticloop/local/` holds the generation manifest and this clone resolved
+ * configuration. The toolkit writes both and gitignores them itself, so gating a
+ * dispatch on their absence refused every dispatch in any target that had run
+ * init, update, or hydrate - and that refusal had no repair, because removing
+ * the files only made the next hydration write them again.
+ *
+ * `.agenticloop/locks/` is deliberately NOT here. A lifecycle lock is gitignored
+ * toolkit state too, but its presence means another process holds lifecycle
+ * authority, so the gate surfacing it is the protection rather than the defect.
+ *
+ * They are therefore permitted here and, like scratch, separately refused as
+ * implementation work at the return boundary. Generated files recorded in the
+ * manifest are classified as toolkit output instead and need no prefix.
+ */
+export const PERMITTED_MACHINE_LOCAL_PREFIXES = Object.freeze(['.agenticloop/local/']);
+
 /** Every prefix whose untracked or ignored content the clean gate tolerates. */
 export const PERMITTED_UNTRACKED_PREFIXES = Object.freeze([
   ...PERMITTED_SCRATCH_PREFIXES,
   ...PERMITTED_OPERATOR_STATE_PREFIXES,
+  ...PERMITTED_MACHINE_LOCAL_PREFIXES,
 ]);
 
 /** Prior-gate dispositions that leave no unproven carrier mutation behind. */
@@ -85,6 +105,7 @@ function cleanStateProjection() {
     ignoredRelevantPaths: [],
     permittedScratchPrefixes: [...PERMITTED_SCRATCH_PREFIXES],
     permittedOperatorStatePrefixes: [...PERMITTED_OPERATOR_STATE_PREFIXES],
+    permittedMachineLocalPrefixes: [...PERMITTED_MACHINE_LOCAL_PREFIXES],
     ignoredFilesPermitted: true,
   };
 }
@@ -264,6 +285,7 @@ export function evaluateDispatchCleanState(input = {}) {
     ignoredRelevantPaths: relevantIgnored,
     permittedScratchPrefixes: [...PERMITTED_SCRATCH_PREFIXES],
     permittedOperatorStatePrefixes: [...PERMITTED_OPERATOR_STATE_PREFIXES],
+    permittedMachineLocalPrefixes: [...PERMITTED_MACHINE_LOCAL_PREFIXES],
     ignoredFilesPermitted: true,
   };
   const identity = `sha256:${CLEAN_STATE_KIND}.v${CLEAN_STATE_SCHEMA_VERSION}:${canonicalSha256(state)}`;

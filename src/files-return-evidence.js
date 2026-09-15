@@ -35,8 +35,18 @@ import {
 import { pathIdentity } from './path-identity.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 import { canonicalJson } from './canonical-json.js';
+import { PERMITTED_MACHINE_LOCAL_PREFIXES } from './repository-state.js';
 
 const SCRATCH_PREFIX = '.agenticloop/tmp/';
+// The dispatch clean gate owns this inventory. Reading it from there rather than
+// restating it keeps the pair honest by construction: whatever a role is allowed
+// to start with, this boundary refuses it from being claimed as role-produced
+// work, and a prefix can never be permitted at one end only.
+function machineLocal(path) {
+  return PERMITTED_MACHINE_LOCAL_PREFIXES.some(
+    prefix => path === prefix.slice(0, -1) || path.startsWith(prefix)
+  );
+}
 
 function sortedPaths(value) {
   return [...new Set(String(value ?? '').split(/\r?\n/).filter(Boolean))].sort();
@@ -177,6 +187,7 @@ function workflowRecordAtHead(runGit, workflowHead, path, expected) {
  */
 function classifyCarriedPath(path, classifier) {
   if (path === '.agenticloop/tmp' || path.startsWith(SCRATCH_PREFIX)) return 'scratch';
+  if (machineLocal(path)) return 'machine_local';
   const kind = classifier.classify(path);
   if (kind === 'product') return 'product';
   if (kind === 'toolkit_generated') return 'toolkit_generated';
@@ -185,6 +196,7 @@ function classifyCarriedPath(path, classifier) {
 
 function classifyPath(path, { target, packet, workflow, runGit, workflowHead, classifier }) {
   if (path === '.agenticloop/tmp' || path.startsWith(SCRATCH_PREFIX)) return 'scratch';
+  if (machineLocal(path)) return 'machine_local';
   // Agentic Loop's own output is never the product's work and is never a
   // validated workflow record either. It is named for what it is, so a toolkit
   // update landing inside a return range neither poisons product lineage nor
@@ -437,6 +449,11 @@ export function deriveReturnTopology(target, packet, signedEvidence, {
     classified.set(path, category);
     if (category === 'scratch') {
       throw new VerificationContextMalformedError(`scratch path '${path}' cannot appear in return evidence`);
+    }
+    if (category === 'machine_local') {
+      throw new VerificationContextMalformedError(
+        `machine-local toolkit path '${path}' cannot appear in return evidence`
+      );
     }
     if (category === 'unknown') {
       throw new VerificationContextMalformedError(`unknown workflow path '${path}' cannot appear in return evidence`);

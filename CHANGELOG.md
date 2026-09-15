@@ -13,6 +13,29 @@
   a repeated-refusal validator-diagnosis stop rule.
 
 ### Fixed
+- **Breaking:** the dispatch clean gate no longer refuses a checkout over Agentic
+  Loop's own machine-local state. A file recorded in the generation manifest is
+  classified as toolkit output wherever it lives, including under
+  `.agenticloop/`, and `.agenticloop/local/` joins the permitted untracked
+  inventory, which the return boundary reads from the same
+  source so those paths still cannot be claimed as role-produced work. Previously
+  any target that had run `init`, `update`, or `hydrate` was refused every
+  dispatch over sidecars the toolkit itself wrote and gitignored, with no
+  available repair. The clean-state projection discloses the new category, so its
+  schema is v4 and packets minted against v3 are refused rather than silently
+  compared. `.agenticloop/worktrees/` content and held lifecycle locks still
+  reach the gate, because each can signal real role work or live authority.
+- Bare `/agenticloop` orientation is now explicitly read-only and bounded: a
+  blocked candidate is reported with its refusal code, fact owner, and first safe
+  next action instead of investigated, and orientation reports only facts it
+  observed, since a host capability declaration is evidence of neither activation
+  nor authorization nor readiness. The activation-capability preamble it inherits
+  is correspondingly condensed.
+- `task handoff-preflight` no longer offers `task readiness` as a repair: no such
+  subcommand exists, so the one deterministic next action a typed refusal promises
+  led nowhere. `dependency.unresolved` now states the fact that must change, other
+  codes carry no invented command, and a registry check fails the build when any
+  emitted command path does not resolve.
 - Removed the unconsumed `task remediation-authority` command and durable state;
   remediation eligibility continues to derive from current authenticated review
   state rather than a decorative authority record.
