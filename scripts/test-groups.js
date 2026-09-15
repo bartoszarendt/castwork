@@ -96,8 +96,6 @@ const MANIFEST = {
     'test/readiness-apply.test.js',
     'test/readiness-plan.test.js',
     'test/remediation-correctness.test.js',
-    'test/role-session-policy.test.js',
-    'test/work-unit-lease.test.js',
     'test/committed-source.test.js',
     'test/dispatch-envelope-activation.test.js',
     'test/dispatch-envelope-blocked.test.js',

@@ -675,6 +675,16 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
       } }, { components: { [role]: {
         previous: { maintainer: 4617, engineer: 4082, auditor: 2347 }[role],
         upperBound: { maintainer: 5000, engineer: 4500, auditor: 3000 }[role],
+        // The Engineer wrapper carries one added instruction: commit the
+        // execution artifacts once after the last check rather than once per
+        // check. That is a real increase in acting context, recorded as one
+        // rather than absorbed by moving 'previous', because making growth
+        // visible is what this budget is for. It buys back roughly two thirds
+        // of the workflow commit volume, and every workflow commit widens the
+        // range the later evidence gates walk.
+        ...(role === 'engineer'
+          ? { regressionExplanation: 'batched required-check evidence commit guidance' }
+          : {}),
       } } });
       roleBudgetErrors.push(...budget.errors.map(error => `${role}: ${error}`));
     }

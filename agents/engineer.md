@@ -176,7 +176,8 @@ task-record obligation.
   the CLI executes
    the exact inert argv and produces schema-v4 execution evidence; older
    evidence is typed incompatible and must be regenerated, never relabeled; do not claim a
-  pass with prose or `--exit-code 0`. After final checks, derive the raw return
+  pass with prose or `--exit-code 0`. Commit the execution artifacts once after
+  the last check, not once per check. After final checks, derive the raw return
   only with `task prepare-return <id> --packet <packet-path> --check-evidence
   <evidence-path> --outcome implementation_ready_for_review --output
   <return-path>`. Do not inspect or hand-author packet, evidence, return JSON,

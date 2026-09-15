@@ -90,6 +90,20 @@
   start identity once rather than once per mutation batch. A live lock owner
   reports stable contention instead of an intermittent inspection failure, and an
   inspection that never answers still fails closed.
+- Removed `src/role-session-policy.js` and `src/work-unit-lease.js` with their
+  tests. Neither had a consumer anywhere in the runtime: the empty-return budget,
+  session-reuse, and work-unit-lease evaluators were reachable only from their
+  own test files, and a catalog declaration naming a module is not an importer.
+  `role_result.schema.invalid` went with the first, because that module was its
+  only evaluation surface and a code no shipped surface can raise protects no
+  boundary; `activation.binding.mismatch` keeps its live producers in activation
+  grant validation and dispatch eligibility and is unaffected.
+- Required-check execution artifacts are now committed once per attempt rather
+  than once per check. Nothing in the toolkit ever required the per-check shape -
+  there is one `required_check_evidence` commit class - but the field practice
+  produced eleven commits per attempt, and every workflow commit widens the range
+  that later evidence gates walk. This is guidance only: no command, record, or
+  schema changes, and the evidence written is identical.
 - `task adopt-commit` now labels adopted actor attribution as the explicit
   `non_authenticated_claim` assurance grade and requires renewed certification;
   it no longer implies authenticated human or supervisor provenance.

@@ -127,7 +127,6 @@ const PRODUCER_INVENTORY_ROWS = [
     'dispatch.attempt.budget_exhausted', 'dispatch.packet.conserved', 'dispatch.attempt.history_rewritten',
     'attempt_return_unbound', 'attempt_return_ambiguous', 'attempt_return_conflict', 'attempt_terminal_conflict',
   ]],
-  ['src/role-session-policy.js', ['role_result.schema.invalid']],
   ['src/closeout-waiver.js', ['compatibility.waiver_scope_retired']],
   ['src/dispatchability.js', ['task.lifecycle.not_dispatchable']],
   ['src/host-role-capabilities.js', ['capability.enforcement.degraded']],
@@ -226,7 +225,6 @@ const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
   ['src/task-contract-baseline.js', ['contract.baseline.invalid', 'contract.baseline.missing', 'contract.baseline.stale']],
   ['src/task-readiness.js', ['dependency.unresolved', 'readiness.base_inventory.missing', 'task.contract.absent', 'task.contract.malformed', 'task.record.structure']],
   ['src/task-record-root.js', ['task.body.bom', 'task.body.collapsed_newlines', 'task.body.utf8']],
-  ['src/work-unit-lease.js', ['activation.binding.mismatch']],
 ];
 
 function producerInventory(rows) {
@@ -757,7 +755,6 @@ const F3 = [
   classified('dependency.evidence.stale', 'F3', 'migration_recompute', 'dependency_state', 'derived-freshness', 'recompute dependency state', policy('dependencies', 'regenerate_decomposition', 'contract_reconciliation', 'The dependency snapshot has aged past its freshness window.')),
   classified('dispatch.attempt.budget_exhausted', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'change task policy', policy('dispatch', 'repair_task_policy', 'human_authority_review', 'The task has recorded as many execution attempts as its attempt_budget allows.')),
   classified('dispatch.attempt.final_slot_unacknowledged', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'acknowledge final attempt', policy('dispatch', 'repair_task_policy', 'human_authority_review', 'Minting this packet would consume the last unit of the task attempt_budget, and the consequence has not been acknowledged.')),
-  classified('role_result.schema.invalid', 'F3', 'single_action_mechanical_repair', 'role_result', 'result-schema-invalid', 'regenerate role result', policy('evidence', 'repair_evidence', 'none', 'The role result does not satisfy its required schema.')),
   classified('task.role_start.check_evidence_missing', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'derived-record-missing', 'initialize check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold is missing.')),
   classified('task.role_start.check_evidence_mismatch', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-record-changed', 'recompute check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold does not match the dispatch packet.')),
   classified('task.lifecycle.not_dispatchable', 'F3', 'retained_hard_refusal', 'attempt_state', 'lifecycle-state-invalid', 'use dispatchable state', policy('task_contract', 'repair_task_record', 'contract_reconciliation', 'The task lifecycle status cannot begin an execution attempt.')),
@@ -899,17 +896,18 @@ const F8 = [
 ];
 
 const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
-// The former 199-row corrective baseline is historical; this live catalog retains 193
+// The former 199-row corrective baseline is historical; this live catalog retains 192
 // rows, including two compatibility-only internal rows with no public claim. The
-// five F3 rows it lost were the retired tooling-failure observation command's:
-// they classified refusals no shipped surface can now raise. The one it gained
-// is the final-attempt-slot acknowledgement, whose refusal no existing row
-// stated truthfully - a budget about to be spent is not a budget exhausted.
-const EXPECTED_CATALOG_ROW_COUNT = 193;
+// F3 rows it lost classified refusals no shipped surface can raise: five belonged
+// to the retired tooling-failure observation command, and one to an unused
+// role-session policy module removed with it. The one it gained is the
+// final-attempt-slot acknowledgement, whose refusal no existing row stated
+// truthfully - a budget about to be spent is not a budget exhausted.
+const EXPECTED_CATALOG_ROW_COUNT = 192;
 const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({
   F1: 23,
   F2: 50,
-  F3: 31,
+  F3: 30,
   F4: 27,
   F5: 4,
   F6: 26,

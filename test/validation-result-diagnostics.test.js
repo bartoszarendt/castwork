@@ -330,8 +330,8 @@ describe('canonical validation-result envelopes', () => {
     }
   });
 
-  it('catalogs clean-tree, host-local, UTF-8/BOM, and role-result schema failures', () => {
-    for (const code of ['worktree.clean_gate.failed', 'state.host_local', 'task.body.utf8', 'task.body.bom', 'role_result.schema.invalid']) {
+  it('catalogs clean-tree, host-local, and UTF-8/BOM failures', () => {
+    for (const code of ['worktree.clean_gate.failed', 'state.host_local', 'task.body.utf8', 'task.body.bom']) {
       assert.ok(REPAIR_POLICY[code], code);
       assert.equal(createDiagnostic({ code }).code, code);
     }
