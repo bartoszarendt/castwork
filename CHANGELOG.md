@@ -39,6 +39,57 @@
 - Removed the unconsumed `task remediation-authority` command and durable state;
   remediation eligibility continues to derive from current authenticated review
   state rather than a decorative authority record.
+- `task verify-return` no longer refuses a return because the repository moved
+  around it. The scope check walked every product-classified path changed
+  anywhere between the carried base and the product head, so a toolkit update an
+  operator ran, a merge, or a lockfile refresh inside that window made the task
+  permanently unable to return - while the range derivation thirty lines earlier
+  already exempted exactly those commits from attribution. Ownership is now
+  derived per commit from the canonical `Task:` trailer the loop writes into its
+  own commits, never from the commit's paths: an out-of-scope path the attempt
+  itself authored is still refused, and undecidable ownership resolves toward the
+  task rather than away from it. Every path in the range remains in the reported
+  inventory; only what is refused changed.
+- `task abandon-attempt` no longer charges engineering budget for product work
+  the attempt did not author. `productMutationOccurred` was derived from the
+  commit range alone, so any non-workflow path in the window set it - including
+  the toolkit's own upgrade commits, which touch `agenticloop.json` and a
+  lockfile. The workflow-recovery exemption that already existed for a
+  `tooling_failed` attempt with no product mutation was therefore unreachable
+  for the one cause that most needs it, and `task attempt-status` reported zero
+  workflow recoveries for tasks that had only ever recovered from tooling.
+- **Breaking:** `task prepare-dispatch` now refuses to mint the packet that
+  opens the final attempt a task's `attempt_budget` allows, under
+  `dispatch.attempt.final_slot_unacknowledged`, until the invocation passes
+  `--acknowledge-final-attempt`. The refusal names the consequence and the
+  repair; the acknowledgement records nothing, grants no additional authority,
+  and carries no scope or expiry a later command can read back. Budget exhaustion
+  remains the separate `dispatch.attempt.budget_exhausted` refusal.
+- **Breaking:** removed the `task record-tooling-failure` command, its
+  tooling-failure observation record and schema, and its identical-failure retry
+  evaluator. The command wrote a durable record whose only reader was itself: no
+  protected transition consumed it, and no gate changed its decision because of
+  it. Roles should not retry an identical tooling failure; an unchanged retry
+  makes no progress.
+- `task measure` now states which of its counters a protected gate reads and
+  which have no consumer at all. The artifact's `authority: none` was true of
+  the artifact and was being read as true of every number in it, which is a
+  different claim: attempt-budget consumption, workflow recoveries, and the live
+  attempt restate facts the dispatch gates decide on. Each now names the gate by
+  that gate's diagnostic code; the artifact still confers no authority and
+  persists nothing.
+- The refusal catalog now declares the one class it cannot express - that the
+  fact a refusal rests on was derived incorrectly by the toolkit rather than
+  recorded incorrectly by the project. Every repair kind asks a workflow role to
+  change project state, so a derivation fault surfaces as an ordinary evidence
+  refusal and never reaches the human-disposition channel that exists for it.
+  The gap is recorded in the catalog and in the CLI reference rather than closed.
+- Lifecycle-lock process inspection now survives a loaded host: the retry backoff
+  spans the load window instead of scheduler jitter, the per-attempt budget for
+  an external process-start query has real margin, and a process resolves its own
+  start identity once rather than once per mutation batch. A live lock owner
+  reports stable contention instead of an intermittent inspection failure, and an
+  inspection that never answers still fails closed.
 - `task adopt-commit` now labels adopted actor attribution as the explicit
   `non_authenticated_claim` assurance grade and requires renewed certification;
   it no longer implies authenticated human or supervisor provenance.

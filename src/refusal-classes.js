@@ -20,6 +20,38 @@ export const REFUSAL_DISPOSITIONS = Object.freeze([
 
 const PENDING_CLASSIFICATION = 'pending_classification';
 
+/**
+ * A class this catalog cannot express, declared here because its consumers read
+ * this file and would otherwise have to discover the gap the way the field did.
+ *
+ * Every repair kind below instructs a role to change *project* state:
+ * `repair_evidence`, `repair_task_contract`, `declare_scope`,
+ * `regenerate_decomposition`. None of them means "the derivation that produced
+ * this fact is wrong". The catalog's implicit axiom is that the toolkit is
+ * right and the fault is in the project's records.
+ *
+ * When that axiom failed in the field, `role_return.invalid` resolved to
+ * `repairKind: repair_evidence, escalationKind: none`. The engineer was told to
+ * repair evidence that was already correct; the human channel that exists for
+ * exactly this - `human_authority_disposition` - was never reached, because no
+ * row routes to it for a derivation fault. Three of four sessions then read the
+ * toolkit's own source, which is the only move the catalog left them.
+ *
+ * Recording the gap is in contract here. Adding the family is not: a new
+ * diagnostic family needs an owner amendment, and this one is carried as
+ * P37-01-C7 with the auditable override it implies as P37-01-C8.
+ */
+export const UNEXPRESSED_REFUSAL_CLASS = Object.freeze({
+  id: 'derivation_fault',
+  claim: 'the fact this refusal rests on was derived incorrectly by the toolkit, not recorded incorrectly by the project',
+  owner: 'operator',
+  // The escalation the family would carry. It already exists and is reachable
+  // by other rows, so the gap is the routing, not the channel.
+  intendedEscalationKind: 'human_authority_disposition',
+  expressible: false,
+  deferredTo: 'P37-01-C7',
+});
+
 /** Families whose complete catalog rows have passed the classification ratchet. */
 export const ACCEPTED_REFUSAL_FAMILIES = Object.freeze(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8']);
 
@@ -95,7 +127,7 @@ const PRODUCER_INVENTORY_ROWS = [
     'dispatch.attempt.budget_exhausted', 'dispatch.packet.conserved', 'dispatch.attempt.history_rewritten',
     'attempt_return_unbound', 'attempt_return_ambiguous', 'attempt_return_conflict', 'attempt_terminal_conflict',
   ]],
-  ['src/role-session-policy.js', ['role_result.tooling_failure_repeated', 'role_result.schema.invalid']],
+  ['src/role-session-policy.js', ['role_result.schema.invalid']],
   ['src/closeout-waiver.js', ['compatibility.waiver_scope_retired']],
   ['src/dispatchability.js', ['task.lifecycle.not_dispatchable']],
   ['src/host-role-capabilities.js', ['capability.enforcement.degraded']],
@@ -105,10 +137,6 @@ const PRODUCER_INVENTORY_ROWS = [
     'handoff.evidence.malformed', 'handoff.evidence.freshness_expired', 'handoff.evidence.schema_retired',
     'handoff.evidence.revalidation_failed', 'handoff.evidence.ambiguous_return', 'handoff.evidence.replayed',
     'handoff.evidence.mismatched', 'handoff.evidence.unsupported', 'handoff.evidence.unauthenticated',
-  ]],
-  ['src/tooling-failure.js', [
-    'tooling_failure_input_invalid', 'tooling_failure_evidence_conflict', 'tooling_failure_write_failed',
-    'tooling_failure_admission_conflict',
   ]],
   ['src/readiness-candidates.js', ['readiness.candidate.stage_failure', 'readiness.candidate.internal_failure']],
   ['src/blocked-result-authority.js', [
@@ -193,7 +221,7 @@ const SUPPLEMENTAL_PRODUCER_INVENTORY_ROWS = [
   ]],
   ['src/repository-state.js', ['evidence.changed', 'evidence.malformed', 'evidence.missing']],
   ['src/result-envelope.js', ['task.body.bom', 'task.body.collapsed_newlines', 'task.body.utf8', 'task.record.structure']],
-  ['src/task-cli.js', ['dispatch.packet.stale', 'task.evidence.contract_drift', 'task.evidence.lineage', 'task.evidence.lineage.stale', 'task.record.identity_mismatch']],
+  ['src/task-cli.js', ['dispatch.attempt.final_slot_unacknowledged', 'dispatch.packet.stale', 'task.evidence.contract_drift', 'task.evidence.lineage', 'task.evidence.lineage.stale', 'task.record.identity_mismatch']],
   ['src/task-fact-readers.js', ['task.evidence.product_head']],
   ['src/task-contract-baseline.js', ['contract.baseline.invalid', 'contract.baseline.missing', 'contract.baseline.stale']],
   ['src/task-readiness.js', ['dependency.unresolved', 'readiness.base_inventory.missing', 'task.contract.absent', 'task.contract.malformed', 'task.record.structure']],
@@ -728,7 +756,7 @@ const F3 = [
   classified('dependency.unresolved', 'F3', 'retained_hard_refusal', 'dependency_state', 'dependency-unsatisfied', 'resolve dependency', policy('dependencies', 'resolve_dependency', 'dependency_escalation', 'A declared dependency is unresolved.')),
   classified('dependency.evidence.stale', 'F3', 'migration_recompute', 'dependency_state', 'derived-freshness', 'recompute dependency state', policy('dependencies', 'regenerate_decomposition', 'contract_reconciliation', 'The dependency snapshot has aged past its freshness window.')),
   classified('dispatch.attempt.budget_exhausted', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'change task policy', policy('dispatch', 'repair_task_policy', 'human_authority_review', 'The task has recorded as many execution attempts as its attempt_budget allows.')),
-  classified('role_result.tooling_failure_repeated', 'F3', 'advisory_diagnostic', 'tooling_observation', 'no-progress-observation', 'diagnose tooling', policy('role_result', 'repair_evidence', 'none', 'The same contract-bound tooling failure repeated without progress.')),
+  classified('dispatch.attempt.final_slot_unacknowledged', 'F3', 'material_human_decision', 'task_policy', 'attempt-policy-limit', 'acknowledge final attempt', policy('dispatch', 'repair_task_policy', 'human_authority_review', 'Minting this packet would consume the last unit of the task attempt_budget, and the consequence has not been acknowledged.')),
   classified('role_result.schema.invalid', 'F3', 'single_action_mechanical_repair', 'role_result', 'result-schema-invalid', 'regenerate role result', policy('evidence', 'repair_evidence', 'none', 'The role result does not satisfy its required schema.')),
   classified('task.role_start.check_evidence_missing', 'F3', 'single_action_mechanical_repair', 'dispatch_packet', 'derived-record-missing', 'initialize check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold is missing.')),
   classified('task.role_start.check_evidence_mismatch', 'F3', 'migration_recompute', 'dispatch_packet', 'derived-record-changed', 'recompute check evidence', policy('dispatch', 'repair_evidence', 'none', 'The role-start check-evidence scaffold does not match the dispatch packet.')),
@@ -758,10 +786,6 @@ const F3 = [
   classified('handoff.evidence.unauthenticated', 'F3', 'retained_hard_refusal', 'handoff_boundary', 'authorization-absent', 'supply authenticated evidence', policy('handoff', 'repair_evidence', 'human_authority_review', 'Handoff evidence is session-reported or below the required assurance minimum and cannot authorize a protected transition.')),
   classified('handoff.refresh.plan.malformed', 'F3', 'single_action_mechanical_repair', 'handoff_boundary', 'refresh-plan-invalid', 'repair refresh plan', policy('handoff', 'repair_evidence', 'none', 'Handoff evidence refresh plan is malformed or does not match the expected task binding.')),
   classified('handoff.refresh.plan.unsupported', 'F3', 'advisory_diagnostic', 'handoff_boundary', 'unsupported-observation', 'use supported backend', policy('handoff', 'repair_evidence', 'none', 'Derived-evidence refresh plans apply only to the files backend; the selected backend has no local derived-evidence surface to refresh.')),
-  classified('tooling_failure_input_invalid', 'F3', 'single_action_mechanical_repair', 'tooling_observation', 'observation-input-invalid', 'repair tooling observation', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure observation input is invalid.')),
-  classified('tooling_failure_evidence_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'derived-record-changed', 'recompute tooling observation', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure observation evidence conflicts with current history.')),
-  classified('tooling_failure_write_failed', 'F3', 'advisory_diagnostic', 'tooling_observation', 'atomic-write-unproven', 'retry observation write', policy('tooling_failure', 'repair_evidence', 'record_recovery', 'Tooling-failure observation could not be recorded atomically.')),
-  classified('tooling_failure_admission_conflict', 'F3', 'migration_recompute', 'tooling_observation', 'concurrent-observation-change', 'recompute retry admission', policy('tooling_failure', 'repair_evidence', 'none', 'Tooling-failure retry admission changed concurrently.')),
 ];
 
 const F4 = [
@@ -875,13 +899,17 @@ const F8 = [
 ];
 
 const catalog = [...F1, ...F2, ...F3, ...F4, ...F5, ...F6, ...F7, ...F8];
-// The former 199-row corrective baseline is historical; this live catalog retains 197
-// rows, including two compatibility-only internal rows with no public claim.
-const EXPECTED_CATALOG_ROW_COUNT = 197;
+// The former 199-row corrective baseline is historical; this live catalog retains 193
+// rows, including two compatibility-only internal rows with no public claim. The
+// five F3 rows it lost were the retired tooling-failure observation command's:
+// they classified refusals no shipped surface can now raise. The one it gained
+// is the final-attempt-slot acknowledgement, whose refusal no existing row
+// stated truthfully - a budget about to be spent is not a budget exhausted.
+const EXPECTED_CATALOG_ROW_COUNT = 193;
 const EXPECTED_CATALOG_FAMILY_COUNTS = Object.freeze({
   F1: 23,
   F2: 50,
-  F3: 35,
+  F3: 31,
   F4: 27,
   F5: 4,
   F6: 26,
@@ -962,6 +990,7 @@ const NEGATIVE_PROOF_BY_CODE = Object.freeze({
   'execution_evidence.lineage_mismatch': 'Material fact: execution evidence lineage is ambiguous. scenario: execution-lineage-mismatch-blocks-return.',
   'dependency.unresolved': 'Material fact: prerequisite dependency is unsatisfied. scenario: unresolved-dependency-blocks-dispatch.',
   'dispatch.attempt.budget_exhausted': 'Material fact: task policy budget is exhausted. scenario: exhausted-attempt-budget-needs-human-decision.',
+  'dispatch.attempt.final_slot_unacknowledged': 'Material fact: this packet consumes the final attempt_budget unit. scenario: final-attempt-slot-needs-acknowledgement.',
   'task.lifecycle.not_dispatchable': 'Material fact: task is not in a dispatchable lifecycle state. scenario: non-dispatchable-task-cannot-start.',
   'dispatch.packet.conserved': 'Material fact: another packet is still conserved. scenario: conserved-packet-needs-complete-or-abandon.',
   'dispatch.attempt.history_rewritten': 'Material fact: attempt history attribution changed. scenario: rewritten-attempt-history-is-refused.',

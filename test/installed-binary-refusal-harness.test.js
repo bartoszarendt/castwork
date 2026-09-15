@@ -2,8 +2,8 @@
  * Installed-binary refusals are deliberately exercised through a packed,
  * offline installation.  The catalog remains the accounting source of truth;
  * the registry records 48 installed-binary executions. Together with 5
- * pre-existing installed probes and 2 installed-module executions, the 87
- * retained hard-refusal targets partition into 24 genuinely unreachable public
+ * pre-existing installed probes and 2 installed-module executions, the 88
+ * retained hard-refusal targets partition into 25 genuinely unreachable public
  * surfaces and 15 harness-blocked routes. The separate session_reported row is
  * a warning-only non-refusal with an installed `task verify-return` proof.
  */
@@ -80,7 +80,7 @@ const NORMALIZED_PUBLIC_SURFACE_OBSTACLES = new Map([
   ['review.entry.persistence_conflict', 'an authentic return fixture requires a persisted verified return, but the installed verifier rejects its only supported test fixture authority at activation.capture.malformed before review-entry persistence.'],
 ]);
 
-// This is intentionally a closed inventory rather than a fallback: these 24
+// This is intentionally a closed inventory rather than a fallback: these 25
 // producers have no supported installed public trigger.  Each entry records
 // the current public-surface obstacle without claiming that its typed producer
 // was reached by the installed-binary run.
@@ -198,6 +198,13 @@ const CLOSED_PUBLIC_SURFACE_BLOCKERS = Object.freeze([
     obstacle: 'authentic exhausted attempt history still leaves public preflight green, so the budget check is unreachable through supported public inputs; this does not claim dispatch.attempt.budget_exhausted was reached.',
   },
   {
+    code: 'dispatch.attempt.final_slot_unacknowledged',
+    status: 'blocked-by-public-surface',
+    supportedPublicTrigger: false,
+    proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:dispatch.attempt.final_slot_unacknowledged',
+    obstacle: 'reaching the final budget slot needs an authentic consumed-and-abandoned attempt history a clean offline install cannot build, so the final-slot check is unreachable through supported public inputs; this does not claim dispatch.attempt.final_slot_unacknowledged was reached. Its executed proof is the source-boundary fixture in test/attempt-supersession.test.js.',
+  },
+  {
     code: 'capability.action.denied',
     status: 'blocked-by-public-surface',
     supportedPublicTrigger: false,
@@ -282,10 +289,10 @@ function npm(args, options = {}) {
 
 function installedRows() {
   const codes = HARD_REFUSAL_ALLOWLIST.map(row => row.code);
-  assert.equal(codes.length, 94, 'warning-only session_reported is excluded from hard refusals');
+  assert.equal(codes.length, 95, 'warning-only session_reported is excluded from hard refusals');
   assert.equal(new Set(codes).size, codes.length, 'catalog rows must be unique');
   const rows = codes.filter(code => !PRE_EXISTING_INSTALLED_PROBE_ROWS.has(code) && !INSTALLED_MODULE_ROWS.has(code) && !WARNING_ONLY_ROWS.has(code));
-  assert.equal(rows.length, 87, 'the installed-binary target must retain 87 hard-refusal catalog rows');
+  assert.equal(rows.length, 88, 'the installed-binary target must retain 88 hard-refusal catalog rows');
   return rows;
 }
 
@@ -1399,7 +1406,7 @@ function executedRowReference(code) {
 
 function closedPublicSurfaceBlockers(catalog = HARD_REFUSAL_ALLOWLIST, inventory = CLOSED_PUBLIC_SURFACE_BLOCKERS) {
   const inventoryCodes = inventory.map(row => row.code);
-  assert.equal(inventoryCodes.length, 24, 'the closed public-surface blocker inventory must retain exactly 24 rows');
+  assert.equal(inventoryCodes.length, 25, 'the closed public-surface blocker inventory must retain exactly 25 rows');
   assert.equal(new Set(inventoryCodes).size, inventoryCodes.length, 'the closed public-surface blocker inventory may not duplicate rows');
   const fallbackCodes = catalog
     .map(row => row.code)
@@ -1491,10 +1498,10 @@ function assertResidueLedger(document) {
     }
   }
   assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'the harness-blocked partition contains 15 rows');
-  assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 24, 'the explicit public-surface inventory must remain closed at 24 rows');
+  assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 25, 'the explicit public-surface inventory must remain closed at 25 rows');
   assert.equal(parsed.filter(row => row.status === 'harness-blocked').length, 15,
     'harness limits must remain separate from product-surface unreachability');
-  assert.equal(parsed.filter(row => row.status === 'unreachable-through-supported-public-surface').length, 24,
+  assert.equal(parsed.filter(row => row.status === 'unreachable-through-supported-public-surface').length, 25,
     'only the closed public inventory may claim product-surface unreachability');
   const partition = expected.reduce((counts, row) => {
     counts[row.disposition] = (counts[row.disposition] ?? 0) + 1;
@@ -1504,7 +1511,7 @@ function assertResidueLedger(document) {
     executed: 53,
     'module-only': 2,
     'harness-blocked': 15,
-    'unreachable-through-supported-public-surface': 24,
+    'unreachable-through-supported-public-surface': 25,
   }, 'harness limitations must not be ratcheted as product unreachability');
 }
 
@@ -1533,7 +1540,7 @@ describe('installed-binary refusal harness', () => {
     assert.throws(() => assertResidueLedger(removed), /row count|contain every catalog row/, 'removing a residue row must fail accounting');
 
     assert.throws(() => closedPublicSurfaceBlockers(HARD_REFUSAL_ALLOWLIST, CLOSED_PUBLIC_SURFACE_BLOCKERS.slice(1)),
-      /exactly 24 rows|one closed public-surface blocker/,
+      /exactly 25 rows|one closed public-surface blocker/,
       'removing a closed-inventory row must fail candidate-bound accounting');
     const substituted = CLOSED_PUBLIC_SURFACE_BLOCKERS.map((blocker, index) => index === 0
       ? { ...blocker, code: 'activation.capture.missing', proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:activation.capture.missing' }
@@ -1572,11 +1579,11 @@ describe('installed-binary refusal harness', () => {
     assert.throws(() => assertResidueLedger(fabricatedExecution), /generated from the catalog and executed-row registry/, 'a fabricated installed execution must fail accounting');
   });
 
-  it('keeps the 87-row hard-refusal target partition explicit', () => {
+  it('keeps the 88-row hard-refusal target partition explicit', () => {
     const target = installedRows();
     const executedRows = executedInstalledBinaryRows();
     assert.equal(new Set(executedRows).size, executedRows.length, 'a batch row may not be counted twice');
-    assert.ok(executedRows.every(code => target.includes(code)), 'batch rows must belong to the 87-row target');
+    assert.ok(executedRows.every(code => target.includes(code)), 'batch rows must belong to the 88-row target');
     assert.equal(FIRST_BATCH_ROWS.length, 9, 'the first executable slice must name each target row once');
     assert.equal(SECOND_BATCH_ROWS.length, 4, 'the second executable slice must name each target row once');
     assert.equal(THIRD_BATCH_ROWS.length, 11, 'the third executable slice must name each target row once');
@@ -1586,7 +1593,7 @@ describe('installed-binary refusal harness', () => {
     assert.equal(SEVENTH_BATCH_ROWS.length, 1, 'the seventh executable slice must name each target row once');
     assert.equal(CORRECTED_PUBLIC_ROUTE_ROWS.length, 3, 'the authorized public-route correction slice must name exactly three rows');
     assert.equal(executedRows.length, 48, 'the installed-binary registry must retain 48 executed hard-refusal rows');
-    assert.equal(target.length - executedRows.length, 39, 'blocked public-surface hard-refusal rows must stay explicit');
+    assert.equal(target.length - executedRows.length, 40, 'blocked public-surface hard-refusal rows must stay explicit');
     assert.deepEqual([...new Set(FIRST_BATCH_SCENARIOS.map(row => row.family))], FIRST_BATCH_FAMILIES);
     assert.deepEqual([...new Set(SECOND_BATCH_SCENARIOS.map(row => row.family))], SECOND_BATCH_FAMILIES);
 

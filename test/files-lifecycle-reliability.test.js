@@ -562,27 +562,6 @@ describe('live-attempt predictive safety', () => {
       join(fixture.root, '.agenticloop', 'tasks', `${TASK_ID}.md`), 'utf8'
     ), carrierBeforeObservation, 'every refused CLI mutation must preserve the frozen carrier');
 
-    const failureInput = '.agenticloop/tmp/tooling-failure.json';
-    writeFileSync(join(fixture.root, failureInput), `${JSON.stringify({
-      schemaVersion: 1,
-      operation: 'task.handoff-preflight',
-      diagnosticCode: 'task.evidence.lineage.stale',
-      diagnosticClass: 'workflow',
-      mutationOccurred: false,
-      safeToRetry: true,
-      provenance: { source: 'reliability-test' },
-    }, null, 2)}\n`, 'utf8');
-    const observation = JSON.parse(assertOk(await cli([
-      'task', 'record-tooling-failure', TASK_ID, '--attempt', started.attemptId,
-      '--input', failureInput, '--json',
-    ]), 'record deferred recovery observation').stdout);
-    assert.match(observation.path, /tooling-failures/);
-    assert.equal(readFileSync(
-      join(fixture.root, '.agenticloop', 'tasks', `${TASK_ID}.md`), 'utf8'
-    ), carrierBeforeObservation, 'recovery observation must remain outside the frozen carrier');
-    await canonicalCommit(cli, fixture.root, 'tooling_failure_observation',
-      'Record deferred tooling failure observation', [observation.path]);
-
     const productHead = await commitProduct(cli, fixture.root, started.packetPath, 'guard-product');
     const artifact = JSON.parse(assertOk(await cli([
       'task', 'evidence', TASK_ID, '--class', 'implementation_artifact_evidence',

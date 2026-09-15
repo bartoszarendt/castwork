@@ -8,7 +8,7 @@
  * ancestry proof is a precondition rather than an optional extra check.
  */
 
-import { commitMessageProducerHint, evaluateCommitAttribution, parseFinalTrailerBlock } from './commit-attribution.js';
+import { commitMessageProducerHint, commitTaskOwnership, evaluateCommitAttribution } from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 
@@ -44,39 +44,6 @@ function changed(message) {
 
 function text(result) {
   return String(result?.stdout ?? '').trim();
-}
-
-/**
- * Whose work is one commit?
- *
- * This is a different question from whether a commit's attribution is canonical
- * for the role returning now, and the two must not stand in for each other. The
- * attribution gate below asks "is this commit's trailer block valid?" and
- * refuses when it is not. This asks "did this task's own work produce this
- * commit?", and only that answer decides what the task's scope gate is entitled
- * to ask about.
- *
- * - `claimed`   - the final contiguous trailer block names exactly this task.
- * - `other`     - it names another task, or carries no Task trailer at all: the
- *                 toolkit update an operator ran, a merge, a lockfile refresh.
- * - `ambiguous` - a Task trailer is present but does not resolve to one task,
- *                 or was stranded outside the final block by `git commit -m … -m …`.
- *                 Undecidable ownership resolves toward the task, never away
- *                 from it, so an ambiguous commit's paths still face the gate.
- *
- * Note what is deliberately absent: the commit's paths. Four field cohorts
- * established that path classification cannot answer an ownership question -
- * `agenticloop.json`, `.gitignore`, `package.json`, and `package-lock.json`
- * genuinely belong to the target, so no classifier can exempt them without
- * hiding real task edits to real files.
- */
-function commitTaskOwnership(message, taskId) {
-  const { named, misplaced } = parseFinalTrailerBlock(message);
-  if (misplaced.some(line => /^task:/i.test(line))) return 'ambiguous';
-  const claimed = named.filter(entry => entry.name === 'task').map(entry => entry.value);
-  if (claimed.length === 0) return 'other';
-  if (claimed.length === 1) return claimed[0] === taskId ? 'claimed' : 'other';
-  return claimed.includes(taskId) ? 'ambiguous' : 'other';
 }
 
 function lines(result) {

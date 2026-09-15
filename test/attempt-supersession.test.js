@@ -46,7 +46,7 @@ function assertOk(result, label) {
  * Drive one more role start against a fresh packet, exactly as a resumed
  * attempt does: mint, consume, commit the workflow state it produced.
  */
-async function consumePacket(fixture, cli, sequence) {
+async function consumePacket(fixture, cli, sequence, { acknowledgeFinal = false } = {}) {
   const root = fixture.root;
   const packetPath = `.agenticloop/tmp/packet-${sequence}.json`;
   // Every packet is minted through the real commands. For a successor, execute
@@ -64,6 +64,7 @@ async function consumePacket(fixture, cli, sequence) {
   assertOk(await cli([
     'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
     '--output', packetPath, '--json',
+    ...(acknowledgeFinal ? ['--acknowledge-final-attempt'] : []),
   ]), `mint packet ${sequence}`);
   const started = await cli(['task', 'role-start', 'T-001', '--packet', packetPath, '--json']);
   if (started.status === 0) {
@@ -157,7 +158,9 @@ describe('attempt_budget is a bound, not a comment', () => {
     ]), 'record real no-progress attempt');
     git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
     git(fixture.root, ['commit', '-m', 'record no-progress attempt\n\nTask: T-001\nAgent: maintainer']);
-    assertOk(await consumePacket(fixture, cli, 2), 'second role start');
+    // The second mint is the last the budget allows, so it now requires the
+    // acknowledgement the case below covers.
+    assertOk(await consumePacket(fixture, cli, 2, { acknowledgeFinal: true }), 'second role start');
 
     const status = JSON.parse((await cli(['task', 'attempt-status', 'T-001', '--json'])).stdout);
     assert.equal(status.newPacketPermitted, false, 'the budget is a hard stop');
@@ -168,6 +171,58 @@ describe('attempt_budget is a bound, not a comment', () => {
     assert.match(status.reason, /attempt_budget of 2/);
     assert.match(status.safeRepair, /record the task as blocked or needs_context/);
     assert.match(status.safeRepair, /authorize-correction T-001/);
+  });
+
+  /**
+   * The slot that decides whether a task can be tried again was the only one
+   * that arrived silently. In the field the maintainer had already written "the
+   * fresh attempt will be attempt 5 of 5 (the final one)" into its return, and
+   * the mechanism made nothing of it: the packet minted exactly as any other
+   * would, and the budget was gone before anyone chose to spend it.
+   */
+  it('refuses the final budget slot until the consequence is acknowledged', async () => {
+    const { fixture, cli } = await startedTask('budget-final-slot');
+    const carrier = join(fixture.root, '.agenticloop', 'tasks', 'T-001.md');
+    writeFileSync(carrier, readFileSync(carrier, 'utf8').replace('attempt_budget: 5', 'attempt_budget: 2'), 'utf8');
+    git(fixture.root, ['add', '.agenticloop/tasks']);
+    git(fixture.root, ['commit', '-m', 'declare the attempt budget\n\nTask: T-001\nAgent: maintainer']);
+
+    assertOk(await consumePacket(fixture, cli, 1), 'the first slot is not the last and mints silently');
+    const first = await attemptStatus(cli);
+    assertOk(await cli([
+      'task', 'abandon-attempt', 'T-001', '--attempt', first.liveAttempt.attemptId,
+      '--reason', 'Engineering attempt made no acceptable progress and requires a fresh approach.',
+      '--authority', 'maintainer:budget-test', '--json',
+    ]), 'record real no-progress attempt');
+    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
+    git(fixture.root, ['commit', '-m', 'record no-progress attempt\n\nTask: T-001\nAgent: maintainer']);
+
+    const refused = await cli([
+      'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',
+      '--output', '.agenticloop/tmp/final-slot.json', '--json',
+    ]);
+    assert.equal(refused.status, 1, `the final slot is not spent silently\n${refused.stdout}${refused.stderr}`);
+    const result = JSON.parse(refused.stdout);
+    assert.equal(result.diagnostics[0].code, 'dispatch.attempt.final_slot_unacknowledged',
+      'a budget about to be spent is not a budget exhausted, and does not borrow that code');
+    assert.match(result.errors.join('\n'), /opens attempt 2 of 2 .*the last the attempt_budget allows/);
+    assert.match(result.firstSafeRepair, /--acknowledge-final-attempt/);
+    assert.match(result.firstSafeRepair, /authorize-correction T-001/);
+    assert.match(result.firstSafeRepair, /blocked or needs_context/);
+    // The decision is the operator's, so it routes to the human channel rather
+    // than asking a role to repair evidence that is not wrong.
+    assert.equal(result.diagnostics[0].escalationKind, 'human_authority_review');
+    assert.equal(result.diagnostics[0].escalationOwner, 'human_authority');
+
+    // Refusing mints nothing: the refusal is not a half-spent slot.
+    const held = await attemptStatus(cli);
+    assert.equal(held.attemptBudget.recorded, 1, 'the refused mint consumed no budget');
+
+    assertOk(await consumePacket(fixture, cli, 2, { acknowledgeFinal: true }),
+      'the acknowledgement is what makes the final attempt available');
+    const spent = await attemptStatus(cli);
+    assert.equal(spent.attemptBudget.recorded, 2);
+    assert.equal(spent.newPacketPermitted, false, 'and it really was the last one');
   });
 
   it('reports the budget it is measuring against while the task is still under it', async () => {

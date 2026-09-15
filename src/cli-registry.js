@@ -696,18 +696,6 @@ export const COMMAND_REGISTRY = {
           jsonOption,
         ],
       },
-      'record-tooling-failure': {
-        summary: 'Persist one bounded tooling-failure observation and evaluate the identical-failure retry bound.',
-        usage: 'agenticloop task record-tooling-failure <id> --attempt <attempt-id> --input <path> [--budget <n>] [--json] [--target <dir>]',
-        positionals: [{ name: 'id', required: true }],
-        options: [
-          targetOption(),
-          opt('attempt', 'string', 'Exact execution attempt identity. Required.'),
-          opt('input', 'string', 'Target-relative closed tooling-failure JSON input. Required.'),
-          opt('budget', 'string', 'Maximum identical failure observations; default 2 means the first permits one retry and the second stops.'),
-          jsonOption,
-        ],
-      },
       'commit-message': {
         summary: 'Write a canonically trailered commit message file for one workflow commit class. Never commits.',
         usage: 'agenticloop task commit-message <id> --class <commit-class> --subject <text> --output <path> [--body <text> | --body-file <path>] [--json] [--target <dir>]',
@@ -791,10 +779,10 @@ export const COMMAND_REGISTRY = {
       },
       'prepare-dispatch': {
         summary: 'Refetch and bind one backend-selected role dispatch without mutating the task.',
-        usage: 'agenticloop task prepare-dispatch <id> (--host <host> --role engineer | --input <dispatch-input.json> | --packet <packet.json> --role engineer) [--route <serial|parallel>] [--output <path>] [--repo <owner/name>] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
+        usage: 'agenticloop task prepare-dispatch <id> (--host <host> --role engineer | --input <dispatch-input.json> | --packet <packet.json> --role engineer) [--route <serial|parallel>] [--output <path>] [--repo <owner/name>] [--acknowledge-final-attempt] [--host-trust-store <expected-path>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: true }],
-        options: [targetOption(), opt('host', 'string', 'Canonical generated host identity used to derive the Engineer assignment from current durable facts. Required for the ordinary no-input producer.'), opt('route', 'string', 'Execution route. Serial is the default and carries no decomposition or parallel scan; parallel requires the committed decomposition and full safety validation.', { enum: ['serial', 'parallel'] }), opt('output', 'string', 'Optional packet output path. With --json, stdout is a closed success result and this path holds the exact packet artifact. Input/output paths are target-relative and must remain inside the selected target.'), opt('input', 'string', 'Advanced compatibility input for projects where durable source selectors are unavailable. Its route is validated normally; it may not override refetched durable authority. Path is target-relative and must remain inside the selected target.'), opt('packet', 'string', 'Existing dispatch packet to revalidate read-only before receiver mutation. Path is target-relative and must remain inside the selected target.'), opt('role', 'string', 'Immutable receiving role required for ordinary and --packet routes. The advanced --input compatibility route preserves its existing no-host invocation.', { enum: ['engineer'] }), opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('prior-receipts', 'string', 'JSON array of prior-gate or setup task-mutation receipts that must be resolved and undrifted before dispatch. Path is target-relative and must remain inside the selected target.'), opt('repo', 'string', 'GitHub repository in owner/name form. Defaults to the authenticated current repository for the GitHub backend.'), hostTrustStoreOption, jsonOption],
+        options: [targetOption(), opt('host', 'string', 'Canonical generated host identity used to derive the Engineer assignment from current durable facts. Required for the ordinary no-input producer.'), opt('route', 'string', 'Execution route. Serial is the default and carries no decomposition or parallel scan; parallel requires the committed decomposition and full safety validation.', { enum: ['serial', 'parallel'] }), opt('output', 'string', 'Optional packet output path. With --json, stdout is a closed success result and this path holds the exact packet artifact. Input/output paths are target-relative and must remain inside the selected target.'), opt('input', 'string', 'Advanced compatibility input for projects where durable source selectors are unavailable. Its route is validated normally; it may not override refetched durable authority. Path is target-relative and must remain inside the selected target.'), opt('packet', 'string', 'Existing dispatch packet to revalidate read-only before receiver mutation. Path is target-relative and must remain inside the selected target.'), opt('role', 'string', 'Immutable receiving role required for ordinary and --packet routes. The advanced --input compatibility route preserves its existing no-host invocation.', { enum: ['engineer'] }), opt('return-adapter', 'string', 'Exact authenticated protected-boundary adapter to bind for host role-return receipts. Required when several eligible adapters exist; hardened mode requires one.'), opt('prior-receipts', 'string', 'JSON array of prior-gate or setup task-mutation receipts that must be resolved and undrifted before dispatch. Path is target-relative and must remain inside the selected target.'), opt('repo', 'string', 'GitHub repository in owner/name form. Defaults to the authenticated current repository for the GitHub backend.'), opt('acknowledge-final-attempt', 'boolean', 'Acknowledge that this mint consumes the last unit of the task attempt_budget. Required only when it does; it records nothing and grants no additional authority.'), hostTrustStoreOption, jsonOption],
       },
       'role-start': {
         summary: 'Atomically combine files-backend role start (in-progress transition), dispatch consumption, and required-check evidence initialization into one guarded transaction.',

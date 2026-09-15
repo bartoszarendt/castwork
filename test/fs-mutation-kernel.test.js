@@ -41,7 +41,7 @@ before(() => {
 });
 
 after(() => {
-  rmSync(tmpBase, { recursive: true, force: true });
+  rmSync(tmpBase, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function target() {
@@ -867,6 +867,51 @@ describe('lifecycle authority locks', () => {
     assert.equal(exhausted.code, 'fs.lifecycle_lock.inspect_failed');
     assert.equal(calls, 3);
     assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress');
+  });
+
+  /**
+   * The loaded-run instability. Liveness is a cheap `process.kill` probe, but
+   * the process-start identity is an external query, and on a loaded Windows
+   * host it is the one that stalls. A live owner then reported
+   * `inspect_failed` instead of stable live contention: both refuse, so nothing
+   * was unsafe, but the run reported a different reason each time, and
+   * integrated acceptance cannot close on a diagnostic that moves.
+   */
+  it('absorbs a transient stall in the start-identity query and still fails closed when it persists', () => {
+    const t = target();
+    writeFileSync(join(t, 'carrier.txt'), 'in-progress');
+    const taskId = 'T-TRANSIENT-IDENTITY';
+    const held = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'in-progress', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], retainLifecycleAuthorityLocksForTest: true,
+      lifecycleLockBootIdentity: () => 'test-boot', lifecycleLockProcessIdentity: () => 'start-A',
+    });
+    assert.equal(held.ok, true, held.errors.join('\n'));
+    foreignizePrimaryLock(t, taskId);
+
+    let identityCalls = 0;
+    const stalled = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true,
+      lifecycleLockProcessIdentity: () => {
+        identityCalls += 1;
+        if (identityCalls < 3) throw Object.assign(new Error('host busy'), { code: 'ETIMEDOUT' });
+        return 'start-A';
+      },
+    });
+    assert.equal(stalled.code, 'fs.lifecycle_lock.contended',
+      'a stalled identity query on a live owner resolves to the true refusal, not an inspection failure');
+    assert.equal(identityCalls, 3);
+
+    identityCalls = 0;
+    const persistent = executeMutationBatch(t, [{ type: 'write', path: 'carrier.txt', content: 'accepted', expectedKind: 'file', expectedDigest: fingerprintTargetPath(t, 'carrier.txt') }], {
+      lifecycleAuthorityTaskIds: [taskId], lifecycleLockBootIdentity: () => 'test-boot',
+      lifecycleLockProcessInspector: () => true,
+      lifecycleLockProcessIdentity: () => { throw Object.assign(new Error('host busy'), { code: 'ETIMEDOUT' }); },
+    });
+    assert.equal(persistent.code, 'fs.lifecycle_lock.inspect_failed',
+      'an inspection that never answers still fails closed rather than guessing the owner is gone');
+    assert.equal(readFileSync(join(t, 'carrier.txt'), 'utf8'), 'in-progress',
+      'neither path reclaims the lock or touches the carrier');
   });
 
   it('records and conservatively handles a current writer with unavailable start identity', () => {

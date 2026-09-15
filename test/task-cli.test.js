@@ -2299,43 +2299,6 @@ describe('task CLI', () => {
     assert.equal(JSON.parse(repeated.stdout).bindingAlreadyCurrent, true);
   });
 
-  it('persists and enforces the identical tooling-failure retry cohort through the task CLI', async () => {
-    const fixture = await createDispatchFixture(tmpDir, 'tooling-failure-cli');
-    const packetPath = '.agenticloop/tmp/dispatch.json';
-    const failurePath = '.agenticloop/tmp/tooling-failure.json';
-    const options = { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) };
-    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
-    writeFileSync(join(fixture.root, packetPath), JSON.stringify(prepareDispatch(fixture).packet), 'utf8');
-    assertOk(await runCliInProcess([
-      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
-      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
-    ], options));
-    writeFileSync(join(fixture.root, failurePath), JSON.stringify({
-      schemaVersion: 1, operation: 'task.role-start', diagnosticCode: 'host.spawn_failed',
-      diagnosticClass: 'tooling', mutationOccurred: false, safeToRetry: true,
-      provenance: { source: 'guarded-cli', operationRef: 'role-start' },
-    }), 'utf8');
-    const attemptStatus = await runCliInProcess(['task', 'attempt-status', 'T-001', '--json', '--target', fixture.root], options);
-    assertOk(attemptStatus);
-    const attemptId = JSON.parse(attemptStatus.stdout).attempts[0].attemptId;
-    const args = ['task', 'record-tooling-failure', 'T-001', '--attempt', attemptId, '--input', failurePath, '--json', '--target', fixture.root];
-    const first = await runCliInProcess(args, options);
-    assertOk(first);
-    assert.equal(JSON.parse(first.stdout).retryPermitted, true);
-    const threshold = await runCliInProcess(args, options);
-    assert.notEqual(threshold.status, 0);
-    const exhausted = JSON.parse(threshold.stdout);
-    assert.equal(exhausted.retryPermitted, false);
-    assert.equal(exhausted.repeated, 2);
-    assert.match(exhausted.repair, /validator\/source diagnosis/i);
-    assert.match(exhausted.repair, /Do not mint or consume another packet/i);
-    const conserved = JSON.parse((await runCliInProcess([
-      'task', 'attempt-status', 'T-001', '--json', '--target', fixture.root,
-    ], options)).stdout);
-    assert.equal(conserved.attempts.length, 1);
-    assert.equal(conserved.liveAttempt.attemptId, attemptId);
-  });
-
   it('fails closed for trailing, multiple, and directory JSON public handoff inputs', async () => {
     const fixture = await createDispatchFixture(tmpDir, 'public-json-failures');
     const packet = prepareDispatch(fixture).packet;

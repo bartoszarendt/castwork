@@ -28,7 +28,6 @@ export const COMMIT_MESSAGE_CLASSES = Object.freeze({
   implementation_outcome_evidence: 'engineer',
   required_check_evidence: 'engineer',
   attempt_abandonment: 'maintainer',
-  tooling_failure_observation: 'maintainer',
   handoff_evidence_refresh: 'maintainer',
   readiness_settlement: 'maintainer',
   review_record: 'maintainer',
@@ -258,6 +257,49 @@ export function evaluateCommitAttribution({ message, taskId, role = 'engineer' }
         `Then create or amend the commit explicitly as ${expectedRole}. This command never amends or publishes.`
       : null,
   };
+}
+
+/**
+ * Whose work is one commit?
+ *
+ * This is a different question from whether a commit's attribution is canonical
+ * for the role returning now, and the two must not stand in for each other. The
+ * attribution gate below asks "is this commit's trailer block valid?" and
+ * refuses when it is not. This asks "did this task's own work produce this
+ * commit?", and only that answer decides what the task's scope gate is entitled
+ * to ask about.
+ *
+ * - `claimed`   - the final contiguous trailer block names exactly this task.
+ * - `other`     - it names another task, or carries no Task trailer at all: the
+ *                 toolkit update an operator ran, a merge, a lockfile refresh.
+ * - `ambiguous` - a Task trailer is present but does not resolve to one task,
+ *                 or was stranded outside the final block by `git commit -m … -m …`.
+ *                 Undecidable ownership resolves toward the task, never away
+ *                 from it, so an ambiguous commit's paths still face the gate.
+ *
+ * Note what is deliberately absent: the commit's paths. Four field cohorts
+ * established that path classification cannot answer an ownership question -
+ * `agenticloop.json`, `.gitignore`, `package.json`, and `package-lock.json`
+ * genuinely belong to the target, so no classifier can exempt them without
+ * hiding real task edits to real files.
+ */
+export function commitTaskOwnership(message, taskId) {
+  const { named, misplaced } = parseFinalTrailerBlock(message);
+  if (misplaced.some(line => /^task:/i.test(line))) return 'ambiguous';
+  const claimed = named.filter(entry => entry.name === 'task').map(entry => entry.value);
+  if (claimed.length === 0) return 'other';
+  if (claimed.length === 1) return claimed[0] === taskId ? 'claimed' : 'other';
+  return claimed.includes(taskId) ? 'ambiguous' : 'other';
+}
+
+/**
+ * The same ownership question asked of a durable commit. An unreadable message
+ * is undecidable, not unowned.
+ */
+export function commitTaskOwnershipOf(runGit, commit, taskId) {
+  const shown = runGit(['show', '-s', '--format=%B', commit]);
+  if (!shown || shown.status !== 0) return 'ambiguous';
+  return commitTaskOwnership(String(shown.stdout ?? ''), taskId);
 }
 
 /** Validate exact work-unit and task-set attribution without accepting a Task trailer fallback. */

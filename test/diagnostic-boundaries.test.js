@@ -13,13 +13,20 @@ import { loadAgenticLoopConfig } from '../src/json.js';
 import {
   ACCEPTED_REFUSAL_FAMILIES,
   HARD_REFUSAL_ALLOWLIST,
+  UNEXPRESSED_REFUSAL_CLASS,
   HISTORICAL_PRODUCER_EXCEPTIONS,
   REFUSAL_CLASSES,
   assertRefusalClassCatalog,
   repairPolicyViewFor,
   validateCatalog,
 } from '../src/refusal-classes.js';
-import { REPAIR_POLICY } from '../src/repair-policy.js';
+import {
+  ESCALATION_KINDS,
+  HUMAN_AUTHORITY_ESCALATION_PREFIX,
+  REPAIR_KINDS,
+  REPAIR_POLICY,
+  repairPolicyFor,
+} from '../src/repair-policy.js';
 import { createValidationResult, validateValidationResult } from '../src/result-envelope.js';
 import { validateConfig } from '../src/validate-config.js';
 import { seedTargetLayout } from './helpers/layout-fixture.js';
@@ -187,5 +194,37 @@ describe('diagnostic catalog and executable proof boundaries', () => {
     const code = F6_DIAGNOSTIC_PROOF_BINDINGS[0].code;
     const definitions = { ...REFUSAL_CLASSES, [code]: { ...REFUSAL_CLASSES[code], factOwner: 'changed-owner' } };
     assert.equal(f6DiagnosticProofBindingsFor(definitions)[0].factOwner, 'changed-owner');
+  });
+});
+
+/**
+ * The separation this phase owns - executable proof,
+ * product-surface unreachability, harness limitations, warnings, human
+ * decisions - is incomplete by exactly one category, and the incompleteness is
+ * what routed the field cohort's refusal to a role that could not act. The gap
+ * is recorded rather than closed: adding the family needs an owner amendment
+ * and is carried as P37-01-C7. These cases keep the record honest - it must
+ * stay declared, stay marked inexpressible, and name an escalation the catalog
+ * really has.
+ */
+describe('the catalog declares the class it cannot express', () => {
+  it('records the derivation-fault gap with its intended escalation and deferral', () => {
+    assert.equal(UNEXPRESSED_REFUSAL_CLASS.expressible, false);
+    assert.equal(UNEXPRESSED_REFUSAL_CLASS.owner, 'operator');
+    assert.equal(UNEXPRESSED_REFUSAL_CLASS.deferredTo, 'P37-01-C7');
+    assert.ok(ESCALATION_KINDS.includes(UNEXPRESSED_REFUSAL_CLASS.intendedEscalationKind),
+      'the channel the family would use already exists; only the routing is missing');
+    assert.ok(UNEXPRESSED_REFUSAL_CLASS.intendedEscalationKind
+      .startsWith(HUMAN_AUTHORITY_ESCALATION_PREFIX),
+      'a derivation fault is the operator\'s to disposition, never a role\'s to repair');
+  });
+
+  it('keeps the gap real: no repair kind claims the toolkit can be wrong', () => {
+    assert.ok(!REPAIR_KINDS.includes(UNEXPRESSED_REFUSAL_CLASS.id),
+      'if a repair kind ever expresses this class, the declaration above is stale and must be retired');
+    // The exact field routing, pinned so closing the gap is a visible change.
+    const observed = repairPolicyFor('role_return.invalid');
+    assert.equal(observed.repairKind, 'repair_evidence');
+    assert.equal(observed.escalationKind, 'none');
   });
 });

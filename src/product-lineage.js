@@ -35,6 +35,7 @@ import {
   groupExecutionAttempts,
   listExecutionAttemptAbandonments,
 } from './execution-attempt.js';
+import { commitTaskOwnershipOf } from './commit-attribution.js';
 import { listDispatchConsumptions } from './handoff-consumption.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { loadManifest } from './generated-artifacts.js';
@@ -238,7 +239,7 @@ export function isCarryCompatibleAttempt(attempt) {
  *           baseHead: string, head: string }} input
  * @returns {{ ok: boolean, productHead: string|null, reason: string|null }}
  */
-export function deriveProductHead({ runGit, baseHead, head, classifier = null } = {}) {
+export function deriveProductHead({ runGit, baseHead, head, classifier = null, taskId = null } = {}) {
   if (typeof runGit !== 'function') throw new TypeError('deriveProductHead requires a runGit function');
   if (!isGitObjectId(baseHead) || !isGitObjectId(head) || !sameGitObjectFormat([baseHead, head])) {
     return { ok: false, productHead: null, reason: 'product head derivation requires two full Git identities of one object format' };
@@ -256,9 +257,17 @@ export function deriveProductHead({ runGit, baseHead, head, classifier = null } 
   for (const commit of lines(listed)) {
     const changed = commitChangedPaths(runGit, commit);
     if (!changed.ok) return { ok: false, productHead: null, reason: changed.reason };
-    if (changed.paths.some(path => !isWorkflowPath(path, classifier))) {
-      return { ok: true, productHead: commit, reason: null };
-    }
+    if (!changed.paths.some(path => !isWorkflowPath(path, classifier))) continue;
+    // "Is there product work here?" and "did this task produce product work?"
+    // are different questions, and a caller that asks the second one gets the
+    // second one. A toolkit update the operator ran touches `agenticloop.json`
+    // and a lockfile, which are product paths by every honest classification -
+    // so with no task named, the answer stays what it always was. With a task
+    // named, a commit that task never authored is not this task's product work.
+    // Undecidable ownership counts, so an unreadable message cannot erase a
+    // mutation that did happen.
+    if (taskId !== null && commitTaskOwnershipOf(runGit, commit, taskId) === 'other') continue;
+    return { ok: true, productHead: commit, reason: null };
   }
   return { ok: true, productHead: baseHead, reason: null };
 }

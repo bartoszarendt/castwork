@@ -219,6 +219,7 @@ import {
   EXECUTION_ATTEMPT_ABANDONMENT_KIND,
   EXECUTION_ATTEMPT_ABANDONMENT_SCHEMA_VERSION,
   EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS,
+  ATTEMPT_FINAL_SLOT_DIAGNOSTIC_CODE,
   PACKET_CONSERVATION_DIAGNOSTIC_CODE,
   deriveAttemptSupersessions,
   evaluateTaskPacketConservation,
@@ -229,7 +230,6 @@ import {
 import { createDegradedEnforcementReports } from './host-role-capabilities.js';
 import { REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION, validateRequiredCheckEvidence, requiredCheckEvidenceMatchesInventory } from './required-checks.js';
 import { produceExecutionEvidence, parseRequiredCheckCommand, validateExecutionEvidence } from './execution-evidence.js';
-import { recordToolingFailure } from './tooling-failure.js';
 import { applyTaskEvidenceInput, validateAppliedTaskEvidence, validateTaskEvidenceInput } from './task-evidence.js';
 import { createCheckEvidenceSupersession, listCheckEvidenceSupersessions } from './check-evidence-supersession.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
@@ -848,7 +848,6 @@ const TASK_SUBCOMMAND_BACKENDS = Object.freeze({
   materialize: Object.freeze(['files']),
   'establish-baseline': Object.freeze(['files']),
   'abandon-attempt': Object.freeze(['files']),
-  'record-tooling-failure': Object.freeze(['files']),
   'prepare-product-commit': Object.freeze(['files']),
   'adopt-historical': Object.freeze(['files']),
   'adopt-commit': Object.freeze(['files']),
@@ -2516,7 +2515,7 @@ export async function cmdTask(args, io = createIo()) {
     const suggestion = sub ? suggestName(sub, Object.keys(TASK_SUBCOMMANDS)) : null;
     throw new CliUsageError(suggestion
       ? `task: unknown subcommand '${sub}'. Did you mean '${suggestion}'?`
-      : 'task requires a subcommand: list, show, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, attempt-status, abandon-attempt, record-tooling-failure, prepare-product-commit, adopt-historical, readiness-plan, readiness-apply, measure, explain, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, review-attach-outcome, status.');
+      : 'task requires a subcommand: list, show, lint, new, establish-baseline, authorize-correction, prepare-decomposition, prepare-dispatch, role-start, handoff-preflight, refresh-handoff-receipt, refresh-handoff-evidence, attempt-status, abandon-attempt, prepare-product-commit, adopt-historical, readiness-plan, readiness-apply, measure, explain, prepare-return, verify-return, check-evidence-init, check-evidence-show, check-evidence-update, evidence, review-prepare, review-attach-outcome, status.');
   }
   const { opts, positional } = parseCommandArgs(`task ${sub}`, TASK_SUBCOMMANDS[sub], args.slice(1));
   const target = resolveCliTarget(io, opts.target);
@@ -3341,6 +3340,40 @@ export async function cmdTask(args, io = createIo()) {
             committedStateEvaluated: true,
             publicMessage: conservation.reason,
             safeRepair: conservation.repair,
+          });
+          return printGateResult(
+            'task prepare-dispatch',
+            commandFailure('task prepare-dispatch', error, 'operational_error', { task_id: taskId }, target),
+            asJson, io
+          );
+        }
+        // The last slot is the one that decides whether the task can be tried
+        // again at all, and it was the only one that arrived silently. In the
+        // field the maintainer had already written "the fresh attempt will be
+        // attempt 5 of 5 (the final one)" into its return, and the mechanism
+        // made nothing of it: the packet minted exactly as any other would.
+        //
+        // This refuses rather than warns, and it asks for nothing durable. The
+        // acknowledgement is spent on the invocation that makes it - there is no
+        // record, no grant, and no scope it could later be read back as.
+        const budget = conservation.attemptBudget;
+        const finalSlot = Number.isSafeInteger(budget?.budget) && Number.isSafeInteger(budget?.recorded) &&
+          budget.budget > 0 && budget.recorded === budget.budget - 1;
+        if (finalSlot && opts.acknowledgeFinalAttempt !== true) {
+          const reason =
+            `minting this packet opens attempt ${budget.recorded + 1} of ${budget.budget} for ${taskId}, ` +
+            `the last the attempt_budget allows (source: ${budget.source}); after it no further packet ` +
+            'can be minted until the budget is raised or the task is recorded as blocked';
+          const error = new PublicCommandError(reason, {
+            code: ATTEMPT_FINAL_SLOT_DIAGNOSTIC_CODE,
+            evidenceState: 'negative',
+            disposition: 'blocked',
+            committedStateEvaluated: true,
+            publicMessage: reason,
+            safeRepair:
+              'Re-run this command with --acknowledge-final-attempt if spending the final attempt is intended. ' +
+              `If it is not, raise attempt_budget through 'npx agenticloop task authorize-correction ${taskId}', ` +
+              'or record the task as blocked or needs_context with what is actually unknown.',
           });
           return printGateResult(
             'task prepare-dispatch',
@@ -6559,54 +6592,6 @@ export async function cmdTask(args, io = createIo()) {
       return 0;
     }
 
-    if (sub === 'record-tooling-failure') {
-      const taskId = positional[0];
-      const asJson = Boolean(opts.json);
-      if (!taskId || !opts.attempt || !opts.input) {
-        io.err('task record-tooling-failure requires <id>, --attempt <attempt-id>, and --input <path>');
-        return EXIT_USAGE;
-      }
-      const budget = opts.budget === undefined ? 2 : Number(opts.budget);
-      if (!Number.isSafeInteger(budget) || budget < 0) {
-        io.err('task record-tooling-failure --budget must be a non-negative integer');
-        return EXIT_USAGE;
-      }
-      const conservation = evaluateTaskPacketConservation(target, taskId, { backend: selectedBackend.backend });
-      if (!Array.isArray(conservation.attempts)) {
-        io.err(`tooling-failure attempt evidence is unavailable: ${conservation.reason ?? 'unknown failure'}`);
-        return 1;
-      }
-      const attempt = conservation.attempts.find(item => item.attemptId === String(opts.attempt)) ?? null;
-      if (!attempt) {
-        io.err(`Execution attempt '${String(opts.attempt)}' is not recorded for ${taskId}.`);
-        return 1;
-      }
-      const input = readTargetJson(target, opts.input, 'tooling-failure input');
-      const taskFile = taskPathForId(target, projectConfig, taskId);
-      if (!existsSync(taskFile)) throw new VerificationContextMalformedError(`task record not found: ${taskId}`);
-      const currentContract = taskContractDigest(readFileSync(taskFile, 'utf8')).digest;
-      const result = recordToolingFailure(target, {
-        taskId,
-        taskContractDigest: attempt.taskContractDigest,
-        currentTaskContractDigest: currentContract,
-        attempt,
-        input,
-        budget,
-        mutationOptions: io?.fsMutationOptions ?? {},
-      });
-      const payload = {
-        ...result,
-        operation: input?.operation ?? 'record-tooling-failure',
-      };
-      if (asJson) io.out(JSON.stringify(payload, null, 2));
-      else {
-        io.out(`${taskId}: identical tooling failure ${result.repeated ?? 0}/${result.budget ?? budget}`);
-        io.out(`  retry permitted: ${result.retryPermitted === true ? 'yes' : 'no'}`);
-        if (result.repair) io.out(`  repair: ${result.repair}`);
-      }
-      return result.ok && result.retryPermitted ? 0 : 1;
-    }
-
     if (sub === 'abandon-attempt') {
       const taskId = positional[0];
       const asJson = Boolean(opts.json);
@@ -6646,11 +6631,21 @@ export async function cmdTask(args, io = createIo()) {
       }
       const runGit = targetGitRunner(target);
       const liveHead = String(runGit(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
+      // `productMutationOccurred` answers exactly one question: did *this
+      // attempt* produce product work? Deriving it from the range alone made
+      // every commit in the window an answer, so a toolkit update the operator
+      // ran - `agenticloop.json`, a lockfile - marked the attempt as having
+      // consumed engineering budget. Four workflow recoveries were recorded as
+      // four engineering failures, and the exemption `classifyExecutionAttempt`
+      // already implements for a `tooling_failed` attempt with no product
+      // mutation was unreachable for the one cause that most needs it: the
+      // toolkit's own. Naming the task here is what makes it reachable.
       const productLineage = deriveProductHead({
         runGit,
         baseHead: attempt.productBaseHead,
         head: liveHead,
         classifier: createPathClassifier(target),
+        taskId,
       });
       if (!productLineage.ok) {
         io.err(`cannot establish attempt product-mutation evidence: ${productLineage.reason}`);

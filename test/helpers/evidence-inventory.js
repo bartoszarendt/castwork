@@ -306,17 +306,6 @@ export const EVIDENCE_INVENTORY = Object.freeze({
     storageClass: 'durable_project_evidence',
     visibleTo: Object.freeze(['orchestrator', 'maintainer']),
   }),
-  tooling_failure_observation: entry({
-    artifactKind: 'agenticloop.tooling-failure-observation',
-    root: '.agenticloop/handoffs/attempts',
-    producer: 'recordToolingFailure after a failed operation passes its retry-safety admission',
-    consumer: 'recordToolingFailure and evaluateToolingFailureRetry when they read the matching task, attempt, operation, and signature cohort',
-    decision: 'whether another identical tooling operation remains safe to retry, or must refuse after the bounded retry history',
-    derivable: false,
-    retention: 'project history; the append-only cohort explains why a tooling retry was admitted or refused for an attempt',
-    storageClass: 'durable_project_evidence',
-    visibleTo: Object.freeze(['orchestrator', 'maintainer']),
-  }),
   return_verification: entry({
     artifactKind: 'agenticloop.return-verification',
     root: '.agenticloop/returns/verifications',

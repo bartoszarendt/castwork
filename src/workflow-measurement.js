@@ -31,7 +31,12 @@
  */
 
 import { listCarrierMutationReceipts, listDispatchConsumptions } from './handoff-consumption.js';
-import { groupExecutionAttempts, listExecutionAttemptAbandonments } from './execution-attempt.js';
+import {
+  ATTEMPT_BUDGET_DIAGNOSTIC_CODE,
+  PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+  groupExecutionAttempts,
+  listExecutionAttemptAbandonments,
+} from './execution-attempt.js';
 import { listReturnVerifications } from './return-verification.js';
 import { parseFilesReviewHistory } from './review-history.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -234,6 +239,28 @@ export function measureTaskWorkflow(target, taskId, options = {}) {
     derived: true,
     persisted: false,
     authority: 'none',
+    // `authority: 'none'` is true of this artifact and was read as true of every
+    // number in it, which is not the same claim. Three of these counters restate
+    // a fact a protected gate decides on - from the durable records, never from
+    // this view - and the rest restate nothing. The field cohort read the
+    // blanket disclaimer, concluded the whole instrument bound nothing, and
+    // opened its final budget slot. Each bound counter names its gate by the
+    // gate's own diagnostic code, so the claim is checkable rather than prose.
+    countersBoundElsewhere: Object.freeze({
+      engineeringAttemptBudgetConsumption: ATTEMPT_BUDGET_DIAGNOSTIC_CODE,
+      workflowRecoveries: ATTEMPT_BUDGET_DIAGNOSTIC_CODE,
+      liveAttempts: PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+    }),
+    // Instrument only. No gate reads these, and promoting any of them to a
+    // control input is a roadmap decision with its own preconditions, not
+    // something this view may assume by reporting them.
+    countersWithNoConsumer: Object.freeze([
+      'abandonedAttempts', 'carrierMutations', 'dispatchConsumptions',
+      'distinctProductBases', 'executionAttempts', 'packetRemints',
+      'physicalAttempts', 'physicalHostInvocations', 'productCommits',
+      'reviewEntries', 'reviewRounds', 'supersessions', 'totalCommits',
+      'verifiedReturns', 'workflowCommits',
+    ]),
     counters: Object.freeze(counters),
     durations: Object.freeze(durations),
     attempts: Object.freeze(attempts.map(attempt => Object.freeze({

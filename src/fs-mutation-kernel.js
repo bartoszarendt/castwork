@@ -601,7 +601,30 @@ function lifecycleBootIdentity() {
   }
 }
 
+/**
+ * A process's own start identity cannot change while it is running, so the
+ * answer for this PID is computed once and reused.
+ *
+ * Every lifecycle lock this process takes records its own start identity, and
+ * on Windows that meant one PowerShell spawn per mutation batch. Across a full
+ * suite that is thousands of process creations, contending for exactly the
+ * resource the inspection itself needs - the mechanism was a meaningful share
+ * of the load under which it became unstable. Only this PID is cached, and only
+ * for the default inspector; an injected one is never memoized.
+ */
+const SELF_PROCESS_IDENTITY = { resolved: false, value: null };
+
 function lifecycleProcessIdentity(pid) {
+  if (pid === process.pid && SELF_PROCESS_IDENTITY.resolved) return SELF_PROCESS_IDENTITY.value;
+  const identity = queryProcessIdentity(pid);
+  if (pid === process.pid) {
+    SELF_PROCESS_IDENTITY.resolved = true;
+    SELF_PROCESS_IDENTITY.value = identity;
+  }
+  return identity;
+}
+
+function queryProcessIdentity(pid) {
   try {
     if (process.platform === 'linux') {
       const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
@@ -611,7 +634,7 @@ function lifecycleProcessIdentity(pid) {
     }
     if (process.platform === 'darwin') {
       const start = String(execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
-        encoding: 'utf8', timeout: 1_000, windowsHide: true,
+        encoding: 'utf8', timeout: PROCESS_INSPECTION_TIMEOUT_MS, windowsHide: true,
       })).trim();
       return start ? `darwin:${start}` : null;
     }
@@ -619,7 +642,7 @@ function lifecycleProcessIdentity(pid) {
       const start = String(execFileSync('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-Command',
         `(Get-Process -Id ${pid} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`,
-      ], { encoding: 'utf8', timeout: 1_000, windowsHide: true })).trim();
+      ], { encoding: 'utf8', timeout: PROCESS_INSPECTION_TIMEOUT_MS, windowsHide: true })).trim();
       return start ? `win32:${start}` : null;
     }
   } catch (error) {
@@ -630,7 +653,30 @@ function lifecycleProcessIdentity(pid) {
   return null;
 }
 
-const TRANSIENT_INSPECTION_RETRY_DELAYS_MS = Object.freeze([10, 25]);
+/**
+ * Backoff between process-inspection attempts.
+ *
+ * The previous 10ms/25ms pair could only absorb a scheduler hiccup. The failure
+ * it had to absorb is a loaded host: the query that times out at one second is
+ * one that needed longer than a second, and retrying it 10ms later under the
+ * same load asks the same question of the same busy machine. Three attempts
+ * then spent three seconds to reach `inspect_failed` on a lock whose owner was
+ * simply alive - a refusal that is safe, but not the true one, and not stable
+ * across runs. The delays now span the load window rather than the jitter.
+ */
+const TRANSIENT_INSPECTION_RETRY_DELAYS_MS = Object.freeze([250, 1_000]);
+
+/**
+ * Per-attempt budget for an external process-start query.
+ *
+ * Measured on a loaded Windows host, the PowerShell start-time query returns in
+ * roughly 200-350ms with deliberate CPU and process-creation contention, so one
+ * second left barely a threefold margin before a hard cliff. This is a ceiling
+ * on a refusal path that already holds a lock, not a latency budget: exceeding
+ * it still fails closed.
+ */
+const PROCESS_INSPECTION_TIMEOUT_MS = 10_000;
+
 const ACTIVE_LIFECYCLE_LOCK_WITNESSES = new Map();
 
 function recognizedTransientInspectionFailure(error) {

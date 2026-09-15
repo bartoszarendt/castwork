@@ -222,7 +222,7 @@ const INSTALLED_MODULE_NEGATIVE_PROBE_CODES = new Set([
 ]);
 
 function installedNegativeCoverage(catalog) {
-  assert.equal(catalog.length, 94, 'the warning-only session_reported row is excluded from hard refusals');
+  assert.equal(catalog.length, 95, 'the warning-only session_reported row is excluded from hard refusals');
   const codes = catalog.map(entry => entry.code);
   assert.equal(new Set(codes).size, codes.length, 'the installed hard-refusal catalog must not duplicate rows');
 
@@ -237,7 +237,7 @@ function installedNegativeCoverage(catalog) {
     ...INSTALLED_MODULE_NEGATIVE_PROBE_CODES,
   ]);
   assert.deepEqual([...covered].sort(), [...codes].sort(), 'every catalog row must have one installed-boundary disposition');
-  assert.equal(installed.length, 87, 'the installed boundary keeps 87 hard-refusal targets');
+  assert.equal(installed.length, 88, 'the installed boundary keeps 88 hard-refusal targets');
   assert.equal(INSTALLED_CLI_NEGATIVE_PROBE_CODES.size, 5, 'the existing installed probes must execute exactly five rows');
   assert.equal(INSTALLED_MODULE_NEGATIVE_PROBE_CODES.size, 2, 'only reconciliation rows may use installed-module coverage');
   return Object.freeze({ installed, probes: [...INSTALLED_CLI_NEGATIVE_PROBE_CODES], modules: [...INSTALLED_MODULE_NEGATIVE_PROBE_CODES] });
@@ -454,7 +454,7 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
   it('keeps every retained hard-refusal negative proof identical in the packed and clean-installed artifact', async () => {
     const installed = await import(pathToFileURL(join(packedRoot, 'src', 'refusal-classes.js')).href);
     assert.deepEqual(installed.HARD_REFUSAL_ALLOWLIST, HARD_REFUSAL_ALLOWLIST);
-    assert.equal(installed.HARD_REFUSAL_ALLOWLIST.length, 94);
+    assert.equal(installed.HARD_REFUSAL_ALLOWLIST.length, 95);
     for (const entry of installed.HARD_REFUSAL_ALLOWLIST) {
       assert.match(entry.negativeProof, /Material fact:.*scenario:/is);
     }
@@ -463,7 +463,7 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
   it('partitions every clean-installed hard-refusal negative without a silent skip', async () => {
     const installed = await import(pathToFileURL(join(packedRoot, 'src', 'refusal-classes.js')).href);
     const coverage = installedNegativeCoverage(installed.HARD_REFUSAL_ALLOWLIST);
-    assert.equal(coverage.installed.length + coverage.probes.length + coverage.modules.length, 94);
+    assert.equal(coverage.installed.length + coverage.probes.length + coverage.modules.length, 95);
     for (const entry of installed.HARD_REFUSAL_ALLOWLIST) assert.match(scenarioFor(entry), /\S/);
 
     // Scratch drift demonstration: a removed catalog row cannot be hidden by

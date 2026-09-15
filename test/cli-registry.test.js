@@ -51,12 +51,22 @@ describe('command registry', () => {
     assert.equal(resolveCommandName('frobnicate'), null);
   });
 
-  it('does not expose the retired remediation command in registry, help, or task routing', async () => {
-    const retiredSubcommand = ['remediation', 'authority'].join('-');
-    assert.equal(COMMAND_REGISTRY.task.subcommands[retiredSubcommand], undefined);
-    assert.doesNotMatch(COMMAND_REGISTRY.task.usage, new RegExp(retiredSubcommand));
-    const result = await runCliInProcess(['task', retiredSubcommand, 'T-001', '--json']);
-    assert.equal(result.status, 2);
+  /**
+   * A shipped command nothing routes to is the defect this phase keeps finding.
+   * `remediation-authority` wrote a durable record no protected transition read;
+   * `record-tooling-failure` wrote one whose only reader was itself. Neither had
+   * a protected consumer to name, so both were retired rather than completed.
+   */
+  it('does not expose retired task commands in registry, help, or task routing', async () => {
+    for (const retiredSubcommand of [
+      ['remediation', 'authority'].join('-'),
+      ['record', 'tooling', 'failure'].join('-'),
+    ]) {
+      assert.equal(COMMAND_REGISTRY.task.subcommands[retiredSubcommand], undefined, retiredSubcommand);
+      assert.doesNotMatch(COMMAND_REGISTRY.task.usage, new RegExp(retiredSubcommand));
+      const result = await runCliInProcess(['task', retiredSubcommand, 'T-001', '--json']);
+      assert.equal(result.status, 2, retiredSubcommand);
+    }
   });
 
   it('parses kebab-case options into camelCase keys', () => {

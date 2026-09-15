@@ -8,8 +8,6 @@ import { resolveCloseoutCandidateArtifact } from '../src/candidate.js';
 import { validateCloseoutPacket } from '../src/closeout-contract.js';
 import { recommendedStatusForReasons } from '../src/closeout.js';
 import { groupExecutionAttempts } from '../src/execution-attempt.js';
-import { evaluateToolingFailureRetry } from '../src/role-session-policy.js';
-import { recordToolingFailure } from '../src/tooling-failure.js';
 import { applyTaskEvidenceInput, validateAppliedTaskEvidence } from '../src/task-evidence.js';
 import { parseVerificationAttempts } from '../src/verification-learning.js';
 import { parseResolutionMatrix } from '../src/resolution-matrix.js';
@@ -126,20 +124,8 @@ describe('section-specific structured evidence', () => {
   });
 });
 
-describe('retry admission and explicit attempt results', () => {
-  const current = {
-    taskId: 'T-001', taskContractDigest: CONTRACT, attemptId: ATTEMPT_ID,
-    attemptState: 'live', contractCurrent: true, operation: 'task.role-start', signature: 'sig',
-    mutationOccurred: false, safeToRetry: true,
-  };
-
-  it('classifies retry safety and status reasons deterministically', () => {
-    assert.equal(evaluateToolingFailureRetry({ current, budget: 0 }).retryPermitted, false);
-    assert.equal(evaluateToolingFailureRetry({ current, budget: 2 }).retryPermitted, true);
-    assert.equal(evaluateToolingFailureRetry({ current: { ...current, mutationOccurred: true } }).retryPermitted, false);
-    assert.equal(evaluateToolingFailureRetry({ current: { ...current, safeToRetry: false } }).retryPermitted, false);
-    assert.equal(evaluateToolingFailureRetry({ current: { ...current, contractCurrent: false } }).retryPermitted, false);
-    assert.equal(evaluateToolingFailureRetry({ current: { ...current, attemptState: 'returned' } }).retryPermitted, false);
+describe('explicit attempt results', () => {
+  it('classifies status reasons deterministically', () => {
     const statusCases = [
       [['audit_stale'], 'follow_up_required'],
       [['audit_candidate_missing'], 'follow_up_required'],
@@ -161,37 +147,4 @@ describe('retry admission and explicit attempt results', () => {
     assert.equal(serialized.errors[0].code, 'attempt_return_unbound');
   });
 
-  it('admits only one of two contenders for the final retry slot', () => {
-    const target = mkdtempSync(join(tmpdir(), 'agenticloop-tooling-retry-'));
-    try {
-      const attempt = {
-        attemptId: ATTEMPT_ID, state: 'live', packetId: 'dispatch:11111111-1111-4111-8111-111111111111',
-        packetDigest: `sha256:agenticloop.dispatch-preparation.v6:${'c'.repeat(64)}`,
-        invocationId: 'invocation-1', productBaseHead: SHA,
-      };
-      const input = {
-        schemaVersion: 1, operation: 'task.role-start', diagnosticCode: 'host.spawn_failed', diagnosticClass: 'tooling',
-        mutationOccurred: false, safeToRetry: true, provenance: { source: 'guarded-cli', operationRef: 'role-start' },
-      };
-      let inner = null;
-      let injected = false;
-      const outer = recordToolingFailure(target, {
-        taskId: 'T-001', taskContractDigest: CONTRACT, currentTaskContractDigest: CONTRACT,
-        attempt, input, budget: 2,
-        mutationOptions: { beforeWrite: () => {
-          if (injected) return;
-          injected = true;
-          inner = recordToolingFailure(target, {
-            taskId: 'T-001', taskContractDigest: CONTRACT, currentTaskContractDigest: CONTRACT,
-            attempt, input, budget: 2,
-          });
-        } },
-      });
-      assert.equal(inner.retryPermitted, true);
-      assert.equal(outer.retryPermitted, false);
-      assert.equal(outer.repeated, 2);
-    } finally {
-      rmSync(target, { recursive: true, force: true });
-    }
-  });
 });

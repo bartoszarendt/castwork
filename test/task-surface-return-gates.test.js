@@ -339,7 +339,7 @@ describe('return gates are scoped to the task surface', () => {
   });
 
   /**
-   * The fourth cohort's blocker (`C12F-F18`). The window held four commits the
+   * The fourth field cohort's blocker. The window held four commits the
    * loop never authored - a toolkit update the operator ran and the lockfile
    * refresh that followed it - and every product-classified path they touched
    * was refused as out of scope. `deriveCommitRange` had already exempted those

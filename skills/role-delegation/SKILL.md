@@ -132,9 +132,9 @@ diagnosis. Precedent is a hypothesis, not authority.
 
 For non-passing/manual checks, record the observed outcome and omit required
 `--execution-output`. Retry an in-lease usage refusal only when `safeToRetry:
-true` and `mutationOccurred: false`, using its corrected command. Before one
-identical tooling retry, run `task record-tooling-failure`; two total observations
-allow one retry and only bounded provenance persists. Authority, lifecycle,
+true` and `mutationOccurred: false`, using its corrected command. Do not retry
+one identical tooling failure twice; an unchanged retry makes no progress.
+Authority, lifecycle,
 binding, ambiguity, evidence, and partial-mutation failures stop immediately.
 Public boundaries revalidate and reject caller-authored receipts. The raw return
 binds the packet and non-authoritative outcome; Orchestrator never reconstructs

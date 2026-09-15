@@ -89,6 +89,15 @@ export const ATTEMPT_HISTORY_DIAGNOSTIC_CODE = 'dispatch.attempt.history_rewritt
 export const ATTEMPT_BUDGET_DIAGNOSTIC_CODE = 'dispatch.attempt.budget_exhausted';
 
 /**
+ * The one diagnostic code an unacknowledged final attempt slot reports under.
+ *
+ * Distinct from exhaustion on purpose: a budget about to be spent is not a
+ * budget already spent, and a row that said otherwise would make the catalog
+ * state something false about the repository it is describing.
+ */
+export const ATTEMPT_FINAL_SLOT_DIAGNOSTIC_CODE = 'dispatch.attempt.final_slot_unacknowledged';
+
+/**
  * How an attempt stopped being live.
  *
  * `superseded_by_packet` is not an operator act. It is recorded automatically

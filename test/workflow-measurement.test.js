@@ -27,7 +27,13 @@ import {
   measureTaskWorkflow,
 } from '../src/workflow-measurement.js';
 import { createDispatchConsumption, dispatchConsumptionRelativePath } from '../src/handoff-consumption.js';
-import { executionAttemptAbandonmentRelativePath, executionAttemptIdentity } from '../src/execution-attempt.js';
+import {
+  ATTEMPT_BUDGET_DIAGNOSTIC_CODE,
+  PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+  executionAttemptAbandonmentRelativePath,
+  executionAttemptIdentity,
+} from '../src/execution-attempt.js';
+import { repairPolicyFor } from '../src/repair-policy.js';
 import { recognizeHandoff } from '../src/handoff-recognition.js';
 import { createDispatchFixture, git as fixtureGit, prepare } from './helpers/dispatch-fixture.js';
 import { fixtureDispatchValidator } from './helpers/handoff-fixture.js';
@@ -392,5 +398,45 @@ describe('measurement never invents a number', () => {
     const later = new Date(Date.parse(consumption.consumedAt) + 90_000).toISOString();
     const measurement = measureTaskWorkflow(fixture.root, 'T-001', { now: later });
     assert.equal(measurement.durations.liveAttemptElapsedSeconds, 90);
+  });
+});
+
+/**
+ * `authority: 'none'` is true of the artifact and was being read
+ * as true of every number in it - which is a different claim, and a false one:
+ * two of these counters restate facts a protected gate decides on. The field
+ * cohort read the blanket disclaimer, concluded the whole instrument bound
+ * nothing, and opened its final budget slot. These cases keep the two lists
+ * exhaustive and disjoint, so a counter added later cannot quietly arrive
+ * without an answer to "does anything read this?".
+ */
+describe('measurement says which of its counters bind something', () => {
+  it('accounts for every counter exactly once', async () => {
+    const fixture = await createDispatchFixture(temp, 'measure-counter-provenance');
+    const measurement = measureTaskWorkflow(fixture.root, 'T-001');
+    const counters = Object.keys(measurement.counters).sort();
+    const bound = Object.keys(measurement.countersBoundElsewhere);
+    const unbound = [...measurement.countersWithNoConsumer];
+
+    assert.deepEqual([...bound, ...unbound].sort(), counters,
+      'every counter is either bound to a named gate or declared to have no consumer');
+    assert.equal(new Set([...bound, ...unbound]).size, bound.length + unbound.length,
+      'no counter may appear in both lists');
+  });
+
+  it('names a real gate for every counter it claims is bound', async () => {
+    const fixture = await createDispatchFixture(temp, 'measure-counter-consumers');
+    const measurement = measureTaskWorkflow(fixture.root, 'T-001');
+    const gates = new Set([ATTEMPT_BUDGET_DIAGNOSTIC_CODE, PACKET_CONSERVATION_DIAGNOSTIC_CODE]);
+    for (const [counter, consumer] of Object.entries(measurement.countersBoundElsewhere)) {
+      assert.ok(gates.has(consumer), `${counter} must name a real gate, got '${consumer}'`);
+      // The named code must be a diagnostic the catalog actually classifies,
+      // so a counter cannot claim a consumer that does not exist.
+      assert.ok(repairPolicyFor(consumer), `${consumer} must be a classified diagnostic`);
+    }
+    // The artifact itself still confers nothing; naming a consumer is not a
+    // claim that this view is that consumer's input.
+    assert.equal(measurement.authority, 'none');
+    assert.equal(measurement.persisted, false);
   });
 });

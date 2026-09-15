@@ -35,7 +35,7 @@ All commands:
 | `generate` | Generate adapter artifacts (`opencode`, `codex`, `claude-code`, `copilot`, `cursor`, `all`) |
 | `configure models` | Set per-host role model settings in `agenticloop.json` |
 | `configure import-generated-models` | Explicitly preview or import missing tracked model settings from one generated host |
-| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `measure`, `explain`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `review-attach-outcome`, `adopt-historical`, `adopt-commit`, `abandon-attempt`, `record-tooling-failure`, `commit-message`, `prepare-product-commit`, `attempt-status`, `status`) |
+| `task` | Task records and lifecycle preparation (`list`, `show`, `lint`, `new`, `materialize`, `readiness-plan`, `readiness-apply`, `measure`, `explain`, `establish-baseline`, `authorize-correction`, `prepare-decomposition`, `prepare-dispatch`, `role-start`, `handoff-preflight`, `refresh-handoff-receipt`, `prepare-return`, `verify-return`, `check-evidence-init`, `check-evidence-show`, `check-evidence-update`, `evidence`, `review-prepare`, `review-attach-outcome`, `adopt-historical`, `adopt-commit`, `abandon-attempt`, `commit-message`, `prepare-product-commit`, `attempt-status`, `status`) |
 | `audit` | Work-unit audit certificates (`new`, `baseline`, `report`, `status`, `gate`, `lint`, `repair-structure`, `disposition`, `override`, `resolve`) |
 | `closeout` | Composite closeout packets (`prepare`, `status`, `record`) |
 | `improvement` | Bounded improvement proposals (`new`, `lint`, `status`) |
@@ -73,10 +73,9 @@ All commands:
   range into an existing attempt. The latter preserves bounded attempt context
   but never authenticates claimed origin or substitutes for permission, Git
   attribution, or fresh required-check, review, and audit certification.
-- `task abandon-attempt`, `task attempt-status`, and
-  `task record-tooling-failure` respectively discard a named live attempt under
-  durable authority, report whether a new packet may be minted, and persist one
-  bounded tooling-failure observation with its retry bound.
+- `task abandon-attempt` and `task attempt-status` respectively discard a
+  named live attempt under durable authority and report whether a new packet may
+  be minted.
 - `task commit-message` writes a canonically trailered workflow commit message
   without committing. `task prepare-product-commit` derives the exact task-owned
   product paths after work and writes the corresponding product commit message.
@@ -1079,6 +1078,17 @@ So a consumed packet **reaches a canonical return or is explicitly abandoned**.
 | A live attempt exists and has recorded Engineer mutations | **refused** |
 | The previous attempt was explicitly abandoned | permitted, with the abandoned attempt still on record |
 
+The last unit of `attempt_budget` is spent explicitly. When minting would open
+the final attempt the budget allows, `task prepare-dispatch` refuses under
+`dispatch.attempt.final_slot_unacknowledged` and names the consequence: after
+that attempt no further packet can be minted until the budget is raised or the
+task is recorded as blocked. Re-run with `--acknowledge-final-attempt` to
+proceed. The acknowledgement is spent on the invocation that makes it - it
+records nothing, grants no additional authority, and carries no scope or expiry
+a later command could read back. Exhaustion itself remains a separate refusal,
+`dispatch.attempt.budget_exhausted`; a budget about to be spent is not a
+budget already spent.
+
 Re-validating an existing packet with `task prepare-dispatch <id> --packet
 <path>` remains a pre-role-start diagnostic. Do not run it after consumption:
 role start deliberately advances the repository/carrier, so recomputing the
@@ -1684,12 +1694,6 @@ after persistence and changes only its marked section blocks. Raw returns and re
 product/workflow paths, and exact chain references. `task review-prepare` uses
 one command-local carrier snapshot and writes no review receipt when it changes.
 
-Before retrying a failed tooling operation, run `task
-record-tooling-failure <id> --attempt <attempt-id> --input <path> --json`. The
-default is two identical observations: the first permits one retry; the second
-exits nonzero. Contract, attempt, operation, or signature changes start another
-cohort. Inputs are bounded and exclude raw output, secrets, and session data.
-
 `task review-prepare --json` also emits two revision-routing fields,
 `findingResolutionMatrix` and `matrixDecision`. Both are `null` on a first
 review: the matrix is scaffolded only on a revision round, once the review record
@@ -2257,6 +2261,27 @@ internal stack details for unexpected failures; normal output keeps those
 details behind a stable debug reference. Set `AGENTICLOOP_DEBUG=1` for the same
 behavior in automation. Do not publish debug output without reviewing it for
 paths, environment details, or other sensitive operational context.
+
+### A refusal class the catalog cannot express
+
+Every diagnostic resolves to a repair kind that asks a workflow role to change
+*project* state, and to an escalation kind that routes the result. None of them
+means "the fact this refusal rests on was derived incorrectly by the toolkit".
+A derivation fault therefore surfaces as an ordinary evidence refusal - in the
+field, `role_return.invalid` with `repairKind: repair_evidence` and
+`escalationKind: none` - and the role is asked to repair evidence that is
+already correct.
+
+The human channel the fault belongs to, `human_authority_disposition`, exists
+and other rows reach it; no row reaches it for this reason. The gap is declared
+in the catalog itself as `UNEXPRESSED_REFUSAL_CLASS` so a consumer can read it
+where the rest of the routing lives. Adding the diagnostic family requires an
+owner amendment and is carried as P37-01-C7, with the auditable override it
+implies as P37-01-C8.
+
+Until then, an operator who believes a refusal rests on a wrongly derived fact
+should treat it as an operator decision rather than role work, and should not
+read `repair_evidence` as a statement that the project's records are wrong.
 
 ## Exit statuses
 

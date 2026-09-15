@@ -183,6 +183,74 @@ describe('the CLI conserves a consumed packet', () => {
     assert.ok(report.attempts[0].productBaseHead);
   });
 
+  /**
+   * `classifyExecutionAttempt` already exempts a `tooling_failed`
+   * attempt that produced no product work from consuming engineering budget.
+   * The exemption was unreachable for the one cause that most needs it: while
+   * `productMutationOccurred` counted any non-workflow path in the window, a
+   * toolkit update the operator ran set it `true`, and four workflow recoveries
+   * were recorded as four engineering failures on a task with zero product
+   * defects.
+   */
+  it('does not charge engineering budget for a toolkit update the attempt never authored', async () => {
+    const fixture = await createDispatchFixture(temp, 'attempt-toolkit-update');
+    const { consumption, attemptId } = consumeOnePacket(fixture);
+    recordEngineerMutation(fixture, consumption);
+
+    // Untrailered, and on product-classified paths the target genuinely owns.
+    // Neither file can be declared toolkit-owned without hiding real edits.
+    writeFileSync(join(fixture.root, 'agenticloop.json'), '{\n  "documents": {}\n}\n', 'utf8');
+    writeFileSync(join(fixture.root, 'package-lock.json'), '{\n  "lockfileVersion": 3\n}\n', 'utf8');
+    fixtureGit(fixture.root, ['add', 'agenticloop.json', 'package-lock.json']);
+    fixtureGit(fixture.root, ['commit', '-m', 'Update Agentic Loop']);
+
+    const abandoned = await cli(fixture, [
+      'task', 'abandon-attempt', 'T-001', '--attempt', attemptId,
+      '--reason', 'the toolkit refused the return over state this attempt did not author',
+      '--authority', 'operator:x', '--disposition', 'tooling_failed', '--json',
+    ]);
+    assert.equal(abandoned.status, 0, abandoned.stderr);
+    assert.equal(JSON.parse(abandoned.stdout).record.productMutationOccurred, false,
+      'a commit this task never authored is not this attempt\'s product work');
+
+    const status = await cli(fixture, ['task', 'attempt-status', 'T-001', '--json']);
+    assert.equal(status.status, 0, status.stderr);
+    const report = JSON.parse(status.stdout);
+    assert.equal(report.attempts[0].state, 'tooling_failed');
+    assert.equal(report.attempts[0].workflowRecovery, true, 'the exemption is reachable');
+    assert.equal(report.attempts[0].engineeringBudgetConsumed, false);
+    assert.equal(report.attemptBudget.workflowRecoveries, 1,
+      'a workflow recovery is now counted as one, not reported as zero');
+    // The counter is not decoration: `attemptBudget.recorded` is what the
+    // budget gate compares, and this attempt no longer spends a unit of it.
+    assert.equal(report.attemptBudget.recorded, 0);
+  });
+
+  it('still charges engineering budget for product work the attempt did author', async () => {
+    const fixture = await createDispatchFixture(temp, 'attempt-real-product-work');
+    const { consumption, attemptId } = consumeOnePacket(fixture);
+    recordEngineerMutation(fixture, consumption);
+
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "attempted";\n', 'utf8');
+    fixtureGit(fixture.root, ['add', 'src/existing.js']);
+    fixtureGit(fixture.root, ['commit', '-m', 'implement the task\n\nTask: T-001\nAgent: engineer']);
+
+    const abandoned = await cli(fixture, [
+      'task', 'abandon-attempt', 'T-001', '--attempt', attemptId,
+      '--reason', 'the implementation is incomplete and this attempt is being retired',
+      '--authority', 'operator:x', '--disposition', 'tooling_failed', '--json',
+    ]);
+    assert.equal(abandoned.status, 0, abandoned.stderr);
+    assert.equal(JSON.parse(abandoned.stdout).record.productMutationOccurred, true,
+      'the attempt authored product work and is charged for it');
+
+    const report = JSON.parse((await cli(fixture, ['task', 'attempt-status', 'T-001', '--json'])).stdout);
+    assert.equal(report.attempts[0].workflowRecovery, false);
+    assert.equal(report.attempts[0].engineeringBudgetConsumed, true);
+    assert.equal(report.attemptBudget.workflowRecoveries, 0);
+    assert.equal(report.attemptBudget.recorded, 1, 'real product work still spends a budget unit');
+  });
+
   it('refuses to abandon an attempt that does not exist', async () => {
     const fixture = await createDispatchFixture(temp, 'attempt-unknown');
     consumeOnePacket(fixture);
