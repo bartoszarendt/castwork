@@ -8,7 +8,7 @@
  * ancestry proof is a precondition rather than an optional extra check.
  */
 
-import { commitMessageProducerHint, evaluateCommitAttribution } from './commit-attribution.js';
+import { commitMessageProducerHint, evaluateCommitAttribution, parseFinalTrailerBlock } from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 
@@ -46,6 +46,39 @@ function text(result) {
   return String(result?.stdout ?? '').trim();
 }
 
+/**
+ * Whose work is one commit?
+ *
+ * This is a different question from whether a commit's attribution is canonical
+ * for the role returning now, and the two must not stand in for each other. The
+ * attribution gate below asks "is this commit's trailer block valid?" and
+ * refuses when it is not. This asks "did this task's own work produce this
+ * commit?", and only that answer decides what the task's scope gate is entitled
+ * to ask about.
+ *
+ * - `claimed`   - the final contiguous trailer block names exactly this task.
+ * - `other`     - it names another task, or carries no Task trailer at all: the
+ *                 toolkit update an operator ran, a merge, a lockfile refresh.
+ * - `ambiguous` - a Task trailer is present but does not resolve to one task,
+ *                 or was stranded outside the final block by `git commit -m … -m …`.
+ *                 Undecidable ownership resolves toward the task, never away
+ *                 from it, so an ambiguous commit's paths still face the gate.
+ *
+ * Note what is deliberately absent: the commit's paths. Four field cohorts
+ * established that path classification cannot answer an ownership question -
+ * `agenticloop.json`, `.gitignore`, `package.json`, and `package-lock.json`
+ * genuinely belong to the target, so no classifier can exempt them without
+ * hiding real task edits to real files.
+ */
+function commitTaskOwnership(message, taskId) {
+  const { named, misplaced } = parseFinalTrailerBlock(message);
+  if (misplaced.some(line => /^task:/i.test(line))) return 'ambiguous';
+  const claimed = named.filter(entry => entry.name === 'task').map(entry => entry.value);
+  if (claimed.length === 0) return 'other';
+  if (claimed.length === 1) return claimed[0] === taskId ? 'claimed' : 'other';
+  return claimed.includes(taskId) ? 'ambiguous' : 'other';
+}
+
 function lines(result) {
   return text(result).split(/\r?\n/).filter(Boolean);
 }
@@ -63,7 +96,8 @@ function lines(result) {
  *   requireAttribution?: boolean,
  *   allowedPaths?: string[]|null,
  * }} input
- * @returns {{ ok: true, range: { base: string, head: string }, commits: string[], changedPaths: string[] }
+ * @returns {{ ok: true, range: { base: string, head: string }, commits: string[], changedPaths: string[],
+ *     taskAuthoredChangedPaths: string[]|null }
  *   | { ok: false, code: string, evidenceState: string, disposition: string, message: string }}
  */
 export function deriveCommitRange(input = {}) {
@@ -111,6 +145,13 @@ export function deriveCommitRange(input = {}) {
     return malformed('durable commit range mixes Git object formats');
   }
 
+  // The task-scoped half of the range inventory. Every path in the range is
+  // still reported below; this records only which of them this task's own work
+  // produced, so the scope gate stops re-asking the whole-repository question
+  // the attribution exemption immediately below deliberately removed.
+  const taskAuthoredPaths = new Set();
+  let ownershipComplete = requireAttribution;
+
   if (requireAttribution) {
     // Attribution binds the commits that carry the task's work. A range in a
     // repository other people also commit to holds commits that are not the
@@ -123,19 +164,29 @@ export function deriveCommitRange(input = {}) {
     // before.
     const patterns = (Array.isArray(allowedPaths) ? allowedPaths : [])
       .filter(pattern => typeof pattern === 'string' && pattern);
-    const carriesTaskWork = commit => {
-      if (patterns.length === 0) return true;
-      const changed = runGit(['diff', '--name-only', '--no-renames', `${commit}^!`]);
-      if (!changed || changed.status !== 0) return true;
-      return lines(changed).some(path => patterns.some(pattern => fileMatchesScopePattern(path, pattern)));
-    };
     for (const commit of commits) {
-      if (!carriesTaskWork(commit)) continue;
+      const changed = runGit(['diff', '--name-only', '--no-renames', `${commit}^!`]);
+      // An unreadable diff is not evidence of an empty commit. It leaves both
+      // questions below undecidable, and both then fail toward the task.
+      const commitPaths = changed && changed.status === 0 ? lines(changed) : null;
+      const carriesTaskWork = patterns.length === 0 || commitPaths === null ||
+        commitPaths.some(path => patterns.some(pattern => fileMatchesScopePattern(path, pattern)));
+
       const shown = runGit(['show', '-s', '--format=%B', commit]);
       if (!shown || shown.status !== 0) {
         return stale(`unable to read durable commit message ${commit}`);
       }
-      const attribution = evaluateCommitAttribution({ message: String(shown.stdout ?? ''), taskId, role: roleId });
+      const message = String(shown.stdout ?? '');
+      const ownership = commitTaskOwnership(message, taskId);
+      if (ownership !== 'other') {
+        // The commit is this task's own work, so the paths it introduced are
+        // the task's to answer for. An unreadable diff cannot be enumerated, so
+        // the whole inventory stays in scope rather than silently shrinking.
+        if (commitPaths === null) ownershipComplete = false;
+        else for (const path of commitPaths) taskAuthoredPaths.add(path);
+      }
+      if (!carriesTaskWork) continue;
+      const attribution = evaluateCommitAttribution({ message, taskId, role: roleId });
       if (!attribution.ok) {
         // The trailer grammar is almost never got wrong on purpose: `git commit
         // -m … -m …` inserts a blank line between every `-m` and strands
@@ -160,6 +211,10 @@ export function deriveCommitRange(input = {}) {
     range: { base: baseHead, head },
     commits,
     changedPaths: lines(diff).sort(),
+    // `null` means ownership was not determined here, not that this task
+    // authored nothing. A caller that cannot tell the two apart must ask its
+    // question of the whole range.
+    taskAuthoredChangedPaths: ownershipComplete ? [...taskAuthoredPaths].sort() : null,
   };
 }
 

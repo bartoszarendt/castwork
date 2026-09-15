@@ -54,6 +54,15 @@ const SHARED_PATHS = Object.freeze([
   ['package-lock.json', `${JSON.stringify({ name: 'target', lockfileVersion: 3 }, null, 2)}\n`],
 ]);
 
+/**
+ * The same shared paths as the operator's toolkit update first left them, so a
+ * later refresh of the same files is a real second change rather than a no-op.
+ */
+const MAINTENANCE_PATHS = Object.freeze([
+  ['agenticloop.json', `${JSON.stringify({ documents: { rules: 'AGENTS.md' }, generated: false }, null, 2)}\n`],
+  ['package-lock.json', `${JSON.stringify({ name: 'target', lockfileVersion: 2 }, null, 2)}\n`],
+]);
+
 function carrierDigest(root, taskId = 'T-001') {
   const content = readFileSync(join(root, '.agenticloop', 'tasks', `${taskId}.md`), 'utf8');
   return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
@@ -86,7 +95,10 @@ function commitFiles(root, files, subject) {
  * trailers - the operator ran the updater, not the loop. The shared-path commit
  * lands after the implementation and touches nothing this task declared.
  */
-async function implementedTask(name) {
+async function implementedTask(name, {
+  maintenancePaths = [],
+  attemptAuthoredOffSurface = null,
+} = {}) {
   const fixture = await createDispatchFixture(temp, name, {
     requiredChecksText: '- [RC-1] command: `node --version`\n- [RC-2] command: `node --version`',
   });
@@ -108,7 +120,15 @@ async function implementedTask(name) {
 
   // Inside the return range, and untrailered: the toolkit updater is not the
   // loop and does not write canonical Task:/Agent: trailers.
-  const toolkitUpdate = commitFiles(root, TOOLKIT_UPDATE_PATHS, 'Update Agentic Loop');
+  const toolkitUpdate = commitFiles(root, [...TOOLKIT_UPDATE_PATHS, ...maintenancePaths], 'Update Agentic Loop');
+
+  // An off-surface edit the attempt itself authored. It carries the loop's own
+  // canonical trailers, so no ownership question arises: it is this task's work,
+  // and task work outside `allowed_paths` is what the scope gate exists for.
+  const offSurfaceHead = attemptAuthoredOffSurface
+    ? commitFiles(root, [attemptAuthoredOffSurface],
+      'touch a path this task never declared\n\nTask: T-001\nAgent: engineer')
+    : null;
 
   writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
   git(root, ['add', 'src/existing.js']);
@@ -117,7 +137,40 @@ async function implementedTask(name) {
 
   const sharedHead = commitFiles(root, SHARED_PATHS, 'chore: refresh target config and lockfile');
 
-  return { fixture, root, cli, packetPath, toolkitUpdate, productHead, sharedHead };
+  return { fixture, root, cli, packetPath, toolkitUpdate, offSurfaceHead, productHead, sharedHead };
+}
+
+/**
+ * Bind the implementation, execute the required checks, and produce the raw
+ * return. Every return fixture needs this same chain; only the history around
+ * it differs.
+ */
+async function produceReturn({ root, cli, packetPath }, productHead, slug) {
+  assertOk(await cli([
+    'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
+    '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
+  ]), 'implementation artifact evidence');
+  git(root, ['add', '.agenticloop/tasks']);
+  git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
+
+  const checksPath = `.agenticloop/tmp/${slug}-checks.json`;
+  assertOk(await cli([
+    'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath, '--json',
+  ]), 'check evidence init');
+  for (const check of JSON.parse(readFileSync(join(root, checksPath), 'utf8'))) {
+    assertOk(await cli([
+      'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+      '--input', checksPath, '--output', checksPath, '--check', check.id,
+      '--outcome', 'passed', '--evidence', `${check.id} passed`, '--json',
+    ]), `check evidence update ${check.id}`);
+  }
+
+  const returnPath = `.agenticloop/tmp/${slug}-return.json`;
+  const prepared = await cli([
+    'task', 'prepare-return', 'T-001', '--packet', packetPath, '--check-evidence', checksPath,
+    '--outcome', 'implementation_ready_for_review', '--output', returnPath, '--json',
+  ]);
+  return { returnPath, prepared };
 }
 
 describe('return gates are scoped to the task surface', () => {
@@ -282,6 +335,60 @@ describe('return gates are scoped to the task surface', () => {
       `${afterCommit.stdout}${afterCommit.stderr}`,
       /unknown workflow path/,
       'committed check proof is workflow evidence, not an unknown path'
+    );
+  });
+
+  /**
+   * The fourth cohort's blocker (`C12F-F18`). The window held four commits the
+   * loop never authored - a toolkit update the operator ran and the lockfile
+   * refresh that followed it - and every product-classified path they touched
+   * was refused as out of scope. `deriveCommitRange` had already exempted those
+   * commits from attribution thirty lines earlier; the scope check re-asked the
+   * whole-repository question that exemption removed.
+   *
+   * These two cases are the pair the repair has to satisfy at once: separately
+   * owned maintenance in the range must not be refused, and an out-of-scope
+   * path the attempt itself authored still must be.
+   */
+  it('verifies a return whose range holds separately-owned maintenance on product paths', async () => {
+    const context = await implementedTask('maintenance-in-range', { maintenancePaths: MAINTENANCE_PATHS });
+    const { root, cli, packetPath, productHead } = context;
+    const { returnPath, prepared } = await produceReturn(context, productHead, 'maintenance');
+    assertOk(prepared, 'prepare-return over separately-owned maintenance inside the range');
+
+    const roleReturn = JSON.parse(readFileSync(join(root, returnPath), 'utf8'));
+    // The repair changes what is refused, not what is reported: a path the
+    // range really carries stays in the range's inventory either way.
+    for (const [path] of MAINTENANCE_PATHS) {
+      assert.ok(roleReturn.productChangedPaths.includes(path),
+        `the range inventory still reports the maintenance path '${path}'`);
+    }
+
+    assertOk(await cli([
+      'task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath,
+      '--from-current-repository', '--json',
+    ]), 'verify-return over separately-owned maintenance inside the range');
+  });
+
+  it('still refuses an out-of-scope path the attempt itself authored', async () => {
+    const context = await implementedTask('attempt-authored-off-surface', {
+      attemptAuthoredOffSurface: ['off-surface.md', '# Not this task\n'],
+    });
+    const { root, cli, packetPath, productHead, offSurfaceHead } = context;
+    assert.notEqual(offSurfaceHead, productHead, 'the off-surface commit sits inside the return range');
+
+    const { returnPath, prepared } = await produceReturn(context, productHead, 'off-surface');
+    assertOk(prepared, 'prepare-return still produces the return; the scope gate is the refusal');
+
+    const refused = await cli([
+      'task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath,
+      '--from-current-repository', '--json',
+    ]);
+    assert.equal(refused.status, 1, `an attempt-authored out-of-scope path is still refused\n${refused.stdout}${refused.stderr}`);
+    assert.match(
+      `${refused.stdout}${refused.stderr}`,
+      /product changed path 'off-surface\.md' is outside packet-bound task scope/,
+      'the refusal names the path the attempt authored, not the maintenance paths'
     );
   });
 });

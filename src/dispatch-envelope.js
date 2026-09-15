@@ -1780,6 +1780,10 @@ function validateReturnAgainstCurrent({
   carrierLineage = null, returnAssurance = 'host_receipt', historicalCloseout = false,
 }, findings) {
   let finishCandidate = null;
+  // Which of the range's paths this task's own work produced, or `null` when
+  // that could not be derived here - a GitHub/injected transport has no Git
+  // reader, and a range whose ownership is undecidable is answered whole.
+  let taskAuthoredChangedPaths = null;
   validateRepositoryEvidence(repositoryEvidence, findings);
   const authoritative = authoritativePacketTaskBinding(snapshot);
   if (!authoritative.ok) {
@@ -1937,6 +1941,7 @@ function validateReturnAgainstCurrent({
         });
         if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
         else {
+          taskAuthoredChangedPaths = derived.taskAuthoredChangedPaths;
           const productToWorkflow = runGit(['merge-base', '--is-ancestor', wire.productHead, wire.workflowHead]);
           if (productToWorkflow?.status !== 0) {
             findings.changed('role return productHead is not an ancestor of workflowHead');
@@ -1967,6 +1972,7 @@ function validateReturnAgainstCurrent({
       });
       if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
       else {
+        taskAuthoredChangedPaths = derived.taskAuthoredChangedPaths;
         const productToWorkflow = runGit(['merge-base', '--is-ancestor', wire.productHead, wire.workflowHead]);
         if (productToWorkflow?.status !== 0) findings.changed('role return productHead is not an ancestor of workflowHead');
         if (!sameCanonical(wire.productAttribution.commits, derived.commits)) findings.changed('role return product attribution commits do not equal the durable Git commit range');
@@ -1984,11 +1990,21 @@ function validateReturnAgainstCurrent({
     ...(contract.projection?.allowed_paths ?? []),
     ...(packet.task?.preAuthorizedDeviationPaths ?? []),
   ]);
+  // Scope is a question about this task's own work, so it is asked of the paths
+  // this task's own work produced. The inventory itself is unchanged and still
+  // reports every path in the range: what moved is which of them the gate
+  // refuses. A range in a repository other people also commit to holds commits
+  // that are not the loop's and never claimed to be, and `deriveCommitRange`
+  // already exempts exactly those from attribution - this gate used to re-ask
+  // the whole-repository question that exemption removed, which is what refused
+  // four separately-owned maintenance paths in the field. Scratch state stays
+  // unconditional: it may not appear in a product inventory under any owner.
   for (const path of wire.productChangedPaths ?? []) {
     if (PERMITTED_SCRATCH_PREFIXES.some(prefix => path === prefix.replace(/\/$/, '') || path.startsWith(prefix))) {
       findings.negative(`role return product changed path '${path}' is scratch state and cannot be implementation work`);
       continue;
     }
+    if (taskAuthoredChangedPaths !== null && !taskAuthoredChangedPaths.includes(path)) continue;
     if (![...allowedPaths].some(pattern => fileMatchesScopePattern(path, pattern))) findings.negative(`role return product changed path '${path}' is outside packet-bound task scope`);
   }
   return finishCandidate;
