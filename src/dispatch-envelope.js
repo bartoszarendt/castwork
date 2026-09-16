@@ -1777,13 +1777,57 @@ function validateRepositoryEvidence(value, findings) {
 
 function validateReturnAgainstCurrent({
   wire, packet, snapshot, repositoryEvidence, producerEvidence, runGit,
-  carrierLineage = null, returnAssurance = 'host_receipt', historicalCloseout = false,
+  carrierLineage = null,
+  returnAssurance = 'host_receipt', historicalCloseout = false,
 }, findings) {
   let finishCandidate = null;
   // Which of the range's paths this task's own work produced, or `null` when
   // that could not be derived here - a GitHub/injected transport has no Git
   // reader, and a range whose ownership is undecidable is answered whole.
   let taskAuthoredChangedPaths = null;
+  // TRUST ANCHOR. The boundary is `packet.repository.head`.
+  //
+  // What makes that authoritative is not that the packet is on disk - it is a
+  // repository file too, and `packet.digest` is an ordinary unkeyed self-hash.
+  // It is that on a `host_receipt` return the packet digest is bound by the host
+  // handoff receipt, verified under an operator-pinned adapter key that a
+  // repository writer does not hold, and `repository.head` is inside that signed
+  // digest. On a `session_reported` return there is no such signature, and the
+  // boundary is then exactly as trustworthy as the repository - which is the
+  // assurance that grade already advertises, and why the catalog carries it as a
+  // warning-only non-refusal.
+  //
+  // It is deliberately NOT read out of the persisted dispatch consumption, whose
+  // digest is unkeyed on every grade: a repository writer can edit its
+  // `productBaseHead` and recompute a consistent digest. Selecting that record by
+  // packet identity removes drift and substitution but not the rewrite, so a
+  // record-derived boundary would inherit the weakness it was meant to remove.
+  //
+  // The record is still consulted, as a cross-check rather than a source: the
+  // recognition that produced it bound `productBaseHead` to this same packet
+  // head, so the two must agree. A disagreement means one of them has been
+  // rewritten, and that is refused rather than resolved in favour of either.
+  // No guard for "the packet carries no usable product head": a packet whose
+  // `repository.head` is not a full Git identity is already rejected as malformed
+  // by `validateDispatchPreparation`, which runs earlier on this route and
+  // returns rather than continuing. A guard here could not fire through any
+  // supported input, and this phase removes mechanisms nothing can reach rather
+  // than keeping them for the shape of safety.
+  const packetStart = String(packet?.repository?.head ?? '');
+  const attemptStartProductHead = isGitObjectId(packetStart) ? packetStart : null;
+  const lineageStart = carrierLineage?.dispatchConsumption?.productBaseHead ?? null;
+  const lineagePacketId = carrierLineage?.dispatchConsumption?.packetId ?? null;
+  if (lineagePacketId !== null && packet?.packetId !== undefined && lineagePacketId !== packet.packetId) {
+    findings.changed(
+      `the attempt-start record belongs to packet ${lineagePacketId}, not to the packet under ` +
+      `verification (${packet?.packetId}); this return cannot be placed against its own attempt`
+    );
+  } else if (lineageStart !== null && attemptStartProductHead !== null && lineageStart !== attemptStartProductHead) {
+    findings.changed(
+      `the persisted dispatch consumption records attempt start ${lineageStart}, but the validated ` +
+      `packet for this attempt records ${attemptStartProductHead}; one of them has been rewritten`
+    );
+  }
   validateRepositoryEvidence(repositoryEvidence, findings);
   const authoritative = authoritativePacketTaskBinding(snapshot);
   if (!authoritative.ok) {
@@ -1937,7 +1981,7 @@ function validateReturnAgainstCurrent({
         }
         const derived = deriveCommitRange({
           runGit, baseHead: wire.productBaseHead, head: wire.productHead, taskId: packet.task.id, roleId: packet.assignment.roleId,
-          allowedPaths: packet.task.allowedPaths,
+          allowedPaths: packet.task.allowedPaths, attemptStartProductHead,
         });
         if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
         else {
@@ -1968,7 +2012,7 @@ function validateReturnAgainstCurrent({
       }
       const derived = deriveCommitRange({
           runGit, baseHead: wire.productBaseHead, head: wire.productHead, taskId: packet.task.id, roleId: packet.assignment.roleId,
-          allowedPaths: packet.task.allowedPaths,
+          allowedPaths: packet.task.allowedPaths, attemptStartProductHead,
       });
       if (!derived.ok) findings.add(derived.evidenceState, derived.message, { disposition: derived.disposition, code: derived.code });
       else {

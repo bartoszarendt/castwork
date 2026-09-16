@@ -11,6 +11,7 @@
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -62,7 +63,7 @@ import { canonicalJson } from '../src/canonical-json.js';
 import { buildHostRoleCapabilityInventory } from '../src/host-role-capabilities.js';
 import { resolveWorkflowRoleRegistry } from '../src/workflow-roles.js';
 import { recognizeHandoff } from '../src/handoff-recognition.js';
-import { createDispatchConsumption, dispatchConsumptionRelativePath } from '../src/handoff-consumption.js';
+import { createDispatchConsumption, dispatchConsumptionRelativePath, resolveCarrierLineage } from '../src/handoff-consumption.js';
 import {
   activation,
   createResettableDispatchFixturePool,
@@ -673,6 +674,305 @@ describe('return ancestry is proven, not assumed', () => {
     assert.equal(derived.commits.length, 3);
     assert.ok(derived.changedPaths.includes('side.txt'));
     assert.ok(derived.changedPaths.includes('main.txt'));
+  });
+
+  it('places an unattributed commit by reachability from the attempt start, not by a date it sets itself', () => {
+    const root = scratchRepo('ancestry-attempt-start');
+    const base = commit(root, 'a.txt', 'a\n', trailer('base'));
+    // Maintenance that was already in history when the attempt was dispatched.
+    const earlier = commit(root, 'maintenance.txt', 'm\n', 'operator maintenance');
+    // The attempt is dispatched here: this is the product head the authoritative
+    // dispatch consumption records.
+    const attemptStartProductHead = earlier;
+    const declared = { allowedPaths: ['src/**'], attemptStartProductHead };
+
+    const exempt = range(root, base, earlier, declared);
+    assert.equal(exempt.ok, true, exempt.message);
+    assert.deepEqual(exempt.taskAuthoredChangedPaths, [],
+      'a commit reachable from the attempt start predates the attempt and keeps the exemption');
+
+    // An undeclared, untrailered edit made after dispatch. It is not reachable
+    // from the attempt start, so it answers to the task.
+    const during = commit(root, 'escape.txt', 'e\n', 'undeclared in-attempt edit');
+    const caught = range(root, base, during, declared);
+    assert.equal(caught.ok, true, caught.message);
+    assert.ok(caught.taskAuthoredChangedPaths.includes('escape.txt'),
+      'a commit not reachable from the attempt start is the task\'s to answer for');
+  });
+
+  it('leaves ownership underived when there is no attempt start, rather than exempting', () => {
+    const root = scratchRepo('ancestry-no-boundary');
+    const base = commit(root, 'a.txt', 'a\n', trailer('base'));
+    mkdirSync(join(root, 'src'), { recursive: true });
+    commit(root, 'src/x.js', 'x\n', trailer('task work'));
+    const undeclared = commit(root, 'docs-maint.md', 'm\n', 'undeclared maintenance');
+
+    // With no attempt start the commit cannot be placed relative to the
+    // attempt at all. Treating that as proof it is separately owned dropped
+    // its paths from the inventory while the answer still claimed to be
+    // complete - a scope escape that left nothing behind to notice.
+    const derived = range(root, base, undeclared, { allowedPaths: ['src/**'], attemptStartProductHead: null });
+    assert.equal(derived.ok, true, derived.message);
+    assert.equal(derived.taskAuthoredChangedPaths, null,
+      'an unplaceable commit leaves ownership underived, so the caller asks the whole range');
+
+    // With a boundary the same range answers precisely.
+    const placed = range(root, base, undeclared, { allowedPaths: ['src/**'], attemptStartProductHead: base });
+    assert.equal(placed.ok, true, placed.message);
+    assert.deepEqual(placed.taskAuthoredChangedPaths, ['docs-maint.md', 'src/x.js'],
+      'a placeable commit is attributed exactly');
+  });
+  it('binds the attempt start to the packet under verification, never the newest one', async () => {
+    const fixture = await createDispatchFixture(temp, 'attempt-start-packet-bound');
+    const recognitionFor = prepared => recognizeHandoff({
+      transition: 'role_start',
+      expectation: {
+        backend: 'files', taskId: 'T-001', roleId: 'engineer',
+        taskContractDigest: prepared.packet.task.contractDigest,
+        carrierDigest: prepared.packet.task.digest,
+        packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
+        workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
+        artifactHead: prepared.packet.repository.head,
+        worktreeRoot: prepared.packet.repository.worktree,
+        minimumActivationAssurance: 'operator_confirmed',
+      },
+      preparedDispatch: prepared.packet,
+      validatePreparedDispatch: fixtureDispatchValidator(fixture),
+    });
+    const persist = consumption => {
+      mkdirSync(join(fixture.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001'), { recursive: true });
+      writeFileSync(join(fixture.root, dispatchConsumptionRelativePath(consumption)),
+        `${JSON.stringify(consumption, null, 2)}\n`, 'utf8');
+    };
+
+    // The attempt whose return will later be re-checked.
+    const first = prepare(fixture);
+    assert.equal(first.ok, true, first.validation.errors?.join('\n'));
+    const firstRecognition = recognitionFor(first);
+    assert.equal(firstRecognition.recognized, true, JSON.stringify(firstRecognition.diagnostics));
+    const firstConsumption = createDispatchConsumption({ backend: 'files', taskId: 'T-001', recognition: firstRecognition });
+    persist(firstConsumption);
+    // Workflow records are committed in the real sequence; a later dispatch
+    // refuses an unclean checkout otherwise.
+    git(fixture.root, ['add', '-f', '.agenticloop/handoffs']);
+    git(fixture.root, ['commit', '-m', 'record dispatch consumption\n\nTask: T-001\nAgent: maintainer']);
+
+    // History moves on and a later attempt is dispatched from a descendant.
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const later = true;\n', 'utf8');
+    git(fixture.root, ['add', 'src/existing.js']);
+    git(fixture.root, ['commit', '-m', 'later work\n\nTask: T-001\nAgent: engineer']);
+    const second = prepare(fixture);
+    assert.equal(second.ok, true, second.validation.errors?.join('\n'));
+    assert.notEqual(second.packet.packetId, first.packet.packetId, 'the fixture must produce two distinct packets');
+    const secondRecognition = recognitionFor(second);
+    assert.equal(secondRecognition.recognized, true, JSON.stringify(secondRecognition.diagnostics));
+    const secondConsumption = createDispatchConsumption({ backend: 'files', taskId: 'T-001', recognition: secondRecognition });
+    persist(secondConsumption);
+    // The two attempts may share a product head in this fixture; what must not
+    // be shared is which record answers for the boundary. Packet identity is the
+    // discriminator, and it is the thing a latest-by-task lookup gets wrong.
+
+    // Resolving by the first packet must answer with the first attempt's start.
+    // Answering with the newest would re-check that record against a boundary
+    // that keeps moving forward, exempting more of the range each time.
+    const bound = resolveCarrierLineage(fixture.root, 'T-001', {
+      backend: 'files', packetId: first.packet.packetId,
+    });
+    assert.equal(bound.dispatchConsumption?.packetId, first.packet.packetId);
+    assert.equal(bound.dispatchConsumption?.digest, firstConsumption.digest,
+      'the boundary must come from the record this packet wrote, not the newest for the task');
+    assert.notEqual(bound.dispatchConsumption?.packetId, secondConsumption.packetId,
+      'a later attempt must not supply the boundary for an earlier one');
+
+    // A packet with no consumption is unavailable, and unavailable fails closed
+    // rather than falling back to whatever else is on disk.
+    const missing = resolveCarrierLineage(fixture.root, 'T-001', {
+      backend: 'files', packetId: 'packet-that-never-ran',
+    });
+    assert.equal(missing.ok, false);
+    assert.match(missing.errors.join('; '), /no dispatch consumption exists for packet/);
+  });
+  it('refuses when it cannot find out whether the repository is grafted', () => {
+    const root = scratchRepo('ancestry-graft-unknown');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    const base = commit(root, 'src/x.js', 'x\n', trailer('base'));
+    const head = commit(root, 'src/x.js', 'y\n', trailer('task work'));
+
+    // `--path-format` needs Git >= 2.31, and the query can fail for other
+    // reasons too. A failure leaves the grafts question unanswered, and an
+    // unanswered question about a rewrite channel is not a negative answer -
+    // otherwise the defence evaporates silently on an older Git while grafts
+    // still forge ancestry.
+    const honest = gitRunner(root);
+    const blindToGrafts = args => (args.includes('--path-format=absolute')
+      ? { status: 1, stdout: '', stderr: 'unknown option --path-format' }
+      : honest(args));
+
+    const derived = deriveCommitRange({
+      runGit: blindToGrafts, baseHead: base, head, taskId: 'T-001', roleId: 'engineer',
+      allowedPaths: ['src/**'], attemptStartProductHead: base,
+    });
+    assert.equal(derived.ok, false, 'an unanswerable grafts question must refuse, not assume absence');
+    assert.match(derived.message, /grafts/);
+  });
+  it('refuses a repository whose history is rewritten by a legacy grafts file', () => {
+    const root = scratchRepo('ancestry-grafts');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    const base = commit(root, 'src/x.js', 'x\n', trailer('base'));
+    const undeclared = commit(root, 'secret.txt', 's\n', 'undeclared in-attempt edit');
+    const declared = { allowedPaths: ['src/**'], attemptStartProductHead: base };
+
+    const honest = range(root, base, undeclared, declared);
+    assert.equal(honest.ok, true, honest.message);
+
+    // Grafts are a second rewrite channel and --no-replace-objects does not
+    // close it: with a grafts file in place, merge-base --is-ancestor reports
+    // an unrelated commit as an ancestor even under that flag. A repository
+    // carrying one cannot be measured truthfully, so it is refused.
+    mkdirSync(join(root, '.git', 'info'), { recursive: true });
+    writeFileSync(join(root, '.git', 'info', 'grafts'), `${undeclared} ${base}\n`, 'utf8');
+
+    const grafted = range(root, base, undeclared, declared);
+    assert.equal(grafted.ok, false, 'a grafted repository must not be measured as if it were honest');
+    assert.match(grafted.message, /grafts/);
+  });
+  it('refuses to let a replacement object forge the attempt-start ancestry', () => {
+    const root = scratchRepo('ancestry-replace-ref');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    const base = commit(root, 'src/x.js', 'x\n', trailer('base'));
+    const attemptStartProductHead = base;
+    commit(root, 'src/x.js', 'y\n', trailer('task work'));
+    const undeclared = commit(root, 'secret.txt', 's\n', 'undeclared in-attempt edit');
+    const declared = { allowedPaths: ['src/**'], attemptStartProductHead };
+
+    const honest = range(root, base, undeclared, declared);
+    assert.ok(honest.taskAuthoredChangedPaths.includes('secret.txt'),
+      'the undeclared path is the task\'s to answer for');
+
+    // `refs/replace/*` lives in the repository the party under inspection can
+    // write. One replacement makes the attempt's own start appear to already
+    // contain the undeclared commit, which would exempt it.
+    const tree = git(root, ['rev-parse', `${attemptStartProductHead}^{tree}`]);
+    const forged = git(root, ['commit-tree', tree, '-p', undeclared, '-m', 'forged']);
+    git(root, ['replace', attemptStartProductHead, forged]);
+
+    const underReplace = range(root, base, undeclared, declared);
+    assert.ok(underReplace.taskAuthoredChangedPaths.includes('secret.txt'),
+      'a replacement object must not be able to exempt an undeclared path');
+  });
+
+  it('measures a root commit against the empty tree, not the working tree', () => {
+    const root = scratchRepo('ancestry-orphan-root');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'x.js'), 'final\n', 'utf8');
+    writeFileSync(join(root, 'README.md'), 'readme\n', 'utf8');
+    git(root, ['add', '.']);
+    git(root, ['commit', '-m', trailer('base')]);
+    const base = git(root, ['rev-parse', 'HEAD']);
+    const attemptStartProductHead = base;
+
+    // An orphan root carrying a declared path, with no canonical trailers. Its
+    // in-scope content matches the final tree, so a working-tree comparison
+    // reports only the out-of-scope difference and the trailer demand is
+    // skipped - the path is smuggled in unattributed.
+    git(root, ['checkout', '-q', '--orphan', 'orphan']);
+    git(root, ['rm', '-rfq', '.']);
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'x.js'), 'final\n', 'utf8');
+    writeFileSync(join(root, 'src', 'smuggled.js'), 'smuggled\n', 'utf8');
+    git(root, ['add', 'src']);
+    git(root, ['commit', '-m', 'orphan root, untrailered']);
+    git(root, ['checkout', '-q', '-f', 'master']);
+    git(root, ['merge', '--allow-unrelated-histories', '--no-ff', 'orphan', '-m', trailer('Merge orphan')]);
+    const head = git(root, ['rev-parse', 'HEAD']);
+
+    const derived = range(root, base, head, { allowedPaths: ['src/**'], attemptStartProductHead });
+    assert.equal(derived.ok, false,
+      'an untrailered root commit that authored a declared path must be asked for trailers');
+    assert.match(derived.message, /canonical Task:\/Agent: trailers/);
+  });
+  it('refuses to let a backdated committer date buy an exemption', () => {
+    const root = scratchRepo('ancestry-backdated');
+    const base = commit(root, 'a.txt', 'a\n', trailer('base'));
+    const attemptStartProductHead = base;
+
+    // Committed after the attempt started, but claiming to be from 2020.
+    // `GIT_COMMITTER_DATE` is caller-settable, which is exactly why the commit
+    // under suspicion is not allowed to date itself: under the previous
+    // timestamp rule this backdating bought a silent exemption.
+    writeFileSync(join(root, 'escape.txt'), 'e\n', 'utf8');
+    git(root, ['add', 'escape.txt']);
+    const backdated = spawnSync('git', ['-C', root, 'commit', '-m', 'undeclared, backdated'], {
+      encoding: 'utf8',
+      env: { ...process.env, GIT_COMMITTER_DATE: '2020-01-01T00:00:00+00:00', GIT_AUTHOR_DATE: '2020-01-01T00:00:00+00:00' },
+    });
+    assert.equal(backdated.status, 0, backdated.stderr);
+    const head = git(root, ['rev-parse', 'HEAD']);
+    assert.equal(git(root, ['show', '-s', '--format=%cI', head]).slice(0, 4), '2020',
+      'the fixture must actually report a backdated committer instant');
+
+    const derived = range(root, base, head, { allowedPaths: ['src/**'], attemptStartProductHead });
+    assert.equal(derived.ok, true, derived.message);
+    assert.ok(derived.taskAuthoredChangedPaths.includes('escape.txt'),
+      'a backdated commit is still unreachable from the attempt start, so it is still the task\'s');
+  });
+
+  it('attributes what an in-window merge brought in, where nothing else can', () => {
+    const root = scratchRepo('ancestry-merge-cannot-vanish');
+    const base = commit(root, 'a.txt', 'a\n', trailer('base'));
+
+    // Separately-owned work, already in history when this attempt was
+    // dispatched: the attempt's recorded product head is this commit, so the
+    // commit itself is reachable from the attempt start and is exempt.
+    git(root, ['checkout', '-q', '-b', 'side']);
+    const attemptStartProductHead = commit(root, 'vendor.txt', 'v\n', 'separately owned');
+
+    // The task's own work, on its declared surface.
+    git(root, ['checkout', '-q', '-']);
+    mkdirSync(join(root, 'src'), { recursive: true });
+    commit(root, 'src/feature.js', 'f\n', trailer('feature'));
+
+    // During the attempt, that separately-owned branch is merged onto the
+    // product line with an untrailered merge.
+    git(root, ['merge', '--no-ff', 'side', '-m', 'Merge branch side']);
+    const head = git(root, ['rev-parse', 'HEAD']);
+
+    const derived = range(root, base, head, { allowedPaths: ['src/**'], attemptStartProductHead });
+    assert.equal(derived.ok, true, derived.message);
+
+    // The side commit is exempt, so it contributes nothing. The merge is the
+    // only commit that can answer for 'vendor.txt' arriving on this line. Read
+    // with the combined `^!` diff the merge reports nothing, and the path
+    // disappears from the ownership set with no commit accountable for it.
+    assert.ok(derived.changedPaths.includes('vendor.txt'),
+      'the range inventory always reports every path it contains');
+    assert.ok(derived.taskAuthoredChangedPaths.includes('vendor.txt'),
+      'an in-window merge must answer for the paths it put on the product line');
+  });
+  it('does not let an ordinary untrailered merge poison the range', () => {
+    const root = scratchRepo('ancestry-merge-enumeration');
+    const base = commit(root, 'a.txt', 'a\n', trailer('base'));
+    const attemptStartProductHead = base;
+
+    // The engineer's own declared work, done on a side branch and merged back
+    // with the message `git merge` writes by default - no canonical trailers.
+    git(root, ['checkout', '-q', '-b', 'side']);
+    mkdirSync(join(root, 'src'), { recursive: true });
+    commit(root, 'src/feature.js', 'f\n', trailer('feature'));
+    git(root, ['checkout', '-q', '-']);
+    commit(root, 'other.txt', 'o\n', trailer('main work'));
+    git(root, ['merge', '--no-ff', 'side', '-m', 'Merge branch side']);
+    const head = git(root, ['rev-parse', 'HEAD']);
+
+    const derived = range(root, base, head, { allowedPaths: ['src/**'], attemptStartProductHead });
+    // A commit's paths are read with `<commit>^!`, a combined diff, so a clean
+    // merge enumerates nothing and never demands trailers of itself. Reading
+    // the first-parent diff instead makes this merge report 'src/feature.js',
+    // demand a trailer block it does not have, and fail the whole range - the
+    // untrailered-commit poisoning this gate exists to remove.
+    assert.equal(derived.ok, true, derived.message);
+    assert.ok(derived.changedPaths.includes('src/feature.js'),
+      'the range still reports every path it contains');
   });
 
   it('rejects a head reset behind its dispatched base', () => {

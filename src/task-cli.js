@@ -4883,9 +4883,14 @@ export async function cmdTask(args, io = createIo()) {
         refetchRepositoryEvidence,
         refetchCarrierLineage: ({ snapshot }) => {
           const contract = taskContractDigest(snapshot.body);
+          // The packet under verification names its own attempt. Resolving by
+          // task alone takes the newest consumption, which for a re-checked
+          // return is a record belonging to a different packet - and the
+          // envelope refuses that rather than measuring against it.
           return resolveCarrierLineage(target, taskId, {
             backend, taskContractDigest: contract.ok ? contract.digest : null,
             currentCarrierDigest: snapshot.digest,
+            packetId: packet?.packetId ?? null,
           });
         },
         producerReceipt,

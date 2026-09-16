@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, describe, it } from 'node:test';
 
-import { HARD_REFUSAL_ALLOWLIST, REFUSAL_CLASSES } from '../src/refusal-classes.js';
+import { DIAGNOSTIC_DEFINITIONS, HARD_REFUSAL_ALLOWLIST, REFUSAL_CLASSES } from '../src/refusal-classes.js';
 import { runExecutedEightStepChain } from './helpers/lifecycle-scenario-harness.js';
 import { runNpm } from './helpers/npm-runner.js';
 
@@ -119,4 +119,61 @@ describe('integrated lifecycle proof', () => {
       assert.ok(packedPaths.includes(path), `${path} is missing from npm pack`);
     }
   }, { timeout: 120000 });
+});
+
+/**
+ * The prose summary above the residue table stated a catalog row count nobody
+ * checked. It shipped as "193" while the catalog held 192, and the suite stayed
+ * green because the binding test pins the *table* and never read that sentence.
+ * A number no test derives is a claim, not a measurement.
+ *
+ * These derive every figure in that sentence from the thing it describes, so a
+ * drift fails here instead of shipping.
+ */
+describe('the residue summary is derived, not asserted', () => {
+  const summary = proof.split('\n').find(line => line.includes('hard-refusal targets and one warning-only'));
+
+  /** The ledger table, parsed back out of the shipped document. */
+  function ledgerTally() {
+    const tally = {};
+    for (const line of proof.split('\n')) {
+      if (!line.startsWith('| ') || line.startsWith('| Code |') || line.startsWith('|---')) continue;
+      const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+      if (cells.length !== 4) continue;
+      tally[cells[1]] = (tally[cells[1]] ?? 0) + 1;
+    }
+    return tally;
+  }
+
+  it('states the live catalog row count', () => {
+    assert.ok(summary, 'the residue summary sentence must exist');
+    const rows = Object.keys(DIAGNOSTIC_DEFINITIONS).length;
+    assert.ok(summary.includes(`The ${rows}-row catalog`),
+      `the summary must state the live catalog row count (${rows}), not: ${summary.slice(0, 40)}`);
+  });
+
+  it('states the live hard-refusal target count', () => {
+    assert.ok(summary.includes(`${HARD_REFUSAL_ALLOWLIST.length} hard-refusal targets`),
+      `the summary must state ${HARD_REFUSAL_ALLOWLIST.length} hard-refusal targets`);
+  });
+
+  it('states the partition the ledger actually renders, accounting for every target once', () => {
+    const tally = ledgerTally();
+    const probes = tally['pre-existing-installed-probe'] ?? 0;
+    const binary = tally['executed-installed-binary'] ?? 0;
+    const moduleOnly = tally['executed-installed-module'] ?? 0;
+    const blocked = tally['harness-blocked'] ?? 0;
+    const unreachable = tally['unreachable-through-supported-public-surface'] ?? 0;
+    const executed = probes + binary;
+
+    assert.ok(summary.includes(`${executed} executed (${probes} pre-existing probes and ${binary} installed-binary executions)`),
+      `the summary must state ${executed} executed (${probes} probes, ${binary} binary)`);
+    assert.ok(summary.includes(`${moduleOnly} module-only`), `module-only rows: ${moduleOnly}`);
+    assert.ok(summary.includes(`${blocked} harness-blocked`), `harness-blocked rows: ${blocked}`);
+    assert.ok(summary.includes(`${unreachable} unreachable`), `unreachable rows: ${unreachable}`);
+
+    // Every hard-refusal target is dispositioned exactly once.
+    assert.equal(executed + moduleOnly + blocked + unreachable, HARD_REFUSAL_ALLOWLIST.length,
+      'the rendered partition must account for every hard-refusal target exactly once');
+  });
 });

@@ -3,8 +3,8 @@
  * offline installation.  The catalog remains the accounting source of truth;
  * the registry records 48 installed-binary executions. Together with 5
  * pre-existing installed probes and 2 installed-module executions, the 88
- * retained hard-refusal targets partition into 25 genuinely unreachable public
- * surfaces and 15 harness-blocked routes. The separate session_reported row is
+ * retained hard-refusal targets partition into 24 genuinely unreachable public
+ * surfaces and 16 harness-blocked routes. The separate session_reported row is
  * a warning-only non-refusal with an installed `task verify-return` proof.
  */
 
@@ -63,6 +63,7 @@ const WARNING_ONLY_ROWS = new Set([
 const SESSION_REPORTED_WARNING_PROOF = 'return.assurance.session_reported';
 
 const NORMALIZED_PUBLIC_SURFACE_OBSTACLES = new Map([
+  ['dispatch.attempt.final_slot_unacknowledged', 'the final-slot refusal has a real supported public trigger - task prepare-dispatch on the last attempt the budget allows - but a clean offline install cannot build the consumed-and-abandoned attempt history that reaches it. This is a harness limitation, not product unreachability: the executed proof is the public-CLI fixture in test/attempt-supersession.test.js.'],
   ['blocked_result.owner_mismatch', 'a schema-valid blocked return cannot pass the installed verifier: its packet carries the test-only signed adapter agenticloop.test.parser.v1, but the installed capability inventory does not expose that adapter and the verifier emits activation.capture.malformed before the blocked-result authority guard.'],
   ['blocked_result.redelegation_required', 'a schema-valid blocked return cannot pass the installed verifier: its packet carries the test-only signed adapter agenticloop.test.parser.v1, but the installed capability inventory does not expose that adapter and the verifier emits activation.capture.malformed before the blocked-result authority guard.'],
   ['blocked_result.redelegation_untrusted', 'a schema-valid blocked return cannot pass the installed verifier: its packet carries the test-only signed adapter agenticloop.test.parser.v1, but the installed capability inventory does not expose that adapter and the verifier emits activation.capture.malformed before the blocked-result authority guard.'],
@@ -80,7 +81,7 @@ const NORMALIZED_PUBLIC_SURFACE_OBSTACLES = new Map([
   ['review.entry.persistence_conflict', 'an authentic return fixture requires a persisted verified return, but the installed verifier rejects its only supported test fixture authority at activation.capture.malformed before review-entry persistence.'],
 ]);
 
-// This is intentionally a closed inventory rather than a fallback: these 25
+// This is intentionally a closed inventory rather than a fallback: these 24
 // producers have no supported installed public trigger.  Each entry records
 // the current public-surface obstacle without claiming that its typed producer
 // was reached by the installed-binary run.
@@ -196,13 +197,6 @@ const CLOSED_PUBLIC_SURFACE_BLOCKERS = Object.freeze([
     supportedPublicTrigger: false,
     proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:dispatch.attempt.budget_exhausted',
     obstacle: 'authentic exhausted attempt history still leaves public preflight green, so the budget check is unreachable through supported public inputs; this does not claim dispatch.attempt.budget_exhausted was reached.',
-  },
-  {
-    code: 'dispatch.attempt.final_slot_unacknowledged',
-    status: 'blocked-by-public-surface',
-    supportedPublicTrigger: false,
-    proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:dispatch.attempt.final_slot_unacknowledged',
-    obstacle: 'reaching the final budget slot needs an authentic consumed-and-abandoned attempt history a clean offline install cannot build, so the final-slot check is unreachable through supported public inputs; this does not claim dispatch.attempt.final_slot_unacknowledged was reached. Its executed proof is the source-boundary fixture in test/attempt-supersession.test.js.',
   },
   {
     code: 'capability.action.denied',
@@ -1406,7 +1400,7 @@ function executedRowReference(code) {
 
 function closedPublicSurfaceBlockers(catalog = HARD_REFUSAL_ALLOWLIST, inventory = CLOSED_PUBLIC_SURFACE_BLOCKERS) {
   const inventoryCodes = inventory.map(row => row.code);
-  assert.equal(inventoryCodes.length, 25, 'the closed public-surface blocker inventory must retain exactly 25 rows');
+  assert.equal(inventoryCodes.length, 24, 'the closed public-surface blocker inventory must retain exactly 24 rows');
   assert.equal(new Set(inventoryCodes).size, inventoryCodes.length, 'the closed public-surface blocker inventory may not duplicate rows');
   const fallbackCodes = catalog
     .map(row => row.code)
@@ -1497,11 +1491,11 @@ function assertResidueLedger(document) {
       assert.equal(row.proof, executedRowReference(row.code), `${row.code} must retain its installed-binary proof reference`);
     }
   }
-  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 15, 'the harness-blocked partition contains 15 rows');
-  assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 25, 'the explicit public-surface inventory must remain closed at 25 rows');
-  assert.equal(parsed.filter(row => row.status === 'harness-blocked').length, 15,
+  assert.equal(NORMALIZED_PUBLIC_SURFACE_OBSTACLES.size, 16, 'the harness-blocked partition contains 16 rows');
+  assert.equal(CLOSED_PUBLIC_SURFACE_BLOCKERS.length, 24, 'the explicit public-surface inventory must remain closed at 24 rows');
+  assert.equal(parsed.filter(row => row.status === 'harness-blocked').length, 16,
     'harness limits must remain separate from product-surface unreachability');
-  assert.equal(parsed.filter(row => row.status === 'unreachable-through-supported-public-surface').length, 25,
+  assert.equal(parsed.filter(row => row.status === 'unreachable-through-supported-public-surface').length, 24,
     'only the closed public inventory may claim product-surface unreachability');
   const partition = expected.reduce((counts, row) => {
     counts[row.disposition] = (counts[row.disposition] ?? 0) + 1;
@@ -1510,8 +1504,8 @@ function assertResidueLedger(document) {
   assert.deepEqual(partition, {
     executed: 53,
     'module-only': 2,
-    'harness-blocked': 15,
-    'unreachable-through-supported-public-surface': 25,
+    'harness-blocked': 16,
+    'unreachable-through-supported-public-surface': 24,
   }, 'harness limitations must not be ratcheted as product unreachability');
 }
 
@@ -1540,7 +1534,7 @@ describe('installed-binary refusal harness', () => {
     assert.throws(() => assertResidueLedger(removed), /row count|contain every catalog row/, 'removing a residue row must fail accounting');
 
     assert.throws(() => closedPublicSurfaceBlockers(HARD_REFUSAL_ALLOWLIST, CLOSED_PUBLIC_SURFACE_BLOCKERS.slice(1)),
-      /exactly 25 rows|one closed public-surface blocker/,
+      /exactly 24 rows|one closed public-surface blocker/,
       'removing a closed-inventory row must fail candidate-bound accounting');
     const substituted = CLOSED_PUBLIC_SURFACE_BLOCKERS.map((blocker, index) => index === 0
       ? { ...blocker, code: 'activation.capture.missing', proof: 'test/installed-binary-refusal-harness.test.js#CLOSED_PUBLIC_SURFACE_BLOCKERS:activation.capture.missing' }

@@ -80,7 +80,29 @@ export function isExactImplementationArtifactReaffirmation(content, productHead)
 }
 
 export function targetGitRunner(target) {
-  return args => spawnSync('git', args, { cwd: target, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER });
+  // Replacement objects rewrite what Git reports about history, and they live in
+  // the repository the party under inspection can write. A single `git replace`
+  // can make an undeclared commit appear to be an ancestor of the attempt's own
+  // start, which would exempt it from the scope gate. Every reader built here
+  // refuses them.
+  //
+  // That is the whole of what this flag delivers. Legacy grafts are a **second**
+  // rewrite channel and `--no-replace-objects` does not close it - measured:
+  // with `$GIT_DIR/info/grafts` in place, `merge-base --is-ancestor` reports an
+  // unrelated commit as an ancestor, and reports it identically under the flag
+  // and under `GIT_NO_REPLACE_OBJECTS=1`. Grafts are refused instead, by
+  // `graftedHistory` in `src/commit-range.js` - but only there, on the
+  // authoritative return route. Ancestry read through this runner anywhere else,
+  // including `evaluateProductHeadEvidence` below and `deriveProductHead` in
+  // `src/product-lineage.js`, is still graft-forgeable. Do not read this flag as
+  // a guarantee that a reader sees the real object graph; it guarantees only
+  // that it sees one no `git replace` has rewritten.
+  return args => spawnSync('git', ['--no-replace-objects', ...args], {
+    cwd: target,
+    encoding: 'utf8',
+    maxBuffer: GIT_MAX_BUFFER,
+    env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1' },
+  });
 }
 
 export function evaluateProductHeadEvidence(runGit, productHead, allowedPaths) {

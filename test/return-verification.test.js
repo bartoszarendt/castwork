@@ -24,7 +24,7 @@ import { createExecutionReceiptReplayAuthority, generateHostSigningKey, signHost
 import { refetchGitHubReturnEvidence } from '../src/github-return-evidence.js';
 import { receiveRoleReturn } from '../src/dispatch-envelope.js';
 import { recognizeHandoff, recognizeStoredReturnHandoff } from '../src/handoff-recognition.js';
-import { createDispatchConsumption, dispatchConsumptionRelativePath } from '../src/handoff-consumption.js';
+import { createDispatchConsumption, dispatchConsumptionDigest, dispatchConsumptionRelativePath, resolveCarrierLineage } from '../src/handoff-consumption.js';
 import { resolveCloseoutAssuranceContext } from '../src/closeout-cli.js';
 import { loadProjectMap } from '../src/project-map.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
@@ -717,6 +717,191 @@ describe('observed return verification storage', () => {
       }), stderr: '' }),
       historicalCloseout: true,
     }), /changed after return evidence/);
+  });
+
+   it('refuses a persisted dispatch consumption that was rewritten and re-digested', async () => {
+    // The consumption record is a file in the target repository and its digest
+    // is an ordinary unkeyed hash, so anyone who can write the repository can
+    // move the attempt start and recompute a consistent digest. The boundary is
+    // therefore taken from the validated packet, and the record is cross-checked
+    // against it rather than trusted as its source.
+    const dispatch = await createDispatchFixture(root, 'consumption-rewritten', {
+      requiredChecksText: '- [RC-1] command: \`node --version\`',
+    });
+    dispatch.options.returnAdapter = null;
+    dispatch.options.assurancePolicy = { mode: 'standard', policySource: 'default' };
+    const prepared = prepare(dispatch);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const recognition = recognizeHandoff({
+      transition: 'role_start',
+      expectation: {
+        backend: 'files', taskId: 'T-001', roleId: 'engineer',
+        taskContractDigest: prepared.packet.task.contractDigest,
+        carrierDigest: prepared.packet.task.digest,
+        packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
+        workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
+        artifactHead: prepared.packet.repository.head,
+        worktreeRoot: prepared.packet.repository.worktree,
+        minimumActivationAssurance: 'operator_confirmed',
+      },
+      preparedDispatch: prepared.packet,
+      validatePreparedDispatch: fixtureDispatchValidator(dispatch),
+    });
+    assert.equal(recognition.recognized, true, JSON.stringify(recognition.diagnostics));
+    const consumption = createDispatchConsumption({ backend: 'files', taskId: 'T-001', recognition });
+
+    writeFileSync(join(dispatch.root, 'src', 'existing.js'), 'export const ok = true;\n', 'utf8');
+    git(dispatch.root, ['add', 'src/existing.js']);
+    git(dispatch.root, ['commit', '-m', 'declared work\n\nTask: T-001\nAgent: engineer']);
+    const productHead = git(dispatch.root, ['rev-parse', 'HEAD']);
+
+    // Rewrite the persisted record's attempt start, then re-digest it so every
+    // integrity check on the record itself still passes.
+    const consumptionPath = dispatchConsumptionRelativePath(consumption);
+    mkdirSync(join(dispatch.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001'), { recursive: true });
+    const rewritten = { ...consumption, productBaseHead: productHead, digest: null };
+    rewritten.digest = dispatchConsumptionDigest(rewritten);
+    assert.notEqual(rewritten.productBaseHead, consumption.productBaseHead);
+    assert.equal(dispatchConsumptionDigest({ ...rewritten, digest: null }), rewritten.digest,
+      'the rewritten record must be internally self-consistent, as an attacker would leave it');
+    writeFileSync(join(dispatch.root, consumptionPath), `${JSON.stringify(rewritten, null, 2)}\n`, 'utf8');
+    git(dispatch.root, ['add', '-f', '.agenticloop/handoffs']);
+    git(dispatch.root, ['commit', '-m', 'record dispatch consumption\n\nTask: T-001\nAgent: maintainer']);
+
+    const evidence = repositoryEvidence(prepared.packet, {
+      head: productHead,
+      checks: [{
+        id: 'RC-1', kind: 'command', command: 'node --version', outcome: 'passed',
+        exitCode: 0, evidence: 'node is available',
+      }],
+    });
+    evidence.productAttribution = {
+      range: { base: prepared.packet.repository.head, head: productHead },
+      commits: git(dispatch.root, ['rev-list', '--reverse', `${prepared.packet.repository.head}..${productHead}`])
+        .split(/\n?\n/).filter(Boolean),
+    };
+    const roleReturn = readyReturn(prepared.packet, evidence);
+    const received = receiveRoleReturn({
+      raw: JSON.stringify(roleReturn), packet: prepared.packet,
+      refetchTask: dispatch.refetchTask,
+      refetchRepositoryEvidence: () => evidence,
+      refetchCarrierLineage: () => resolveCarrierLineage(dispatch.root, 'T-001', {
+        backend: 'files', packetId: prepared.packet.packetId,
+      }),
+      producerReceipt: null,
+      resolveTrustedAdapter: () => dispatch.trust.adapter,
+      runGit: dispatch.runGit,
+    }, { ...dispatch.options, minimumReturnAssurance: 'session_reported' });
+
+    assert.equal(received.ok, false, 'a rewritten attempt start must be refused, not adopted');
+    // Defence in depth: this forgery does not even reach the packet cross-check,
+    // because the record embeds the recognition that bound its own attempt start
+    // and the rewrite breaks that binding first. The cross-check is isolated in
+    // the next case.
+    assert.match(JSON.stringify(received.validation.errors ?? []), /carrier lineage|rewritten/);
+  });
+
+   it('refuses a carrier lineage whose attempt start disagrees with the validated packet', async () => {
+    // The previous case is stopped by the record's internal binding. This one
+    // hands the envelope an otherwise-valid lineage whose only defect is the
+    // attempt start, which is exactly what a rewrite that also repaired the
+    // record's internal consistency would produce.
+    const dispatch = await createDispatchFixture(root, 'lineage-start-mismatch', {
+      requiredChecksText: '- [RC-1] command: \`node --version\`',
+    });
+    dispatch.options.returnAdapter = null;
+    dispatch.options.assurancePolicy = { mode: 'standard', policySource: 'default' };
+    const prepared = prepare(dispatch);
+    assert.equal(prepared.ok, true, prepared.validation.errors?.join('\n'));
+    const recognition = recognizeHandoff({
+      transition: 'role_start',
+      expectation: {
+        backend: 'files', taskId: 'T-001', roleId: 'engineer',
+        taskContractDigest: prepared.packet.task.contractDigest,
+        carrierDigest: prepared.packet.task.digest,
+        packetId: prepared.packet.packetId, packetDigest: prepared.packet.digest,
+        workUnitIdentity: prepared.packet.decomposition?.workUnitId ?? null,
+        artifactHead: prepared.packet.repository.head,
+        worktreeRoot: prepared.packet.repository.worktree,
+        minimumActivationAssurance: 'operator_confirmed',
+      },
+      preparedDispatch: prepared.packet,
+      validatePreparedDispatch: fixtureDispatchValidator(dispatch),
+    });
+    assert.equal(recognition.recognized, true, JSON.stringify(recognition.diagnostics));
+    const consumption = createDispatchConsumption({ backend: 'files', taskId: 'T-001', recognition });
+
+    writeFileSync(join(dispatch.root, 'src', 'existing.js'), 'export const ok = true;\n', 'utf8');
+    git(dispatch.root, ['add', 'src/existing.js']);
+    git(dispatch.root, ['commit', '-m', 'declared work\n\nTask: T-001\nAgent: engineer']);
+    const productHead = git(dispatch.root, ['rev-parse', 'HEAD']);
+    const consumptionPath = dispatchConsumptionRelativePath(consumption);
+    mkdirSync(join(dispatch.root, '.agenticloop', 'handoffs', 'dispatch', 'T-001'), { recursive: true });
+    writeFileSync(join(dispatch.root, consumptionPath), `${JSON.stringify(consumption, null, 2)}\n`, 'utf8');
+    git(dispatch.root, ['add', '-f', '.agenticloop/handoffs']);
+    git(dispatch.root, ['commit', '-m', 'record dispatch consumption\n\nTask: T-001\nAgent: maintainer']);
+    const workflowHead = git(dispatch.root, ['rev-parse', 'HEAD']);
+
+    const evidence = repositoryEvidence(prepared.packet, {
+      head: productHead,
+      checks: [{
+        id: 'RC-1', kind: 'command', command: 'node --version', outcome: 'passed',
+        exitCode: 0, evidence: 'node is available',
+      }],
+    });
+    evidence.workflowHead = workflowHead;
+    evidence.workflowChangedPaths = [consumptionPath];
+    evidence.productAttribution = {
+      range: { base: prepared.packet.repository.head, head: productHead },
+      commits: git(dispatch.root, ['rev-list', '--reverse', `${prepared.packet.repository.head}..${productHead}`])
+        .split(/\n?\n/).filter(Boolean),
+    };
+    evidence.carrierLineage = {
+      dispatchConsumptionDigest: consumption.digest,
+      evidenceMutationReceiptDigests: [],
+    };
+    const roleReturn = readyReturn(prepared.packet, evidence);
+
+    const honestLineage = resolveCarrierLineage(dispatch.root, 'T-001', {
+      backend: 'files', packetId: prepared.packet.packetId,
+    });
+    assert.equal(honestLineage.ok, true, honestLineage.errors?.join('; '));
+
+    const receive = lineage => receiveRoleReturn({
+      raw: JSON.stringify(roleReturn), packet: prepared.packet,
+      refetchTask: dispatch.refetchTask,
+      refetchRepositoryEvidence: () => evidence,
+      refetchCarrierLineage: () => lineage,
+      producerReceipt: null,
+      resolveTrustedAdapter: () => dispatch.trust.adapter,
+      runGit: dispatch.runGit,
+    }, { ...dispatch.options, minimumReturnAssurance: 'session_reported' });
+
+    assert.equal(receive(honestLineage).ok, true, 'the honest lineage must still verify');
+
+    // Only the attempt start moves; the record digest the wire names is left
+    // intact, so every other lineage check still agrees.
+    const mismatched = {
+      ...honestLineage,
+      dispatchConsumption: { ...honestLineage.dispatchConsumption, productBaseHead: productHead },
+    };
+    const refused = receive(mismatched);
+    assert.equal(refused.ok, false, 'an attempt start that disagrees with the packet must be refused');
+    assert.ok(JSON.stringify(refused.validation.errors ?? []).includes('rewritten'),
+      `the refusal must name the rewrite: ${JSON.stringify(refused.validation.errors)}`);
+
+    // A record that belongs to a different packet is a different failure from a
+    // rewritten head, and it has its own refusal. Production now resolves the
+    // lineage by exact packet, so reaching this state means the record was
+    // substituted rather than selected.
+    const foreign = {
+      ...honestLineage,
+      dispatchConsumption: { ...honestLineage.dispatchConsumption, packetId: 'packet-from-another-attempt' },
+    };
+    const refusedForeign = receive(foreign);
+    assert.equal(refusedForeign.ok, false, 'a record belonging to another packet must be refused');
+    assert.ok(JSON.stringify(refusedForeign.validation.errors ?? []).includes('packet-from-another-attempt'),
+      `the refusal must name the foreign packet: ${JSON.stringify(refusedForeign.validation.errors)}`);
   });
 
    it('freshly revalidates real standard and hardened return evidence', async () => {

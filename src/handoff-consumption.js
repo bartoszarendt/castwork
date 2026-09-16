@@ -435,6 +435,34 @@ export function migrateDispatchConsumptionAtProtectedBoundary(target, taskId, pa
   return { ...migrateLegacyDispatchConsumption(target, relPath, options), path: relPath };
 }
 
+/**
+ * The dispatch consumption a specific packet produced.
+ *
+ * "Latest for this task" is the wrong question wherever an existing record is
+ * being re-checked: the newest consumption belongs to a different packet than
+ * the one under verification, and the envelope refuses a record that does not
+ * belong to its packet. Asking the right question here produces an answer;
+ * asking the convenient one produces a refusal that names the wrong cause.
+ *
+ * Exactly one match is an answer. Zero is unavailable and more than one is
+ * ambiguous, and both fail closed here rather than degrading to a guess.
+ */
+export function dispatchConsumptionForPacket(target, taskId, packetId, options = {}) {
+  if (typeof packetId !== 'string' || packetId === '') {
+    return { ok: false, errors: ['a dispatch consumption lookup requires the exact packet identity'], records: [], record: null };
+  }
+  const listed = listDispatchConsumptions(target, taskId, options);
+  if (!listed.ok) return { ...listed, record: null };
+  const matches = listed.records.filter(record => record.packetId === packetId);
+  if (matches.length === 0) {
+    return { ok: false, errors: [`no dispatch consumption exists for packet ${packetId}`], records: listed.records, record: null };
+  }
+  if (matches.length > 1) {
+    return { ok: false, errors: [`packet ${packetId} has ${matches.length} dispatch consumptions; its attempt start is ambiguous`], records: listed.records, record: null };
+  }
+  return { ok: true, records: listed.records, errors: [], record: matches[0] };
+}
+
 export function currentDispatchConsumption(target, taskId, options = {}) {
   const listed = listDispatchConsumptions(target, taskId, options);
   if (!listed.ok || listed.records.length === 0) return { ...listed, record: null };
@@ -524,12 +552,21 @@ export const CARRIER_LINEAGE_BOUNDARIES = Object.freeze(['engineer_return', 'lif
  *   mutation into the Engineer chain; `lifecycle` accepts the full vocabulary.
  */
 export function resolveCarrierLineage(target, taskId, {
-  backend, taskContractDigest, currentCarrierDigest, boundary = 'lifecycle',
+  backend, taskContractDigest, currentCarrierDigest, boundary = 'lifecycle', packetId = null,
 } = {}) {
   if (!CARRIER_LINEAGE_BOUNDARIES.includes(boundary)) {
     return { ok: false, errors: [`carrier lineage boundary '${boundary}' is not recognized`], records: [] };
   }
-  const consumed = currentDispatchConsumption(target, taskId, { backend });
+  // A caller that names a packet gets that packet's record or an error; there is
+  // deliberately no fallback to "latest" on that path. The newest consumption
+  // belongs to a different packet than the one under verification, and the
+  // envelope refuses a record that does not belong to its packet - so a silent
+  // fallback does not widen anything, it produces a refusal that names the wrong
+  // cause. The boundary itself has come from the validated packet since the
+  // attempt-start remediation; no record supplies it.
+  const consumed = packetId === null
+    ? currentDispatchConsumption(target, taskId, { backend })
+    : dispatchConsumptionForPacket(target, taskId, packetId, { backend });
   if (!consumed.ok || !consumed.record) {
     return { ok: false, errors: consumed.errors?.length ? consumed.errors : ['no recognized dispatch consumption exists'], records: [] };
   }

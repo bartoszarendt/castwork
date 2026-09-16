@@ -646,6 +646,14 @@ export function revalidateReturnVerification(record, {
       } catch (error) { errors.push(error.message); }
     }
     if (errors.length === 0 && typeof refetchTask === 'function' && typeof refetchRepositoryEvidence === 'function') {
+      // The attempt-start boundary is not supplied from here. It is derived
+      // inside the envelope from `packet.repository.head` on the record's own
+      // carried packet, so revalidation applies the same boundary rule as the
+      // primary route without re-reading anything repository-resident for it.
+      // It does not re-run the lineage cross-checks: no carrier lineage is
+      // refetched here, because carrier evidence legitimately advances after a
+      // return and the recognized-chain equality check would reject the advanced
+      // chain. The boundary itself is identical either way.
       const received = receiveRoleReturn({
         raw: JSON.stringify(roleReturn), packet, refetchTask, refetchRepositoryEvidence,
         producerReceipt, resolveTrustedAdapter, now, runGit, historicalCloseout,

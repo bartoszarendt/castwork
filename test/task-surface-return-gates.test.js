@@ -98,6 +98,7 @@ function commitFiles(root, files, subject) {
 async function implementedTask(name, {
   maintenancePaths = [],
   attemptAuthoredOffSurface = null,
+  offSurfaceTrailered = true,
 } = {}) {
   const fixture = await createDispatchFixture(temp, name, {
     requiredChecksText: '- [RC-1] command: `node --version`\n- [RC-2] command: `node --version`',
@@ -126,8 +127,11 @@ async function implementedTask(name, {
   // canonical trailers, so no ownership question arises: it is this task's work,
   // and task work outside `allowed_paths` is what the scope gate exists for.
   const offSurfaceHead = attemptAuthoredOffSurface
-    ? commitFiles(root, [attemptAuthoredOffSurface],
-      'touch a path this task never declared\n\nTask: T-001\nAgent: engineer')
+    ? commitFiles(root, [attemptAuthoredOffSurface], offSurfaceTrailered
+      ? 'touch a path this task never declared\n\nTask: T-001\nAgent: engineer'
+      // No trailers at all. An attempt that simply declines to declare its own
+      // commit must not thereby place it beyond the scope gate.
+      : 'touch a path this task never declared')
     : null;
 
   writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
@@ -339,35 +343,39 @@ describe('return gates are scoped to the task surface', () => {
   });
 
   /**
-   * The fourth field cohort's blocker. The window held four commits the
-   * loop never authored - a toolkit update the operator ran and the lockfile
-   * refresh that followed it - and every product-classified path they touched
-   * was refused as out of scope. `deriveCommitRange` had already exempted those
-   * commits from attribution thirty lines earlier; the scope check re-asked the
-   * whole-repository question that exemption removed.
+   * The fourth field cohort's blocker, and the escape its first repair opened.
    *
-   * These two cases are the pair the repair has to satisfy at once: separately
-   * owned maintenance in the range must not be refused, and an out-of-scope
-   * path the attempt itself authored still must be.
+   * A range that begins at this attempt's own base contains only this attempt's
+   * span, so every untrailered commit in it landed while the attempt was live.
+   * Nothing in the records distinguishes such a commit from one the attempt
+   * authored and declined to declare - there is no per-commit product receipt -
+   * so it is undecidable, and undecidable resolves toward the task.
+   *
+   * Separately-owned maintenance from *before* the attempt is the case the
+   * field actually hit, and it can only be expressed with carried lineage.
+   * That proof lives in test/resumed-attempt-return.test.js, where a carried
+   * base reaches back across an abandoned attempt exactly as the cohort's did.
    */
-  it('verifies a return whose range holds separately-owned maintenance on product paths', async () => {
-    const context = await implementedTask('maintenance-in-range', { maintenancePaths: MAINTENANCE_PATHS });
+  it('refuses an undeclared product-path commit made while the attempt was live', async () => {
+    const context = await implementedTask('undeclared-in-window', { maintenancePaths: MAINTENANCE_PATHS });
     const { root, cli, packetPath, productHead } = context;
-    const { returnPath, prepared } = await produceReturn(context, productHead, 'maintenance');
-    assertOk(prepared, 'prepare-return over separately-owned maintenance inside the range');
+    const { returnPath, prepared } = await produceReturn(context, productHead, 'undeclared');
+    assertOk(prepared, 'prepare-return still produces the return; the scope gate is the refusal');
 
     const roleReturn = JSON.parse(readFileSync(join(root, returnPath), 'utf8'));
-    // The repair changes what is refused, not what is reported: a path the
-    // range really carries stays in the range's inventory either way.
+    // The repair changes what is refused, not what is reported.
     for (const [path] of MAINTENANCE_PATHS) {
       assert.ok(roleReturn.productChangedPaths.includes(path),
-        `the range inventory still reports the maintenance path '${path}'`);
+        `the range inventory still reports '${path}'`);
     }
 
-    assertOk(await cli([
+    const refused = await cli([
       'task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath,
       '--from-current-repository', '--json',
-    ]), 'verify-return over separately-owned maintenance inside the range');
+    ]);
+    assert.equal(refused.status, 1,
+      `an undeclared in-window product path is refused\n${refused.stdout}${refused.stderr}`);
+    assert.match(`${refused.stdout}${refused.stderr}`, /is outside packet-bound task scope/);
   });
 
   it('still refuses an out-of-scope path the attempt itself authored', async () => {
@@ -388,7 +396,35 @@ describe('return gates are scoped to the task surface', () => {
     assert.match(
       `${refused.stdout}${refused.stderr}`,
       /product changed path 'off-surface\.md' is outside packet-bound task scope/,
-      'the refusal names the path the attempt authored, not the maintenance paths'
+      'the refusal names the path the attempt authored'
+    );
+  });
+
+  /**
+   * The escape the trailer-only ownership rule opened: a trailer is a voluntary
+   * declaration, so reading its absence as "not this task's work" let an
+   * attempt put an out-of-scope edit beyond every gate by simply not declaring
+   * it. Identical to the case above in every respect except the trailers.
+   */
+  it('refuses an out-of-scope path the attempt authored without declaring it', async () => {
+    const context = await implementedTask('attempt-authored-undeclared', {
+      attemptAuthoredOffSurface: ['off-surface.md', '# Not this task\n'],
+      offSurfaceTrailered: false,
+    });
+    const { root, cli, packetPath, productHead } = context;
+    const { returnPath, prepared } = await produceReturn(context, productHead, 'undeclared-off-surface');
+    assertOk(prepared, 'prepare-return still produces the return; the scope gate is the refusal');
+
+    const refused = await cli([
+      'task', 'verify-return', 'T-001', '--packet', packetPath, '--return', returnPath,
+      '--from-current-repository', '--json',
+    ]);
+    assert.equal(refused.status, 1,
+      `omitting the trailers must not place the edit beyond the gate\n${refused.stdout}${refused.stderr}`);
+    assert.match(
+      `${refused.stdout}${refused.stderr}`,
+      /product changed path 'off-surface\.md' is outside packet-bound task scope/,
+      'the undeclared path is named exactly as the declared one is'
     );
   });
 });

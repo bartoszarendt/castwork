@@ -109,6 +109,17 @@ describe('a resumed attempt whose product work is already committed can return',
     ]), 'first role start');
     commitWorkflow(root, 'start the engineer role', 'engineer');
 
+    // An operator sync inside attempt 1's span, untrailered, rewriting files the
+    // target genuinely owns: its own `agenticloop.json` and the lockfile the
+    // installer refreshed. Neither can be declared toolkit-owned, so both are
+    // product-classified. These are the paths that blocked the fourth field
+    // cohort, and by the time attempt 2 returns they sit in carried history -
+    // before that attempt opened, and so not its work to answer for.
+    writeFileSync(join(root, 'agenticloop.json'), '{\n  "documents": {}\n}\n', 'utf8');
+    writeFileSync(join(root, 'package-lock.json'), '{\n  "lockfileVersion": 3\n}\n', 'utf8');
+    git(root, ['add', 'agenticloop.json', 'package-lock.json']);
+    git(root, ['commit', '-m', 'Update Agentic Loop']);
+
     writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
     git(root, ['add', 'src/existing.js']);
     git(root, ['commit', '-m', 'implement the task\n\nTask: T-001\nAgent: engineer']);
@@ -208,8 +219,8 @@ describe('a resumed attempt whose product work is already committed can return',
 
     const roleReturn = JSON.parse(readFileSync(join(root, returnPath), 'utf8'));
     assert.equal(roleReturn.productHead, productHead);
-    assert.deepEqual(roleReturn.productChangedPaths, ['src/existing.js'],
-      'the carried product work is attributed as product work, not lost');
+    assert.deepEqual(roleReturn.productChangedPaths, ['agenticloop.json', 'package-lock.json', 'src/existing.js'],
+      'the carried product work is attributed as product work, and every path in the range stays in the inventory');
     assert.ok(
       roleReturn.workflowChangedPaths.includes('.agenticloop/generated-artifacts.json'),
       'toolkit-written target state in carried history is workflow state, not an unknown path'
@@ -219,10 +230,13 @@ describe('a resumed attempt whose product work is already committed can return',
     assert.equal(roleReturn.productBaseHead, roleReturn.productLineage.carriedBaseHead);
     assert.notEqual(roleReturn.productBaseHead, packet.repository.head);
 
+    // The fourth cohort's blocker: separately-owned maintenance that landed in
+    // carried history, before this attempt opened, is reported in the inventory
+    // and is not refused. It is not this attempt's to answer for.
     assertOk(await cli([
       'task', 'verify-return', 'T-001', '--packet', secondPacket, '--return', returnPath,
       '--from-current-repository', '--json',
-    ]), 'verify-return on a resumed attempt');
+    ]), 'verify-return over separately-owned maintenance in carried history');
   });
 
   it('refuses an implementation artifact that introduces no product work', async () => {
