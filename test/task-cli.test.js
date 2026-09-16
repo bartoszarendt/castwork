@@ -37,6 +37,7 @@ import { executeMutationBatch } from '../src/fs-mutation-kernel.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { publicOutputTargetRelativePath } from '../src/public-output-policy.js';
 import { validatePreparedCommandCheckExecutions } from '../src/task-fact-readers.js';
+import { pathIdentity } from '../src/path-identity.js';
 
 let tmpDir;
 const IS_WINDOWS = platform() === 'win32';
@@ -1307,7 +1308,7 @@ describe('task CLI', () => {
     assert.ok(Buffer.byteLength(negative.execution.output.stdout, 'utf8') <= 64 * 1024);
     assert.equal(negative.check.command, 'node');
     assert.deepEqual(negative.check.args, ['--version']);
-    assert.equal(negative.locations.workingDirectory.authorityPath, fixture.root.replaceAll('\\', '/'));
+    assert.equal(negative.locations.workingDirectory.authorityPath, pathIdentity(fixture.root).authorityPath);
     assert.equal(negative.binding.invocationId, packet.assignment.invocationId);
     assert.notEqual(negative.digest, JSON.parse(retainedPass).digest);
   });
