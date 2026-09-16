@@ -15,6 +15,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -25,6 +26,7 @@ import { tmpdir, platform } from 'node:os';
 import { createHash } from 'node:crypto';
 
 import {
+  atomicWriteFile,
   assertSafeRelativePath,
   executeMutationBatch,
   executeRenameMutation,
@@ -955,6 +957,72 @@ describe('Windows EPERM behavior', { skip: !IS_WINDOWS }, () => {
       assert.equal(readFileSync(protectedPath, 'utf-8'), 'original');
     } finally {
       chmodSync(protectedPath, 0o666);
+    }
+  });
+});
+
+describe('atomic replacement retry', () => {
+  it('retries transient Windows rename failures with bounded linear backoff', () => {
+    const t = target();
+    const destination = join(t, 'record.json');
+    writeFileSync(destination, 'original', 'utf8');
+    const waits = [];
+    let attempts = 0;
+
+    atomicWriteFile(destination, 'updated', {
+      platform: 'win32',
+      rename: (from, to) => {
+        attempts += 1;
+        if (attempts < 3) throw Object.assign(new Error('temporarily locked'), { code: 'EPERM' });
+        renameSync(from, to);
+      },
+      wait: delay => waits.push(delay),
+    });
+
+    assert.equal(readFileSync(destination, 'utf8'), 'updated');
+    assert.equal(attempts, 3);
+    assert.deepEqual(waits, [100, 200]);
+  });
+
+  it('stops after the bounded Windows retry budget and preserves the prior file', () => {
+    const t = target();
+    const destination = join(t, 'record.json');
+    writeFileSync(destination, 'original', 'utf8');
+    const waits = [];
+    let attempts = 0;
+    const locked = Object.assign(new Error('persistently locked'), { code: 'EPERM' });
+
+    assert.throws(() => atomicWriteFile(destination, 'updated', {
+      platform: 'win32',
+      rename: () => { attempts += 1; throw locked; },
+      wait: delay => waits.push(delay),
+    }), error => error === locked);
+
+    assert.equal(readFileSync(destination, 'utf8'), 'original');
+    assert.equal(attempts, 6);
+    assert.deepEqual(waits, [100, 200, 300, 400, 500]);
+    assert.deepEqual(readdirSync(t).sort(), ['record.json']);
+  });
+
+  it('does not retry a non-transient error or retry outside Windows', () => {
+    for (const [platformName, code] of [['win32', 'EINVAL'], ['linux', 'EPERM']]) {
+      const t = target();
+      const destination = join(t, 'record.json');
+      writeFileSync(destination, 'original', 'utf8');
+      let attempts = 0;
+      let waited = false;
+      const failure = Object.assign(new Error(`${platformName} ${code}`), { code });
+
+      assert.throws(() => atomicWriteFile(destination, 'updated', {
+        platform: platformName,
+        rename: () => { attempts += 1; throw failure; },
+        wait: () => { waited = true; },
+      }), error => error === failure);
+
+      assert.equal(attempts, 1);
+      assert.equal(waited, false);
+      assert.equal(readFileSync(destination, 'utf8'), 'original');
+      assert.deepEqual(readdirSync(t).sort(), ['record.json']);
     }
   });
 });

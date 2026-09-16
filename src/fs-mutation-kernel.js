@@ -49,6 +49,10 @@ import {
 
 const RECOVERABLE_MUTATION_INTENT_KIND = 'agenticloop.recoverable-mutation-intent';
 const RECOVERABLE_MUTATION_INTENT_SCHEMA_VERSION = 1;
+const WINDOWS_ATOMIC_RENAME_RETRY_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
+const WINDOWS_ATOMIC_RENAME_MAX_RETRIES = 5;
+const WINDOWS_ATOMIC_RENAME_RETRY_DELAY_MS = 100;
+const WINDOWS_ATOMIC_RENAME_WAIT_STATE = new Int32Array(new SharedArrayBuffer(4));
 export const SIMULATED_MUTATION_TERMINATION_CODE = 'fs.mutation.simulated_termination';
 const LIFECYCLE_LOCK_CODES = Object.freeze({
   malformed: ['fs', 'lifecycle_lock', 'malformed'].join('.'),
@@ -113,6 +117,31 @@ function restoreEncodedState(path, state) {
 
 function simulatedTermination(error) {
   return error?.code === SIMULATED_MUTATION_TERMINATION_CODE;
+}
+
+function waitForAtomicRenameRetry(delayMs) {
+  Atomics.wait(WINDOWS_ATOMIC_RENAME_WAIT_STATE, 0, 0, delayMs);
+}
+
+function commitAtomicReplacement(from, to, {
+  platform = process.platform,
+  rename = renameSync,
+  wait = waitForAtomicRenameRetry,
+} = {}) {
+  let retries = 0;
+  while (true) {
+    try {
+      rename(from, to);
+      return;
+    } catch (error) {
+      if (platform !== 'win32' || !WINDOWS_ATOMIC_RENAME_RETRY_CODES.has(error?.code) ||
+          retries >= WINDOWS_ATOMIC_RENAME_MAX_RETRIES) {
+        throw error;
+      }
+      retries += 1;
+      wait(WINDOWS_ATOMIC_RENAME_RETRY_DELAY_MS * retries);
+    }
+  }
 }
 
 function buildRecoverableIntent(root, prepared, snapshots, transaction) {
@@ -408,13 +437,14 @@ export function fingerprintTargetPath(targetRoot, relPath) {
  *
  * @param {string} path  Absolute destination path.
  * @param {string|Buffer} content
+ * @param {{platform?: string, rename?: Function, wait?: Function}} [options]
  */
-export function atomicWriteFile(path, content) {
+export function atomicWriteFile(path, content, options = {}) {
   mkdirSync(dirname(path), { recursive: true });
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporary, content);
-    renameSync(temporary, path);
+    commitAtomicReplacement(temporary, path, options);
   } finally {
     if (existsSync(temporary)) rmSync(temporary, { force: true });
   }
