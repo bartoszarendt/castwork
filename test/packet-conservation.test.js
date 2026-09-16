@@ -230,14 +230,15 @@ describe('attempts are grouped from durable evidence', () => {
     const consumed = consumption();
     const attemptId = executionAttemptIdentity(consumed);
     const cases = [
-      ['superseded_before_work', false, false, false, true, false],
-      ['tooling_failed', false, false, false, true, false],
+      ['superseded_before_work', false, false, false, true, true],
+      ['tooling_failed', false, false, false, true, true],
       ['tooling_failed', true, false, true, false, true],
-      ['superseded_by_packet', false, false, false, true, false],
+      ['superseded_by_packet', false, false, false, true, true],
       ['superseded_by_maintainer_repair', true, true, false, true, true],
       ['abandoned', true, true, true, false, true],
+      ['abandoned', false, true, true, false, false],
     ];
-    for (const [disposition, productMutationOccurred, carrierMutationOccurred, budget, recovery, carriesProduct] of cases) {
+    for (const [disposition, productMutationOccurred, carrierMutationOccurred, budget, recovery, preservesContinuity] of cases) {
       const record = abandonment(attemptId, {
         disposition, productMutationOccurred, carrierMutationOccurred,
       });
@@ -248,8 +249,8 @@ describe('attempts are grouped from durable evidence', () => {
       assert.notEqual(budget && recovery, true);
       assert.equal(
         isCarryCompatibleAttempt(attempts.records[0]),
-        carriesProduct,
-        `${disposition} must carry product lineage only when the abandoned attempt mutated product state`,
+        preservesContinuity,
+        `${disposition} must preserve continuity only when it contributed product or is a proven no-product recovery`,
       );
     }
     assert.equal(isCarryCompatibleAttempt({ state: 'live', abandonment: null }), false);

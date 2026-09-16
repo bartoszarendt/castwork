@@ -345,8 +345,38 @@ describe('canonical files-backend lifecycle', () => {
       'task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json',
     ]), 'return predictive preflight').stdout);
     assert.equal(returnPreflight.liveAttemptGate.nextStep, 'prepare_return');
+    assert.equal(returnPreflight.liveAttemptGate.checkEvidence.current, true);
+    assert.deepEqual(returnPreflight.liveAttemptGate.checkEvidence.executionBindings, {
+      status: 'tested', reason: null,
+    });
     assert.match(returnPreflight.nextSequence.steps[0].command, /task prepare-return/);
     assert.equal(returnPreflight.nextSequence.steps[0].commitRequired, false);
+
+    const firstExecutionPath = join(root, `.agenticloop/checks/${TASK_ID}/RC-1.execution.json`);
+    const firstExecutionBytes = readFileSync(firstExecutionPath, 'utf8');
+    const damagedExecution = JSON.parse(firstExecutionBytes);
+    damagedExecution.binding.invocationId = 'invocation:00000000-0000-4000-8000-000000000000';
+    writeFileSync(firstExecutionPath, `${JSON.stringify(damagedExecution, null, 2)}\n`, 'utf8');
+    const bindingPreflightResult = await cli([
+      'task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json',
+    ]);
+    assert.equal(bindingPreflightResult.status, 1);
+    const bindingPreflight = JSON.parse(bindingPreflightResult.stdout);
+    assert.equal(bindingPreflight.liveAttemptGate.nextStep, 'required_checks');
+    assert.equal(bindingPreflight.liveAttemptGate.checkEvidence.current, false);
+    assert.equal(bindingPreflight.liveAttemptGate.checkEvidence.executionBindings.status, 'tested');
+    assert.match(bindingPreflight.liveAttemptGate.checkEvidence.executionBindings.reason, /execution artifact is invalid/);
+    assert.match(bindingPreflight.firstSafeRepair, /task check-evidence-init/);
+    assert.match(bindingPreflight.firstSafeRepair, /--expect-existing-digest/);
+    assert.match(bindingPreflight.firstSafeRepair, /--supersession-authority maintainer:<ref>/);
+    const bindingDownstream = await cli([
+      'task', 'prepare-return', TASK_ID, '--packet', packetPath,
+      '--check-evidence', DEFAULT_CHECKS, '--outcome', 'implementation_ready_for_review',
+      '--output', returnPath, '--json',
+    ]);
+    assert.equal(bindingDownstream.status, 1);
+    assert.match(JSON.parse(bindingDownstream.stdout).diagnostics[0].message, /execution artifact is invalid/);
+    writeFileSync(firstExecutionPath, firstExecutionBytes, 'utf8');
 
     assertOk(await cli([
       'task', 'prepare-return', TASK_ID, '--packet', packetPath,
@@ -471,6 +501,78 @@ describe('resumed and recovery files-backend lifecycle', () => {
     assert.equal(prior.engineeringBudgetConsumed, false);
     assert.equal(prior.workflowRecovery, true);
   });
+
+  it('refuses an impossible frozen-artifact topology before minting or running checks', async () => {
+    const fixture = await createDispatchFixture(temp, 'pre-mint-impossible-topology', {
+      requiredChecksText: '- [RC-1] command: `node --version`',
+    });
+    const cli = cliFor(fixture);
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+
+    const productAttempt = await preparePacketAndStart(fixture, cli, 'product');
+    const productHead = await commitProduct(cli, fixture.root, productAttempt.packetPath, 'frozen-artifact');
+    await publishEngineerEvidence(cli, fixture.root, productAttempt.packetPath, productHead);
+    await abandon(cli, fixture.root, productAttempt.attemptId, 'tooling_failed');
+
+    const emptyAttempt = await preparePacketAndStart(fixture, cli, 'empty');
+    await abandon(cli, fixture.root, emptyAttempt.attemptId, 'abandoned');
+
+    const before = listDispatchConsumptions(fixture.root, TASK_ID).records;
+    const output = '.agenticloop/tmp/dispatch-impossible.json';
+    const refused = await cli([
+      'task', 'prepare-dispatch', TASK_ID, '--host', 'opencode', '--role', 'engineer',
+      '--output', output, '--json',
+    ]);
+    assert.equal(refused.status, 1);
+    const result = JSON.parse(refused.stdout);
+    assert.match(result.diagnostics[0].message, /would-be product base .* does not precede .*implementation_artifact/);
+    assert.equal(existsSync(join(fixture.root, output)), false, 'no impossible packet is minted');
+    assert.equal(listDispatchConsumptions(fixture.root, TASK_ID).records.length, before.length, 'no attempt is consumed');
+    assert.equal(existsSync(join(fixture.root, '.agenticloop', 'checks', TASK_ID)), false, 'no required check executes');
+  });
+
+  it('resumes verification across a proven no-product tooling recovery gap', async () => {
+    const fixture = await createDispatchFixture(temp, 'recovery-gap-sequence', {
+      requiredChecksText: '- [RC-1] command: `node --version`',
+    });
+    const cli = cliFor(fixture);
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+
+    const productAttempt = await preparePacketAndStart(fixture, cli, 'product');
+    const productHead = await commitProduct(cli, fixture.root, productAttempt.packetPath, 'recovery-gap-product');
+    await publishEngineerEvidence(cli, fixture.root, productAttempt.packetPath, productHead);
+    await abandon(cli, fixture.root, productAttempt.attemptId, 'tooling_failed');
+
+    const recoveryAttempt = await preparePacketAndStart(fixture, cli, 'tooling-recovery');
+    await abandon(cli, fixture.root, recoveryAttempt.attemptId, 'tooling_failed');
+    const abandonmentDirectory = join(fixture.root, '.agenticloop', 'handoffs', 'attempts', TASK_ID);
+    const originalRecords = Object.fromEntries(readdirSync(abandonmentDirectory).map(name => [
+      name,
+      readFileSync(join(abandonmentDirectory, name), 'utf8'),
+    ]));
+
+    const verificationAttempt = await preparePacketAndStart(fixture, cli, 'verification');
+    await runChecks(cli, fixture.root, verificationAttempt.packetPath);
+    const returnPath = '.agenticloop/tmp/recovery-gap-return.json';
+    assertOk(await cli([
+      'task', 'prepare-return', TASK_ID, '--packet', verificationAttempt.packetPath,
+      '--check-evidence', DEFAULT_CHECKS, '--outcome', 'implementation_ready_for_review',
+      '--output', returnPath, '--json',
+    ]), 'prepare verification-only return');
+    const returned = JSON.parse(readFileSync(join(fixture.root, returnPath), 'utf8'));
+    assertOk(await cli([
+      'task', 'verify-return', TASK_ID, '--packet', verificationAttempt.packetPath,
+      '--return', returnPath, '--from-current-repository', '--json',
+    ]), 'verify recovery-gap return');
+    assert.equal(returned.productLineage.carriedBaseHead, productAttempt.packet.repository.head);
+    assert.deepEqual(
+      returned.productLineage.attempts.map(attempt => attempt.attemptId),
+      [productAttempt.attemptId, recoveryAttempt.attemptId],
+    );
+    for (const [name, bytes] of Object.entries(originalRecords)) {
+      assert.equal(readFileSync(join(abandonmentDirectory, name), 'utf8'), bytes, `${name} remains unchanged`);
+    }
+  });
 });
 
 describe('live-attempt predictive safety', () => {
@@ -572,10 +674,22 @@ describe('live-attempt predictive safety', () => {
     const expectedTerminal = artifact.currentCarrierDigest;
 
     const carrierPath = join(fixture.root, '.agenticloop', 'tasks', `${TASK_ID}.md`);
+    const terminalCarrierBytes = readFileSync(carrierPath, 'utf8');
     writeFileSync(carrierPath,
-      readFileSync(carrierPath, 'utf8').replace('## Comments\n', '## Comments\n\n- External out-of-chain edit.\n'),
+      terminalCarrierBytes.replace('## Comments\n', '## Comments\n\n- External out-of-chain edit.\n'),
       'utf8');
     const currentCarrierDigest = digestCarrier(fixture.root);
+
+    const driftedLintResult = await cli(['task', 'lint', TASK_ID, '--json']);
+    assert.equal(driftedLintResult.status, 1);
+    const driftedLint = JSON.parse(driftedLintResult.stdout)[0];
+    assert.ok(driftedLint.diagnostics.some(item => item.code === 'task.evidence.lineage.stale'));
+    assert.match(driftedLint.errors.join('\n'), new RegExp(expectedTerminal));
+    writeFileSync(carrierPath, terminalCarrierBytes, 'utf8');
+    assertOk(await cli(['task', 'lint', TASK_ID, '--json']), 'lint at recognized live lineage terminal');
+    writeFileSync(carrierPath,
+      terminalCarrierBytes.replace('## Comments\n', '## Comments\n\n- External out-of-chain edit.\n'),
+      'utf8');
 
     const preflightResult = await cli([
       'task', 'handoff-preflight', TASK_ID, '--host', 'opencode', '--json',

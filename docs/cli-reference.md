@@ -1089,6 +1089,13 @@ a later command could read back. Exhaustion itself remains a separate refusal,
 `dispatch.attempt.budget_exhausted`; a budget about to be spent is not a
 budget already spent.
 
+If human authority decides the budget is genuinely too low, edit only
+`attempt_budget` in the task carrier and commit that carrier-only change.
+`attempt_budget` is outside the protected task contract, so this does not use
+`task authorize-correction`. The edit is permitted only when no attempt is
+live: complete the live attempt, or explicitly retire it with `task
+abandon-attempt`, before changing the budget.
+
 Re-validating an existing packet with `task prepare-dispatch <id> --packet
 <path>` remains a pre-role-start diagnostic. Do not run it after consumption:
 role start deliberately advances the repository/carrier, so recomputing the
@@ -1152,12 +1159,14 @@ Both are now derived facts rather than positions:
   current. `task lint` asks the same question of the same surface and refuses an
   `implementation_artifact` that carries no work on it, so the field can never
   point at a role-start receipt while the implementation sits earlier.
-- **The product base is carried, explicitly.** Every valid terminal
-  abandonment disposition (`superseded_before_work`, `tooling_failed`,
-  `superseded_by_packet`, `superseded_by_maintainer_repair`, and `abandoned`)
-  is lineage-continuous. A return whose task has such prior attempts binds the
-  earliest carried attempt's base and
-  states the claim in `productLineage`, naming each attempt it carries. The claim
+- **The product base is carried, explicitly.** A product-mutating terminal
+  attempt contributes lineage. A valid same-task recovery record that proves no
+  product mutation preserves continuity only when it is `tooling_failed` or a
+  `superseded_*` disposition. A live attempt, plain no-product abandonment,
+  terminal conflict, malformed record, or unrelated history ends the walk. A
+  no-product-only history yields no lineage. A return across an unbroken run
+  binds the earliest product-contributing attempt's base and states the claim
+  in `productLineage`, naming each traversed attempt. The claim
   is derived from durable dispatch-consumption and abandonment records, and the
   verification boundary re-derives it from the same records and reproves the
   ancestry against Git before accepting the return. An ordinary attempt carries
@@ -2121,9 +2130,11 @@ remain separate.
 ## Workflow budgets
 
 `task new` materializes `attempt_budget` from target
-`default_attempt_budget`, then built-in `5`. A task-specific override is a
-subsequent task-record edit made before work begins; `task new` has no budget
-override option. The field is the hard limit for equivalent no-progress
+`default_attempt_budget`, then built-in `5`. A task-specific override is an
+authorized carrier-only `attempt_budget` edit while no attempt is live; it is
+outside the protected task contract and does not use `task
+authorize-correction`. `task new` has no budget override option. The field is
+the hard limit for equivalent no-progress
 attempts. The command also materializes `review_budget` from the target
 project's `default_review_budget`, then the built-in `5`; this is a Review Round
 Checkpoint threshold, not a review cap. `audit new --budget <n>` is an explicit override;

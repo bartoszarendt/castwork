@@ -211,20 +211,19 @@ function isAncestor(runGit, ancestor, descendant) {
  * Whether one terminal attempt preserves product-lineage continuity.
  *
  * Carry compatibility is deliberately separate from engineering-budget
- * accounting. Every closed-schema abandonment disposition is a durable
- * explanation of why ownership ended; the disposition-specific mutation
- * constraints were already validated when the record was loaded.
+ * accounting and product contribution. A product-mutating terminal attempt
+ * contributes lineage. A same-task recovery record that proves no product
+ * mutation preserves continuity only when it is `tooling_failed` or a
+ * `superseded_*` disposition. A live attempt, plain no-product abandonment,
+ * terminal conflict, malformed record, or unrelated history ends the walk.
  */
 export function isCarryCompatibleAttempt(attempt) {
-  return Boolean(
-    attempt?.abandonment &&
-    EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS.includes(attempt.state) &&
-    attempt.abandonment.disposition === attempt.state &&
-    // A predecessor without product mutation carries no product lineage. Its
-    // workflow-only abandonment remains history, but must not pull a later
-    // adopted product range back across the later attempt's authorization base.
-    attempt.abandonment.productMutationOccurred === true
-  );
+  if (!attempt?.abandonment ||
+      !EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS.includes(attempt.state) ||
+      attempt.abandonment.disposition !== attempt.state) return false;
+  if (attempt.abandonment.productMutationOccurred === true) return true;
+  return attempt.abandonment.productMutationOccurred === false &&
+    (attempt.state === 'tooling_failed' || attempt.state.startsWith('superseded_'));
 }
 
 /**
@@ -315,12 +314,12 @@ export function commitCarriesProductPaths(runGit, commit, classifier = null) {
  *
  * @param {string} target
  * @param {string} taskId
- * @param {{ backend?: string, packetBaseHead: string,
+ * @param {{ backend?: string, packetBaseHead: string, prospective?: boolean,
  *           runGit: (args: string[]) => { status: number, stdout?: string } }} options
  * @returns {{ ok: boolean, lineage: object|null, errors: string[] }}
  */
 export function resolveCarriedProductLineage(target, taskId, {
-  backend = 'files', packetBaseHead, runGit,
+  backend = 'files', packetBaseHead, runGit, prospective = false,
 } = {}) {
   if (typeof runGit !== 'function') throw new TypeError('resolveCarriedProductLineage requires a runGit function');
   if (!isGitObjectId(packetBaseHead)) {
@@ -337,12 +336,15 @@ export function resolveCarriedProductLineage(target, taskId, {
   });
   if (!grouped.ok) return { ok: false, lineage: null, errors: grouped.errors.map(error => error.message) };
   const attempts = grouped.records;
-  // The current attempt is the newest one that started from this packet's base.
-  // Identifying it by base rather than by liveness keeps the derivation stable
-  // whether it is asked before or after this attempt's own records land.
-  let index = -1;
-  for (let position = attempts.length - 1; position >= 0; position--) {
-    if (attempts[position].productBaseHead === packetBaseHead) { index = position; break; }
+  // A pre-mint check starts after all recorded attempts. Return production and
+  // verification instead locate the already-consumed current attempt by its
+  // packet base, keeping their derivation stable after that attempt's records
+  // land. Both routes share the same backward continuity walk below.
+  let index = prospective ? attempts.length : -1;
+  if (!prospective) {
+    for (let position = attempts.length - 1; position >= 0; position--) {
+      if (attempts[position].productBaseHead === packetBaseHead) { index = position; break; }
+    }
   }
   if (index <= 0) return { ok: true, lineage: null, errors: [] };
 
@@ -356,9 +358,10 @@ export function resolveCarriedProductLineage(target, taskId, {
     if (!isCarryCompatibleAttempt(attempts[position])) break;
     carried.unshift(attempts[position]);
   }
-  if (carried.length === 0) return { ok: true, lineage: null, errors: [] };
+  const contributors = carried.filter(attempt => attempt.abandonment.productMutationOccurred === true);
+  if (contributors.length === 0) return { ok: true, lineage: null, errors: [] };
 
-  const carriedBaseHead = carried[0].productBaseHead;
+  const carriedBaseHead = contributors[0].productBaseHead;
   if (carriedBaseHead === packetBaseHead) return { ok: true, lineage: null, errors: [] };
   if (!isGitObjectId(carriedBaseHead) || !sameGitObjectFormat([carriedBaseHead, packetBaseHead])) {
     return { ok: false, lineage: null, errors: ['carried attempt base is not a full Git identity of the packet base object format'] };

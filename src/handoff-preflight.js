@@ -71,6 +71,11 @@ import {
 } from './required-checks.js';
 import { renderActivationRepair } from './activation-repair.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
+import {
+  checkEvidenceSupersessionRepair,
+  implementationArtifactHead,
+  validatePreparedCommandCheckExecutions,
+} from './task-fact-readers.js';
 // The canonical dispatch-eligibility evaluator. Preflight resolves facts and
 // presents results; every shared prerequisite is decided in this one module,
 // the same one packet preparation and role start consume.
@@ -1381,10 +1386,62 @@ export function evaluateHandoffPreflight(input) {
             inventory.checks,
             { contractVersion: REQUIRED_CHECK_EVIDENCE_CONTRACT_VERSION },
           );
-          checkEvidence = { path: checkPath, digest: digestBytes(checkBytes), current: matches };
+          checkEvidence = {
+            path: checkPath,
+            digest: digestBytes(checkBytes),
+            current: false,
+            executionBindings: { status: 'untested', reason: 'aggregate inventory validation did not pass' },
+          };
+          if (matches) {
+            const productHead = implementationArtifactHead(snapshot.body);
+            const consumption = liveLineage.dispatchConsumption;
+            if (productHead && repositoryState?.head && consumption) {
+              try {
+                validatePreparedCommandCheckExecutions(
+                  resolvedTarget,
+                  checked.checks,
+                  inventory.checks,
+                  {
+                    packetId: consumption.packetId,
+                    packetDigest: consumption.packetDigest,
+                    invocationId: consumption.invocationId,
+                    taskId,
+                    taskContractDigest: taskContractDigestValue,
+                    currentCarrierDigest: taskCarrierDigest,
+                    repositoryHead: repositoryState.head,
+                    productHead,
+                  },
+                );
+                checkEvidence.current = true;
+                checkEvidence.executionBindings = { status: 'tested', reason: null };
+              } catch (error) {
+                checkEvidence.executionBindings = { status: 'tested', reason: error.message };
+                findings.error(
+                  'evidence.malformed',
+                  `live check aggregate '${checkPath}' has invalid passed-check execution bindings: ${error.message}`,
+                  error.safeRepair ?? checkEvidenceSupersessionRepair(taskId),
+                  'changed',
+                );
+              }
+            } else {
+              checkEvidence.executionBindings = {
+                status: 'untested',
+                reason: 'current packet consumption, repository head, or implementation artifact is unavailable',
+              };
+              findings.error(
+                'evidence.missing',
+                `live check aggregate '${checkPath}' execution bindings are untested because the current packet ` +
+                  'consumption, repository head, or implementation artifact is unavailable',
+                'Restore the named current task and attempt facts, then rerun preflight before prepare-return.',
+                'missing',
+              );
+            }
+          }
           if (matches && checks.every(check => check.outcome === 'passed')) {
-            nextStep = 'prepare_return';
-            liveAttemptGate.nextStep = nextStep;
+            if (checkEvidence.current) {
+              nextStep = 'prepare_return';
+              liveAttemptGate.nextStep = nextStep;
+            }
           } else if (matches) {
             nextCheckId = checks.find(check => check.outcome !== 'passed')?.id ?? null;
           }
@@ -1397,7 +1454,12 @@ export function evaluateHandoffPreflight(input) {
             );
           }
         } catch (error) {
-          checkEvidence = { path: checkPath, digest: null, current: false };
+          checkEvidence = {
+            path: checkPath,
+            digest: null,
+            current: false,
+            executionBindings: { status: 'untested', reason: 'aggregate is unreadable' },
+          };
           findings.error(
             'evidence.malformed',
             `live check aggregate '${checkPath}' is unreadable: ${error.message}`,
@@ -1406,7 +1468,12 @@ export function evaluateHandoffPreflight(input) {
           );
         }
       } else {
-        checkEvidence = { path: checkPath, digest: null, current: false };
+        checkEvidence = {
+          path: checkPath,
+          digest: null,
+          current: false,
+          executionBindings: { status: 'untested', reason: 'aggregate is missing' },
+        };
         findings.error(
           'evidence.missing',
           `live check aggregate is missing at '${checkPath}'`,

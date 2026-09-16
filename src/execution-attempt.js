@@ -97,6 +97,19 @@ export const ATTEMPT_BUDGET_DIAGNOSTIC_CODE = 'dispatch.attempt.budget_exhausted
  */
 export const ATTEMPT_FINAL_SLOT_DIAGNOSTIC_CODE = 'dispatch.attempt.final_slot_unacknowledged';
 
+/** Render the one supported attempt-budget repair without implying a contract amendment. */
+export function attemptBudgetCarrierEditRepair(taskId, { liveAttempt = null } = {}) {
+  const live = liveAttempt
+    ? ` A live attempt (${liveAttempt.attemptId ?? '<attempt-id>'}) cannot be bypassed by a carrier edit: ` +
+      `complete it, or explicitly retire it with 'npx agenticloop task abandon-attempt ${taskId} ` +
+      `--attempt ${liveAttempt.attemptId ?? '<attempt-id>'} --disposition <valid-disposition> ` +
+      `--reason <reason> --authority human:<ref> --json' before changing the budget.`
+    : ' This edit is permitted only when no attempt is live.';
+  return `If human authority decides the budget is genuinely too low, edit only attempt_budget in the ${taskId} ` +
+    `task carrier and commit that carrier-only change; attempt_budget is outside the protected task contract, so no ` +
+    `contract amendment or authorize-correction command is involved.${live}`;
+}
+
 /**
  * How an attempt stopped being live.
  *
@@ -638,8 +651,7 @@ export function evaluateTaskPacketConservation(target, taskId, {
         'not a guideline, and a further packet would repeat work that has produced no new evidence',
       repair:
         'Stop repeating the attempt and record the task as blocked or needs_context with what is actually unknown. ' +
-        `If the budget is genuinely too low for this task, raise attempt_budget in the task record through ` +
-        `'npx agenticloop task authorize-correction ${taskId}' before requesting another packet.`,
+        attemptBudgetCarrierEditRepair(taskId, { liveAttempt: verdict.liveAttempt }),
       historyIntegrity: history,
       attemptBudget,
     };

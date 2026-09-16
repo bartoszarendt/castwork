@@ -801,6 +801,7 @@ export function prepareRoleDispatch(input = {}, options = {}) {
       runGit,
       priorGateReceipts = [],
       readCarrierDigest = null,
+      validatePreMintTopology = null,
       assignment,
       parallelRequested: requestedParallel,
       routeAgreementRequested: requestedRouteAgreement,
@@ -955,6 +956,28 @@ export function prepareRoleDispatch(input = {}, options = {}) {
     }
 
     const bound = eligibility.bindings.repository;
+    if (typeof validatePreMintTopology === 'function') {
+      let topology;
+      try {
+        topology = validatePreMintTopology({ snapshot, repository: bound });
+      } catch (error) {
+        const state = typeof error?.evidenceState === 'string' ? error.evidenceState : 'malformed';
+        const disposition = typeof error?.disposition === 'string' ? error.disposition : 'blocked';
+        const repairHint = error instanceof PublicCommandError ? error.safeRepair : null;
+        return singleFailure(command, state, disposition, `pre-mint product topology could not be evaluated: ${error.message}`, {}, null, repairHint);
+      }
+      if (topology?.ok !== true) {
+        return singleFailure(
+          command,
+          topology?.evidenceState ?? 'changed',
+          topology?.disposition ?? 'blocked',
+          topology?.message ?? 'pre-mint product topology is incompatible with the bound implementation artifact',
+          {},
+          null,
+          topology?.repairHint ?? null,
+        );
+      }
+    }
     const packet = packetFromBindings({
       snapshot,
       activation: eligibility.bindings.activation,

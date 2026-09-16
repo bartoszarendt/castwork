@@ -13,6 +13,29 @@
   a repeated-refusal validator-diagnosis stop rule.
 
 ### Fixed
+- Failed required-check executions are now retained as bounded negative
+  execution evidence, including actual argv, working directory, exit/wrapper
+  status, output, and attempt binding, without overwriting an earlier pass or
+  reporting the observed failure as missing context.
+- `task handoff-preflight` now validates passed command executions with the same
+  protected binding validator as `task prepare-return`, and explicitly reports
+  execution bindings it could not test instead of claiming current evidence.
+- `task prepare-dispatch` now refuses an already-bound artifact whose prospective
+  carried product base cannot precede it, before packet minting, check execution,
+  or attempt-budget consumption.
+- Product lineage now crosses a valid same-task no-product recovery record only
+  for `tooling_failed` and `superseded_*` dispositions, while preserving the
+  earliest product-contributing base and keeping live, conflicting, malformed,
+  unrelated, and plain no-product abandonment gaps terminal.
+- Stale or invalid passed-check diagnostics now name the existing same-attempt
+  `task check-evidence-init` supersession route, its expected-digest and authority
+  requirements, its retained history, and the required full rerun.
+- Attempt-budget refusals now describe the authorized carrier-only
+  `attempt_budget` edit and its no-live-attempt restriction instead of suggesting
+  `task authorize-correction`, which cannot change that non-contract field.
+- Read-only `task lint` now reports `task.evidence.lineage.stale` when a live
+  attempt's recognized carrier terminal differs from the task carrier, making
+  drift visible before an operator commits it.
 - **Breaking:** the dispatch clean gate no longer refuses a checkout over Agentic
   Loop's own machine-local state. A file recorded in the generation manifest is
   classified as toolkit output wherever it lives, including under

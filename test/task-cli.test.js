@@ -36,6 +36,7 @@ import {
 import { executeMutationBatch } from '../src/fs-mutation-kernel.js';
 import { listDispatchConsumptions } from '../src/handoff-consumption.js';
 import { publicOutputTargetRelativePath } from '../src/public-output-policy.js';
+import { validatePreparedCommandCheckExecutions } from '../src/task-fact-readers.js';
 
 let tmpDir;
 const IS_WINDOWS = platform() === 'win32';
@@ -1234,6 +1235,83 @@ describe('task CLI', () => {
     assert.equal(existsSync(join(fixture.root, checksPath)), false);
   });
 
+  it('retains a bounded negative execution without overwriting an earlier pass', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'retained-failed-check', {
+      requiredChecksText: '- [RC-1] command: `node --version`',
+    });
+    const packetPath = '.agenticloop/tmp/packet.json';
+    const checksPath = '.agenticloop/tmp/checks.json';
+    const passPath = '.agenticloop/checks/T-001/RC-1.execution.json';
+    const options = {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      hostAuthority: protectedHostBoundary(fixture.trust),
+    };
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    const packet = prepareDispatch(fixture).packet;
+    writeFileSync(join(fixture.root, packetPath), JSON.stringify(packet), 'utf8');
+    assertOk(await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
+      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
+    ], options));
+    assertOk(await runCliInProcess([
+      'task', 'check-evidence-init', 'T-001', '--packet', packetPath,
+      '--output', checksPath, '--json', '--target', fixture.root,
+    ], options));
+
+    assertOk(await runCliInProcess([
+      'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+      '--input', checksPath, '--output', checksPath, '--check', 'RC-1',
+      '--outcome', 'passed', '--evidence', 'first observation', '--json', '--target', fixture.root,
+    ], {
+      ...options,
+      requiredCheckCommandRunner: ({ command, args, cwd }) => ({
+        exitCode: 0, stdout: 'earlier pass', stderr: '', logicalCommand: command,
+        resolvedExecutable: command, wrapperKind: 'native', wrapperProgram: null, wrapperArgs: [], args, cwd,
+      }),
+    }));
+    const retainedPass = readFileSync(join(fixture.root, passPath), 'utf8');
+
+    const failed = await runCliInProcess([
+      'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+      '--input', checksPath, '--output', checksPath, '--check', 'RC-1',
+      '--outcome', 'passed', '--evidence', 'second observation', '--json', '--target', fixture.root,
+    ], {
+      ...options,
+      requiredCheckCommandRunner: ({ command }) => ({
+        exitCode: 7,
+        stdout: `failure-start\n${'x'.repeat(80 * 1024)}`,
+        stderr: 'controlled stderr',
+        logicalCommand: command,
+        resolvedExecutable: command,
+        wrapperKind: 'native',
+        wrapperProgram: null,
+        wrapperArgs: [],
+      }),
+    });
+    assert.equal(failed.status, 1);
+    assert.match(JSON.parse(failed.stdout).diagnostics[0].message, /observed failing.*negative execution was retained/);
+    assert.equal(readFileSync(join(fixture.root, passPath), 'utf8'), retainedPass, 'the earlier pass remains a separate artifact');
+
+    const aggregate = JSON.parse(readFileSync(join(fixture.root, checksPath), 'utf8'));
+    assert.equal(aggregate[0].outcome, 'failed');
+    assert.equal(aggregate[0].exitCode, 7);
+    assert.equal(aggregate[0].executionEvidence, null);
+    const failurePath = aggregate[0].evidence.match(/Execution artifact: (.+)/)?.[1];
+    assert.match(failurePath, /RC-1\.execution\.failed-[a-f0-9]{64}\.json$/);
+    const negative = JSON.parse(readFileSync(join(fixture.root, failurePath), 'utf8'));
+    assert.equal(negative.execution.outcome, 'child_failed');
+    assert.equal(negative.execution.childExitCode, 7);
+    assert.equal(negative.execution.output.stderr, 'controlled stderr');
+    assert.match(negative.execution.output.stdout, /failure-start/);
+    assert.match(negative.execution.output.stdout, /truncated by Agentic Loop/);
+    assert.ok(Buffer.byteLength(negative.execution.output.stdout, 'utf8') <= 64 * 1024);
+    assert.equal(negative.check.command, 'node');
+    assert.deepEqual(negative.check.args, ['--version']);
+    assert.equal(negative.locations.workingDirectory.authorityPath, fixture.root.replaceAll('\\', '/'));
+    assert.equal(negative.binding.invocationId, packet.assignment.invocationId);
+    assert.notEqual(negative.digest, JSON.parse(retainedPass).digest);
+  });
+
   it('executes the exact required argv itself and refuses a passed claim it cannot evidence', async () => {
     const fixture = await createDispatchFixture(tmpDir, 'fabricated-check-evidence');
     const packetPath = 'packet.json';
@@ -1259,7 +1337,7 @@ describe('task CLI', () => {
     assert.notEqual(result.status, 0);
     assert.match(
       JSON.parse(result.stdout).diagnostics[0].message,
-      /required command check 'RC-1' did not pass/
+      /required command check 'RC-1' was observed failing/
     );
   });
 
@@ -2168,7 +2246,78 @@ describe('task CLI', () => {
       '--outcome', 'implementation_ready_for_review', '--output', returnPath, '--json', '--target', fixture.root,
     ], options);
     assert.notEqual(stale.status, 0);
-    assert.match(JSON.parse(stale.stdout).diagnostics[0].message, /changed after the declared productHead|binding 'productHead'|lineage 'repositoryHead'/);
+    const staleResult = JSON.parse(stale.stdout);
+    assert.match(staleResult.diagnostics[0].message, /changed after the declared productHead|binding 'productHead'|lineage 'repositoryHead'/);
+    assert.match(staleResult.firstSafeRepair, /task check-evidence-init T-001/);
+    assert.match(staleResult.firstSafeRepair, /--expect-existing-digest/);
+    assert.match(staleResult.firstSafeRepair, /--supersession-authority maintainer:<ref>/);
+    assert.match(staleResult.firstSafeRepair, /resets every required check to not_run/);
+  });
+
+  it('characterizes other-task changes outside and inside a real check input without changing currentness scope', async () => {
+    const fixture = await createDispatchFixture(tmpDir, 'other-task-currentness-fixtures', {
+      requiredChecksText: '- [RC-1] command: `node src/existing.js`',
+    });
+    const packetPath = '.agenticloop/tmp/dispatch.json';
+    const checksPath = '.agenticloop/tmp/checks.json';
+    const options = { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) };
+    mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+    const packet = prepareDispatch(fixture).packet;
+    writeFileSync(join(fixture.root, packetPath), JSON.stringify(packet), 'utf8');
+    assertOk(await runCliInProcess([
+      'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
+      '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
+    ], options));
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "other-task-fixture";\n', 'utf8');
+    fixtureGit(fixture.root, ['add', 'src/existing.js']);
+    fixtureGit(fixture.root, ['commit', '-m', 'implement synthetic task\n\nTask: T-001\nAgent: engineer']);
+    const productHead = fixtureGit(fixture.root, ['rev-parse', 'HEAD']);
+    assertOk(await runCliInProcess([
+      'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
+      '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead,
+      '--json', '--target', fixture.root,
+    ], options));
+    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
+    fixtureGit(fixture.root, ['commit', '-m', 'record synthetic artifact\n\nTask: T-001\nAgent: engineer']);
+    assertOk(await runCliInProcess([
+      'task', 'check-evidence-init', 'T-001', '--packet', packetPath,
+      '--output', checksPath, '--json', '--target', fixture.root,
+    ], options));
+    assertOk(await runCliInProcess([
+      'task', 'check-evidence-update', 'T-001', '--packet', packetPath,
+      '--input', checksPath, '--output', checksPath, '--check', 'RC-1',
+      '--outcome', 'passed', '--evidence', 'synthetic input passed', '--json', '--target', fixture.root,
+    ], options));
+
+    assertOk(await runCliInProcess([
+      'task', 'new', 'Other synthetic task', '--scaffold', '--id', 'T-002', '--json', '--target', fixture.root,
+    ], options));
+    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-002.md']);
+    fixtureGit(fixture.root, ['commit', '-m', 'add unrelated task carrier\n\nTask: T-002\nAgent: maintainer']);
+    const checks = JSON.parse(readFileSync(join(fixture.root, checksPath), 'utf8'));
+    const execution = JSON.parse(readFileSync(join(fixture.root, checks[0].executionEvidence.path), 'utf8'));
+    const expectedBinding = {
+      ...execution.binding,
+      currentCarrierDigest: execution.lineage.currentCarrierDigest,
+      repositoryHead: fixtureGit(fixture.root, ['rev-parse', 'HEAD']),
+    };
+    assert.doesNotThrow(() => validatePreparedCommandCheckExecutions(
+      fixture.root,
+      checks,
+      [{ id: 'RC-1', kind: 'command', command: 'node src/existing.js' }],
+      expectedBinding,
+    ), 'an other-task carrier change outside every check input remains current');
+
+    writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "changed by other task";\n', 'utf8');
+    fixtureGit(fixture.root, ['add', 'src/existing.js']);
+    fixtureGit(fixture.root, ['commit', '-m', 'change the real check input\n\nTask: T-002\nAgent: engineer']);
+    assert.throws(() => validatePreparedCommandCheckExecutions(
+      fixture.root,
+      checks,
+      [{ id: 'RC-1', kind: 'command', command: 'node src/existing.js' }],
+      { ...expectedBinding, repositoryHead: fixtureGit(fixture.root, ['rev-parse', 'HEAD']) },
+    ), /lineage 'repositoryHead'/,
+    'an other-task change to a real check input invalidates regardless of task attribution');
   });
 
   it('rejects execution evidence replayed from a different dispatch invocation', async () => {

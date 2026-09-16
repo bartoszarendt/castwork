@@ -201,26 +201,49 @@ export function validateCommandCheckExecutionStructure(target, checks, inventory
   }
 }
 
+/** The supported same-attempt repair for stale or invalid passed-check evidence. */
+export function checkEvidenceSupersessionRepair(taskId) {
+  return `Run 'npx agenticloop task check-evidence-init ${taskId} --packet <retained-packet.json> ` +
+    `--expect-existing-digest <current-aggregate-sha256> --supersession-authority maintainer:<ref>' ` +
+    `(or use human:<ref> authority). This retains the predecessor under checks/${taskId}/history, ` +
+    'resets every required check to not_run in the same live attempt, and requires every required check to be rerun.';
+}
+
 /** Protected validation: structural integrity plus the caller's complete binding. */
 export function validatePreparedCommandCheckExecutions(target, checks, inventory, expectedBinding) {
   if (!expectedBinding || typeof expectedBinding !== 'object' || Array.isArray(expectedBinding)) {
     throw new VerificationContextMalformedError('protected command-check validation requires a complete execution-evidence binding');
   }
-  validateCommandCheckExecutionStructure(target, checks, inventory);
+  try {
+    validateCommandCheckExecutionStructure(target, checks, inventory);
+  } catch (error) {
+    throw new VerificationContextMalformedError(error.message, {
+      safeRepair: checkEvidenceSupersessionRepair(expectedBinding.taskId),
+    });
+  }
   for (const required of inventory) {
     if (required.kind !== 'command') continue;
     const check = checks.find(candidate => candidate?.id === required.id);
     if (check?.outcome !== 'passed') continue;
-    const execution = readTargetJson(target, check.executionEvidence.path, `passed command check '${required.id}' execution artifact`);
-    const expectedArgv = parseRequiredCheckCommand(required.command);
-    const checked = validateExecutionEvidence(execution, {
-      expectedBinding: { ...expectedBinding, checkId: required.id, command: expectedArgv.command, args: [...expectedArgv.args] },
-      repositoryHeadIsPermitted(observed, expected) {
-        if (!isGitObjectId(observed) || !isGitObjectId(expected)) return false;
-        const lineage = deriveProductHead({ runGit: targetGitRunner(target), baseHead: observed, head: expected, classifier: createPathClassifier(target) });
-        return lineage.ok && lineage.productHead === observed;
-      },
-    });
-    if (!checked.ok) throw new VerificationContextMalformedError(`passed command check '${required.id}' execution artifact is invalid: ${checked.errors.join('; ')}`);
+    try {
+      const execution = readTargetJson(target, check.executionEvidence.path, `passed command check '${required.id}' execution artifact`);
+      const expectedArgv = parseRequiredCheckCommand(required.command);
+      const checked = validateExecutionEvidence(execution, {
+        expectedBinding: { ...expectedBinding, checkId: required.id, command: expectedArgv.command, args: [...expectedArgv.args] },
+        repositoryHeadIsPermitted(observed, expected) {
+          if (!isGitObjectId(observed) || !isGitObjectId(expected)) return false;
+          const lineage = deriveProductHead({ runGit: targetGitRunner(target), baseHead: observed, head: expected, classifier: createPathClassifier(target) });
+          return lineage.ok && lineage.productHead === observed;
+        },
+      });
+      if (checked.ok) continue;
+      throw new VerificationContextMalformedError(
+        `passed command check '${required.id}' execution artifact is invalid: ${checked.errors.join('; ')}`,
+      );
+    } catch (error) {
+      throw new VerificationContextMalformedError(error.message, {
+        safeRepair: checkEvidenceSupersessionRepair(expectedBinding.taskId),
+      });
+    }
   }
 }

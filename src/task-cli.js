@@ -104,7 +104,13 @@ import { CommitRangeError, deriveCommitRange } from './commit-range.js';
 import { gitTreeObjectId, isGitObjectId } from './git-oid.js';
 import { DISPATCH_LIVENESS_WINDOW_SECONDS } from './dispatch-eligibility.js';
 import { isLinkedWorktreeTarget } from './carrier-root.js';
-import { commitCarriesProductPaths, commitChangedPaths, createPathClassifier, deriveProductHead } from './product-lineage.js';
+import {
+  commitCarriesProductPaths,
+  commitChangedPaths,
+  createPathClassifier,
+  deriveProductHead,
+  resolveCarriedProductLineage,
+} from './product-lineage.js';
 import { nextLiveEngineerStep, renderHandoffSequence } from './handoff-sequence.js';
 import { GIT_MAX_BUFFER } from './git-runner.js';
 import { validateCommittedSourcePath, verifyCommittedAttributedSource } from './committed-source.js';
@@ -221,6 +227,7 @@ import {
   EXECUTION_ATTEMPT_ABANDONMENT_DISPOSITIONS,
   ATTEMPT_FINAL_SLOT_DIAGNOSTIC_CODE,
   PACKET_CONSERVATION_DIAGNOSTIC_CODE,
+  attemptBudgetCarrierEditRepair,
   deriveAttemptSupersessions,
   evaluateTaskPacketConservation,
   executionAttemptIdentity,
@@ -336,6 +343,23 @@ function defaultCheckExecutionOutput(taskId, checkId) {
   if (!taskId || !checkId) return null;
   const safe = value => String(value).replace(/[^A-Za-z0-9._-]/g, '_');
   return `${CHECK_EVIDENCE_DIRECTORY_RELATIVE_PATH}/${safe(taskId)}/${safe(checkId)}.execution.json`;
+}
+
+const MAX_RECORDED_CHECK_OUTPUT_BYTES = 64 * 1024;
+
+function boundedCheckOutput(value) {
+  const text = String(value ?? '');
+  if (Buffer.byteLength(text, 'utf8') <= MAX_RECORDED_CHECK_OUTPUT_BYTES) return text;
+  const marker = '\n...[truncated by Agentic Loop]';
+  let end = Math.min(text.length, MAX_RECORDED_CHECK_OUTPUT_BYTES - Buffer.byteLength(marker, 'utf8'));
+  while (end > 0 && Buffer.byteLength(text.slice(0, end) + marker, 'utf8') > MAX_RECORDED_CHECK_OUTPUT_BYTES) end -= 1;
+  return text.slice(0, end) + marker;
+}
+
+function failedCheckExecutionOutput(taskId, checkId, digest) {
+  const canonical = defaultCheckExecutionOutput(taskId, checkId);
+  const identity = String(digest ?? '').split(':').at(-1);
+  return canonical.replace(/\.json$/, `.failed-${identity}.json`);
 }
 
 /** One mutable aggregate per task, always outside durable Git history. */
@@ -1107,6 +1131,38 @@ function lintTaskFile(filePath, target, projectConfig, verificationContext) {
     });
     errors.push(...baseline.errors);
     warnings.push(...baseline.warnings);
+
+    const taskId = frontmatterString(frontmatter.task_id);
+    if (taskId) {
+      const conservation = evaluateTaskPacketConservation(target, taskId, { backend: 'files' });
+      if (conservation.liveAttempt) {
+        const contract = taskContractDigest(content);
+        const currentCarrierDigest = taskRecordDigest(content);
+        const lineage = contract.ok
+          ? resolveCarrierLineage(target, taskId, {
+              backend: 'files',
+              taskContractDigest: contract.digest,
+              currentCarrierDigest,
+            })
+          : { ok: false, errors: ['current task contract is malformed'], currentCarrierDigest: null };
+        if (!lineage.ok) {
+          const message =
+            `live attempt ${conservation.liveAttempt.attemptId} recognizes carrier lineage terminal ` +
+            `${lineage.currentCarrierDigest ?? '(unresolved)'}, but the current carrier digest is ${currentCarrierDigest}: ` +
+            `${lineage.errors.join('; ')}`;
+          const diagnostic = createDiagnostic({
+            code: 'task.evidence.lineage.stale',
+            message,
+            evidence: { state: 'changed', supplied: true, rollbackAuthorized: false },
+            repairHint:
+              `Restore ${filename} to the recognized lineage terminal ${lineage.currentCarrierDigest ?? '(shown by attempt-status)'} ` +
+              'without rewriting attempt history, then rerun task lint.',
+          });
+          diagnostics.push(diagnostic);
+          errors.push(message);
+        }
+      }
+    }
   }
   return { file: filename, digest: taskRecordDigest(content), errors, warnings, diagnostics };
 }
@@ -3303,6 +3359,41 @@ export async function cmdTask(args, io = createIo()) {
         readCarrierDigest,
         refetchActivationEvidence,
         refetchParallelScanInventory,
+        validatePreMintTopology: ({ snapshot, repository }) => {
+          if (backend !== 'files') return { ok: true };
+          const artifactHead = implementationArtifactHead(snapshot.body);
+          if (!artifactHead) return { ok: true };
+          const carried = resolveCarriedProductLineage(target, taskId, {
+            backend,
+            packetBaseHead: repository.head,
+            runGit: targetGitRunner(target),
+            prospective: true,
+          });
+          if (!carried.ok) {
+            return {
+              ok: false,
+              evidenceState: 'malformed',
+              disposition: 'blocked',
+              message: `pre-mint carried product lineage is invalid: ${carried.errors.join('; ')}`,
+              repairHint: 'Repair the named attempt-history record without rewriting history, then rerun prepare-dispatch.',
+            };
+          }
+          const productBaseHead = carried.lineage?.carriedBaseHead ?? repository.head;
+          const precedesArtifact = productBaseHead !== artifactHead &&
+            targetGitRunner(target)(['merge-base', '--is-ancestor', productBaseHead, artifactHead]).status === 0;
+          if (precedesArtifact) return { ok: true };
+          return {
+            ok: false,
+            evidenceState: 'changed',
+            disposition: 'blocked',
+            message:
+              `would-be product base ${productBaseHead} does not precede the bound implementation_artifact ${artifactHead}; ` +
+              'minting this packet would create an impossible return topology',
+            repairHint:
+              'Preserve the current task and attempt records; restore a valid carried lineage from packet-bound history ' +
+              'or explicitly resolve the incompatible artifact before rerunning prepare-dispatch. Do not derive the base from the artifact.',
+          };
+        },
       };
       let packet = null;
       let prepared;
@@ -3372,8 +3463,8 @@ export async function cmdTask(args, io = createIo()) {
             publicMessage: reason,
             safeRepair:
               'Re-run this command with --acknowledge-final-attempt if spending the final attempt is intended. ' +
-              `If it is not, raise attempt_budget through 'npx agenticloop task authorize-correction ${taskId}', ` +
-              'or record the task as blocked or needs_context with what is actually unknown.',
+              attemptBudgetCarrierEditRepair(taskId, { liveAttempt: conservation.liveAttempt }) +
+              ' Otherwise record the task as blocked or needs_context with what is actually unknown.',
           });
           return printGateResult(
             'task prepare-dispatch',
@@ -4385,6 +4476,11 @@ export async function cmdTask(args, io = createIo()) {
           let evidenceText = opts.evidence;
           let executionReference = null;
           let execution = null;
+          let persistedExecutionPath = paths.execution;
+          let persistedExecutionCondition = executionCondition;
+          let recordedOutcome = opts.outcome;
+          let recordedExitCode = opts.outcome === 'passed' ? 0 : Number(opts.exitCode);
+          let observedExecutionFailure = null;
           if (required.kind === 'command' && opts.outcome === 'passed') {
           // Absent an explicit destination the artifact lands on a tracked
           // path, not in gitignored scratch. This is the whole of the reason a
@@ -4422,26 +4518,47 @@ export async function cmdTask(args, io = createIo()) {
               contractDigest: current.contractDigest,
               currentCarrierDigest: current.currentCarrierDigest,
             }),
-          }, { run: io.requiredCheckCommandRunner ?? requiredCheckCommandRunner });
+          }, {
+            run: io.requiredCheckCommandRunner ?? requiredCheckCommandRunner,
+            outputFilter: output => ({
+              stdout: boundedCheckOutput(output.stdout),
+              stderr: boundedCheckOutput(output.stderr),
+            }),
+          });
           if (execution.execution.outcome !== 'passed' || execution.execution.childExitCode !== 0) {
-            throw new VerificationContextError(
-              `required command check '${required.id}' did not pass (outcome ${execution.execution.outcome}, exit ${String(execution.execution.childExitCode)})`
+            const failureRelativePath = failedCheckExecutionOutput(taskId, required.id, execution.digest);
+            persistedExecutionPath = validateCheckEvidenceWritePath(
+              target,
+              publicTargetRelativePath(target, failureRelativePath, 'failed execution output'),
+              'failed execution output',
             );
+            persistedExecutionCondition = observedWriteCondition(persistedExecutionPath);
+            recordedOutcome = 'failed';
+            recordedExitCode = execution.execution.childExitCode ?? -1;
+            evidenceText = `${evidenceText}\nObserved execution failure: ${execution.execution.outcome}` +
+              `\nExecution evidence: ${execution.digest}\nExecution artifact: ${persistedExecutionPath.relPath}`;
+            observedExecutionFailure = {
+              outcome: execution.execution.outcome,
+              exitCode: execution.execution.childExitCode,
+              path: persistedExecutionPath.relPath,
+              digest: execution.digest,
+            };
+          } else {
+            evidenceText = `${evidenceText}\nExecution evidence: ${execution.digest}\nExecution artifact: ${paths.execution.relPath}`;
+            executionReference = {
+              path: paths.execution.relPath,
+              digest: execution.digest,
+            };
           }
-          evidenceText = `${evidenceText}\nExecution evidence: ${execution.digest}\nExecution artifact: ${paths.execution.relPath}`;
-          executionReference = {
-            path: paths.execution.relPath,
-            digest: execution.digest,
-          };
         }
         if (required.kind !== 'command' || opts.outcome !== 'passed') validatePriorExecutions();
         const updated = checks.map(check => check?.id === required.id ? {
           id: required.id,
           kind: required.kind,
           ...(required.kind === 'command'
-            ? { command: required.command, exitCode: opts.outcome === 'passed' ? 0 : Number(opts.exitCode) }
+            ? { command: required.command, exitCode: recordedExitCode }
             : { instruction: required.instruction, exitCode: null }),
-          outcome: opts.outcome,
+          outcome: recordedOutcome,
           evidence: evidenceText,
           ...(required.kind === 'command' ? { executionEvidence: executionReference } : {}),
         } : check);
@@ -4454,8 +4571,8 @@ export async function cmdTask(args, io = createIo()) {
           throw new VerificationContextMalformedError(`updated check evidence is invalid: ${checked.errors.join('; ')}`);
         }
         writeCheckEvidenceUpdate(
-          target, executionReference === null ? null : execution, paths.execution, checked.checks, paths.output,
-          { executionCondition, checksCondition, fsMutationOptions: io?.fsMutationOptions },
+          target, execution, persistedExecutionPath, checked.checks, paths.output,
+          { executionCondition: persistedExecutionCondition, checksCondition, fsMutationOptions: io?.fsMutationOptions },
         );
         const persistedChecks = readTargetJson(target, paths.output.relPath, 'persisted check evidence');
         const persistedValidation = validateRequiredCheckEvidence(persistedChecks, {
@@ -4479,6 +4596,22 @@ export async function cmdTask(args, io = createIo()) {
             currentCarrierDigest: current.currentCarrierDigest,
           }),
         );
+        if (observedExecutionFailure) {
+          throw new PublicCommandError(
+            `required command check '${required.id}' was observed failing and the negative execution was retained ` +
+              `at '${observedExecutionFailure.path}' (outcome ${observedExecutionFailure.outcome}, ` +
+              `exit ${String(observedExecutionFailure.exitCode)}); the aggregate now records failed, not passed`,
+            {
+              code: 'cli.operational',
+              evidenceState: 'negative',
+              disposition: 'blocked',
+              committedStateEvaluated: true,
+              safeRepair:
+                'Continue recording the remaining required checks, then diagnose this retained failure before prepare-return; ' +
+                'do not treat it as missing verification context.',
+            },
+          );
+        }
         const outputPath = paths.output.path;
         io.out(JSON.stringify(checkEvidenceSuccess({
           taskId, outputPath, checks: checked.checks, assuranceGrade: packet.assurance?.activation ?? 'unknown',

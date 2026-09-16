@@ -27,6 +27,7 @@ import { tmpdir } from 'node:os';
 import { createDispatchFixture, git } from './helpers/dispatch-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { taskContractDigest } from '../src/task-contract-baseline.js';
 
 let temp;
 before(() => { temp = mkdtempSync(join(tmpdir(), 'al-attempt-supersession-')); });
@@ -170,7 +171,27 @@ describe('attempt_budget is a bound, not a comment', () => {
     );
     assert.match(status.reason, /attempt_budget of 2/);
     assert.match(status.safeRepair, /record the task as blocked or needs_context/);
-    assert.match(status.safeRepair, /authorize-correction T-001/);
+    assert.match(status.safeRepair, /edit only attempt_budget/);
+    assert.match(status.safeRepair, /outside the protected task contract/);
+    assert.doesNotMatch(status.safeRepair, /task authorize-correction/);
+
+    const contractBefore = taskContractDigest(readFileSync(carrier, 'utf8')).digest;
+    assert.match(status.safeRepair, new RegExp(status.liveAttempt.attemptId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assertOk(await cli([
+      'task', 'abandon-attempt', 'T-001', '--attempt', status.liveAttempt.attemptId,
+      '--disposition', 'tooling_failed',
+      '--reason', 'Retire the live attempt before the human-authorized budget-only carrier edit.',
+      '--authority', 'human:budget-repair-test', '--json',
+    ]), 'retire live attempt before budget edit');
+    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
+    git(fixture.root, ['commit', '-m', 'record live attempt retirement\n\nTask: T-001\nAgent: maintainer']);
+    writeFileSync(carrier, readFileSync(carrier, 'utf8').replace('attempt_budget: 2', 'attempt_budget: 3'), 'utf8');
+    git(fixture.root, ['add', '.agenticloop/tasks/T-001.md']);
+    git(fixture.root, ['commit', '-m', 'raise attempt budget under human authority\n\nTask: T-001\nAgent: maintainer']);
+    assert.equal(taskContractDigest(readFileSync(carrier, 'utf8')).digest, contractBefore, 'budget edit is not a contract amendment');
+    const repaired = JSON.parse((await cli(['task', 'attempt-status', 'T-001', '--json'])).stdout);
+    assert.equal(repaired.attemptBudget.budget, 3);
+    assert.equal(repaired.newPacketPermitted, true);
   });
 
   /**
@@ -207,7 +228,9 @@ describe('attempt_budget is a bound, not a comment', () => {
       'a budget about to be spent is not a budget exhausted, and does not borrow that code');
     assert.match(result.errors.join('\n'), /opens attempt 2 of 2 .*the last the attempt_budget allows/);
     assert.match(result.firstSafeRepair, /--acknowledge-final-attempt/);
-    assert.match(result.firstSafeRepair, /authorize-correction T-001/);
+    assert.match(result.firstSafeRepair, /edit only attempt_budget/);
+    assert.match(result.firstSafeRepair, /no attempt is live/);
+    assert.doesNotMatch(result.firstSafeRepair, /task authorize-correction/);
     assert.match(result.firstSafeRepair, /blocked or needs_context/);
     // The decision is the operator's, so it routes to the human channel rather
     // than asking a role to repair evidence that is not wrong.
