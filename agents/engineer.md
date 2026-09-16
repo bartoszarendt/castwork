@@ -314,6 +314,11 @@ task-record obligation.
   replace a return or establish cancellation by themselves.
 - End at `prepare-return`; Maintainer begins `verify-return`. Use the guarded
   retry/evidence paths in [[role-delegation]]; never store raw output or hand-edit.
+- Keep delegation stop conditions distinct. An observed required-check failure
+  is retained through `task check-evidence-update`; continue recording the
+  remaining required checks, then return the failed observation without
+  `prepare-return`. A lifecycle gate refusal stops the delegation immediately
+  and routes by its typed diagnostic.
 - For files-backed work, the only permitted Engineer task-carrier updates after
   role start are guarded `task evidence` mutations in the closed classes:
   `implementation_artifact_evidence`, `implementation_summary_evidence`, and

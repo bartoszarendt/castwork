@@ -396,15 +396,16 @@ describe('activation semantics content guards', () => {
 
 describe('generated dual-mode role surfaces across adapters', () => {
   const HOSTS = [
-    { name: 'opencode', generate: generateOpencodeArtifacts, path: '.opencode/agents/engineer.md', maintainerPath: '.opencode/agents/maintainer.md', auditorPath: '.opencode/agents/auditor.md' },
-    { name: 'codex', generate: generateCodexArtifacts, path: '.codex/agents/engineer.toml', maintainerPath: '.codex/agents/maintainer.toml', auditorPath: '.codex/agents/auditor.toml' },
-    { name: 'claude-code', generate: generateClaudeCodeArtifacts, path: '.claude/agents/engineer.md', maintainerPath: '.claude/agents/maintainer.md', auditorPath: '.claude/agents/auditor.md' },
-    { name: 'copilot', generate: generateCopilotArtifacts, path: '.github/agents/engineer.agent.md', maintainerPath: '.github/agents/maintainer.agent.md', auditorPath: '.github/agents/auditor.agent.md' },
-    { name: 'cursor', generate: generateCursorArtifacts, path: '.cursor/agents/engineer.md', maintainerPath: '.cursor/agents/maintainer.md', auditorPath: '.cursor/agents/auditor.md' },
+    { name: 'opencode', generate: generateOpencodeArtifacts, path: '.opencode/agents/engineer.md', orchestratorPath: '.opencode/agents/orchestrator.md', maintainerPath: '.opencode/agents/maintainer.md', auditorPath: '.opencode/agents/auditor.md' },
+    { name: 'codex', generate: generateCodexArtifacts, path: '.codex/agents/engineer.toml', orchestratorPath: '.codex/agents/orchestrator.toml', maintainerPath: '.codex/agents/maintainer.toml', auditorPath: '.codex/agents/auditor.toml' },
+    { name: 'claude-code', generate: generateClaudeCodeArtifacts, path: '.claude/agents/engineer.md', orchestratorPath: '.claude/agents/orchestrator.md', maintainerPath: '.claude/agents/maintainer.md', auditorPath: '.claude/agents/auditor.md' },
+    { name: 'copilot', generate: generateCopilotArtifacts, path: '.github/agents/engineer.agent.md', orchestratorPath: '.github/agents/orchestrator.agent.md', maintainerPath: '.github/agents/maintainer.agent.md', auditorPath: '.github/agents/auditor.agent.md' },
+    { name: 'cursor', generate: generateCursorArtifacts, path: '.cursor/agents/engineer.md', orchestratorPath: '.cursor/agents/orchestrator.md', maintainerPath: '.cursor/agents/maintainer.md', auditorPath: '.cursor/agents/auditor.md' },
   ];
 
   let fx;
   const surfaces = new Map();
+  const orchestratorSurfaces = new Map();
   const maintainerSurfaces = new Map();
   const auditorSurfaces = new Map();
   before(() => {
@@ -423,14 +424,25 @@ describe('generated dual-mode role surfaces across adapters', () => {
       // canonical sentences.
       const auditor = readFileSync(join(out, host.auditorPath), 'utf8')
         .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\s+/g, ' ');
+      const orchestrator = readFileSync(join(out, host.orchestratorPath), 'utf8')
+        .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\s+/g, ' ');
       const maintainer = readFileSync(join(out, host.maintainerPath), 'utf8')
         .replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\s+/g, ' ');
       maintainerSurfaces.set(host.name, maintainer);
       auditorSurfaces.set(host.name, auditor);
+      orchestratorSurfaces.set(host.name, orchestrator);
     }
   });
 
   for (const host of HOSTS) {
+    it(`${host.name} orchestrator carries one canonical activation boundary`, () => {
+      const text = orchestratorSurfaces.get(host.name);
+      assert.equal((text.match(/standard\/hardened activation boundary/gi) ?? []).length, 1,
+        `${host.name} must carry the canonical activation boundary exactly once`);
+      assert.doesNotMatch(text, /require the adapter's parser-controlled activation capture/i,
+        `${host.name} must not retain the parser-capture-only activation contract`);
+    });
+
     it(`${host.name} engineer offers standalone mode with no task-record requirement`, () => {
       const text = surfaces.get(host.name);
       assert.match(text, /standalone/i, `${host.name} missing standalone mode`);
@@ -443,6 +455,12 @@ describe('generated dual-mode role surfaces across adapters', () => {
       assert.match(text, /final maintainer (acceptance|review)/i);
       assert.ok(!text.includes('implement only the scoped task-record work'),
         `${host.name} still carries old scoped-only engineer wording`);
+    });
+
+    it(`${host.name} engineer separates observed check failures from lifecycle refusals`, () => {
+      const text = surfaces.get(host.name).replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\s+/g, ' ');
+      assert.match(text, /observed required-check failure.{0,240}remaining required checks/i);
+      assert.match(text, /lifecycle gate refusal stops the delegation immediately/i);
     });
 
     it(`${host.name} maintainer defaults to bounded standalone advisory work`, () => {

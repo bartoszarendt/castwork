@@ -41,15 +41,8 @@ refresh.
 
 - Check `.agenticloop/project.md` `setup_status` and human-confirmed `development_stage` before the first task is selected or created.
 - When Agentic Loop is activated for a work unit, confirm that `npx agenticloop validate` reports no errors before implementation begins. Report and triage warnings, but only errors block startup. Do not rerun validation during every task; rerun it only when configuration or toolkit assets change.
-- Before task authoring, require the adapter's parser-controlled activation capture
-  and operator expected SHA-256, verified through the target-scoped Ed25519 public
-  key in the fixed host-owned operator registry. A supported verified capture is the only route
-  forward; missing evidence is `needs_context`, mismatch is rejected, and an
-  unsupported capture is blocked. Repository-local or caller-selected external
-  trust data does not authorize capture. Bind its normalized digest to the task
-  contract. Shipped and public in-process adapters currently lack this boundary.
-  Do not invent capture evidence or dispatch; report blocked until an
-  authenticated external host integration exists.
+- Before task authoring, apply the standard/hardened activation boundary in
+  `agenticloop/commands/start.md`; do not invent or weaken activation evidence.
 - Apply the Advance Authorization Boundary in `agenticloop/AGENTIC_LOOP.md` before taking any
   state-changing action or routing task flow.
 - Read the source documents needed to identify the current task and any optional grouping context.
@@ -100,6 +93,10 @@ refresh.
   prepare-return` without an intervening mutation. Do not prepare a review
   packet or treat a raw return as current until `task verify-return <id> --packet
   <packet-path> --return <return-path> --from-current-repository` succeeds.
+- In Engineer delegations, state the stop conditions separately: an observed
+  required-check failure is retained, the remaining checks are recorded, and
+  the Engineer returns the failed observation; a lifecycle gate refusal stops
+  the delegation immediately and is routed by its typed diagnostic.
 - Treat activation coverage, exact operator task authorization, and current task
   readiness as separate facts. A work-unit activation does not authorize every
   activated task; route a draft, missing/untrusted baseline, stale carrier or

@@ -130,12 +130,18 @@ unchanged facts, stop mutations. Preserve the live attempt when safe, do not
 mint or consume another packet, and route one bounded validator/source
 diagnosis. Precedent is a hypothesis, not authority.
 
-For non-passing/manual checks, record the observed outcome and omit required
-`--execution-output`. Retry an in-lease usage refusal only when `safeToRetry:
-true` and `mutationOccurred: false`, using its corrected command. Do not retry
-one identical tooling failure twice; an unchanged retry makes no progress.
-Authority, lifecycle,
-binding, ambiguity, evidence, and partial-mutation failures stop immediately.
+An observed required-check failure and a lifecycle gate refusal have different
+stop conditions. When `task check-evidence-update` executes a required command
+and observes failure, it retains the negative execution: record that outcome,
+continue recording the remaining required checks, then return the failed
+observation without attempting `prepare-return`. For manual or explicitly
+non-running checks, record the observed outcome and omit required
+`--execution-output`. A lifecycle gate refusal stops the delegation immediately
+and routes by its typed diagnostic. Retry an in-lease usage refusal only when
+`safeToRetry: true` and `mutationOccurred: false`, using its corrected command.
+Do not retry one identical tooling failure twice; an unchanged retry makes no
+progress. Authority, lifecycle, binding, ambiguity, evidence, and
+partial-mutation refusals are lifecycle gate refusals.
 Public boundaries revalidate and reject caller-authored receipts. The raw return
 binds the packet and non-authoritative outcome; Orchestrator never reconstructs
 it. Standard mode permits revalidated `session_reported`; hardened mode requires
