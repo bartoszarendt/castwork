@@ -194,6 +194,7 @@ import {
 } from './pr-body-context.js';
 import { atomicWriteFile } from './fs-mutation-kernel.js';
 import { evaluateTaskReadiness } from './task-readiness.js';
+import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 import { genericTerminalRefusalMessage, resolveCanonicalTerminalScope } from './terminal-scope.js';
 import { validateTaskStatusTransition } from './task-transition.js';
 import { parseFrontmatterStrict } from './frontmatter.js';
@@ -1817,9 +1818,21 @@ async function cmdTaskReadiness(args, io) {
     }
     assertLifecycleHandoffResolved(target);
     const base = readBaseEvidence(opts, target);
+    if (opts.serialDependencies && opts.dependencies) {
+      throw new CliUsageError('task-readiness accepts either --serial-dependencies or --dependencies, not both');
+    }
+    if (opts.serialDependencies && source.backend !== 'files') {
+      throw new CliUsageError('task-readiness --serial-dependencies requires a files-backed task carrier');
+    }
+    const configuredTaskTemplate = String(projectMapConfig?.task_file_template ?? '.agenticloop/tasks/{taskId}.md').replace(/\\/g, '/');
+    if (opts.serialDependencies && opts.serialDependencies !== configuredTaskTemplate) {
+      throw new CliUsageError('task-readiness --serial-dependencies must equal the configured task_file_template');
+    }
     const dependency = opts.dependencies
       ? readDependencyEvidence(target, opts.dependencies, 'task-readiness', source.taskId)
-      : null;
+      : (source.backend === 'files'
+          ? resolveSerialDependencyEvidence({ target, taskBody: source.body, projectConfig: projectMapConfig ?? {} })
+          : null);
     const result = evaluateTaskReadiness({
       taskBody: source.body,
       basePaths: base.paths,

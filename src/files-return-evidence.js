@@ -27,6 +27,8 @@ import { targetRepositoryIdentity } from './host-trust.js';
 import { parseFrontmatterStrict } from './frontmatter.js';
 import { validateManifest } from './generated-artifacts.js';
 import { validateHandoffRefreshReceipt } from './handoff-evidence-refresh.js';
+import { validateReturnVerification } from './return-verification.js';
+import { validateReviewEntryReceiptShape } from './review-entry-receipt.js';
 import { VerificationContextMalformedError, VerificationContextStaleError } from './public-error.js';
 import {
   createPathClassifier,
@@ -261,6 +263,38 @@ function classifyPath(path, { target, packet, workflow, runGit, workflowHead, cl
     if (!checked.ok) {
       throw new VerificationContextMalformedError(
         `workflow check evidence '${path}' is not a closed CLI execution artifact: ${checked.errors[0]}`
+      );
+    }
+    return 'workflow_evidence';
+  }
+  const returnVerification = /^\.agenticloop\/returns\/verifications\/[A-Za-z0-9._-]+\.json$/.test(path);
+  if (returnVerification) {
+    let record;
+    try {
+      record = JSON.parse(readGit(runGit, ['show', `${workflowHead}:${path}`], `return verification '${path}'`));
+    } catch {
+      throw new VerificationContextMalformedError(`return verification '${path}' is not valid JSON`);
+    }
+    const checked = validateReturnVerification(record, { path });
+    if (!checked.ok || record.taskId !== packet.task.id) {
+      throw new VerificationContextMalformedError(
+        `return verification '${path}' is not a validated record for this task: ${checked.errors?.[0] ?? 'task identity mismatch'}`
+      );
+    }
+    return 'workflow_evidence';
+  }
+  const reviewEntry = /^\.agenticloop\/reviews\/entries\/[A-Za-z0-9._-]+\/.+\.json$/.test(path);
+  if (reviewEntry) {
+    let record;
+    try {
+      record = JSON.parse(readGit(runGit, ['show', `${workflowHead}:${path}`], `review entry '${path}'`));
+    } catch {
+      throw new VerificationContextMalformedError(`review entry '${path}' is not valid JSON`);
+    }
+    const checked = validateReviewEntryReceiptShape(record);
+    if (!checked.ok || record.taskId !== packet.task.id) {
+      throw new VerificationContextMalformedError(
+        `review entry '${path}' is not a validated record for this task: ${checked.errors?.[0] ?? 'task identity mismatch'}`
       );
     }
     return 'workflow_evidence';

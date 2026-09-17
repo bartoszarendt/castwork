@@ -69,7 +69,7 @@ function validateAttemptEntry(entry, errors) {
 
 export function validateTaskEvidenceInput(value) {
   const errors = [];
-  if (!exact(value, ['kind', 'schemaVersion', 'actorRole', 'provenance', 'sections'])) return { ok: false, errors: ['task evidence input fields must equal the closed schema'] };
+  if (!exact(value, ['kind', 'schemaVersion', 'actorRole', 'provenance', 'sections'])) return { ok: false, errors: ['task evidence input fields must equal kind, schemaVersion, actorRole, provenance, sections'] };
   if (value.kind !== TASK_EVIDENCE_INPUT_KIND || value.schemaVersion !== TASK_EVIDENCE_INPUT_SCHEMA_VERSION) errors.push('task evidence input identity is invalid');
   if (!['engineer', 'maintainer'].includes(value.actorRole)) errors.push('task evidence actorRole is invalid');
   if (!exact(value.provenance, PROVENANCE_KEYS)) {

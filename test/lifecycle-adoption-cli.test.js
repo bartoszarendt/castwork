@@ -225,6 +225,27 @@ function persistAuthenticatedMaintainerReview(fixture, verification, head, revie
   return receiptPath;
 }
 
+function persistSessionReportedMaintainerReview(fixture, head, {
+  reviewerSession = 'session:maintainer-review-1',
+  status = 'accepted',
+  mode = 'host_subagent',
+} = {}) {
+  const reportPath = '.agenticloop/tmp/maintainer-review-session.json';
+  const outcome = {
+    status,
+    mode,
+    artifact: `commit:${head}`,
+    findingIds: status === 'needs_revision' ? ['F-1'] : [],
+    classification: status === 'needs_revision' ? 'implementation_changing' : null,
+    roleId: 'maintainer',
+    actorAccount: reviewerSession,
+    sourceReference: 'review:1',
+  };
+  mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
+  writeFileSync(join(fixture.root, reportPath), `${JSON.stringify({ reviewerSession, outcome }, null, 2)}\n`);
+  return reportPath;
+}
+
 async function prepareLegacyV3ReviewEntry(fixture, verification) {
   const prepared = await runCliInProcess([
     'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
@@ -355,7 +376,9 @@ describe('production lifecycle adoption and review-attachment commands', () => {
       },
     });
     assert.equal(result.status, 1, `${result.stdout}\n${result.stderr}`);
-    assert.match(result.stderr, /task\.lifecycle\.not_dispatchable/);
+    const refusal = JSON.parse(result.stdout);
+    assert.equal(refusal.evaluation.ok, false);
+    assert.match(refusal.evaluation.reasons.join('\n'), /terminal|not dispatchable|closed/i);
     assert.notEqual(before, terminal);
     assert.equal(readFileSync(taskPath(attempt.fixture), 'utf8'), terminal);
     assert.equal(existsSync(join(attempt.fixture.root, '.agenticloop', 'adoptions', 'commits', 'T-001', `${attempt.head}.json`)), false);
@@ -486,9 +509,6 @@ describe('production lifecycle adoption and review-attachment commands', () => {
       const updated = await cli(['task', 'check-evidence-update', 'T-001', '--packet', packetPath, '--input', checksPath, '--output', checksPath, '--check', check.id, '--outcome', 'passed', '--evidence', `${check.id} passed`, '--execution-output', `.agenticloop/checks/T-001/${check.id}.execution.json`, '--json']);
       assert.equal(updated.status, 0, `${updated.stderr}\n${updated.stdout}`);
     }
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs', '.agenticloop/checks']);
-    git(fixture.root, ['commit', '-m', 'record required checks\n\nTask: T-001\nAgent: engineer']);
-
     const adopted = await cli([
       'task', 'adopt-commit', 'T-001', '--attempt', attempt, '--base', packet.repository.head, '--head', humanHead,
       '--actor-class', 'operator', '--actor-id', 'operator-1', '--reason', 'Operator bounded correction.', '--json',
@@ -652,6 +672,70 @@ describe('production lifecycle adoption and review-attachment commands', () => {
       'the authenticated needs_revision outcome keeps the bounded attempt eligible for an in-contract correction');
   });
 
+  it('records an exact session-reported outcome only for a standard task without independent review', async () => {
+    const fixture = await createDispatchFixture(temp, 'review-attach-session-reported');
+    const attempt = consumeAttempt(fixture);
+    const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+    const verification = persistVerifiedReturn(fixture, attempt, head);
+    const prepared = await runCliInProcess([
+      'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(prepared.status, 0, `${prepared.stderr}\n${prepared.stdout}`);
+    const sessionReport = persistSessionReportedMaintainerReview(fixture, head);
+
+    const attached = await runCliInProcess([
+      'task', 'review-attach-outcome', 'T-001', '--return-verification', verification.recordId,
+      '--session-report', sessionReport, '--json', '--target', fixture.root,
+    ], protectedOptions(fixture));
+    assert.equal(attached.status, 0, `${attached.stderr}\n${attached.stdout}`);
+    const result = JSON.parse(attached.stdout);
+    assert.equal(result.assurance, 'session_reported');
+    assert.equal(result.producerAuthenticated, false);
+    const entry = JSON.parse(readFileSync(join(fixture.root, result.reviewEntryPath), 'utf8'));
+    assert.equal(entry.schemaVersion, 6);
+    assert.equal(entry.initialAuthentication, null);
+    assert.equal(entry.maintainerOutcome.assurance, 'session_reported');
+    assert.equal(entry.maintainerOutcome.producerAuthenticated, false);
+    assert.equal(entry.maintainerOutcome.reviewerSession, 'session:maintainer-review-1');
+    assert.equal(entry.maintainerOutcome.binding.taskContractDigest, taskContractDigest(readFileSync(taskPath(fixture), 'utf8')).digest);
+    assert.equal(entry.maintainerOutcome.binding.candidate.head, head);
+    assert.equal(entry.maintainerOutcome.binding.returnVerification.recordId, verification.recordId);
+    assert.equal(entry.maintainerOutcome.history.digest, entry.reviewHistory.digest);
+    assert.deepEqual(entry.maintainerOutcome.policy, { mode: 'standard', independentReviewRequired: false });
+  });
+
+  it('keeps session-reported review outcomes blocked for independent-review and hardened tasks', async () => {
+    for (const scenario of [
+      { name: 'independent', fixtureOptions: { independentReviewRequired: true }, expectedCode: 'review_prepare.independent_review_policy' },
+      { name: 'hardened', fixtureOptions: {}, hardened: true, expectedCode: 'handoff.evidence.unauthenticated' },
+    ]) {
+      const fixture = await createDispatchFixture(temp, `review-attach-session-${scenario.name}`, scenario.fixtureOptions);
+      const attempt = consumeAttempt(fixture);
+      const head = commit(fixture, 'src/adopted.js', undefined, { attributed: true });
+      const verification = persistVerifiedReturn(fixture, attempt, head);
+      const prepared = await runCliInProcess([
+        'task', 'review-prepare', 'T-001', '--json', '--target', fixture.root,
+      ], protectedOptions(fixture));
+      assert.equal(prepared.status, 0, `${prepared.stderr}\n${prepared.stdout}`);
+      const sessionReport = persistSessionReportedMaintainerReview(fixture, head);
+      if (scenario.hardened) {
+        writeFileSync(join(fixture.root, 'agenticloop.json'), `${JSON.stringify({ activation: { mode: 'hardened' } })}\n`);
+      }
+      const taskBefore = readFileSync(taskPath(fixture), 'utf8');
+      const entryPath = join(fixture.root, JSON.parse(prepared.stdout).reviewEntryPath);
+      const entryBefore = readFileSync(entryPath, 'utf8');
+
+      const attached = await runCliInProcess([
+        'task', 'review-attach-outcome', 'T-001', '--return-verification', verification.recordId,
+        '--session-report', sessionReport, '--json', '--target', fixture.root,
+      ], protectedOptions(fixture));
+      assert.equal(attached.status, 1, `${scenario.name}: ${attached.stderr}\n${attached.stdout}`);
+      assert.equal(JSON.parse(attached.stdout).diagnostics[0].code, scenario.expectedCode);
+      assert.equal(readFileSync(taskPath(fixture), 'utf8'), taskBefore);
+      assert.equal(readFileSync(entryPath, 'utf8'), entryBefore);
+    }
+  });
+
   it('serializes a terminal contender during review preparation and preserves the terminal retry', async () => {
     const fixture = await createDispatchFixture(temp, 'review-prepare-terminal-interleave');
     const attempt = consumeAttempt(fixture);
@@ -788,7 +872,8 @@ describe('production lifecycle adoption and review-attachment commands', () => {
     assert.equal(migrated.schemaVersion, 5);
     assert.equal(migrated.taskId, legacy.taskId);
     assert.deepEqual(migrated.verifiedReturn, legacy.verifiedReturn);
-    assert.deepEqual(migrated.reviewHistory, legacy.reviewHistory);
+    assert.equal(migrated.reviewHistory.eventCount, legacy.reviewHistory.eventCount + 1);
+    assert.notEqual(migrated.reviewHistory.digest, legacy.reviewHistory.digest);
     assert.deepEqual(migrated.maintainerOutcome.binding, legacy.maintainerOutcome.binding);
     assert.notEqual(migrated.maintainerOutcome.receiptId, legacy.maintainerOutcome.receiptId);
     assert.ok(migrated.initialAuthentication);

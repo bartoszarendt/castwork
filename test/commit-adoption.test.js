@@ -12,19 +12,37 @@ import {
 const BASE = 'a'.repeat(40);
 const HUMAN_FIX = 'b'.repeat(40);
 const CURRENT = 'c'.repeat(40);
+const WORKFLOW_RECEIPT = 'd'.repeat(40);
 
-function gitFixture({ reachable = true, merge = false, paths = ['src/fix.js'] } = {}) {
+function gitFixture({
+  reachable = true,
+  merge = false,
+  commits = [HUMAN_FIX],
+  paths = ['src/fix.js'],
+  pathsByCommit = {},
+  messagesByCommit = {},
+} = {}) {
   return args => {
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
       return { status: reachable ? 0 : 1, stdout: '', stderr: '' };
     }
     if (args[0] === 'rev-list' && args[1] === '--reverse') {
-      return { status: 0, stdout: `${HUMAN_FIX}\n`, stderr: '' };
+      return { status: 0, stdout: `${commits.join('\n')}\n`, stderr: '' };
     }
     if (args[0] === 'rev-list' && args[1] === '--parents') {
-      return { status: 0, stdout: `${HUMAN_FIX} ${BASE}${merge ? ` ${'d'.repeat(40)}` : ''}\n`, stderr: '' };
+      const commit = args.at(-1);
+      const index = commits.indexOf(commit);
+      const parent = index > 0 ? commits[index - 1] : BASE;
+      return { status: 0, stdout: `${commit} ${parent}${merge ? ` ${'e'.repeat(40)}` : ''}\n`, stderr: '' };
     }
-    if (args[0] === 'diff-tree') return { status: 0, stdout: `${paths.join('\n')}\n`, stderr: '' };
+    if (args[0] === 'diff-tree') {
+      const commit = args.at(-1);
+      const changedPaths = pathsByCommit[commit] ?? paths;
+      return { status: 0, stdout: `${changedPaths.join('\n')}\n`, stderr: '' };
+    }
+    if (args[0] === 'show' && args[1] === '-s' && args[2] === '--format=%B') {
+      return { status: 0, stdout: messagesByCommit[args[3]] ?? 'Product implementation\n', stderr: '' };
+    }
     throw new Error(`unexpected git call: ${args.join(' ')}`);
   };
 }
@@ -113,6 +131,39 @@ describe('commit adoption', () => {
 
     assert.equal(directoryScope.ok, true);
     assert.equal(questionGlobScope.ok, true);
+  });
+
+  it('excludes protected-command workflow receipts from adopted product paths', () => {
+    const result = adoption({
+      currentHead: WORKFLOW_RECEIPT,
+      range: { base: BASE, head: WORKFLOW_RECEIPT },
+      runGit: gitFixture({
+        commits: [HUMAN_FIX, WORKFLOW_RECEIPT],
+        pathsByCommit: {
+          [HUMAN_FIX]: ['src/fix.js'],
+          [WORKFLOW_RECEIPT]: ['.agenticloop/tasks/T-001.md'],
+        },
+        messagesByCommit: {
+          [WORKFLOW_RECEIPT]: 'Record protected evidence\n\nWorkflow-Class: workflow_evidence\nTask: T-001\nAgent: maintainer\n',
+        },
+      }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.adoption.changedPaths, ['src/fix.js']);
+  });
+
+  it('refuses a collapsed workflow class that authors a product path', () => {
+    const result = adoption({
+      runGit: gitFixture({
+        messagesByCommit: {
+          [HUMAN_FIX]: 'Forged protected evidence\n\nWorkflow-Class: workflow_disposition\nTask: T-001\nAgent: maintainer\n',
+        },
+      }),
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.reasons.join('\n'), /authors a product path/);
   });
 
   it('uses a closed claimed-actor vocabulary', () => {

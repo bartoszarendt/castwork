@@ -28,7 +28,7 @@ import { carrierRootOf } from './carrier-root.js';
 import { executeMutationBatch, fingerprintTargetPath, resolveTargetPath } from './fs-mutation-kernel.js';
 import {
   validateActivationGrantShape,
-  validateActivationRevocation,
+  validateActivationDenial,
   validateTaskActivationBindingShape,
 } from './activation-grant.js';
 
@@ -244,7 +244,7 @@ export function writeActivationRecords(target, { grant, bindings = [], expectedB
 /** Persist one revocation record. Revocation is deny-side and create-only. */
 export function writeActivationRevocation(target, revocation) {
   target = storeRoot(target);
-  const checked = validateActivationRevocation(revocation);
+  const checked = validateActivationDenial(revocation);
   if (!checked.ok) {
     return {
       ok: false,

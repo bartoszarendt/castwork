@@ -4,12 +4,11 @@
  * `task readiness-plan` removed the *discovery* loop the field record
  * measured: the Maintainer can now see the whole ordered sequence instead of
  * finding one prerequisite per failed gate. It did not remove the *execution*
- * loop. Settling readiness by hand still meant `establish-baseline`, a commit,
- * `prepare-decomposition` redirected to a file, `task status agent-ready`, and a
- * second commit - because every one of those commands deliberately writes
- * nothing durable and the next one refuses evidence that is not yet committed.
- * Four or five commands, usually two commits, and every repair in the middle
- * able to invalidate what an earlier command had already produced.
+ * loop. Settling readiness through the standalone commands still means a
+ * CLI-authored baseline commit, `prepare-decomposition` redirected to a file and
+ * committed as authored planning evidence, then a CLI-authored
+ * `task status agent-ready` commit. Four or five commands, three commits, and
+ * every repair in the middle can invalidate what an earlier command produced.
  *
  * This module consumes one reviewed executable plan and settles the whole
  * sequence as a single transaction: one filesystem batch through the shared
@@ -70,6 +69,7 @@ import { evaluateDispatchableLifecycle, taskStatusFromBody } from './dispatchabi
 import { readTaskActivationBinding } from './activation-store.js';
 import { evaluateHandoffPreflight } from './handoff-preflight.js';
 import { isGitObjectId } from './git-oid.js';
+import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 import {
   READINESS_FORBIDDEN_WRITE_PREFIXES,
   READINESS_PLAN_KIND,
@@ -142,7 +142,7 @@ const PLAN_FIELDS = Object.freeze([
   'steps', 'nextStep', 'pendingSteps', 'writeSet', 'writeSetIsWorkflowOnly', 'finalCommitTrailer',
   'activationPlanned', 'activationNote', 'readiness', 'readinessCommands', 'executable', 'planDigest',
 ]);
-const STEP_FIELDS = Object.freeze(['id', 'settled', 'detail', 'owner', 'dependsOn', 'command', 'writes']);
+const STEP_FIELDS = Object.freeze(['id', 'settled', 'state', 'detail', 'owner', 'dependsOn', 'command', 'writes']);
 const EXECUTABLE_FIELDS = Object.freeze([
   'expectedHead', 'expectedTaskDigest', 'repository', 'task', 'contractChain', 'actor', 'authority',
   'workUnit', 'base', 'dependencies', 'inventory', 'decomposition', 'activationPresent',
@@ -239,6 +239,15 @@ export function validateExecutableReadinessPlan(plan, context = {}) {
   if (!Array.isArray(plan.steps) || plan.steps.length !== READINESS_STEPS.length ||
       plan.steps.some((item, index) => !exactKeys(item, STEP_FIELDS) || item.id !== READINESS_STEPS[index])) {
     errors.push('readiness plan steps must be the closed ordered readiness sequence');
+  } else {
+    for (const item of plan.steps) {
+      if (!['satisfied', 'pending', 'not_applicable'].includes(item.state)) {
+        errors.push(`readiness plan step '${item.id}' has an unsupported state`);
+      }
+      if (item.settled !== (item.state === 'satisfied')) {
+        errors.push(`readiness plan step '${item.id}' settled flag disagrees with its state`);
+      }
+    }
   }
   if (!Array.isArray(plan.pendingSteps) || plan.pendingSteps.some(id => !READINESS_STEPS.includes(id))) {
     errors.push('readiness plan pendingSteps must name declared readiness steps');
@@ -269,7 +278,9 @@ export function validateExecutableReadinessPlan(plan, context = {}) {
     errors.push('readiness plan executable binding fields must equal the closed schema');
     return { ok: false, errors };
   }
+  const serial = executable?.decomposition?.route === 'serial';
   for (const [field, fields] of Object.entries(NESTED_FIELDS)) {
+    if (serial && ['workUnit', 'inventory'].includes(field) && executable[field] === null) continue;
     if (!exactKeys(executable[field], fields)) {
       errors.push(`readiness plan executable.${field} fields must equal the closed schema`);
     }
@@ -298,25 +309,52 @@ export function validateExecutableReadinessPlan(plan, context = {}) {
   if (!/^[a-z][a-z0-9_-]*:\s*\S/i.test(String(executable.authority ?? ''))) {
     errors.push('readiness plan requires a durable authority as <kind>:<reference>');
   }
-  const workUnitId = String(executable.workUnit?.id ?? '');
-  if (!workUnitId || workUnitId === `work-unit:${plan.taskId}` || workUnitId === plan.taskId) {
-    errors.push('readiness plan requires a durable work-unit identity, not a per-task fallback');
+  if (!['serial', 'parallel'].includes(executable.decomposition.route)) {
+    errors.push("readiness plan route must be 'serial' or 'parallel'");
   }
   if (executable.base.revalidationArgs?.[0] !== '--base' && executable.base.revalidationArgs?.[0] !== '--base-paths') {
     errors.push('readiness plan base evidence must revalidate through --base or --base-paths');
   }
-  if (executable.dependencies.revalidationArgs?.[0] !== '--dependencies') {
-    errors.push('readiness plan dependency evidence must revalidate through --dependencies');
-  }
-  if (!isObject(executable.dependencies.provenance) || !isGitObjectId(executable.dependencies.provenance.commit)) {
-    errors.push('readiness plan dependency evidence must bind a committed source commit');
-  }
-  if (executable.inventory.complete !== true) errors.push('readiness plan inventory must be a complete observation');
-  if (executable.decomposition.sourceRevision !== `git-commit:${String(executable.expectedHead)}`) {
-    errors.push('readiness plan decomposition source revision must bind the expected HEAD');
-  }
-  if (!Number.isSafeInteger(executable.decomposition.freshnessMaxAgeSeconds) || executable.decomposition.freshnessMaxAgeSeconds <= 0) {
-    errors.push('readiness plan decomposition freshness policy must be a positive integer');
+  if (serial) {
+    if (executable.workUnit !== null || executable.inventory !== null) {
+      errors.push('serial readiness plan work-unit and inventory bindings must be null');
+    }
+    if (executable.decomposition.path !== null || executable.decomposition.sourceRevision !== null ||
+        executable.decomposition.freshnessMaxAgeSeconds !== null || executable.decomposition.rescanTrigger !== null) {
+      errors.push('serial readiness plan must not bind decomposition facts');
+    }
+    const serialSelector = typeof executable.dependencies.source === 'string' && executable.dependencies.source.startsWith('files:')
+      ? executable.dependencies.source.slice('files:'.length)
+      : null;
+    if (!serialSelector || canonicalJson(executable.dependencies.revalidationArgs) !== canonicalJson(['--serial-dependencies', serialSelector])) {
+      errors.push('serial readiness plan dependency evidence must revalidate through direct declared carriers');
+    }
+    if (executable.dependencies.provenance !== null) {
+      errors.push('serial readiness plan dependency evidence must not claim snapshot provenance');
+    }
+    for (const id of ['work_unit_identity', 'committed_decomposition']) {
+      if (plan.steps.find(item => item.id === id)?.state !== 'not_applicable') {
+        errors.push(`serial readiness plan step '${id}' must be not_applicable`);
+      }
+    }
+  } else {
+    const workUnitId = String(executable.workUnit?.id ?? '');
+    if (!workUnitId || workUnitId === `work-unit:${plan.taskId}` || workUnitId === plan.taskId) {
+      errors.push('parallel readiness plan requires a durable work-unit identity, not a per-task fallback');
+    }
+    if (executable.dependencies.revalidationArgs?.[0] !== '--dependencies') {
+      errors.push('parallel readiness plan dependency evidence must revalidate through --dependencies');
+    }
+    if (!isObject(executable.dependencies.provenance) || !isGitObjectId(executable.dependencies.provenance.commit)) {
+      errors.push('parallel readiness plan dependency evidence must bind a committed source commit');
+    }
+    if (executable.inventory.complete !== true) errors.push('parallel readiness plan inventory must be a complete observation');
+    if (executable.decomposition.sourceRevision !== `git-commit:${String(executable.expectedHead)}`) {
+      errors.push('parallel readiness plan decomposition source revision must bind the expected HEAD');
+    }
+    if (!Number.isSafeInteger(executable.decomposition.freshnessMaxAgeSeconds) || executable.decomposition.freshnessMaxAgeSeconds <= 0) {
+      errors.push('parallel readiness plan decomposition freshness policy must be a positive integer');
+    }
   }
   if (executable.finalCommitMessage !== readinessCommitMessage(plan.taskId)) {
     errors.push('readiness plan finalCommitMessage must be the bounded readiness subject and Maintainer trailers');
@@ -386,6 +424,9 @@ export function validateExecutableReadinessPlan(plan, context = {}) {
     }
     if (executable.writes.some(entry => entry.role === 'committed_decomposition' && entry.path !== executable.decomposition.path)) {
       errors.push('readiness plan decomposition write must be the bound decomposition path');
+    }
+    if (serial && executable.writes.some(entry => entry.role === 'committed_decomposition')) {
+      errors.push('serial readiness plan must not write a decomposition');
     }
   }
 
@@ -552,7 +593,9 @@ function stalenessErrors(plan, current) {
   compare('the task lifecycle status', planned.task.status, now.task.status);
   compare('the protected task contract', planned.task.contractDigest, now.task.contractDigest);
   compare('the trusted task-contract chain', planned.contractChain, now.contractChain);
-  compare('the committed dependency snapshot', planned.dependencies, now.dependencies);
+  compare(planned.decomposition.route === 'serial'
+    ? 'the current declared dependency evidence'
+    : 'the committed dependency snapshot', planned.dependencies, now.dependencies);
   compare('the resolved base evidence', planned.base, now.base);
   compare('the observed task inventory', planned.inventory, now.inventory);
   compare('the work-unit identity', planned.workUnit, now.workUnit);
@@ -744,8 +787,18 @@ export function applyReadinessPlan(input) {
         ? { base: executable.base.revalidationArgs[1] }
         : { basePaths: executable.base.revalidationArgs[1] }
     );
-    dependencies = resolveDependencyEvidence(executable.dependencies.revalidationArgs[1]);
-    inventory = enumerateInventory();
+    if (executable.decomposition.route === 'serial') {
+      dependencies = resolveSerialDependencyEvidence({
+        target,
+        taskBody: readFileSync(resolveWorkflowPath(target, executable.task.path), 'utf8'),
+        projectConfig,
+        now,
+      });
+      inventory = null;
+    } else {
+      dependencies = resolveDependencyEvidence(executable.dependencies.revalidationArgs[1]);
+      inventory = enumerateInventory();
+    }
   } catch (error) {
     return refuse('stale', [error instanceof Error ? error.message : String(error)], {
       planDigest: plan.planDigest,
@@ -758,7 +811,7 @@ export function applyReadinessPlan(input) {
     projectConfig,
     actor: executable.actor,
     authority: executable.authority,
-    workUnitId: executable.workUnit.id,
+    workUnitId: executable.workUnit?.id ?? null,
     base,
     dependencies,
     dependencyRef: executable.dependencies.sourceRef,
@@ -1006,8 +1059,34 @@ export function applyReadinessPlan(input) {
   // --- 8. The filesystem transaction ------------------------------------
   capturePredecessorBytes(target, candidates);
   const mutations = candidates.map(readinessCandidateMutation);
+  const serialDependencyTaskIds = executable.decomposition.route === 'serial'
+    ? dependencies.records.map(record => record.taskId)
+    : [];
+  const validateSerialDependencies = () => {
+    if (executable.decomposition.route !== 'serial') return;
+    const observed = resolveSerialDependencyEvidence({
+      target,
+      taskBody: readFileSync(taskAbsolute, 'utf8'),
+      projectConfig,
+      now,
+    });
+    if (observed.evidence.digest !== dependencies.evidence.digest) {
+      throw new Error('direct declared dependency evidence changed at the atomic readiness boundary');
+    }
+    if (observed.evidence.evaluatedState !== 'satisfied') {
+      const detail = observed.records
+        .filter(record => record.state !== 'satisfied')
+        .map(record => `${record.taskId}:${record.state}`)
+        .join(', ');
+      throw new Error(`direct declared dependency evidence is not satisfied at the atomic readiness boundary: ${detail}`);
+    }
+  };
   const written = executeMutationBatch(target, mutations, {
-    ...(beforeWrite ? { beforeWrite } : {}), ...readinessLifecycleLockOptions(candidates),
+    beforeWrite: () => {
+      beforeWrite?.();
+      validateSerialDependencies();
+    },
+    ...readinessLifecycleLockOptions(candidates, serialDependencyTaskIds),
   });
   if (!written.ok) {
     const rolledBack = written.rollbackErrors.length === 0;
@@ -1784,10 +1863,13 @@ function proveConsumedReadinessCommit(target, plan) {
   return { ok: errors.length === 0, head, errors };
 }
 
-function readinessLifecycleLockOptions(candidates) {
-  const taskIds = [...new Set(candidates
+function readinessLifecycleLockOptions(candidates, additionalTaskIds = []) {
+  const taskIds = [...new Set([
+    ...additionalTaskIds,
+    ...candidates
     .filter(item => item.role === 'task_carrier' && typeof item.taskId === 'string')
-    .map(item => item.taskId))].sort();
+    .map(item => item.taskId),
+  ])].sort();
   return taskIds.length > 0 ? { lifecycleAuthorityTaskIds: taskIds } : {};
 }
 
@@ -2241,15 +2323,23 @@ function readinessCommitFacts(target, sha, ref = null) {
 function verifyCommittedReadiness({ target, taskId, projectConfig, plan, base, dependencies, enumerateInventory, io, activationBefore, workUnitAttribution = null }) {
   const errors = [];
   const executable = plan.executable;
+  const serial = executable.decomposition.route === 'serial';
+  const currentDependencies = serial
+    ? resolveSerialDependencyEvidence({
+        target,
+        taskBody: readFileSync(resolveWorkflowPath(target, executable.task.path), 'utf8'),
+        projectConfig,
+      })
+    : dependencies;
   const after = buildReadinessPlan(target, taskId, {
     projectConfig,
     actor: executable.actor,
     authority: executable.authority,
-    workUnitId: executable.workUnit.id,
+    workUnitId: executable.workUnit?.id ?? null,
     base,
-    dependencies,
+    dependencies: currentDependencies,
     dependencyRef: executable.dependencies.sourceRef,
-    inventory: enumerateInventory(),
+    inventory: serial ? null : enumerateInventory(),
     freshnessMaxAgeSeconds: executable.decomposition.freshnessMaxAgeSeconds,
     rescanTrigger: executable.decomposition.rescanTrigger,
     route: executable.decomposition.route,
@@ -2262,12 +2352,14 @@ function verifyCommittedReadiness({ target, taskId, projectConfig, plan, base, d
     errors.push(`the committed trusted contract chain is '${after.executable.contractChain.state}', not current`);
   }
 
-  for (const [label, path, attribution] of [
-    ['decomposition', executable.decomposition.path, workUnitAttribution],
-    ['dependency snapshot', executable.dependencies.sourceRef, null],
-  ]) {
-    const verified = verifyCommittedAttributedSource(target, path, { taskId, ...(attribution ?? {}) });
-    if (!verified.ok) errors.push(`the committed ${label} is not exact Maintainer-attributed evidence: ${verified.error}`);
+  if (!serial) {
+    for (const [label, path, attribution] of [
+      ['decomposition', executable.decomposition.path, workUnitAttribution],
+      ['dependency snapshot', executable.dependencies.sourceRef, null],
+    ]) {
+      const verified = verifyCommittedAttributedSource(target, path, { taskId, ...(attribution ?? {}) });
+      if (!verified.ok) errors.push(`the committed ${label} is not exact Maintainer-attributed evidence: ${verified.error}`);
+    }
   }
 
   const activationAfter = readTaskActivationBinding(target, 'files', taskId).state;

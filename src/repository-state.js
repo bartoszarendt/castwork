@@ -20,8 +20,8 @@ import { listAgenticLoopWorktrees } from './worktree.js';
 import { createPathClassifier } from './product-lineage.js';
 
 export const CLEAN_STATE_KIND = 'agenticloop.dispatch-clean-state';
-/** v2 adds the operator-owned activation state class. */
-export const CLEAN_STATE_SCHEMA_VERSION = 4;
+/** v6 requires durable return verifications to be committed before dispatch. */
+export const CLEAN_STATE_SCHEMA_VERSION = 6;
 
 /**
  * Bounded scratch state a dispatch may carry. `.agenticloop/tmp/` is the
@@ -56,7 +56,6 @@ export const PERMITTED_SCRATCH_PREFIXES = Object.freeze(['.agenticloop/tmp/']);
  */
 export const PERMITTED_OPERATOR_STATE_PREFIXES = Object.freeze([
   '.agenticloop/activations/',
-  '.agenticloop/returns/verifications/',
   '.agenticloop/closeout-waivers/',
 ]);
 
@@ -64,13 +63,12 @@ export const PERMITTED_OPERATOR_STATE_PREFIXES = Object.freeze([
 export const SHARED_STATE_PREFIXES = Object.freeze(['.agenticloop/']);
 
 /**
- * Machine-local toolkit state a dispatch may carry untracked.
+ * Machine-local or non-authoritative operational state a dispatch may carry.
  *
- * `.agenticloop/local/` holds the generation manifest and this clone resolved
- * configuration. The toolkit writes both and gitignores them itself, so gating a
- * dispatch on their absence refused every dispatch in any target that had run
- * init, update, or hydrate - and that refusal had no repair, because removing
- * the files only made the next hydration write them again.
+ * `.agenticloop/local/` holds the generation manifest and this clone's resolved
+ * configuration. `.agenticloop/logs/` holds optional, non-authoritative event
+ * observations. Gating a dispatch on either class would let local tooling or a
+ * best-effort observation invalidate the protected action it just described.
  *
  * `.agenticloop/locks/` is deliberately NOT here. A lifecycle lock is gitignored
  * toolkit state too, but its presence means another process holds lifecycle
@@ -80,7 +78,10 @@ export const SHARED_STATE_PREFIXES = Object.freeze(['.agenticloop/']);
  * implementation work at the return boundary. Generated files recorded in the
  * manifest are classified as toolkit output instead and need no prefix.
  */
-export const PERMITTED_MACHINE_LOCAL_PREFIXES = Object.freeze(['.agenticloop/local/']);
+export const PERMITTED_MACHINE_LOCAL_PREFIXES = Object.freeze([
+  '.agenticloop/local/',
+  '.agenticloop/logs/',
+]);
 
 /** Every prefix whose untracked or ignored content the clean gate tolerates. */
 export const PERMITTED_UNTRACKED_PREFIXES = Object.freeze([

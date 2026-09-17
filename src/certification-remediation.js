@@ -78,10 +78,10 @@ function reviewHistoryBinding(history) {
 
 async function reviewEntryMatches(target, taskId, returnVerification, history, latestReview, verifyMaintainerOutcome, independentReviewRequired) {
   const directory = join(target, '.agenticloop', 'reviews', 'entries', taskId);
-  if (!existsSync(directory)) return { matched: false, authenticated: false };
+  if (!existsSync(directory)) return { matched: false, accepted: false, authenticated: false };
   const returnToken = String(returnVerification.recordId ?? '').replace(/^return-verification:/, '');
   let names;
-  try { names = readdirSync(directory).filter(name => name.endsWith('.json')); } catch { return { matched: false, authenticated: false }; }
+  try { names = readdirSync(directory).filter(name => name.endsWith('.json')); } catch { return { matched: false, accepted: false, authenticated: false }; }
   let matched = false;
   let authenticationFailed = false;
   for (const name of names) {
@@ -98,7 +98,12 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
         Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_V5_FIELDS.includes(key)) &&
         ((entry.maintainerOutcome === null && entry.initialAuthentication === null) ||
           (entry.maintainerOutcome !== null && entry.initialAuthentication !== null));
-      const structurallyMatches = (isV3 || isV5) &&
+      const isV6 = entry?.schemaVersion === 6 &&
+        Object.keys(entry ?? {}).length === FILES_REVIEW_ENTRY_V5_FIELDS.length &&
+        Object.keys(entry ?? {}).every(key => FILES_REVIEW_ENTRY_V5_FIELDS.includes(key)) &&
+        entry.maintainerOutcome?.kind === 'agenticloop.maintainer-review-session-report' &&
+        entry.initialAuthentication === null;
+      const structurallyMatches = (isV3 || isV5 || isV6) &&
         entry.kind === 'agenticloop.files-review-entry-receipt' &&
         entry.backend === 'files' && entry.taskId === taskId &&
         name === `${returnToken}.json` &&
@@ -111,7 +116,7 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
         Number.isSafeInteger(entry.reviewHistory?.eventCount) && entry.reviewHistory.eventCount >= 0 &&
         entry.reviewHistory.eventCount <= history.events.length &&
         entry.reviewHistory.digest === reviewHistoryBinding({ events: history.events.slice(0, entry.reviewHistory.eventCount) }).digest &&
-        digest === `sha256:agenticloop.files-review-entry-receipt.v${isV3 ? 3 : 4}:${canonicalSha256(projection)}`;
+        digest === `sha256:agenticloop.files-review-entry-receipt.v${isV3 ? 3 : (isV6 ? 5 : 4)}:${canonicalSha256(projection)}`;
       if (!structurallyMatches) continue;
       matched = true;
       if (typeof verifyMaintainerOutcome !== 'function' || !latestReview) {
@@ -127,19 +132,24 @@ async function reviewEntryMatches(target, taskId, returnVerification, history, l
         history,
         reviewOutcome: latestReview,
         independentReviewRequired,
-        initialAuthentication: isV5 ? entry.initialAuthentication : null,
+        initialAuthentication: (isV5 || isV6) ? entry.initialAuthentication : null,
       });
-      if (authenticated?.ok === true) return { matched: true, authenticated: true };
+      if (authenticated?.ok === true) return {
+        matched: true,
+        accepted: true,
+        authenticated: authenticated.producerAuthenticated === true,
+        assurance: authenticated.assurance ?? (authenticated.producerAuthenticated === true ? 'host_receipt' : null),
+      };
       authenticationFailed = true;
       if (authenticated?.diagnosticType === 'maintainer_review_independence_required') {
-        return { matched: true, authenticated: false, authenticationDiagnosticType: authenticated.diagnosticType };
+        return { matched: true, accepted: false, authenticated: false, authenticationDiagnosticType: authenticated.diagnosticType };
       }
     } catch {
       // A malformed entry is not a competing authority. Continue so a valid
       // uniquely named receipt may still be evaluated.
     }
   }
-  return { matched, authenticated: false, authenticationFailed };
+  return { matched, accepted: false, authenticated: false, authenticationFailed };
 }
 
 /**
@@ -197,13 +207,13 @@ export async function resolveDurableCertificationEvidence({
   const verifiedReturn = exactReturns.length === 1 ? exactReturns[0] : null;
   const reviewEntry = verifiedReturn
     ? await reviewEntryMatches(target, taskId, verifiedReturn, history, latestReview, verifyMaintainerOutcome, independentReviewRequired)
-    : { matched: false, authenticated: false };
+    : { matched: false, accepted: false, authenticated: false };
   if (verifiedReturn && !reviewEntry.matched) {
     reasons.push('no protected review-entry receipt binds the validated return and current review history for the requested exact candidate');
     diagnostics.push(Object.freeze({ type: 'review_entry_unverified', evidenceState: 'malformed' }));
   }
-  if (verifiedReturn && reviewEntry.matched && !reviewEntry.authenticated) {
-      reasons.push('Maintainer review outcome authentication is missing, mismatched, forged, or unavailable for the requested exact candidate');
+  if (verifiedReturn && reviewEntry.matched && !reviewEntry.accepted) {
+      reasons.push('Maintainer review outcome assurance is missing, mismatched, forged, or unavailable for the requested exact candidate');
       diagnostics.push(Object.freeze({
         type: reviewEntry.authenticationDiagnosticType ?? (typeof verifyMaintainerOutcome === 'function' ? 'maintainer_review_authentication_failed' : 'maintainer_review_receipt_verification_unavailable'),
         evidenceState: 'malformed',
@@ -256,7 +266,14 @@ export async function resolveDurableCertificationEvidence({
     ok: true,
     candidate: verifiedReturn.finishCandidate,
     producer: Object.freeze({ role: verifiedReturn.producerRole, id: verifiedReturn.recordId }),
-    review: Object.freeze({ candidate: verifiedReturn.finishCandidate, role: 'maintainer', id: latestReview.actorAccount, fresh: true }),
+    review: Object.freeze({
+      candidate: verifiedReturn.finishCandidate,
+      role: 'maintainer',
+      id: latestReview.actorAccount,
+      fresh: true,
+      assurance: reviewEntry.assurance,
+      producerAuthenticated: reviewEntry.authenticated,
+    }),
     audit: Object.freeze({
       candidate: verifiedReturn.finishCandidate,
       role: 'auditor',

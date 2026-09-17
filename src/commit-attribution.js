@@ -10,10 +10,15 @@ const TRAILER_LINE_RE = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\s*:\s*(.+?)\s*$/;
 const NAMED_TRAILER_RE = /^(Task|Tasks|Work-Unit|Agent)\s*:\s*(.+?)\s*$/i;
 
 export const ATTRIBUTION_REPAIR_RECORD_KIND = 'agenticloop.attribution-repair';
+export const COLLAPSED_WORKFLOW_COMMIT_CLASSES = Object.freeze([
+  'workflow_evidence',
+  'workflow_disposition',
+]);
 
 /**
- * The workflow commit classes Agentic Loop asks a role to author, and the role
- * each one is attributed to.
+ * The commit classes Agentic Loop asks a role to author, and the role each one
+ * is attributed to. Protected commands author the collapsed workflow classes
+ * themselves; roles author only product implementation commits.
  *
  * The class decides the role because that is the fact a role kept getting wrong
  * while hand-authoring the one artifact the toolkit is strictest about. It is a
@@ -22,17 +27,6 @@ export const ATTRIBUTION_REPAIR_RECORD_KIND = 'agenticloop.attribution-repair';
  */
 export const COMMIT_MESSAGE_CLASSES = Object.freeze({
   product_implementation: 'engineer',
-  role_start_status: 'engineer',
-  implementation_artifact_evidence: 'engineer',
-  implementation_summary_evidence: 'engineer',
-  implementation_outcome_evidence: 'engineer',
-  required_check_evidence: 'engineer',
-  attempt_abandonment: 'maintainer',
-  handoff_evidence_refresh: 'maintainer',
-  readiness_settlement: 'maintainer',
-  review_record: 'maintainer',
-  acceptance_transition: 'maintainer',
-  audit_record: 'auditor',
 });
 
 export const COMMIT_MESSAGE_CLASS_LIST = Object.freeze(Object.keys(COMMIT_MESSAGE_CLASSES));
@@ -47,10 +41,10 @@ export const COMMIT_MESSAGE_CLASS_LIST = Object.freeze(Object.keys(COMMIT_MESSAG
  * because it inserts a blank line between *every* `-m` and so leaves `Task:`
  * stranded in its own paragraph outside the final block.
  *
- * @param {{ taskId: string, role: string, subject: string, body?: string|null }} input
+ * @param {{ taskId: string, role: string, subject: string, body?: string|null, commitClass?: string|null }} input
  * @returns {{ ok: boolean, errors: string[], message: string|null }}
  */
-export function renderCommitMessage({ taskId, role, subject, body = null } = {}) {
+export function renderCommitMessage({ taskId, role, subject, body = null, commitClass = null } = {}) {
   const errors = [];
   const task = String(taskId ?? '').trim();
   const workflowRole = String(role ?? '').trim();
@@ -71,13 +65,18 @@ export function renderCommitMessage({ taskId, role, subject, body = null } = {})
   if (bodyText.split('\n').some(line => NAMED_TRAILER_RE.test(line.trim()))) {
     errors.push('a commit message body cannot contain its own Task or Agent trailer lines');
   }
+  const className = commitClass === null || commitClass === undefined ? null : String(commitClass).trim();
+  if (className !== null && !/^[a-z][a-z0-9_]*$/.test(className)) {
+    errors.push('a workflow commit class must use lowercase snake_case');
+  }
   if (errors.length > 0) return { ok: false, errors, message: null };
-  const paragraphs = [subjectLine, ...(bodyText ? [bodyText] : []), `Task: ${task}\nAgent: ${workflowRole}`];
+  const classTrailer = className ? `Workflow-Class: ${className}\n` : '';
+  const paragraphs = [subjectLine, ...(bodyText ? [bodyText] : []), `${classTrailer}Task: ${task}\nAgent: ${workflowRole}`];
   return { ok: true, errors: [], message: `${paragraphs.join('\n\n')}\n` };
 }
 
 /** Render the canonical attribution block for one bounded work-unit mutation. */
-export function renderWorkUnitCommitMessage({ workUnitId, taskIds, role = 'maintainer', subject, body = null } = {}) {
+export function renderWorkUnitCommitMessage({ workUnitId, taskIds, role = 'maintainer', subject, body = null, commitClass = null } = {}) {
   const errors = [];
   const workUnit = String(workUnitId ?? '').trim();
   const tasks = Array.isArray(taskIds) ? taskIds.map(value => String(value).trim()) : [];
@@ -97,8 +96,13 @@ export function renderWorkUnitCommitMessage({ workUnitId, taskIds, role = 'maint
   if (bodyText.split('\n').some(line => NAMED_TRAILER_RE.test(line.trim()))) {
     errors.push('a commit message body cannot contain its own Work-Unit, Tasks, Task, or Agent trailer lines');
   }
+  const className = commitClass === null || commitClass === undefined ? null : String(commitClass).trim();
+  if (className !== null && !/^[a-z][a-z0-9_]*$/.test(className)) {
+    errors.push('a workflow commit class must use lowercase snake_case');
+  }
   if (errors.length > 0) return { ok: false, errors, message: null };
-  const block = `Work-Unit: ${workUnit}\nTasks: ${tasks.join(', ')}\nAgent: ${workflowRole}`;
+  const classTrailer = className ? `Workflow-Class: ${className}\n` : '';
+  const block = `${classTrailer}Work-Unit: ${workUnit}\nTasks: ${tasks.join(', ')}\nAgent: ${workflowRole}`;
   return { ok: true, errors: [], message: `${[subjectLine, ...(bodyText ? [bodyText] : []), block].join('\n\n')}\n` };
 }
 
@@ -186,6 +190,23 @@ export function parseFinalTrailerBlock(message) {
     named: namedTrailersIn(trailers),
     misplaced,
   };
+}
+
+/** Read the optional canonical workflow class without making it authority. */
+export function commitWorkflowClass(message) {
+  const { trailers } = parseFinalTrailerBlock(message);
+  const values = trailers
+    .map(line => line.match(/^Workflow-Class\s*:\s*(.+?)\s*$/i))
+    .filter(Boolean)
+    .map(match => match[1].trim());
+  return values.length === 1 ? values[0] : null;
+}
+
+/** Resolve one canonical Agent trailer so collapsed classes retain role checks. */
+export function commitAgentRole(message) {
+  const { named } = parseFinalTrailerBlock(message);
+  const agents = named.filter(entry => entry.name === 'agent').map(entry => entry.value);
+  return agents.length === 1 ? agents[0] : null;
 }
 
 function namedTrailersIn(lines) {

@@ -78,8 +78,6 @@ export async function correctContract(fixture, priorDigest, reason) {
     '--target', fixture.root,
   ]);
   assert.equal(corrected.status, 0, corrected.stderr);
-  git(fixture.root, ['add', '.agenticloop/task-contract-history']);
-  git(fixture.root, ['commit', '-m', `authorize contract correction\n\nTask: T-001\nAgent: maintainer`]);
 }
 
 export function interactiveOptions(fixture, answers = [OPERATOR_CONFIRMATION_PHRASE]) {

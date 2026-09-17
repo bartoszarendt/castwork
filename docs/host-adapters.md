@@ -237,9 +237,10 @@ not generate `.cursor/rules/` or always-on hooks by default.
 
 ## Stop Agentic Loop
 
-`stop` is an exact activation argument that deactivates Agentic Loop in the
-current conversation and safely checkpoints unfinished work. It is not task
-closeout, worktree cleanup, host exit, or a request to terminate a host process.
+`stop` is an exact activation argument that durably denies future protected
+transitions for the active task, deactivates Agentic Loop in the current
+conversation, and safely checkpoints unfinished work. It is not task closeout,
+worktree cleanup, host exit, or a promise to terminate a host process.
 
 | Host | Stop invocation | Resume invocation |
 |---|---|---|
@@ -250,13 +251,21 @@ closeout, worktree cleanup, host exit, or a request to terminate a host process.
 | Copilot CLI | `/agenticloop stop` | `/agenticloop <task or context>` |
 | Cursor | `/agenticloop stop` | `/agenticloop <task or context>` |
 
-The stop contract first stops new Agentic Loop work and new role spawning, then
-inspects active subagents, background work, and worktree lanes. It uses safe
-host interruption controls when available and otherwise reports still-running
-activity without waiting indefinitely. When progress is not durable, it appends
-a concise dated checkpoint to the active task record but keeps the task status
-unchanged unless an independent blocker exists. A voluntary stop is neither
-`blocked` nor `needs_context`.
+The stop contract records an immutable exact-binding denial through
+`activation stop <task-id>` before claiming a durable stop, then stops new
+Agentic Loop work and role spawning and inspects active subagents, background
+work, and worktree lanes. It uses safe host interruption controls when
+available and otherwise reports still-running activity without waiting
+indefinitely. Durable denial blocks later protected transitions but cannot
+cancel work the host is already executing. When progress is not durable, the
+host appends a concise dated checkpoint to the active task record but keeps the
+task status unchanged unless an independent blocker exists. A voluntary stop
+is neither `blocked` nor `needs_context`.
+
+Resumption requires a fresh interactive `npx agenticloop activate <task-id>`
+and the normal host activation invocation. The stop tombstone remains; it never
+reactivates the old binding or old packet. A task-scoped stop does not revoke
+sibling bindings derived from a wider grant.
 
 Stop never automatically accepts, closes, commits, pushes, merges, deletes a
 branch, or removes a worktree. Codex `/stop` is a separate built-in control for
@@ -479,6 +488,7 @@ Inspect and manage what exists:
 ```text
 npx agenticloop activation status            # every binding and its usability
 npx agenticloop activation status T-016      # one task
+npx agenticloop activation stop T-016        # durable exact-binding stop
 npx agenticloop activation revoke grant:<uuid>
 npx agenticloop activation provision-key     # optional; activate provisions lazily
 ```

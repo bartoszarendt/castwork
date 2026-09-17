@@ -327,10 +327,9 @@ describe('files correction lifecycle commands', () => {
     git(target, ['commit', '-m', 'task']);
     const baseline = await runCliInProcess(['task', 'establish-baseline', 'T-001', '--actor', 'Agentic Loop Test', '--authority', 'task:T-001', '--target', target, '--json']);
     assert.equal(baseline.status, 0, baseline.stderr);
-    const record = JSON.parse(baseline.stdout).record;
-    git(target, ['add', '.agenticloop/task-contract-history']);
-    git(target, ['commit', '-m', 'baseline']);
-    return record;
+    const result = JSON.parse(baseline.stdout);
+    assert.equal(result.workflowCommit.committed, true);
+    return result.record;
   }
 
   it('refuses a second baseline over trusted history', async () => {
@@ -341,7 +340,7 @@ describe('files correction lifecycle commands', () => {
     assert.match(second.stderr, /duplicate task-contract baseline/);
   });
 
-  it('appends a correction that becomes trusted only after a separate commit', async () => {
+  it('commits a correction itself while leaving the caller-authored contract change untouched', async () => {
     const target = makeTarget('correction-flow');
     const baseline = await newTaskWithBaseline(target);
     const path = taskFilePath(target);
@@ -353,38 +352,23 @@ describe('files correction lifecycle commands', () => {
 
     const corrected = await runCliInProcess(['task', 'authorize-correction', 'T-001', '--expect-prior-digest', baseline.digest, '--reason', 'Clarify scope.', '--authority', 'task:T-001', '--actor', 'Agentic Loop Test', '--target', target, '--json']);
     assert.equal(corrected.status, 0, corrected.stderr);
-    const correction = JSON.parse(corrected.stdout).record;
+    const correctionResult = JSON.parse(corrected.stdout);
+    const correction = correctionResult.record;
     assert.equal(correction.type, 'correction');
     assert.equal(correction.priorDigest, baseline.digest);
     assert.ok(correction.changes.length > 0);
-    assert.match(JSON.parse(corrected.stdout).warning, /commit it separately/i);
+    assert.equal(correctionResult.workflowCommit.committed, true);
+    assert.match(correctionResult.message, /Authorized and committed/);
 
-    const dependencies = '.agenticloop/tmp/dependencies.json';
-    mkdirSync(join(target, '.agenticloop', 'tmp'), { recursive: true });
-    writeFileSync(join(target, dependencies), `${JSON.stringify({
-      kind: 'agenticloop.dependency-snapshot',
-      schemaVersion: 1,
-      source: 'files:.agenticloop/tasks',
-      observedAt: new Date().toISOString(),
-      freshnessPolicy: { maxAgeSeconds: 86400 },
-      statuses: {},
-    })}\n`, 'utf8');
     const digestOfRecord = () =>
       `sha256:${createHash('sha256').update(readFileSync(path, 'utf8'), 'utf8').digest('hex')}`;
 
-    // Uncommitted: the agent-ready gate still fails on the uncommitted record
-    // even with complete base and dependency evidence.
-    const dirty = await runCliInProcess([
-      'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digestOfRecord(),
-      '--base', 'HEAD', '--dependencies', dependencies, '--target', target,
-    ]);
-    assert.notEqual(dirty.status, 0);
-
-    git(target, ['add', '.agenticloop']);
-    git(target, ['commit', '-m', 'correction and task update\n\nTask: T-001\nAgent: maintainer']);
+    // The correction commit deliberately leaves the independently authored
+    // carrier change untouched. The lifecycle command then owns and commits
+    // exactly that carrier while directly observing the empty dependency set.
     const ready = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digestOfRecord(),
-      '--base', 'HEAD', '--dependencies', dependencies, '--target', target,
+      '--base', 'HEAD', '--target', target,
     ]);
     assert.equal(ready.status, 0, ready.stdout + ready.stderr);
   });

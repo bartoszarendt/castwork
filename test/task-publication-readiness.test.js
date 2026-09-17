@@ -26,6 +26,7 @@ import {
 } from './helpers/dispatch-fixture.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { initTestGitRepository } from './helpers/git-fixture.js';
+import { attachAcceptedReview, recordCompletedTaskEvidence } from './helpers/accepted-review-fixture.js';
 import { applyGitHubTaskBody, taskBodyDigest } from '../src/github-task-body.js';
 import { createTaskProjectFixture } from './helpers/task-fixture.js';
 import { validateTaskStatusTransition } from '../src/task-transition.js';
@@ -519,8 +520,6 @@ async function readinessFixture(name, { schema = '2', taskId = 'T-001', body = n
     '--actor', 'Agentic Loop Test', '--authority', `task:${taskId}`, '--target', root,
   ]);
   assert.equal(baseline.status, 0, baseline.stderr);
-  git(root, ['add', '.agenticloop/task-contract-history']);
-  git(root, ['commit', '-m', `baseline ${taskId}`]);
   return root;
 }
 
@@ -580,6 +579,7 @@ async function closeoutFixture(name) {
     operatorTrustRoot: fixture.operatorTrustRoot,
     hostAuthority: protectedHostBoundary(fixture.trust),
   };
+  const invoke = args => runCliInProcess(args, cli);
   const carrierDigest = () => sha256(readFileSync(file, 'utf8'));
   const repository = fixture.repository;
   const dispatchHead = git(root, ['rev-parse', 'HEAD']);
@@ -609,15 +609,14 @@ async function closeoutFixture(name) {
     '--expect-digest', carrierDigest(), '--product-head', productHead, '--json', '--target', root,
   ], cli);
   assert.equal(evidenced.status, 0, evidenced.stdout + evidenced.stderr);
-  git(root, ['add', file]);
-  git(root, ['add', '-f', '.agenticloop/handoffs']);
-  git(root, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
+  await recordCompletedTaskEvidence({
+    target: root, packet, productHead, carrierDigest, invoke,
+  });
 
   const workflowHead = git(root, ['rev-parse', 'HEAD']);
   const changedPaths = git(root, ['diff', '--name-only', `${packet.repository.head}..${workflowHead}`])
     .split(/\r?\n/).filter(Boolean);
-  const productChangedPaths = git(root, ['diff', '--name-only', `${packet.repository.head}..${productHead}`])
-    .split(/\r?\n/).filter(Boolean);
+  const productChangedPaths = ['src/existing.js'];
   const commits = git(root, ['rev-list', '--reverse', `${packet.repository.head}..${productHead}`])
     .split(/\r?\n/).filter(Boolean);
   const evidence = repositoryEvidence(packet, { head: productHead, changedPaths: productChangedPaths });
@@ -670,28 +669,19 @@ async function closeoutFixture(name) {
     '--repository-evidence', evidenceRelPath, '--target', root,
   ], cli);
   assert.equal(verified.status, 0, verified.stdout + verified.stderr);
-  git(root, ['add', '-f', '.agenticloop/returns/verifications']);
-  git(root, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
 
   // Maintainer review provenance, then acceptance under its own authority.
-  writeFileSync(
-    file,
-    `${readFileSync(file, 'utf8')
-      .replace(/^review_status:.*$/m, 'review_status: accepted')
-      .replace(/^reviewed_artifact:.*$/m, `reviewed_artifact: commit:${productHead}`)
-      .replace(/^review_mode:.*$/m, 'review_mode: host_subagent')}` +
-    '\n## Scope Completed\n\n- Delivered the terminal candidate.\n' +
-    '\n## Evidence\n\n- npm test (pass)\n',
-    'utf8'
-  );
-  git(root, ['add', file]);
-  git(root, ['commit', '-m', 'record maintainer review\n\nTask: T-001\nAgent: maintainer']);
+  await attachAcceptedReview({
+    target: root,
+    fixture,
+    invoke,
+    taskContractDigest: packet.task.taskContractDigest,
+    productHead,
+  });
   const accepted = await runCliInProcess([
     'task', 'status', 'T-001', 'accepted', '--expect-digest', carrierDigest(), '--json', '--target', root,
   ], cli);
   assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
-  git(root, ['add', file]);
-  git(root, ['commit', '-m', 'record accepted task\n\nTask: T-001\nAgent: maintainer']);
 
   // Audit follows acceptance, over the accepted work unit.
   const auditArtifact = `commit:${git(root, ['rev-parse', 'HEAD'])}`;
@@ -702,8 +692,6 @@ async function closeoutFixture(name) {
     '--evidence', 'Focused terminal-transition test.', '--target', root,
   ]);
   assert.equal(auditCreated.status, 0, auditCreated.stdout + auditCreated.stderr);
-  git(root, ['add', '.agenticloop/audits']);
-  git(root, ['commit', '-m', 'record audit\n\nTask: T-001\nAgent: maintainer']);
   const auditReportPath = join(root, '.agenticloop', 'tmp', 'audit-report.json');
   writeFileSync(auditReportPath, JSON.stringify({
     report_schema: 'auditor_report_v1',
@@ -724,8 +712,6 @@ async function closeoutFixture(name) {
     'audit', 'report', 'AUD-001', '--file', auditReportPath, '--target', root,
   ]);
   assert.equal(auditReported.status, 0, auditReported.stdout + auditReported.stderr);
-  git(root, ['add', '.agenticloop/audits']);
-  git(root, ['commit', '-m', 'record audit report\n\nTask: T-001\nAgent: maintainer']);
   fixture.closeoutArtifact = auditArtifact;
   closeoutDispatchFixtures.set(root, fixture);
   return root;
@@ -760,12 +746,29 @@ describe('exact readiness evidence for every task record', () => {
     assert.equal(result.status, 0, result.stdout + result.stderr);
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.readinessEvidence.kind, TASK_READINESS_EVIDENCE_KIND);
-    assert.equal(payload.readinessEvidence.dependencies, null);
+    assert.deepEqual(payload.readinessEvidence.dependencies.revalidationArgs, [
+      '--serial-dependencies', '.agenticloop/tasks/{taskId}.md',
+    ]);
+    assert.equal(payload.readinessEvidence.dependencies.evaluatedState, 'satisfied');
     assert.equal(validateTaskReadinessEvidence(payload.readinessEvidence).ok, true);
     assert.equal(Object.hasOwn(payload, 'evidenceContext'), false);
+
+    const explicit = await runCliInProcess([
+      'task-readiness', '--task-body', '.agenticloop/tasks/T-001.md',
+      '--mode', 'authoring', '--base', 'HEAD',
+      '--serial-dependencies', '.agenticloop/tasks/{taskId}.md', '--target', root, '--json',
+    ]);
+    assert.equal(explicit.status, 0, explicit.stdout + explicit.stderr);
+    const mismatched = await runCliInProcess([
+      'task-readiness', '--task-body', '.agenticloop/tasks/T-001.md',
+      '--mode', 'authoring', '--base', 'HEAD',
+      '--serial-dependencies', 'tasks/{taskId}.md', '--target', root, '--json',
+    ]);
+    assert.equal(mismatched.status, 1);
+    assert.match(mismatched.stdout, /must equal the configured task_file_template/);
   });
 
-  it('refuses an agent-ready transition without expected digest, base, or dependencies', async () => {
+  it('requires expected digest and base while observing serial dependencies directly', async () => {
     const root = await readinessFixture('evidence-required');
     const digest = currentTaskDigest(root, 'T-001');
 
@@ -779,13 +782,13 @@ describe('exact readiness evidence for every task record', () => {
     assert.equal(noBase.status, 1);
     assert.match(noBase.stdout + noBase.stderr, /--base <ref>.*--base-paths|--base-paths.*--base <ref>/s);
 
-    const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
-    const noDependencies = await runCliInProcess([
+    const directDependencies = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest, '--base', 'HEAD', '--target', root, '--json',
     ]);
-    assert.equal(noDependencies.status, 1);
-    assert.match(noDependencies.stdout + noDependencies.stderr, /--dependencies/);
-    assert.ok(deps);
+    assert.equal(directDependencies.status, 0, directDependencies.stdout + directDependencies.stderr);
+    assert.deepEqual(JSON.parse(directDependencies.stdout).receipt.evidenceContext.dependencies.revalidationArgs, [
+      '--serial-dependencies', '.agenticloop/tasks/{taskId}.md',
+    ]);
   });
 
   it('applies the same requirement to a legacy record with no contract schema', async () => {
@@ -809,10 +812,9 @@ describe('exact readiness evidence for every task record', () => {
     const inventory = '.agenticloop/tmp/base-paths.json';
     mkdirSync(join(root, '.agenticloop', 'tmp'), { recursive: true });
     writeFileSync(join(root, inventory), JSON.stringify(['src/new.js']), 'utf8');
-    const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const result = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest,
-      '--base', 'HEAD', '--base-paths', inventory, '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--base-paths', inventory, '--target', root, '--json',
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stdout + result.stderr, /exactly one of --base <ref> or --base-paths <path>/i);
@@ -820,12 +822,11 @@ describe('exact readiness evidence for every task record', () => {
 
   it('binds the resolved base tree object id rather than a symbolic ref', async () => {
     const root = await readinessFixture('resolved-base');
-    const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const treeOid = git(root, ['rev-parse', 'HEAD^{tree}']);
     const result = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(result.status, 0, result.stderr);
     const receipt = JSON.parse(result.stdout).receipt;
@@ -833,44 +834,16 @@ describe('exact readiness evidence for every task record', () => {
     assert.equal(validateTaskMutationReceipt(receipt).ok, true);
   });
 
-  it('distinguishes missing, malformed, stale, and changed dependency evidence', async () => {
-    const root = await readinessFixture('dependency-states');
+  it('distinguishes a changed task carrier from current direct dependency evidence', async () => {
+    const root = await readinessFixture('changed-task-state');
     const digest = currentTaskDigest(root, 'T-001');
-    mkdirSync(join(root, '.agenticloop', 'tmp'), { recursive: true });
-
-    const malformedPath = '.agenticloop/tmp/malformed.json';
-    writeFileSync(join(root, malformedPath), '{ not json', 'utf8');
-    git(root, ['add', '-f', malformedPath]);
-    git(root, ['commit', '-m', 'record malformed dependency evidence\n\nTask: T-001\nAgent: maintainer']);
-    const malformed = await runCliInProcess([
-      'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest,
-      '--base', 'HEAD', '--dependencies', malformedPath, '--target', root, '--json',
-    ]);
-    assert.equal(malformed.status, 1);
-    assert.equal(JSON.parse(malformed.stdout).evidenceState, 'malformed');
-
-    const stalePath = writeDependencySnapshot(root, '.agenticloop/tmp/stale.json', {}, '2020-01-01T00:00:00.000Z');
-    const stale = await runCliInProcess([
-      'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest,
-      '--base', 'HEAD', '--dependencies', stalePath, '--target', root, '--json',
-    ]);
-    assert.equal(stale.status, 1);
-    assert.equal(JSON.parse(stale.stdout).evidenceState, 'stale');
-
-    const missing = await runCliInProcess([
-      'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest,
-      '--base', 'HEAD', '--dependencies', '.agenticloop/tmp/absent.json', '--target', root, '--json',
-    ]);
-    assert.equal(missing.status, 1);
-    assert.equal(JSON.parse(missing.stdout).evidenceState, 'missing');
-
     const changed = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', DIGEST_A,
-      '--base', 'HEAD', '--dependencies', writeDependencySnapshot(root, '.agenticloop/tmp/ok.json'),
-      '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(changed.status, 1);
     assert.equal(JSON.parse(changed.stdout).evidenceState, 'changed');
+    assert.notEqual(digest, DIGEST_A);
   });
 });
 
@@ -1034,7 +1007,7 @@ describe('current task-record validation before mutation', () => {
     const bom = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(bom.status, 1);
     assert.match(bom.stdout, /task\.body\.bom/);
@@ -1044,7 +1017,7 @@ describe('current task-record validation before mutation', () => {
     const collapsed = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(collapsed.status, 1);
     assert.match(collapsed.stdout, /task\.body\.collapsed_newlines/);
@@ -1067,7 +1040,7 @@ describe('current task-record validation before mutation', () => {
     const result = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(result.status, 1);
     assert.match(result.stdout + result.stderr, /identity/i);
@@ -1334,7 +1307,7 @@ describe('cross-backend guarded mutation proof matrix', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const applied = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(applied.status, 0, applied.stderr);
     const filesContext = JSON.parse(applied.stdout).receipt.evidenceContext;
@@ -1362,7 +1335,7 @@ describe('cross-backend guarded mutation proof matrix', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const first = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(first.status, 0, first.stderr);
     const before = JSON.parse(first.stdout).receipt.evidenceContext.base;
@@ -1380,7 +1353,7 @@ describe('cross-backend guarded mutation proof matrix', () => {
     assert.equal(blocked.status, 0, blocked.stderr);
     const second = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(second.status, 0, second.stderr);
     const after = JSON.parse(second.stdout).receipt.evidenceContext.base;
@@ -1401,7 +1374,7 @@ describe('cross-backend guarded mutation proof matrix', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const quarantined = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(quarantined.status, 1);
     assert.match(quarantined.stdout, /task\.body\.bom/);
@@ -1746,7 +1719,7 @@ describe('setup and init prior-gate receipts', () => {
 
     const blocked = await runCliInProcess([
       'task-readiness', '--task-body', '.agenticloop/tasks/T-001.md', '--mode', 'authoring',
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(blocked.status, 1);
     assert.match(blocked.stdout, /prior setup gate is unresolved/);
@@ -1754,7 +1727,7 @@ describe('setup and init prior-gate receipts', () => {
     const blockedMutation = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(blockedMutation.status, 1);
     assert.match(blockedMutation.stdout + blockedMutation.stderr, /prior setup gate is unresolved/);
@@ -1775,14 +1748,14 @@ describe('setup and init prior-gate receipts', () => {
     writeFileSync(join(root, LIFECYCLE_RECEIPT_RELATIVE_PATH), `${JSON.stringify(resolved, null, 2)}\n`, 'utf8');
     const allowed = await runCliInProcess([
       'task-readiness', '--task-body', '.agenticloop/tasks/T-001.md', '--mode', 'authoring',
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(allowed.status, 0, allowed.stdout + allowed.stderr);
 
     const allowedMutation = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready',
       '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(allowedMutation.status, 0, allowedMutation.stdout + allowedMutation.stderr);
   });
@@ -1918,7 +1891,7 @@ describe('transactional files mutation and executable revalidation', () => {
     const before = currentTaskDigest(root, 'T-001');
     const applied = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', before,
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(applied.status, 0, applied.stderr);
     const receipt = JSON.parse(applied.stdout).receipt;
@@ -1947,7 +1920,7 @@ describe('transactional files mutation and executable revalidation', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const applied = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(applied.status, 0, applied.stderr);
     const receipt = JSON.parse(applied.stdout).receipt;
@@ -1966,13 +1939,13 @@ describe('transactional files mutation and executable revalidation', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const first = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(first.status, 0, first.stderr);
     const afterFirst = currentTaskDigest(root, 'T-001');
     const rerun = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', afterFirst,
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(rerun.status, 0, rerun.stderr);
     const receipt = JSON.parse(rerun.stdout).receipt;
@@ -1999,7 +1972,7 @@ describe('transactional files mutation and executable revalidation', () => {
     const deps = writeDependencySnapshot(root, '.agenticloop/tmp/dependencies.json');
     const applied = await runCliInProcess([
       'task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentTaskDigest(root, 'T-001'),
-      '--base', 'HEAD', '--dependencies', deps, '--target', root, '--json',
+      '--base', 'HEAD', '--target', root, '--json',
     ]);
     assert.equal(applied.status, 0, applied.stderr);
     const committed = currentTaskDigest(root, 'T-001');

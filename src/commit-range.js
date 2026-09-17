@@ -10,8 +10,16 @@
 
 import { existsSync } from 'node:fs';
 
-import { commitMessageProducerHint, commitTaskOwnership, evaluateCommitAttribution } from './commit-attribution.js';
+import {
+  COLLAPSED_WORKFLOW_COMMIT_CLASSES,
+  commitAgentRole,
+  commitMessageProducerHint,
+  commitTaskOwnership,
+  commitWorkflowClass,
+  evaluateCommitAttribution,
+} from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
+import { isWorkflowPath } from './product-lineage.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 
 /**
@@ -286,6 +294,27 @@ export function deriveCommitRange(input = {}) {
         return stale(`unable to read durable commit message ${commit}`);
       }
       const message = String(shown.stdout ?? '');
+      const workflowClass = commitWorkflowClass(message);
+      const collapsedWorkflowCommit = COLLAPSED_WORKFLOW_COMMIT_CLASSES.includes(workflowClass);
+      if (collapsedWorkflowCommit) {
+        if (authoredPaths === null || authoredPaths.some(path =>
+          !isWorkflowPath(path) &&
+          (patterns.length === 0 || patterns.some(pattern => fileMatchesScopePattern(path, pattern))))) {
+          return malformed(
+            `commit ${commit} declares Workflow-Class: ${workflowClass} but authors a packet-scoped product path`
+          );
+        }
+        const workflowRole = commitAgentRole(message);
+        const attribution = evaluateCommitAttribution({ message, taskId, role: workflowRole });
+        if (!attribution.ok) {
+          return malformed(`workflow commit ${commit} has invalid canonical attribution: ${attribution.errors.join('; ')}`);
+        }
+        // Protected workflow commits can legitimately update a task carrier,
+        // which may also match the packet's declared surface. Their retained
+        // class and canonical attribution are the authoritative ownership
+        // proof, so they never enter the task-authored product inventory.
+        continue;
+      }
       let ownership = commitTaskOwnership(message, taskId);
       // A trailer is a voluntary declaration, so its absence cannot by itself
       // mean "not this task's work". Read that way it let an attempt put an
@@ -346,7 +375,9 @@ export function deriveCommitRange(input = {}) {
         if (introducedPaths === null) ownershipComplete = false;
         else for (const path of introducedPaths) taskAuthoredPaths.add(path);
       }
-      if (!carriesTaskWork) continue;
+      if (!carriesTaskWork) {
+        continue;
+      }
       const attribution = evaluateCommitAttribution({ message, taskId, role: roleId });
       if (!attribution.ok) {
         // The trailer grammar is almost never got wrong on purpose: `git commit

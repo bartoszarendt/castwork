@@ -70,14 +70,23 @@ export function resolveSerialDependencyEvidence({
             trustedRecordErrors: history.errors,
           })
         : { ok: false };
+      const status = baseline.ok ? taskStatusFromBody(body) ?? 'unresolved' : 'unresolved';
+      const state = !contract.ok || contract.projection.task_id !== taskId
+        ? 'malformed'
+        : !baseline.ok
+          ? 'untrusted'
+          : ['resolved', 'accepted', 'closed'].includes(status)
+            ? 'satisfied'
+            : 'non_terminal';
       return {
         taskId,
         carrier: carrier.relativePath,
+        state,
         carrierDigest: `sha256:${canonicalSha256(body)}`,
         contractDigest: contract.ok ? contract.digest : null,
         trustedRecordCount: history.trustedRecords.length,
         trustedRecordErrors: [...history.errors],
-        status: baseline.ok ? taskStatusFromBody(body) ?? 'unresolved' : 'unresolved',
+        status,
       };
     } catch {
       return { taskId, carrier: carrier.relativePath, state: 'unreadable', status: 'unresolved' };
@@ -104,6 +113,7 @@ export function resolveSerialDependencyEvidence({
       statuses,
       revalidationArgs: ['--serial-dependencies', template.replace(/\\/g, '/')],
     },
+    records,
     statuses: Object.fromEntries(statuses.map(({ id, status }) => [id, status])),
   };
 }

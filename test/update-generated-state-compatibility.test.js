@@ -236,8 +236,6 @@ test('the real protected prepare-return boundary reads a valid v4 attempt withou
       '--dispatch-packet', '.agenticloop/tmp/packet.json', '--json',
     ]);
     assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'start the legacy attempt\n\nTask: T-001\nAgent: engineer']);
 
     const current = listDispatchConsumptions(fixture.root, 'T-001', { backend: 'files' });
     assert.equal(current.ok, true, current.errors.join('\n'));
@@ -258,8 +256,6 @@ test('the real protected prepare-return boundary reads a valid v4 attempt withou
       '--expect-digest', taskDigest(fixture.root), '--product-head', productHead, '--json',
     ]);
     assert.equal(artifact.status, 0, `${artifact.stdout}\n${artifact.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'record the legacy implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     const checksPath = '.agenticloop/tmp/checks.json';
     const initialized = await fixtureCli(fixture, [
@@ -509,8 +505,6 @@ test('live preflight excludes transaction-recorded generated commits from produc
       'task', 'role-start', 'T-001', '--packet', packetPath, '--json',
     ]);
     assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'start the live attempt\n\nTask: T-001\nAgent: engineer']);
 
     const generatedPath = '.github/agents/engineer.agent.md';
     const generated = executeGenerationPlan(fixture.root, {
@@ -566,8 +560,6 @@ async function startCommandCheckAttempt(root, name) {
     '--dispatch-packet', packetPath, '--json',
   ]);
   assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', 'start the command-check attempt\n\nTask: T-001\nAgent: engineer']);
   return { fixture, packet, packetPath };
 }
 
@@ -627,8 +619,6 @@ test('command-check execution binds the product commit through later generated o
       '--expect-digest', taskDigest(returnAttempt.fixture.root), '--product-head', returnProductHead, '--json',
     ]);
     assert.equal(artifact.status, 0, `${artifact.stdout}\n${artifact.stderr}`);
-    git(returnAttempt.fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(returnAttempt.fixture.root, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
     const { checksPath } = await runPassedCommandCheck(returnAttempt.fixture, returnAttempt.packetPath);
 
     const returned = await fixtureCli(returnAttempt.fixture, [

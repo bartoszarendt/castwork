@@ -131,7 +131,7 @@ describe('diagnostic catalog and executable proof boundaries', () => {
         recursive: true,
         filter(source) {
           const rel = relative(REPO_ROOT, source).replaceAll('\\', '/');
-          return rel === '' || !['.git', '.agenticloop', '.docs', 'node_modules', 'opencode.json']
+          return rel === '' || !['.git', '.agenticloop', '.codegraph', '.docs', 'node_modules', 'opencode.json']
             .some(excluded => rel === excluded || rel.startsWith(`${excluded}/`));
         },
       });

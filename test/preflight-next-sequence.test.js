@@ -21,14 +21,14 @@ import { deriveHandoffSequence, renderHandoffSequence } from '../src/handoff-seq
 
 const LIVE_ATTEMPT = { attemptId: `attempt:${'a'.repeat(32)}` };
 
-describe('the preflight sequence names every step and the commits it forces', () => {
-  it('puts the abandonment and its commit before the packet it unblocks', () => {
+describe('the preflight sequence names every step without role-authored bookkeeping', () => {
+  it('puts CLI-committed abandonment before the packet it unblocks', () => {
     const sequence = deriveHandoffSequence({
       taskId: 'T-018', host: 'opencode', liveAttempt: LIVE_ATTEMPT, newPacketPermitted: false,
     });
     const first = sequence.steps[0];
     assert.match(first.command, /task abandon-attempt T-018 --attempt attempt:a{32}/);
-    assert.equal(first.commitRequired, true, 'the receipt must be committed before the clean gate reads it');
+    assert.equal(first.commitRequired, false, 'the protected command commits its receipt');
     assert.equal(first.gate, 'worktree.clean_gate.failed', 'the sequence names the gate that would otherwise refuse');
     assert.deepEqual(first.writes, ['.agenticloop/handoffs/attempts/T-018/']);
     assert.match(sequence.steps[1].command, /task prepare-dispatch T-018 --host opencode/);
@@ -40,9 +40,9 @@ describe('the preflight sequence names every step and the commits it forces', ()
     const sequence = deriveHandoffSequence({ taskId: 'T-018', host: 'opencode' });
     const roleStart = sequence.steps.find(item => /task role-start T-018/.test(item.command));
     assert.ok(roleStart, 'role start is part of the sequence preflight is predicting');
-    assert.equal(roleStart.commitRequired, true);
+    assert.equal(roleStart.commitRequired, false);
     assert.equal(roleStart.gate, 'handoff.evidence.mismatched');
-    assert.match(roleStart.commitReason, /mutates the carrier/);
+    assert.equal(roleStart.commitReason, null);
     assert.ok(roleStart.writes.includes('.agenticloop/tasks/T-018.md'));
   });
 
@@ -52,14 +52,14 @@ describe('the preflight sequence names every step and the commits it forces', ()
     assert.match(sequence.steps[0].command, /task prepare-dispatch/);
   });
 
-  it('counts the commits so a green is never read as "nothing left to do"', () => {
+  it('reports zero role-authored bookkeeping commits', () => {
     const sequence = deriveHandoffSequence({
       taskId: 'T-018', host: 'opencode', liveAttempt: LIVE_ATTEMPT, newPacketPermitted: false,
     });
     assert.equal(sequence.commitCount, sequence.steps.filter(item => item.commitRequired).length);
-    assert.ok(sequence.commitCount >= 3, 'abandon, role start, and the artifact evidence each force a commit');
+    assert.equal(sequence.commitCount, 0);
     const rendered = renderHandoffSequence(sequence).join('\n');
-    assert.match(rendered, /next ordered sequence \(\d+ steps, \d+ commits required\)/);
-    assert.match(rendered, /commit \.agenticloop\/handoffs\/attempts\/T-018\/ before the next step/);
+    assert.match(rendered, /next ordered sequence \(\d+ steps, 0 role-authored commits required\)/);
+    assert.doesNotMatch(rendered, /commit \.agenticloop\/handoffs\/attempts\/T-018\/ before the next step/);
   });
 });

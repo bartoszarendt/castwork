@@ -21,6 +21,7 @@ import {
   completedAuditRuns,
 } from '../src/audit-record.js';
 import { validateAuditRecords } from '../src/audit-record.js';
+import { initTestGitRepository, git } from './helpers/git-fixture.js';
 
 let tmpDir;
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-audit-e2e-')); });
@@ -59,6 +60,9 @@ function makeTarget(name, mode = 'enabled') {
       'utf-8'
     );
   }
+  initTestGitRepository(target, { quiet: true });
+  git(target, ['add', '-A']);
+  git(target, ['commit', '-q', '-m', 'initialize audit lifecycle fixture']);
   return target;
 }
 
@@ -117,41 +121,44 @@ function gate(target, candidate, coveredTasks, mode = 'enabled') {
 describe('audit end-to-end lifecycle', () => {
   it('runs remediation, staleness, fresh re-audit, and certification-unlocks-closeout', async () => {
     const target = makeTarget('lifecycle');
+    const firstCandidate = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
 
     // Accepted tasks integrated into one candidate -> create the audit record.
     assert.equal(
-      (await audit(target, newAuditArgs('T-041,T-042', 'commit:aaa1110000000000000000000000000000000000'))).status,
+      (await audit(target, newAuditArgs('T-041,T-042', firstCandidate))).status,
       0
     );
 
     // Default-enabled project cannot complete before any audit certifies.
-    assert.equal(gate(target, 'commit:aaa1110000000000000000000000000000000000', ['T-041', 'T-042']).allowed, false);
+    assert.equal(gate(target, firstCandidate, ['T-041', 'T-042']).allowed, false);
 
     // Initial audit -> needs remediation.
     assert.equal((await reportRun(target, { verdict: 'needs_remediation', ref: 'ref-1', findings: BLOCKING_FINDING })).status, 0);
-    assert.equal(gate(target, 'commit:aaa1110000000000000000000000000000000000', ['T-041', 'T-042']).allowed, false, 'a blocking finding must keep closeout locked');
+    assert.equal(gate(target, firstCandidate, ['T-041', 'T-042']).allowed, false, 'a blocking finding must keep closeout locked');
 
     // Remediation is implemented and integrated as ordinary tasks (T-055 added).
     // Refresh the candidate and covered-task boundary -> any stale certification clears.
+    git(target, ['commit', '--allow-empty', '-q', '-m', 'integrate audit remediation']);
+    const secondCandidate = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
     assert.equal(
       (await audit(target, [
         'baseline', 'AUD-001',
-        '--artifact', 'commit:bbb2220000000000000000000000000000000000',
+        '--artifact', secondCandidate,
         '--covered-tasks', 'T-041,T-042,T-055',
-        '--evidence', 'Integrated verification bound to commit:bbb2220000000000000000000000000000000000.',
+        '--evidence', `Integrated verification bound to ${secondCandidate}.`,
       ])).status,
       0
     );
 
     // A report bound to the old candidate is rejected: the baseline moved.
-    const staleReport = await reportRun(target, { verdict: 'certified', ref: 'ref-2', artifact: 'commit:aaa1110000000000000000000000000000000000' });
+    const staleReport = await reportRun(target, { verdict: 'certified', ref: 'ref-2', artifact: firstCandidate });
     assert.equal(staleReport.status, 1);
     assert.match(staleReport.stderr, /does not match the frozen candidate/);
 
     // Fresh invocation audits the new exact candidate and certifies it.
-    assert.equal((await reportRun(target, { verdict: 'certified', ref: 'ref-2', artifact: 'commit:bbb2220000000000000000000000000000000000' })).status, 0);
+    assert.equal((await reportRun(target, { verdict: 'certified', ref: 'ref-2', artifact: secondCandidate })).status, 0);
 
-    const closeout = gate(target, 'commit:bbb2220000000000000000000000000000000000', ['T-041', 'T-042', 'T-055']);
+    const closeout = gate(target, secondCandidate, ['T-041', 'T-042', 'T-055']);
     assert.equal(closeout.allowed, true, closeout.reasons.join('; '));
     assert.equal(closeout.state, 'certified');
     assert.equal(closeout.auditId, 'AUD-001');
@@ -164,7 +171,7 @@ describe('audit end-to-end lifecycle', () => {
     const reopened = evaluateAuditCloseoutGate(target, {
       workUnit: 'phase:4',
       workUnitAudit: 'enabled',
-      expectedCandidate: 'commit:bbb2220000000000000000000000000000000000',
+      expectedCandidate: secondCandidate,
       expectedCoveredTasks: ['T-041', 'T-042', 'T-055'],
       taskStatus: id => (id === 'T-055' ? 'in-progress' : 'accepted'),
     });
@@ -173,7 +180,8 @@ describe('audit end-to-end lifecycle', () => {
 
   it('exhausts the budget after three non-certifying reports without inventing a verdict', async () => {
     const target = makeTarget('budget');
-    await audit(target, newAuditArgs('T-041', 'commit:ccc3330000000000000000000000000000000000'));
+    const candidate = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
+    await audit(target, newAuditArgs('T-041', candidate));
 
     for (let index = 1; index <= 3; index++) {
       const verdict = index === 3 ? 'needs_human_decision' : 'needs_remediation';
@@ -188,17 +196,18 @@ describe('audit end-to-end lifecycle', () => {
     assert.equal(record.latestVerdict, 'needs_human_decision');
     assert.equal(record.history.at(-1).verdict, 'needs_human_decision');
 
-    const closeout = gate(target, 'commit:ccc3330000000000000000000000000000000000', ['T-041']);
+    const closeout = gate(target, candidate, ['T-041']);
     assert.equal(closeout.allowed, false);
     assert.equal(closeout.state, 'audit_awaiting_human');
   });
 
   it('bypasses the gate visibly when work_unit_audit is explicitly disabled', async () => {
     const target = makeTarget('disabled', 'disabled');
-    await audit(target, newAuditArgs('T-041', 'commit:ddd4440000000000000000000000000000000000'));
+    const candidate = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
+    await audit(target, newAuditArgs('T-041', candidate));
     await reportRun(target, { verdict: 'needs_remediation', ref: 'ref-1', findings: BLOCKING_FINDING });
 
-    const closeout = gate(target, 'commit:ddd4440000000000000000000000000000000000', ['T-041'], 'disabled');
+    const closeout = gate(target, candidate, ['T-041'], 'disabled');
     assert.equal(closeout.allowed, true);
     assert.equal(closeout.state, 'audit_disabled');
     assert.equal(closeout.optOut, true, 'the opt-out must be visible in closeout evidence');
@@ -208,7 +217,7 @@ describe('audit end-to-end lifecycle', () => {
     assert.equal(completedAuditRuns(findAuditRecord(target, 'phase:4').record), 1);
 
     // Re-enabling restores the gate and again requires a current certificate.
-    assert.equal(gate(target, 'commit:ddd4440000000000000000000000000000000000', ['T-041'], 'enabled').allowed, false);
+    assert.equal(gate(target, candidate, ['T-041'], 'enabled').allowed, false);
   });
 
   it('does not retroactively invalidate a historical work unit that has no audit record', () => {

@@ -102,9 +102,7 @@ export async function createSyntheticScenarioHarness(temp, name, options = {}) {
       'task', 'prepare-dispatch', taskId, '--host', 'opencode', '--role', 'engineer', '--output', packetPath, '--json',
     ]);
     if (prepared.status !== 0) return prepared;
-    const started = await run('role-start', ['task', 'role-start', taskId, '--packet', packetPath, '--json']);
-    if (started.status === 0) commit(fixture.root, `record role start\n\nTask: ${taskId}\nAgent: engineer`);
-    return started;
+    return run('role-start', ['task', 'role-start', taskId, '--packet', packetPath, '--json']);
   };
   const productCommit = label => {
     writeFileSync(join(fixture.root, 'src', 'baseline-product.js'), `export const baselineProduct = '${label}';\n`, 'utf8');
@@ -202,8 +200,6 @@ export async function runExecutedHappyPath(temp) {
   const started = await harness.run('start', ['task', 'role-start', taskId, '--packet', packetPath, '--json']);
   record('start', [started]);
   if (started.status !== 0) throw new Error(`synthetic role start failed: ${started.stdout}`);
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', `record role start\n\nTask: ${taskId}\nAgent: engineer`]);
 
   writeFileSync(join(fixture.root, 'src', 'baseline-product.js'), "export const baselineProduct = 'eight-step-chain';\n", 'utf8');
   git(fixture.root, ['add', 'src/baseline-product.js']);
@@ -217,8 +213,6 @@ export async function runExecutedHappyPath(temp) {
   ]);
   record('artifact-evidence', [artifactEvidence]);
   if (artifactEvidence.status !== 0) throw new Error(`synthetic artifact evidence failed: ${artifactEvidence.stdout}`);
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', `record implementation artifact evidence\n\nTask: ${taskId}\nAgent: engineer`]);
 
   const initialized = await harness.run('check-evidence-init', [
     'task', 'check-evidence-init', taskId, '--packet', packetPath, '--output', checksPath, '--json',

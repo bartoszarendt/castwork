@@ -94,8 +94,6 @@ async function implementedTask(name) {
     'task', 'status', 'T-001', 'in-progress',
     '--expect-digest', carrierDigest(root), '--dispatch-packet', packetPath, '--json',
   ]), 'role start');
-  git(root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(root, ['commit', '-m', 'start the engineer role\n\nTask: T-001\nAgent: engineer']);
 
   writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
   git(root, ['add', 'src/existing.js']);
@@ -153,8 +151,6 @@ describe('a toolkit update does not invalidate the implementation artifact', () 
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
     ]), 'implementation artifact evidence');
-    git(root, ['add', '.agenticloop/tasks']);
-    git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     const checksPath = '.agenticloop/tmp/checks.json';
     assertOk(await cli([

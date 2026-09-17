@@ -50,9 +50,36 @@ import { resolveOpencodeAgentPath, resolveOpencodeCommandPath } from '../src/ada
 import { HARD_REFUSAL_ALLOWLIST } from '../src/refusal-classes.js';
 import { protectedHostBoundary } from './helpers/host-trust-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { initTestGitRepository } from './helpers/git-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const PACKED_CONCURRENCY = Math.max(1, Number.parseInt(process.env.AGENTICLOOP_PACKED_CONCURRENCY ?? '4', 10) || 4);
+const MANUAL_HISTORY_COMMIT_GUIDANCE = [
+  /commit each history artifact separately/i,
+  /becomes trusted only after (?:its own )?separate commit/i,
+];
+
+function assertInstalledProtectedHistoryCommitGuidance(text, label) {
+  const normalized = text.replace(/^\s*# ?/gm, '').replace(/\s+/g, ' ');
+  assert.match(
+    normalized,
+    /protected command atomically appends and commits exactly (?:its own|that invocation's) history path\/write-set/i,
+    `${label} must assign the append and exact history commit to the protected command`
+  );
+  assert.match(
+    normalized,
+    /no role-authored, operator-authored, or follow-up bookkeeping commit is allowed/i,
+    `${label} must forbid manual follow-up bookkeeping commits`
+  );
+  for (const pattern of MANUAL_HISTORY_COMMIT_GUIDANCE) {
+    assert.doesNotMatch(text, pattern, `${label} contains contradictory manual commit guidance`);
+  }
+}
+
+function assertInstalledReviewAssuranceGuidance(text, label) {
+  assert.match(text, /standard mode[\s\S]*independent_review_required[\s\S]*session_reported[\s\S]*producerAuthenticated: false/i, label);
+  assert.match(text, /Hardened mode[\s\S]*requiring independent review[\s\S]*host-signed receipt/i, label);
+}
 
 let tmpBase;
 let packedBin;
@@ -347,6 +374,7 @@ async function runThroughPackagedBoundary(args, { target, operatorTrustRoot, tru
 
 function makeAuditTarget(name) {
   const target = mkdtempSync(join(tmpBase, `${name}-`));
+  initTestGitRepository(target, { quiet: true, userName: 'Test', userEmail: 'test@example.com' });
   mkdirSync(join(target, '.agenticloop', 'audits'), { recursive: true });
   mkdirSync(join(target, '.agenticloop', 'tasks'), { recursive: true });
   mkdirSync(join(target, '.agenticloop', 'tmp'), { recursive: true });
@@ -366,6 +394,9 @@ function makeAuditTarget(name) {
     '---', 'task_id: T-001', 'status: accepted', '---', '', '# T-001', '',
     '## Grouping', '', 'milestone:M00', '', '## Comments', '', '',
   ].join('\n'), 'utf8');
+  writeFileSync(join(target, '.gitignore'), '.agenticloop/tmp/\n', 'utf8');
+  git(target, ['add', '-A']);
+  git(target, ['commit', '-m', 'Initialize audit target']);
   return target;
 }
 
@@ -815,6 +846,19 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
     const config = JSON.parse(readFileSync(join(target, 'agenticloop.json'), 'utf8'));
     assert.deepEqual(Object.keys(config.adapters), ['opencode', 'codex', 'claude-code', 'copilot', 'cursor']);
 
+    for (const relPath of [
+      'memory/task-record.md',
+      'backends/files.md',
+      'skills/task-record-contract/SKILL.md',
+    ]) {
+      const installedPath = join(target, 'agenticloop', ...relPath.split('/'));
+      assertInstalledProtectedHistoryCommitGuidance(readFileSync(installedPath, 'utf8'), `installed ${relPath}`);
+    }
+    assertInstalledReviewAssuranceGuidance(
+      readFileSync(join(target, 'agenticloop', 'backends', 'files.md'), 'utf8'),
+      'installed backends/files.md',
+    );
+
     const adapterFiles = {
       opencode: '.opencode/commands/agenticloop.md',
       codex: '.agents/skills/agenticloop/SKILL.md',
@@ -950,7 +994,7 @@ describe('packed package boundary', { concurrency: PACKED_CONCURRENCY }, () => {
 
   it('persists one signed Auditor return through the installed protected-host path', { timeout: 120000 }, async () => {
     const target = makeAuditTarget('protected-audit');
-    const artifact = `commit:${'a'.repeat(40)}`;
+    const artifact = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
     const created = await runPacked([
       'audit', 'new', '--work-unit', 'milestone:M00', '--covered-tasks', 'T-001',
       '--artifact', artifact, '--goal', 'g', '--completion-oracle', 'o',
@@ -1025,6 +1069,7 @@ describe('packed public handoff lifecycle', () => {
       writeFileSync(wrapper, [
         `import { runCli } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'cli-main.js')).href)};`,
         `import { DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND, DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND, DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION, HOST_TRUST_BOUNDARY_RESPONSE_KIND, HOST_TRUST_BOUNDARY_SCHEMA_VERSION, hostTrustBoundarySignaturePayload, signHostPayload } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'host-trust.js')).href)};`,
+        `import { MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND, MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION, maintainerReviewInitialAuthenticationSignaturePayload } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'maintainer-review-receipt.js')).href)};`,
         `import { loadAuditorReturnReceiptVerifier } from ${JSON.stringify(pathToFileURL(join(packedRoot, 'src', 'auditor-return-receipt.js')).href)};`,
         'import { createPrivateKey } from "node:crypto";',
         'import { readFileSync } from "node:fs";',
@@ -1033,6 +1078,10 @@ describe('packed public handoff lifecycle', () => {
         '  if (challenge?.kind === DURABLE_MUTATION_INTENT_AUTHENTICATION_CHALLENGE_KIND) {',
         '    if (challenge.schemaVersion !== DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION || challenge.adapterId !== process.env.AGENTICLOOP_TEST_ADAPTER || challenge.keyId !== process.env.AGENTICLOOP_TEST_KEY_ID) throw new Error("invalid durable mutation intent challenge");',
         '    return { kind: DURABLE_MUTATION_INTENT_AUTHENTICATION_RESPONSE_KIND, schemaVersion: DURABLE_MUTATION_INTENT_AUTHENTICATION_SCHEMA_VERSION, adapterId: challenge.adapterId, keyId: challenge.keyId, signature: signHostPayload(challenge.payload, boundaryKey) };',
+        '  }',
+        '  if (challenge?.kind === MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND) {',
+        '    if (challenge.schemaVersion !== MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION || challenge.attestation?.authentication?.keyId !== process.env.AGENTICLOOP_TEST_KEY_ID) throw new Error("invalid Maintainer review initial-authentication attestation");',
+        '    return { kind: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND, schemaVersion: MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION, attestation: challenge.attestation, signature: signHostPayload(maintainerReviewInitialAuthenticationSignaturePayload(challenge.attestation), boundaryKey) };',
         '  }',
         '    const response = {',
         '      kind: HOST_TRUST_BOUNDARY_RESPONSE_KIND,',
@@ -1187,7 +1236,7 @@ describe('packed public handoff lifecycle', () => {
     assert.ok(result.returnAdapter, 'preflight output should carry a returnAdapter resolution');
   });
 
-  it('runs installed refresh-handoff-evidence with a valid plan and reports the required commit', async () => {
+  it('runs installed refresh-handoff-evidence with a valid plan and commits its exact write set', async () => {
     const fixture = await createDispatchFixture(tmpBase, 'packed-refresh-evidence');
     // Step 1: Generate a plan via handoff-preflight
     const preflight = await runPacked([
@@ -1195,6 +1244,7 @@ describe('packed public handoff lifecycle', () => {
       '--repair-plan', '.agenticloop/tmp/refresh-plan.json',
       '--json', '--target', fixture.root,
     ]);
+    assert.ok(preflight.stdout, `installed preflight produced no JSON\nstatus: ${preflight.status}\nstderr:\n${preflight.stderr}`);
     const preflightResult = JSON.parse(preflight.stdout);
     assert.ok(preflightResult.refreshPlan, 'preflight should produce a plan');
 
@@ -1204,24 +1254,30 @@ describe('packed public handoff lifecycle', () => {
       '--plan', '.agenticloop/tmp/refresh-plan.json',
       '--yes', '--json', '--target', fixture.root,
     ]);
-    assert.equal(refresh.status, 1, `refresh should stop pending the durable commit\nstdout:\n${refresh.stdout}\nstderr:\n${refresh.stderr}`);
+    assert.equal(refresh.status, 0, `refresh should commit its durable write set\nstdout:\n${refresh.stdout}\nstderr:\n${refresh.stderr}`);
     const refreshResult = JSON.parse(refresh.stdout);
-    assert.equal(refreshResult.disposition, 'written_pending_commit');
+    assert.equal(refreshResult.disposition, 'committed');
+    assert.equal(refreshResult.receiptState, 'committed');
+    assert.equal(refreshResult.workflowCommit.committed, true);
     assert.ok(refreshResult.receipt, 'refresh result should have a receipt');
     assert.ok(Array.isArray(refreshResult.changedFiles), 'result should have changedFiles array');
     // At least the receipt file should be changed
     assert.ok(refreshResult.changedFiles.length > 0, 'should have at least one changed file');
     assert.ok(refreshResult.changedFiles.some(f => f.includes('T-001')), 'changed files should reference the task');
+    assert.deepEqual(refreshResult.workflowCommit.paths, [...refreshResult.changedFiles].sort());
+    const message = git(fixture.root, ['show', '-s', '--format=%B', refreshResult.workflowCommit.commit]);
+    assert.match(message, /Workflow-Class: workflow_evidence\nTask: T-001\nAgent: maintainer/);
   });
 
   it('installed refresh-handoff-evidence rejects invocation without --yes', async () => {
     const fixture = await createDispatchFixture(tmpBase, 'packed-refresh-no-yes');
     // Generate a plan first
-    await runPacked([
+    const preflight = await runPacked([
       'task', 'handoff-preflight', 'T-001',
       '--repair-plan', '.agenticloop/tmp/refresh-plan.json',
       '--json', '--target', fixture.root,
     ]);
+    assert.ok(preflight.stdout, `installed preflight produced no JSON\nstatus: ${preflight.status}\nstderr:\n${preflight.stderr}`);
 
     // Try to refresh without --yes
     const refresh = await runPacked([
@@ -1240,20 +1296,21 @@ describe('packed public handoff lifecycle', () => {
     const planned = await runPacked([
       'task', 'readiness-plan', 'T-001',
       '--actor', 'Agentic Loop Test', '--authority', 'task:T-001',
-      '--work-unit', 'fixture-work-unit', '--base', 'HEAD',
-      '--dependencies', 'dependencies.json',
+      '--base', 'HEAD',
       '--json', '--target', fixture.root,
     ]);
     assert.equal(planned.status, 0, `${planned.stderr}\n${planned.stdout}`);
     const plan = JSON.parse(planned.stdout);
     assert.equal(plan.kind, 'agenticloop.readiness-plan');
-    assert.equal(plan.schemaVersion, 3);
+    assert.equal(plan.schemaVersion, 4);
     assert.equal(plan.readOnly, true);
     assert.equal(plan.ready, true, `pending: ${plan.pendingSteps.join(', ')}`);
     assert.equal(plan.applicable, true, `blockers: ${plan.blockers.join('; ')}`);
     assert.equal(plan.activationPlanned, false);
     assert.deepEqual(plan.writeSet, []);
-    assert.match(plan.planDigest, /^sha256:agenticloop\.readiness-plan\.v3:[0-9a-f]{64}$/);
+    assert.equal(plan.steps.find(step => step.id === 'work_unit_identity').state, 'not_applicable');
+    assert.equal(plan.steps.find(step => step.id === 'committed_decomposition').state, 'not_applicable');
+    assert.match(plan.planDigest, /^sha256:agenticloop\.readiness-plan\.v4:[0-9a-f]{64}$/);
     assert.ok(plan.executable.expectedHead, 'the plan binds the expected HEAD');
   });
 
@@ -1263,8 +1320,7 @@ describe('packed public handoff lifecycle', () => {
     const planned = await runPacked([
       'task', 'readiness-plan', 'T-001',
       '--actor', 'Agentic Loop Test', '--authority', 'task:T-001',
-      '--work-unit', 'fixture-work-unit', '--base', 'HEAD',
-      '--dependencies', 'dependencies.json',
+      '--base', 'HEAD',
       '--json', '--target', fixture.root,
     ]);
     assert.equal(planned.status, 0, planned.stderr);
@@ -1298,8 +1354,7 @@ describe('packed public handoff lifecycle', () => {
     const planned = await runPacked([
       'task', 'readiness-plan', 'T-001',
       '--actor', 'Agentic Loop Test', '--authority', 'task:T-001',
-      '--work-unit', 'fixture-work-unit', '--base', 'HEAD',
-      '--dependencies', 'dependencies.json',
+      '--base', 'HEAD',
       '--json', '--target', fixture.root,
     ]);
     mkdirSync(join(fixture.root, '.agenticloop', 'tmp'), { recursive: true });
@@ -1311,6 +1366,55 @@ describe('packed public handoff lifecycle', () => {
       assert.equal(refused.status, 2, `${JSON.stringify(args)} should exit with a usage error`);
       assert.match(JSON.parse(refused.stdout).diagnostics[0].message, /--dry-run or --yes/);
     }
+  });
+
+  it('completes default serial readiness through the installed binary and reaches activation-only preflight', async () => {
+    const target = mkdtempSync(join(tmpBase, 'packed-serial-readiness-completion-'));
+    initTestGitRepository(target, { initialBranch: 'main' });
+    const initialized = await runPacked(['init', '--adapter', 'opencode', '--target', target]);
+    assert.equal(initialized.status, 0, `${initialized.stdout}\n${initialized.stderr}`);
+    git(target, ['add', '-A']);
+    git(target, ['commit', '-m', 'initialize downstream target']);
+    const authored = await runPacked([
+      'task', 'new', 'Installed serial readiness', '--id', 'T-001', '--scaffold', '--target', target,
+    ]);
+    assert.equal(authored.status, 0, `${authored.stdout}\n${authored.stderr}`);
+    git(target, ['add', '--', '.agenticloop/tasks/T-001.md']);
+    git(target, ['commit', '-m', 'author downstream task\n\nTask: T-001\nAgent: maintainer']);
+
+    const planPath = '.agenticloop/tmp/T-001-serial-readiness.json';
+    const planned = await runPacked([
+      'task', 'readiness-plan', 'T-001',
+      '--actor', 'Agentic Loop Test', '--authority', 'task:T-001',
+      '--base', 'HEAD', '--json', '--target', target,
+    ]);
+    assert.equal(planned.status, 1, planned.stderr);
+    const plan = JSON.parse(planned.stdout);
+    assert.equal(plan.applicable, true, JSON.stringify(plan.blockers));
+    assert.equal(plan.writeSet.includes('.agenticloop/decompositions/T-001.json'), false);
+    mkdirSync(join(target, '.agenticloop', 'tmp'), { recursive: true });
+    writeFileSync(join(target, planPath), planned.stdout, 'utf8');
+
+    const applied = await runPacked([
+      'task', 'readiness-apply', 'T-001', '--plan', planPath, '--yes', '--json', '--target', target,
+    ]);
+    assert.equal(applied.status, 0, `${applied.stderr}\n${applied.stdout}`);
+    const receipt = JSON.parse(applied.stdout);
+    assert.equal(receipt.mutationDisposition, 'committed');
+    assert.deepEqual(receipt.changedPaths, [
+      '.agenticloop/task-contract-history/T-001.jsonl',
+      '.agenticloop/tasks/T-001.md',
+    ]);
+
+    const preflight = await runPacked([
+      'task', 'handoff-preflight', 'T-001', '--json', '--target', target,
+    ]);
+    assert.equal(preflight.status, 1, `${preflight.stderr}\n${preflight.stdout}`);
+    const result = JSON.parse(preflight.stdout);
+    assert.equal(result.readiness.ok, true, JSON.stringify(result.errors));
+    assert.equal(result.activation, null);
+    assert.deepEqual(result.diagnostics.map(item => item.code), ['activation.capture.missing']);
+    assert.ok(result.errors.every(error => /activation/i.test(error)), JSON.stringify(result.errors));
   });
 
   // Five independent installed adapter lifecycles run serially here. Each
@@ -1436,8 +1540,16 @@ describe('packed public handoff lifecycle', () => {
       '--packet', '.agenticloop/tmp/T-001.packet.json', '--json', '--target', fixture.root,
     ]);
     assert.equal(started.status, 0, `${started.stdout}\n${started.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'Start Engineer work\n\nTask: T-001\nAgent: engineer']);
+    const startedSequence = JSON.parse(started.stdout).nextSequence.steps
+      .map(step => step.command)
+      .filter(command => typeof command === 'string');
+    const installedChecks = startedSequence.findLastIndex(command => command.includes('check-evidence-update'));
+    const installedStructured = startedSequence.findIndex(command => command.includes('structured_task_evidence'));
+    const installedOutcome = startedSequence.findIndex(command => command.includes('implementation_outcome_evidence'));
+    assert.ok(
+      installedChecks >= 0 && installedChecks < installedStructured && installedStructured < installedOutcome,
+      `installed lifecycle must publish checks, structured completion evidence, then outcome: ${startedSequence.join(' | ')}`,
+    );
 
     writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "packed";\n', 'utf8');
     git(fixture.root, ['add', 'src/existing.js']);
@@ -1450,8 +1562,6 @@ describe('packed public handoff lifecycle', () => {
       '--json', '--target', fixture.root,
     ]);
     assert.equal(artifact.status, 0, `${artifact.stdout}\n${artifact.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'Record implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     const summary = await runPacked([
       'task', 'evidence', 'T-001', '--class', 'implementation_summary_evidence',
@@ -1460,8 +1570,6 @@ describe('packed public handoff lifecycle', () => {
       '--json', '--target', fixture.root,
     ]);
     assert.equal(summary.status, 0, `${summary.stdout}\n${summary.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'Record implementation summary\n\nTask: T-001\nAgent: engineer']);
 
     const outcome = await runPacked([
       'task', 'evidence', 'T-001', '--class', 'implementation_outcome_evidence',
@@ -1469,8 +1577,6 @@ describe('packed public handoff lifecycle', () => {
       '--json', '--target', fixture.root,
     ]);
     assert.equal(outcome.status, 0, `${outcome.stdout}\n${outcome.stderr}`);
-    git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(fixture.root, ['commit', '-m', 'Record implementation outcome\n\nTask: T-001\nAgent: engineer']);
 
     for (const check of ['RC-1', 'RC-2']) {
       const updated = await withPacketTrust([
@@ -1489,8 +1595,6 @@ describe('packed public handoff lifecycle', () => {
       assert.equal(execution.execution.outcome, 'passed');
       assert.equal(execution.execution.childExitCode, 0);
     }
-    git(fixture.root, ['add', '.agenticloop/checks/T-001']);
-    git(fixture.root, ['commit', '-m', 'Record required check evidence\n\nTask: T-001\nAgent: engineer']);
 
     const returned = await viaBoundary([
       'task', 'prepare-return', 'T-001',

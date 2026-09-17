@@ -12,28 +12,20 @@ before(() => { fixture.setup(); });
 after(() => { fixture.cleanup(); });
 
 describe('covered-task terminal transitions', () => {
-  it('recording a marker then closing another covered task does not stale the marker', async () => {
+  it('records the covered-task terminal transition without a follow-up bookkeeping commit', async () => {
     const target = await makeGitTarget('non-carrier-close');
     const artifact = await certify(target);
     await recordCompleteMarker(target, artifact);
-
-    // The covered carrier task transitions accepted -> closed while retaining its marker.
-    writeFileSync(taskPath(target, 'T-001'), readFileSync(taskPath(target, 'T-001'), 'utf8').replace(/^status: accepted$/m, 'status: closed'), 'utf8');
-    commitAll(target, 'close T-001');
 
     const state = await statusState(target);
     assert.equal(state.state, 'complete', JSON.stringify(state));
     assert.equal(state.exit, 0, JSON.stringify(state));
   });
 
-  it('closing multiple covered tasks including the carrier stays current', async () => {
+  it('keeps the marker current after its command-authored carrier transition', async () => {
     const target = await makeGitTarget('all-close');
     const artifact = await certify(target);
     await recordCompleteMarker(target, artifact);
-
-    const carrierContent = readFileSync(taskPath(target, 'T-001'), 'utf-8');
-    writeFileSync(taskPath(target, 'T-001'), carrierContent.replace(/^status: accepted$/m, 'status: closed'), 'utf-8');
-    commitAll(target, 'close covered tasks');
 
     const state = await statusState(target);
     assert.equal(state.state, 'complete', JSON.stringify(state));

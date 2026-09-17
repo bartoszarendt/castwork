@@ -14,6 +14,8 @@ export const MAINTAINER_REVIEW_OUTCOME_RECEIPT_SCHEMA_VERSION = 1;
 export const MAINTAINER_REVIEW_OUTCOME_RECEIPT_MAX_VALIDITY_MS = 900_000;
 export const MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_KIND = 'agenticloop.maintainer-review-outcome-initial-authentication-boundary';
 export const MAINTAINER_REVIEW_INITIAL_AUTHENTICATION_BOUNDARY_SCHEMA_VERSION = 1;
+export const MAINTAINER_REVIEW_SESSION_REPORT_KIND = 'agenticloop.maintainer-review-session-report';
+export const MAINTAINER_REVIEW_SESSION_REPORT_SCHEMA_VERSION = 1;
 
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 const SHA256_RE = /^sha256:[a-f0-9]{64}$/;
@@ -58,6 +60,14 @@ function reviewOutcomeProjection(outcome) {
   };
 }
 
+function reviewHistoryProjection(history) {
+  if (!Array.isArray(history?.events)) throw new TypeError('Maintainer review session report requires current review history');
+  return {
+    digest: `sha256:agenticloop.files-review-history.v1:${canonicalSha256(history.events)}`,
+    eventCount: history.events.length,
+  };
+}
+
 /** Derive the exact outcome binding a protected host signs and consumers rederive. */
 /** @param {any} input */
 export function maintainerReviewOutcomeBinding(input = {}) {
@@ -84,6 +94,64 @@ export function maintainerReviewOutcomeBinding(input = {}) {
     outcome: reviewOutcomeProjection(reviewOutcome),
   };
   return Object.freeze({ ...projection, digest: bindingDigest(projection) });
+}
+
+/**
+ * Create an explicitly unauthenticated standard-mode review report. The
+ * record is accepted only for tasks that do not require independent review;
+ * it never impersonates a host receipt or protected signer.
+ */
+export function createMaintainerReviewSessionReport(input = {}) {
+  const reviewerSession = String(input.reviewerSession ?? '');
+  if (!reviewerSession.trim() || /[\r\n]/.test(reviewerSession)) {
+    throw new TypeError('Maintainer review session report requires one reviewer session reference');
+  }
+  if (input.policyMode !== 'standard' || input.independentReviewRequired === true) {
+    throw new TypeError('session-reported Maintainer review is allowed only in standard mode when independent review is not required');
+  }
+  const projection = {
+    kind: MAINTAINER_REVIEW_SESSION_REPORT_KIND,
+    schemaVersion: MAINTAINER_REVIEW_SESSION_REPORT_SCHEMA_VERSION,
+    producerRole: 'maintainer',
+    source: 'reviewer_session',
+    assurance: 'session_reported',
+    producerAuthenticated: false,
+    reviewerSession,
+    targetRepository: targetRepositoryIdentity(input.target),
+    binding: maintainerReviewOutcomeBinding(input),
+    history: reviewHistoryProjection(input.history),
+    policy: { mode: 'standard', independentReviewRequired: false },
+  };
+  return Object.freeze({
+    ...projection,
+    digest: `sha256:agenticloop.maintainer-review-session-report.v1:${canonicalSha256(projection)}`,
+  });
+}
+
+/** Recompute every material binding before accepting a recorded session report. */
+export function verifyMaintainerReviewSessionReport(report, context = {}) {
+  if (!exactKeys(report, [
+    'kind', 'schemaVersion', 'producerRole', 'source', 'assurance', 'producerAuthenticated',
+    'reviewerSession', 'targetRepository', 'binding', 'history', 'policy', 'digest',
+  ])) return { verified: false, state: 'untrusted', error: 'Maintainer review session report fields must equal the closed schema' };
+  let expected;
+  try {
+    expected = createMaintainerReviewSessionReport({
+      ...context,
+      reviewerSession: report.reviewerSession,
+      policyMode: context.policyMode,
+      independentReviewRequired: context.independentReviewRequired === true,
+    });
+  } catch (error) {
+    return {
+      verified: false,
+      state: context.independentReviewRequired === true ? 'independence_required' : 'untrusted',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return canonicalJson(report) === canonicalJson(expected)
+    ? { verified: true, state: 'current', assurance: 'session_reported', producerAuthenticated: false }
+    : { verified: false, state: 'untrusted', error: 'Maintainer review session report does not match the current policy, review, return, candidate, and history binding' };
 }
 
 function receiptDigest(receipt) {

@@ -70,6 +70,7 @@ import { PublicCommandError } from './public-error.js';
 import { commandFailure, printGateResult } from './public-result.js';
 import { evaluateTaskRecordRoot } from './task-record-root.js';
 import { taskContractDigest } from './task-contract-baseline.js';
+import { commitWorkflowPaths } from './workflow-evidence-commit.js';
 import { createExecutionReceiptReplayAuthority, loadHostTrustStore, targetRepositoryIdentity } from './host-trust.js';
 import { resolveTaskActivationBinding } from './activation-grant.js';
 import {
@@ -84,6 +85,7 @@ import {
   resolveEffectiveActivationPolicy,
   resolvePacketActivationBinding,
 } from './activation-resolution.js';
+import { evaluateSemanticValidation, semanticEvaluationFor } from './semantic-validation-normalizer.js';
 import { readCommittedDecomposition } from './activation-cli.js';
 import {
   CURRENT_REQUIRED_CHECK_EVIDENCE_ASSURANCE,
@@ -582,6 +584,7 @@ async function buildEvaluationParams(target, config, opts, io) {
   const backend = config.task_backend === 'github' ? 'github' : 'files';
   const context = createLocalVerificationContext(target);
   const params = {
+    repositoryIdentity: targetRepositoryIdentity(target),
     workUnit: optionString(opts.workUnit),
     artifact: optionString(opts.artifact) || undefined,
     coveredTasks: optionList(opts.coveredTasks),
@@ -923,7 +926,9 @@ export async function cmdCloseout(args, io = createIo()) {
         printAssurance(packet.assurance, io);
         if (packet.reasons.length > 0) printReasons(packet.reasons, io);
       }
-      return packet.completion_eligible ? 0 : 1;
+      const semanticEvaluation = semanticEvaluationFor(evaluation);
+      if (!semanticEvaluation) throw new Error('closeout prepare produced no semantic evaluation');
+      return semanticEvaluation.verdict === 'legal' ? 0 : 1;
     }
 
     if (sub === 'status') {
@@ -1072,7 +1077,27 @@ export async function cmdCloseout(args, io = createIo()) {
       if (gitHubResume) {
         io.out(`Marker ${packet.digest} is already published on the GitHub carrier; resuming at the closeout-owned terminal transition.`);
       }
-      if (staleReasons.length > 0 && !gitHubResume) {
+      const closeoutRecordEvaluation = evaluateSemanticValidation({
+        actionId: 'closeout_record',
+        validation: {
+          ok: staleReasons.length === 0 || gitHubResume,
+          evidenceState: staleReasons.length === 0 || gitHubResume ? 'current' : 'stale',
+          disposition: staleReasons.length === 0 || gitHubResume ? 'allowed' : 'superseded',
+          diagnostics: staleReasons.map((_message, index) => ({ code: `closeout.record.stale.${index + 1}` })),
+          detail: { packetDigest: packet.digest, staleReasons },
+        },
+        backend: packet.backend,
+        repositoryId: String(liveParams.repositoryIdentity ?? 'repository:unavailable'),
+        taskId: `work-unit:${packet.work_unit}`,
+        workUnitId: packet.work_unit,
+        bindings: { candidateId: packet.candidate_artifact, closeoutId: packet.digest },
+        scopeKind: 'closeout_packet',
+        scopeKey: packet.digest,
+        sourceKind: 'closeout_live_revalidation',
+        sourceId: packet.digest,
+        factOwner: { kind: 'workflow_role', id: 'maintainer' },
+      });
+      if (closeoutRecordEvaluation.verdict !== 'legal') {
         // Same-packet retry: the exact digest may already be the current
         // marker. That is idempotent success, never a misleading stale
         // failure - but only when every other live fact still matches.
@@ -1530,6 +1555,7 @@ function recordFilesMarker(target, config, packet, markerBody, live, mode, io) {
   }
   const priorMarkers = currentMarkerState.current;
   const updated = upsertCloseoutMarkerInTaskRecord(content, markerBody, { priorMarkers });
+  const markerChanged = updated !== content;
 
   if (mode.dryRun) {
     io.out(`dry run: would publish to ${carrierRef}:`);
@@ -1572,6 +1598,21 @@ function recordFilesMarker(target, config, packet, markerBody, live, mode, io) {
   }
   io.out(`Recorded ${packet.recommended_status} marker in ${carrierRef} (${packet.digest})`);
   if (packet.recommended_status !== 'complete') {
+    if (markerChanged) {
+      const workflowCommit = commitWorkflowPaths({
+        target,
+        workUnitId: packet.work_unit,
+        taskIds: packet.covered_tasks,
+        paths: [carrierRef],
+        role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record closeout disposition for ${packet.work_unit}`,
+      });
+      if (!workflowCommit.ok) {
+        io.err(`closeout record: marker was written but its bounded workflow commit failed: ${workflowCommit.errors.join('; ')}`);
+        return 1;
+      }
+    }
     io.out('  This marker is truthful state, not completion; completion requires a completion-eligible packet.');
     return 0;
   }
@@ -1580,6 +1621,25 @@ function recordFilesMarker(target, config, packet, markerBody, live, mode, io) {
   // transition. Generic closure is refused for every established scope, so this
   // is the only route by which a covered task set reaches `closed`.
   const terminal = applyFilesCloseoutTerminalTransition(target, config, packet, io);
+  const workflowPaths = [...new Set([
+    ...(markerChanged ? [carrierRef] : []),
+    ...(terminal.receipt?.changedPaths ?? []),
+  ])];
+  if (workflowPaths.length > 0) {
+    const workflowCommit = commitWorkflowPaths({
+      target,
+      workUnitId: packet.work_unit,
+      taskIds: packet.covered_tasks,
+      paths: workflowPaths,
+      role: 'maintainer',
+      commitClass: 'workflow_disposition',
+      subject: `Record closeout disposition for ${packet.work_unit}`,
+    });
+    if (!workflowCommit.ok) {
+      io.err(`closeout record: durable changes were written but their bounded workflow commit failed: ${workflowCommit.errors.join('; ')}`);
+      return 1;
+    }
+  }
   reportTerminalTransition(terminal, io, packet, {
     gateDigest: packet.digest,
     artifact: packet.candidate_artifact,

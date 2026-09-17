@@ -265,7 +265,7 @@ export const COMMAND_REGISTRY = {
   },
   'task-readiness': {
     summary: 'Read-only readiness check for files, GitHub, or supplied task input with explicit base-tree intent.',
-    usage: 'agenticloop task-readiness (--task <id>|--issue <n>|--task-body <path>) (--base <ref>|--base-paths <path>) --mode <authoring|review> [--expect-task-digest <digest>] [--dependencies <path>] [--json]',
+    usage: 'agenticloop task-readiness (--task <id>|--issue <n>|--task-body <path>) (--base <ref>|--base-paths <path>) --mode <authoring|review> [--expect-task-digest <digest>] [--serial-dependencies <task-carrier-template>|--dependencies <path>] [--json]',
     receiptRevalidation: 'read-only',
     options: [
       targetOption(),
@@ -277,6 +277,7 @@ export const COMMAND_REGISTRY = {
       opt('mode', 'string', 'Explicit readiness mode.', { enum: ['authoring', 'review'] }),
       opt('expect-task-digest', 'string', 'Exact SHA-256 digest the task carrier must still hold. Also re-evaluates the trusted contract chain.'),
       opt('dependencies', 'string', 'Exact JSON dependency-status snapshot document.'),
+      opt('serial-dependencies', 'string', 'Re-observe declared files-backend dependencies through the configured task-carrier template.'),
       jsonOption,
     ],
   },
@@ -426,8 +427,8 @@ export const COMMAND_REGISTRY = {
     ],
   },
   activation: {
-    summary: 'Inspect, revoke, and provision durable activation authority.',
-    usage: 'agenticloop activation <status|revoke|provision-key> [options]',
+    summary: 'Inspect, stop, revoke, and provision durable activation authority.',
+    usage: 'agenticloop activation <status|stop|revoke|provision-key> [options]',
     subcommands: {
       status: {
         summary: 'Report every stored task activation binding, its usability against current state, and the effective policy.',
@@ -441,6 +442,17 @@ export const COMMAND_REGISTRY = {
         usage: 'agenticloop activation revoke <grant-id> [--reason <text>] [--json] [--target <dir>]',
         positionals: [{ name: 'grant-id', required: true }],
         options: [targetOption(), opt('reason', 'string', 'Human-readable revocation reason.'), jsonOption],
+      },
+      stop: {
+        summary: 'Durably stop future protected transitions for one exact task binding.',
+        usage: 'agenticloop activation stop <task-id> [--reason <text>] [--json] [--target <dir>]',
+        positionals: [{ name: 'task-id', required: true }],
+        details: [
+          'Writes an immutable exact-binding denial to the existing target and external revocation stores.',
+          'It does not cancel a host operation already in flight. Resume requires a fresh interactive',
+          'agenticloop activate <task-id>; the old denial remains and old packets stay refused.',
+        ],
+        options: [targetOption(), opt('reason', 'string', 'Human-readable stop reason.'), jsonOption],
       },
       'provision-key': {
         summary: 'Create the operator activation confirmation key for this target, outside the repository. Idempotent.',
@@ -600,8 +612,8 @@ export const COMMAND_REGISTRY = {
         ],
       },
       'readiness-plan': {
-        summary: 'Report the complete ordered readiness sequence for one task or one bounded work-unit task set. Read-only; writes nothing.',
-        usage: 'agenticloop task readiness-plan (<id> | --tasks <first-id> [more-id ...]) [--actor <git-author>] [--authority <kind:reference>] [--work-unit <id>] [--base <ref> | --base-paths <path>] [--dependencies <path> | --dependencies-by-task <map.json>] [--max-age-seconds <n>] [--route <route>] [--json] [--target <dir>]',
+        summary: 'Report serial readiness from current task carriers by default, or the complete parallel sequence for one explicit bounded work unit. Read-only; writes nothing.',
+        usage: 'agenticloop task readiness-plan <id> --actor <git-author> --authority <kind:reference> (--base <ref> | --base-paths <path>) [--json] [--target <dir>] | agenticloop task readiness-plan (--route parallel <id> | --tasks <first-id> [more-id ...]) --work-unit <id> --dependencies <path> [parallel options]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: false, variadic: true }],
         options: [
@@ -609,13 +621,13 @@ export const COMMAND_REGISTRY = {
           opt('tasks', 'string', 'Start an explicit bounded task set; subsequent task ids are operands and must be in canonical lexical order.'),
           opt('actor', 'string', 'Expected committed Git author. Required for an applicable plan; never fabricated.'),
           opt('authority', 'string', 'Durable authorization reference as <kind>:<reference>. Required for an applicable plan; never fabricated.'),
-          opt('work-unit', 'string', 'Durable work-unit identity such as milestone:M2. Required for an applicable plan; a per-task fallback is refused.'),
+          opt('work-unit', 'string', 'Durable work-unit identity such as milestone:M2. Required only for explicit parallel readiness; a per-task fallback is refused.'),
           opt('base', 'string', 'Base ref resolved to its exact immutable tree identity. Mutually exclusive with --base-paths.'),
           opt('base-paths', 'string', 'Target-relative JSON path inventory used as base evidence. Mutually exclusive with --base.'),
-          opt('dependencies', 'string', 'Exact committed Maintainer-attributed dependency-status snapshot. Required for an applicable plan.'),
+          opt('dependencies', 'string', 'Exact committed Maintainer-attributed dependency-status snapshot. Parallel-only; serial readiness observes declared task carriers directly.'),
           opt('dependencies-by-task', 'string', 'Target-relative JSON object mapping each selected task id to its exact committed dependency snapshot.'),
           opt('max-age-seconds', 'string', 'Override the decomposition freshness policy bound by the plan.'),
-          opt('route', 'string', 'Decomposition route bound by the plan. Defaults to serial.'),
+          opt('route', 'string', 'Readiness route. Serial is the default and consumes no work-unit inventory, dependency snapshot, or decomposition.', { enum: ['serial', 'parallel'] }),
           opt('rescan-trigger', 'string', 'Override the semantic rescan trigger bound by the plan.'),
           jsonOption,
         ],
@@ -697,18 +709,18 @@ export const COMMAND_REGISTRY = {
         ],
       },
       'commit-message': {
-        summary: 'Write a canonically trailered commit message file for one workflow commit class. Never commits.',
+        summary: 'Write a canonically trailered product commit message file. Never commits.',
         usage: 'agenticloop task commit-message <id> --class <commit-class> --subject <text> --output <path> [--body <text> | --body-file <path>] [--json] [--target <dir>]',
         receiptRevalidation: 'read-only',
         positionals: [{ name: 'id', required: true }],
         details: [
-          'The commit class decides the attributed role; the emitted file always ends with one final contiguous',
+          'The product class is Engineer-attributed; the emitted file always ends with one final contiguous',
           'Task/Agent trailer block. Commit it with git commit -F <path>: repeated -m arguments insert a blank line',
           'between every paragraph and produce a message the attribution grammar rejects.',
         ],
         options: [
           targetOption(),
-          opt('class', 'string', 'Canonical workflow commit class. Required; it decides the attributed role.', { enum: [...COMMIT_MESSAGE_CLASS_LIST] }),
+          opt('class', 'string', 'Role-authored commit class. Required; product_implementation is the only supported value.', { enum: [...COMMIT_MESSAGE_CLASS_LIST] }),
           opt('subject', 'string', 'Single-line commit subject. Required.'),
           opt('body', 'string', 'Optional commit body paragraph.'),
           opt('body-file', 'string', 'Optional target-relative file whose contents become the commit body.'),
@@ -736,13 +748,13 @@ export const COMMAND_REGISTRY = {
         options: [targetOption(), jsonOption],
       },
       'establish-baseline': {
-        summary: 'Append a files-backend baseline payload; it becomes trusted only after a separate commit.',
+        summary: 'Append and commit a files-backend trusted contract baseline.',
         usage: 'agenticloop task establish-baseline <id> --actor <git-author> --authority <kind:reference> [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
         options: [targetOption(), opt('actor', 'string', 'Expected committed Git author. Required.'), opt('authority', 'string', 'Durable authorization reference. Required.'), jsonOption],
       },
       'authorize-correction': {
-        summary: 'Append a files-backend correction payload against the committed trusted chain; it becomes trusted only after a separate commit.',
+        summary: 'Append and commit a files-backend correction against the trusted chain.',
         usage: 'agenticloop task authorize-correction <id> --expect-prior-digest <digest> --reason <text> --authority <kind:reference> --actor <git-author> [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
         options: [
@@ -902,7 +914,7 @@ export const COMMAND_REGISTRY = {
           opt('summary', 'string', 'Engineer implementation summary. Required for implementation_summary_evidence.'),
           opt('check-evidence', 'string', 'Bounded required-check evidence summary. Required for implementation_summary_evidence.'),
           opt('outcome', 'string', 'Non-authoritative Engineer outcome. Required for implementation_outcome_evidence.', { enum: ['implementation_ready_for_review', 'implementation_blocked'] }),
-          opt('input', 'string', 'Target-relative closed structured task-evidence JSON. Required for structured_task_evidence.'),
+          opt('input', 'string', 'Target-relative structured task-evidence JSON with kind, schemaVersion, actorRole, provenance, and sections. Required for structured_task_evidence.'),
           jsonOption,
         ],
       },
@@ -913,14 +925,14 @@ export const COMMAND_REGISTRY = {
         options: [targetOption(), opt('maintainer-receipt', 'string', 'Host-signed Maintainer outcome receipt required when the current review history contains an outcome.'), hostTrustStoreOption, jsonOption],
       },
       'review-attach-outcome': {
-        summary: 'Atomically attach one later host-authenticated Maintainer outcome to an already prepared files review entry.',
-        usage: 'agenticloop task review-attach-outcome <id> --return-verification <record-id> --maintainer-receipt <receipt.json> [--host-trust-store <expected-path>] [--json] [--target <dir>]',
+        summary: 'Atomically attach one later Maintainer outcome to an already prepared files review entry.',
+        usage: 'agenticloop task review-attach-outcome <id> --return-verification <record-id> (--maintainer-receipt <receipt.json>|--session-report <report.json>) [--host-trust-store <expected-path>] [--json] [--target <dir>]',
         positionals: [{ name: 'id', required: true }],
-        options: [targetOption(), opt('return-verification', 'string', 'Exact verified-return record id bound to the prepared review entry. Required.'), opt('maintainer-receipt', 'string', 'Fresh host-signed Maintainer outcome receipt for the exact return and current review history. Required.'), hostTrustStoreOption, jsonOption],
+        options: [targetOption(), opt('return-verification', 'string', 'Exact verified-return record id bound to the prepared review entry. Required.'), opt('maintainer-receipt', 'string', 'Fresh host-signed Maintainer outcome receipt for the exact return and current review history.'), opt('session-report', 'string', 'Standard-mode reviewer-session report input; allowed only when independent review is not required.'), hostTrustStoreOption, jsonOption],
       },
       status: {
         summary: 'Update task status.',
-        usage: 'agenticloop task status <id> <status> --expect-digest <digest> [--dispatch-packet <path>] [--note <text>] [--base <ref>] [--base-paths <path>] [--dependencies <path>] [--block-category <category>] [--target <dir>]',
+        usage: 'agenticloop task status <id> <status> --expect-digest <digest> [--dispatch-packet <path>] [--note <text>] [--base <ref>] [--base-paths <path>] [--block-category <category>] [--target <dir>]',
         positionals: [{ name: 'id', required: true }, { name: 'status', required: true }],
         options: [
           targetOption(),
@@ -930,7 +942,6 @@ export const COMMAND_REGISTRY = {
           opt('block-category', 'string', 'Required when setting status to blocked.'),
           opt('base', 'string', 'Explicit Git base required for agent-ready; no default branch is selected.'),
           opt('base-paths', 'string', 'Explicit JSON base-tree inventory required for agent-ready.'),
-          opt('dependencies', 'string', 'Exact JSON dependency-status snapshot required for agent-ready.'),
           opt('accept', 'boolean', 'Accepted for compatibility.'),
           jsonOption,
         ],

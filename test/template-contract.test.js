@@ -17,12 +17,52 @@ const AUDIT_RUN_LABELS = [
   'Invocation reference', 'Invocation mode', 'Audited artifact', 'Covered tasks',
   'Verdict', 'Assessment', 'Findings', 'Evidence checked',
 ];
+const MANUAL_HISTORY_COMMIT_GUIDANCE = [
+  /commit each history artifact separately/i,
+  /becomes trusted only after (?:its own )?separate commit/i,
+];
+
+function assertProtectedHistoryCommitGuidance(text, label) {
+  const normalized = text.replace(/^\s*# ?/gm, '').replace(/\s+/g, ' ');
+  assert.match(
+    normalized,
+    /protected command atomically appends and commits exactly (?:its own|that invocation's) history path\/write-set/i,
+    `${label} must assign the append and exact history commit to the protected command`
+  );
+  assert.match(
+    normalized,
+    /no role-authored, operator-authored, or follow-up bookkeeping commit is allowed/i,
+    `${label} must forbid manual follow-up bookkeeping commits`
+  );
+  for (const pattern of MANUAL_HISTORY_COMMIT_GUIDANCE) {
+    assert.doesNotMatch(text, pattern, `${label} contains contradictory manual commit guidance`);
+  }
+}
+
+function assertReviewAssuranceGuidance(text, label) {
+  assert.match(text, /standard mode[\s\S]*independent_review_required[\s\S]*session_reported[\s\S]*producerAuthenticated: false/i, label);
+  assert.match(text, /Hardened mode[\s\S]*requiring independent review[\s\S]*host-signed receipt/i, label);
+}
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 describe('template contract validation', () => {
+  it('keeps protected history commits command-owned across source guidance', () => {
+    for (const relPath of [
+      'memory/task-record.md',
+      'backends/files.md',
+      'skills/task-record-contract/SKILL.md',
+    ]) {
+      assertProtectedHistoryCommitGuidance(readFileSync(join(REPO_ROOT, relPath), 'utf8'), relPath);
+    }
+  });
+
+  it('keeps the files-backend review assurance boundary explicit', () => {
+    assertReviewAssuranceGuidance(readFileSync(join(REPO_ROOT, 'backends/files.md'), 'utf8'), 'backends/files.md');
+  });
+
   it('rejects copied trace-summary bullet lists in backend docs', () => {
     const target = mkdtempSync(join(tmpdir(), 'al-template-contract-'));
     try {

@@ -57,12 +57,13 @@ the exact lowercase canonical `roleId`; a capitalized spelling such as
 
 ## Prospective commit flow
 
-Do not hand-author the message. `task commit-message` writes it, with the
-canonical trailer block already in place and the role derived from the commit
-class:
+Do not hand-author a product message. `task commit-message` writes it with the
+canonical trailer block already in place. Protected lifecycle commands commit
+their own bounded workflow evidence and dispositions; never stage or combine
+those paths manually.
 
 ```text
-npx agenticloop task commit-message <task-id> --class <commit-class> --subject <text> --output .agenticloop/tmp/<task>-commit-message.txt
+npx agenticloop task commit-message <task-id> --class product_implementation --subject <text> --output .agenticloop/tmp/<task>-commit-message.txt
 npx agenticloop commit-attribution check --task <task-id> --message-file .agenticloop/tmp/<task>-commit-message.txt
 git commit -F .agenticloop/tmp/<task>-commit-message.txt
 npx agenticloop commit-attribution check --task <task-id>

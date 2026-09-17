@@ -69,15 +69,16 @@ import {
   repositoryAuthorityIdentity,
 } from './repository-identity.js';
 import { validateTaskStatusTransition } from './task-transition.js';
-import { renderWorkUnitCommitMessage } from './commit-attribution.js';
+import { renderCommitMessage, renderWorkUnitCommitMessage } from './commit-attribution.js';
 import {
   evaluateAuthoringReadiness,
   prepareTaskStatusCandidate,
   taskRecordDigest,
 } from './readiness-candidates.js';
+import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 
 export const READINESS_PLAN_KIND = 'agenticloop.readiness-plan';
-export const READINESS_PLAN_SCHEMA_VERSION = 3;
+export const READINESS_PLAN_SCHEMA_VERSION = 4;
 export const WORK_UNIT_READINESS_PLAN_KIND = 'agenticloop.work-unit-readiness-plan';
 export const WORK_UNIT_READINESS_PLAN_SCHEMA_VERSION = 1;
 
@@ -101,7 +102,14 @@ export const READINESS_COMMIT_SUBJECT = 'settle readiness';
  * commit itself cannot spell it three ways.
  */
 export function readinessCommitMessage(taskId) {
-  return `chore(${taskId}): ${READINESS_COMMIT_SUBJECT}\n\nTask: ${taskId}\nAgent: maintainer`;
+  const rendered = renderCommitMessage({
+    taskId,
+    role: 'maintainer',
+    subject: `chore(${taskId}): ${READINESS_COMMIT_SUBJECT}`,
+    commitClass: 'workflow_evidence',
+  });
+  if (!rendered.ok) throw new Error(rendered.errors.join('; '));
+  return rendered.message.trimEnd();
 }
 
 export function workUnitReadinessCommitMessage(workUnitId, taskIds) {
@@ -110,6 +118,7 @@ export function workUnitReadinessCommitMessage(workUnitId, taskIds) {
     taskIds,
     role: 'maintainer',
     subject: `chore(${workUnitId}): ${READINESS_COMMIT_SUBJECT}`,
+    commitClass: 'workflow_evidence',
   });
   if (!rendered.ok) throw new Error(rendered.errors.join('; '));
   return rendered.message.trimEnd();
@@ -167,10 +176,11 @@ export function declaredWorkUnitIdentity(body) {
   return value || null;
 }
 
-function step(id, { settled, detail, owner, dependsOn = [], command = null, writes = [] }) {
+function step(id, { settled, state = settled ? 'satisfied' : 'pending', detail, owner, dependsOn = [], command = null, writes = [] }) {
   return Object.freeze({
     id,
     settled,
+    state,
     detail,
     owner,
     dependsOn: Object.freeze([...dependsOn]),
@@ -262,6 +272,8 @@ function predecessorState(target, relPath) {
  */
 export function buildReadinessPlan(target, taskId, options = {}) {
   const projectConfig = options.projectConfig ?? {};
+  const route = options.route ? String(options.route) : 'serial';
+  const serial = route === 'serial';
   const relTaskPath = (projectConfig.task_file_template ?? '.agenticloop/tasks/{taskId}.md')
     .replace(/\{taskId\}/g, taskId).replace(/\\/g, '/');
   const taskPath = join(target, relTaskPath);
@@ -272,6 +284,12 @@ export function buildReadinessPlan(target, taskId, options = {}) {
   //    this can be evaluated meaningfully if it is absent or malformed.
   const taskExists = existsSync(taskPath);
   const body = taskExists ? readFileSync(taskPath, 'utf8') : null;
+  if (serial && body && !options.dependencies) {
+    options = {
+      ...options,
+      dependencies: resolveSerialDependencyEvidence({ target, taskBody: body, projectConfig }),
+    };
+  }
   const contract = taskExists ? taskContractDigest(body) : null;
   steps.push(step('task_contract', {
     settled: Boolean(contract?.ok),
@@ -332,15 +350,15 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     contractChain = { state: 'damaged', terminalDigest: null, trustedRecordCount: 0 };
   }
 
-  // 3-5. Dependency observation, work-unit identity, and the committed
-  //      decomposition are one authoring act with three outputs, so they are
-  //      reported as three steps that share one command. Presenting them
-  //      separately is what let the field session repair one and invalidate
-  //      the others.
+  // 3-5. Serial readiness observes declared dependency carriers directly.
+  // Parallel readiness retains the committed snapshot, complete inventory,
+  // durable work-unit identity, and decomposition contract. The shared plan
+  // keeps all three step identities visible, but marks the parallel-only steps
+  // not_applicable on the serial route instead of pretending they are settled.
   const decompositionRef = `.agenticloop/decompositions/${taskId}.json`;
   const decompositionPath = join(target, decompositionRef);
   let decomposition = null;
-  if (existsSync(decompositionPath)) {
+  if (!serial && existsSync(decompositionPath)) {
     try {
       decomposition = JSON.parse(readFileSync(decompositionPath, 'utf8'));
     } catch {
@@ -351,7 +369,7 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     decomposition?.scan?.readinessContext?.dependenciesByTask
       ?.find(entry => entry.taskId === taskId)?.evidence?.sourceRef ?? null;
   const dependencyRef = boundDependencyRef ?? (options.dependencyRef ? String(options.dependencyRef).replace(/\\/g, '/') : null);
-  const dependencyCommitted = Boolean(boundDependencyRef) && isTrackedAtHead(target, boundDependencyRef);
+  const dependencyCommitted = !serial && Boolean(boundDependencyRef) && isTrackedAtHead(target, boundDependencyRef);
   const head = git(target, ['rev-parse', 'HEAD']);
   const branch = git(target, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
   const suppliedWorkUnit = options.workUnitId ? String(options.workUnitId) : null;
@@ -367,35 +385,62 @@ export function buildReadinessPlan(target, taskId, options = {}) {
   const durableWorkUnitId = [suppliedWorkUnit, decomposition?.scan?.workUnit?.id, declaredWorkUnit]
     .find(isDurable) ?? null;
   const workUnitId = decomposition?.scan?.workUnit?.id ?? null;
-  const effectiveWorkUnit = suppliedWorkUnit ?? durableWorkUnitId ?? workUnitId;
+  const effectiveWorkUnit = serial ? null : (suppliedWorkUnit ?? durableWorkUnitId ?? workUnitId);
   const decompositionCommand =
     `npx agenticloop task prepare-decomposition ${taskId} ` +
     `--work-unit ${durableWorkUnitId ?? '<work-unit-id>'} ` +
     `--source-ref ${decompositionRef} --source-revision git-commit:${head ?? '<head>'} ` +
     `--base ${baseArgument} --dependencies ${dependencyRef ?? '<dependencies.json>'}`;
 
+  const serialDependencyRecords = options.dependencies?.records ?? [];
+  const directDependenciesSatisfied = serial && options.dependencies &&
+    options.dependencies.evidence?.evaluatedState === 'satisfied';
+  const directDependencyDetail = serialDependencyRecords.length === 0
+    ? 'current direct observation confirms that the task declares no dependencies'
+    : directDependenciesSatisfied
+      ? `current direct observation confirms ${serialDependencyRecords.length} terminal declared dependency carrier(s)`
+      : serialDependencyRecords.map(record =>
+        `${record.taskId}:${record.state ?? (record.status === 'unresolved' ? 'unresolved' : 'non_terminal')}`
+      ).join(', ');
   steps.push(step('dependency_observation', {
-    settled: dependencyCommitted,
-    detail: boundDependencyRef
-      ? (dependencyCommitted ? `committed at ${boundDependencyRef}` : `${boundDependencyRef} is not committed at HEAD`)
-      : 'no dependency snapshot is bound by a decomposition',
+    settled: serial ? Boolean(directDependenciesSatisfied) : dependencyCommitted,
+    detail: serial
+      ? directDependencyDetail
+      : boundDependencyRef
+        ? (dependencyCommitted ? `committed at ${boundDependencyRef}` : `${boundDependencyRef} is not committed at HEAD`)
+        : 'no dependency snapshot is bound by a decomposition',
     owner: 'maintainer',
     dependsOn: ['task_contract'],
-    command: dependencyCommitted ? null : decompositionCommand,
+    command: serial || dependencyCommitted ? null : decompositionCommand,
     // Only paths that are actually known are listed. Before a decomposition
     // exists the snapshot path is not yet chosen, and putting a placeholder in
     // a write set would make the set unusable for the one thing it is for:
     // seeing exactly what is about to be written.
-    writes: dependencyCommitted || !boundDependencyRef ? [] : [boundDependencyRef],
+    writes: serial || dependencyCommitted || !boundDependencyRef ? [] : [boundDependencyRef],
   }));
+  if (serial) {
+    for (const record of serialDependencyRecords.filter(item => item.state !== 'satisfied')) {
+      const failure = {
+        missing: ['dependency.unresolved', `declared dependency '${record.taskId}' carrier is missing`],
+        malformed: ['task.contract.malformed', `declared dependency '${record.taskId}' has a malformed protected contract`],
+        untrusted: ['contract.baseline.invalid', `declared dependency '${record.taskId}' has no current trusted contract baseline`],
+        non_terminal: ['dependency.unresolved', `declared dependency '${record.taskId}' is non-terminal (${record.status})`],
+        unreadable: ['verification.context.unavailable', `declared dependency '${record.taskId}' carrier is unreadable`],
+      }[record.state] ?? ['dependency.unresolved', `declared dependency '${record.taskId}' is unresolved`];
+      blockers.push(`[${failure[0]}] ${failure[1]}`);
+    }
+  }
 
   const durableWorkUnit = isDurable(workUnitId);
   const unconstructableWorkUnitRepair =
     'declare the durable grouping in the task record under "## Concurrency Plan" -> "- Work unit:", ' +
     'or supply --work-unit <kind:reference>; nothing currently on record can clear this step';
   steps.push(step('work_unit_identity', {
-    settled: durableWorkUnit,
-    detail: workUnitId
+    settled: serial ? false : durableWorkUnit,
+    state: serial ? 'not_applicable' : (durableWorkUnit ? 'satisfied' : 'pending'),
+    detail: serial
+      ? 'not applicable to the serial route; no work-unit identity is consumed'
+      : workUnitId
       ? (durableWorkUnit
         ? workUnitId
         : `${workUnitId} is a per-task fallback, not a durable grouping; ` +
@@ -407,25 +452,28 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     dependsOn: ['task_contract'],
     // An unconstructable repair is reported as an authoring task in `detail`
     // rather than printed as a command the system would refuse.
-    command: durableWorkUnit || !durableWorkUnitId ? null : decompositionCommand,
+    command: serial || durableWorkUnit || !durableWorkUnitId ? null : decompositionCommand,
   }));
 
   const decompositionCommitted = Boolean(decomposition) && isTrackedAtHead(target, decompositionRef);
   steps.push(step('committed_decomposition', {
-    settled: decompositionCommitted,
-    detail: decomposition
+    settled: serial ? false : decompositionCommitted,
+    state: serial ? 'not_applicable' : (decompositionCommitted ? 'satisfied' : 'pending'),
+    detail: serial
+      ? 'not applicable to the serial route; no decomposition or task inventory is consumed'
+      : decomposition
       ? (decompositionCommitted ? `committed at ${decompositionRef}` : `${decompositionRef} is not committed at HEAD`)
       : `${decompositionRef} does not exist or is unreadable`,
     owner: 'maintainer',
     dependsOn: ['task_contract', 'dependency_observation'],
-    command: decompositionCommitted ? null : decompositionCommand,
-    writes: decompositionCommitted ? [] : [decompositionRef],
+    command: serial || decompositionCommitted ? null : decompositionCommand,
+    writes: serial || decompositionCommitted ? [] : [decompositionRef],
   }));
 
   // 6. Attribution is not a separate authoring act; it is a property the one
   //    readiness commit must have. Naming it as a step is what makes the plan
   //    show a single final commit instead of leaving it implicit.
-  const attributionSettled = baselineSettled && decompositionCommitted && dependencyCommitted;
+  const attributionSettled = baselineSettled && (serial || (decompositionCommitted && dependencyCommitted));
   const status = contractOk ? taskStatusFromBody(body) : null;
   // Readiness is status-aware, because the pair it used to emit could not both
   // hold. For a task already `in-progress` the plan prescribed
@@ -480,16 +528,25 @@ export function buildReadinessPlan(target, taskId, options = {}) {
       dependencies: options.dependencies,
     })
     : null;
-  const readinessDiagnosticCommand = options.base
-    ? `npx agenticloop task-readiness --task ${cliArg(taskId)} ${evidenceArgs(options.base.evidence)} ` +
-      `--mode authoring${options.dependencies ? ` ${evidenceArgs(options.dependencies.evidence)}` : ''} --json ` +
-      `--target ${cliArg(target)}`
-    : null;
-  const readinessPlanCommand = options.actor && options.authority && effectiveWorkUnit && options.base && options.dependencies
+  const serialPlanCommand = options.actor && options.authority && options.base
     ? `npx agenticloop task readiness-plan ${cliArg(taskId)} --actor ${cliArg(options.actor)} ` +
+      `--authority ${cliArg(options.authority)} ${evidenceArgs(options.base.evidence)} --json --target ${cliArg(target)}`
+    : null;
+  const parallelPlanCommand = options.actor && options.authority && effectiveWorkUnit && options.base && options.dependencies
+    ? `npx agenticloop task readiness-plan ${cliArg(taskId)} --route parallel --actor ${cliArg(options.actor)} ` +
       `--authority ${cliArg(options.authority)} --work-unit ${cliArg(effectiveWorkUnit)} ` +
       `${evidenceArgs(options.base.evidence)} ${evidenceArgs(options.dependencies.evidence)} --json --target ${cliArg(target)}`
     : null;
+  // Serial diagnosis reruns this same public planner, which owns the direct
+  // carrier observation; it never prints a snapshot placeholder.
+  const readinessDiagnosticCommand = serial
+    ? serialPlanCommand
+    : options.base
+      ? `npx agenticloop task-readiness --task ${cliArg(taskId)} ${evidenceArgs(options.base.evidence)} ` +
+        `--mode authoring${options.dependencies ? ` ${evidenceArgs(options.dependencies.evidence)}` : ''} --json ` +
+        `--target ${cliArg(target)}`
+      : null;
+  const readinessPlanCommand = serial ? serialPlanCommand : parallelPlanCommand;
   for (const diagnostic of readiness?.diagnostics ?? []) {
     if (diagnostic.level !== 'error') continue;
     const affected = [
@@ -508,7 +565,7 @@ export function buildReadinessPlan(target, taskId, options = {}) {
   // into a Maintainer readiness commit.
   const stagePaths = [
     ...(baselineSettled ? [] : [historyRef]),
-    ...(decompositionCommitted ? [] : [decompositionRef]),
+    ...(serial || decompositionCommitted ? [] : [decompositionRef]),
     ...(lifecycleSettled ? [] : [relTaskPath]),
   ];
   const finalCommit = readinessCommitMessage(taskId);
@@ -516,12 +573,10 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     settled: attributionSettled,
     detail: attributionSettled
       ? 'readiness evidence is committed'
-      : 'the readiness evidence above is committed by one Maintainer-attributed commit',
+      : 'task readiness-apply commits the exact readiness write set under workflow_evidence',
     owner: 'maintainer',
-    dependsOn: ['trusted_contract_baseline', 'committed_decomposition'],
-    command: attributionSettled
-      ? null
-      : `git add -- ${stagePaths.join(' ')} && git commit -m "${finalCommit.replace(/\n/g, '\\n')}"`,
+    dependsOn: serial ? ['trusted_contract_baseline'] : ['trusted_contract_baseline', 'committed_decomposition'],
+    command: null,
   }));
 
   // 7. The lifecycle transition is last because it consumes everything above:
@@ -540,15 +595,17 @@ export function buildReadinessPlan(target, taskId, options = {}) {
           : `current status is '${status}'`)
       : 'the task declares no lifecycle status',
     owner: 'maintainer',
-    dependsOn: ['trusted_contract_baseline', 'dependency_observation', 'committed_decomposition', 'maintainer_attribution'],
+    dependsOn: serial
+      ? ['trusted_contract_baseline', 'dependency_observation', 'maintainer_attribution']
+      : ['trusted_contract_baseline', 'dependency_observation', 'committed_decomposition', 'maintainer_attribution'],
     command: lifecycleSettled || lifecycleTransitionError
       ? null
       : `npx agenticloop task status ${taskId} agent-ready --expect-digest ${currentTaskDigest ?? '<digest>'} ` +
-        `--base ${baseArgument} --dependencies ${dependencyRef ?? '<dependencies.json>'}`,
+        `--base ${baseArgument}`,
     writes: lifecycleSettled ? [] : [relTaskPath],
   }));
 
-  const pending = steps.filter(item => !item.settled);
+  const pending = steps.filter(item => item.state === 'pending');
   const writeSet = [...new Set(pending.flatMap(item => item.writes))].sort();
 
   // --- The executable binding -------------------------------------------
@@ -562,9 +619,9 @@ export function buildReadinessPlan(target, taskId, options = {}) {
   // it binds here exactly as `--work-unit` would. Without it a task whose
   // grouping is written down in its Concurrency Plan could still only be settled
   // by re-typing that grouping on the command line.
-  if (!effectiveWorkUnit) {
+  if (!serial && !effectiveWorkUnit) {
     blockers.push('a durable --work-unit <kind:reference> is required; readiness never synthesizes a work-unit identity');
-  } else if (!isDurable(effectiveWorkUnit)) {
+  } else if (!serial && !isDurable(effectiveWorkUnit)) {
     blockers.push(
       `work-unit identity '${effectiveWorkUnit}' is a per-task fallback, not a durable grouping; ` +
       'declare the durable grouping in the task record under "## Concurrency Plan" -> "- Work unit:", ' +
@@ -572,9 +629,13 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     );
   }
   if (!options.base) blockers.push('exactly one of --base <ref> or --base-paths <path> is required to resolve exact base evidence');
-  if (!options.dependencies) blockers.push('--dependencies <path> naming the exact committed Maintainer-attributed dependency snapshot is required');
-  if (!options.inventory) blockers.push('the authoritative task inventory could not be observed');
-  else if (options.inventory.complete !== true) blockers.push('the authoritative task inventory is incomplete');
+  if (!options.dependencies) {
+    blockers.push(serial
+      ? 'current declared dependency evidence could not be observed'
+      : '--dependencies <path> naming the exact committed Maintainer-attributed dependency snapshot is required');
+  }
+  if (!serial && !options.inventory) blockers.push('the authoritative task inventory could not be observed');
+  else if (!serial && options.inventory.complete !== true) blockers.push('the authoritative task inventory is incomplete');
   if (!head) blockers.push('the target has no resolvable HEAD commit');
   if (!branch) blockers.push('readiness apply requires a named branch; HEAD is detached');
   if (lifecycleTransitionError) blockers.push(lifecycleTransitionError);
@@ -614,7 +675,7 @@ export function buildReadinessPlan(target, taskId, options = {}) {
 
   const writeRoles = [
     ...(baselineSettled ? [] : [{ path: historyRef, role: 'trusted_contract_baseline' }]),
-    ...(decompositionCommitted ? [] : [{ path: decompositionRef, role: 'committed_decomposition' }]),
+    ...(serial || decompositionCommitted ? [] : [{ path: decompositionRef, role: 'committed_decomposition' }]),
     ...(lifecycleSettled ? [] : [{ path: relTaskPath, role: 'task_carrier' }]),
   ];
   const writes = writeRoles.map(entry => ({
@@ -662,7 +723,7 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     // and would make an unchanged plan drift on every evaluation.
     dependencies: options.dependencies
       ? {
-        sourceRef: options.dependencies.evidence.revalidationArgs[1],
+        sourceRef: serial ? null : options.dependencies.evidence.revalidationArgs[1],
         source: options.dependencies.evidence.source,
         snapshotDigest: options.dependencies.evidence.digest,
         observedAt: options.dependencies.evidence.observedAt,
@@ -673,13 +734,13 @@ export function buildReadinessPlan(target, taskId, options = {}) {
         revalidationArgs: [...options.dependencies.evidence.revalidationArgs],
       }
       : null,
-    inventory: inventoryBinding,
+    inventory: serial ? null : inventoryBinding,
     decomposition: {
-      path: decompositionRef,
-      sourceRevision: head ? `git-commit:${head}` : null,
-      route: options.route ? String(options.route) : 'serial',
-      freshnessMaxAgeSeconds: options.freshnessMaxAgeSeconds ?? null,
-      rescanTrigger: options.rescanTrigger ?? null,
+      path: serial ? null : decompositionRef,
+      sourceRevision: serial ? null : (head ? `git-commit:${head}` : null),
+      route,
+      freshnessMaxAgeSeconds: serial ? null : (options.freshnessMaxAgeSeconds ?? null),
+      rescanTrigger: serial ? null : (options.rescanTrigger ?? null),
     },
     activationPresent,
     predecessorStates: writes.map(entry => ({ path: entry.path, state: entry.state, digest: entry.digest })),
@@ -687,10 +748,10 @@ export function buildReadinessPlan(target, taskId, options = {}) {
     finalCommitMessage: finalCommit,
   };
 
-  if (executable.decomposition.freshnessMaxAgeSeconds === null) {
+  if (!serial && executable.decomposition.freshnessMaxAgeSeconds === null) {
     blockers.push('the decomposition freshness policy was not supplied');
   }
-  if (!executable.decomposition.rescanTrigger) {
+  if (!serial && !executable.decomposition.rescanTrigger) {
     blockers.push('the decomposition semantic rescan trigger was not supplied');
   }
   if (containsUnresolvedPlaceholder(executable)) {
@@ -768,6 +829,7 @@ export function buildWorkUnitReadinessPlan(target, entries, options = {}) {
   const initial = supplied.map(entry => buildReadinessPlan(target, entry.taskId, {
     ...(entry.options ?? {}),
     workUnitId,
+    route: 'parallel',
   }));
   const prospectiveInventoryDigests = Object.fromEntries(initial
     .filter(plan => plan.executable?.task?.path && plan.executable.task.prospectiveDigest)
@@ -775,6 +837,7 @@ export function buildWorkUnitReadinessPlan(target, entries, options = {}) {
   const plans = supplied.map(entry => buildReadinessPlan(target, entry.taskId, {
     ...(entry.options ?? {}),
     workUnitId,
+    route: 'parallel',
     prospectiveInventoryDigests,
   }));
   const expectedHeads = [...new Set(plans.map(plan => plan.executable?.expectedHead).filter(Boolean))];

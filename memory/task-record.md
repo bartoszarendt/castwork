@@ -58,8 +58,10 @@ review_budget: 5
  # Subsequent material changes require a separately verified correction record;
  # do not edit allowed_paths post hoc merely to match an implementation diff.
  # Files tasks append the record with `task establish-baseline` and corrections
- # with `task authorize-correction`; commit each history artifact separately
- # before transition. `task_contract_schema: 2` makes this a required lifecycle
+ # with `task authorize-correction`. Each protected command atomically appends
+ # and commits exactly its own history path/write-set; no role-authored,
+ # operator-authored, or follow-up bookkeeping commit is allowed before
+ # transition. `task_contract_schema: 2` makes this a required lifecycle
  # gate rather than a historical warning; entering agent-ready requires the
  # trusted chain regardless of schema version.
 # Context overflow risk: stored values are medium | high. Omit for ordinary

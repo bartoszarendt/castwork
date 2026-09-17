@@ -56,6 +56,7 @@ import {
 import { RETURN_ASSURANCE_VALUES, returnAssuranceMeets } from './activation-grant.js';
 import { resolveWorkUnitAudit } from './project-map.js';
 import { resolveCanonicalTerminalScope } from './terminal-scope.js';
+import { associateSemanticEvaluation, evaluateSemanticValidation } from './semantic-validation-normalizer.js';
 
 /**
  * Frontmatter keys that must never appear on an audit record. `model`,
@@ -2752,7 +2753,7 @@ export function canonicalizeAuditRecord(content, options, validationOptions = {}
  * @param {string[]} [params.expectedCoveredTasks] Exact task inventory being closed.
  * @returns {{ allowed: boolean, state: string, reasons: string[], auditId: string|null, optOut: boolean }}
  */
-export function evaluateAuditCloseoutGate(repoRoot, params) {
+function evaluateAuditCloseoutGateFeature(repoRoot, params) {
   const workUnit = String(params?.workUnit ?? '').trim();
   const mode = params?.workUnitAudit === 'disabled' ? 'disabled' : 'enabled';
   const minimumAuditorReturnAssurance = RETURN_ASSURANCE_VALUES.has(params?.minimumAuditorReturnAssurance)
@@ -2938,6 +2939,51 @@ export function evaluateAuditCloseoutGate(repoRoot, params) {
       ? `agenticloop audit baseline ${record.auditId} --artifact ${expectedCandidate} --covered-tasks ${(expectedCoveredTasks ?? []).join(',')} --evidence <integrated-evidence>`
       : null,
   };
+}
+
+/**
+ * Evaluate the feature-specific audit certificate and then let the portable
+ * evaluator own the shared legality state. The certificate rules remain here;
+ * consumers must use the semantic verdict instead of interpreting `state`.
+ */
+export function evaluateAuditCloseoutGate(repoRoot, params) {
+  const result = evaluateAuditCloseoutGateFeature(repoRoot, params);
+  const state = result.optOut
+    ? 'not_applicable'
+    : result.allowed
+      ? 'current'
+      : ['audit_candidate_missing', 'audit_task_set_missing', 'audit_missing'].includes(result.state)
+        ? 'missing'
+        : result.state === 'audit_stale'
+          ? 'stale'
+          : result.state === 'audit_invalid'
+            ? 'malformed'
+            : result.state === 'audit_awaiting_human'
+              ? 'unknown'
+              : 'negative';
+  const semanticEvaluation = evaluateSemanticValidation({
+    actionId: 'audit_record',
+    validation: {
+      ok: result.allowed === true && result.optOut !== true,
+      evidenceState: state,
+      disposition: result.optOut ? 'not_applicable' : result.allowed ? 'allowed' : 'blocked',
+      diagnostics: (result.codes ?? [result.state]).filter(Boolean).map(code => ({ code })),
+      detail: { auditId: result.auditId, reasons: result.reasons },
+    },
+    repositoryId: String(params?.repositoryIdentity ?? 'repository:unavailable'),
+    taskId: `work-unit:${String(params?.workUnit ?? 'unavailable')}`,
+    workUnitId: String(params?.workUnit ?? '').trim() || null,
+    bindings: {
+      candidateId: String(params?.expectedCandidate ?? '').trim() || null,
+      auditRunId: result.auditId ? `${result.auditId}:run` : null,
+    },
+    scopeKind: 'work_unit_candidate',
+    scopeKey: `${String(params?.workUnit ?? 'unavailable')}:${String(params?.expectedCandidate ?? 'unavailable')}`,
+    sourceKind: 'audit_certificate',
+    sourceId: result.auditId ?? 'audit:missing',
+    factOwner: { kind: 'workflow_role', id: 'auditor' },
+  });
+  return associateSemanticEvaluation(result, semanticEvaluation);
 }
 
 /**

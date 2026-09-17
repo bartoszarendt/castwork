@@ -8,7 +8,6 @@ import { join, resolve } from 'node:path';
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
 import { executeMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
 import { targetRepositoryIdentity } from './host-trust.js';
-import { evaluateCommitAttribution } from './commit-attribution.js';
 import { currentDispatchConsumption } from './handoff-consumption.js';
 import { evaluateParallelScan, normalizeFilesTaskInventory, createTaskInventoryEnumeration } from './parallel-scan.js';
 import { createDecompositionProvenance, DECOMPOSITION_SCHEMA_VERSION } from './dispatch-envelope.js';
@@ -192,26 +191,6 @@ export function handoffRefreshRelativePath(taskId) {
   const normalized = safeTaskId(taskId);
   if (!TASK_ID_RE.test(normalized)) throw new TypeError('handoff refresh taskId is invalid');
   return `${HANDOFF_REFRESH_ROOT}/${normalized}.json`;
-}
-
-export function handoffRefreshMaintainerTrailerBlock(taskId) {
-  const normalized = safeTaskId(taskId);
-  if (!TASK_ID_RE.test(normalized)) throw new TypeError('handoff refresh taskId is invalid');
-  return `Task: ${normalized}\nAgent: maintainer`;
-}
-
-export function validateHandoffRefreshMaintainerTrailer(taskId, message = null) {
-  const trailer = handoffRefreshMaintainerTrailerBlock(taskId);
-  const attribution = evaluateCommitAttribution({
-    taskId,
-    role: 'maintainer',
-    message: message ?? `chore(${taskId}): refresh handoff receipt\n\n${trailer}`,
-  });
-  return {
-    ok: attribution.ok,
-    trailer,
-    errors: attribution.errors,
-  };
 }
 
 function projectionFromPreflight(preflight, target = null) {
@@ -1239,17 +1218,14 @@ export function applyHandoffEvidenceRefresh({ target, plan, preflight }) {
     decompositionStale: plan.categories.some(item =>
       item.category === 'decomposition_provenance' && item.action === 'requires_maintainer_regeneration'),
     authority: plan.authority,
-    commitSubject: `chore(${plan.taskId}): refresh handoff receipt`,
-    maintainerTrailerBlock: handoffRefreshMaintainerTrailerBlock(plan.taskId),
-    attributionValidation: validateHandoffRefreshMaintainerTrailer(plan.taskId),
     nextOperation: plan.categories.some(item =>
       item.category === 'decomposition_provenance' && item.action === 'requires_maintainer_regeneration')
       ? (malformedDependencyMap
         ? `Do not regenerate from this plan: ${regenerationCategory.reason}. A Maintainer must correct the multi-member dependency map before creating a new refresh plan.`
         : regenerationCommand
-        ? `Regenerate decomposition exactly with: ${regenerationCommand}. Then commit every changed file and rerun: npx agenticloop task handoff-preflight ${plan.taskId} --json`
-        : `Decomposition regeneration inputs are incomplete in this plan: ${plan.categories.find(item => item.category === 'decomposition_provenance')?.reason ?? 'unknown defect'}. Regenerate the handoff-preflight repair plan, then run its exact task prepare-decomposition command before committing and rerunning preflight.`)
-      : `Review and commit exactly these files with the printed subject and trailer block, then rerun: npx agenticloop task handoff-preflight ${plan.taskId} --json`,
-    firstSafeRepair: 'Do not dispatch from this state: the written receipt is uncommitted and clean-checkout preflight must refuse it.',
+        ? `After this invocation's bounded workflow commit, regenerate decomposition exactly with: ${regenerationCommand}. Then rerun: npx agenticloop task handoff-preflight ${plan.taskId} --json`
+        : `Decomposition regeneration inputs are incomplete in this plan: ${plan.categories.find(item => item.category === 'decomposition_provenance')?.reason ?? 'unknown defect'}. Regenerate the handoff-preflight repair plan, then run its exact task prepare-decomposition command and rerun preflight.`)
+      : `The calling protected command must commit exactly this invocation's changed files before rerunning: npx agenticloop task handoff-preflight ${plan.taskId} --json`,
+    firstSafeRepair: 'Do not dispatch from this state: the calling protected command has not yet completed its bounded workflow commit.',
   };
 }

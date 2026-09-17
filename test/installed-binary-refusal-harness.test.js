@@ -733,8 +733,6 @@ async function makeSessionReportedWarningFixture() {
   await installed([
     'task', 'role-start', 'T-001', '--packet', packet, '--json', '--target', fixture.root,
   ], 'installed role-start');
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', 'start receipt-less return fixture work\n\nTask: T-001\nAgent: engineer']);
 
   writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "session-reported";\n', 'utf8');
   git(fixture.root, ['add', 'src/existing.js']);
@@ -745,21 +743,15 @@ async function makeSessionReportedWarningFixture() {
     'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
     '--expect-digest', carrierDigest(), '--product-head', productHead, '--json', '--target', fixture.root,
   ], 'installed implementation artifact evidence');
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', 'record receipt-less return fixture artifact\n\nTask: T-001\nAgent: engineer']);
   await installed([
     'task', 'evidence', 'T-001', '--class', 'implementation_summary_evidence',
     '--expect-digest', carrierDigest(), '--summary', 'Receipt-less return fixture complete.',
     '--check-evidence', checks, '--json', '--target', fixture.root,
   ], 'installed implementation summary evidence');
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', 'record receipt-less return fixture summary\n\nTask: T-001\nAgent: engineer']);
   await installed([
     'task', 'evidence', 'T-001', '--class', 'implementation_outcome_evidence',
     '--expect-digest', carrierDigest(), '--outcome', 'implementation_ready_for_review', '--json', '--target', fixture.root,
   ], 'installed implementation outcome evidence');
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(fixture.root, ['commit', '-m', 'record receipt-less return fixture outcome\n\nTask: T-001\nAgent: engineer']);
 
   for (const check of JSON.parse(readFileSync(join(fixture.root, checks), 'utf8'))) {
     await installed([
@@ -767,8 +759,6 @@ async function makeSessionReportedWarningFixture() {
       '--check', check.id, '--outcome', 'passed', '--evidence', `${check.id} passed`, '--json', '--target', fixture.root,
     ], `installed required check ${check.id}`);
   }
-  git(fixture.root, ['add', '.agenticloop/checks']);
-  git(fixture.root, ['commit', '-m', 'record receipt-less return fixture checks\n\nTask: T-001\nAgent: engineer']);
   await installed([
     'task', 'prepare-return', 'T-001', '--packet', packet, '--check-evidence', checks,
     '--outcome', 'implementation_ready_for_review', '--output', roleReturn, '--json', '--target', fixture.root,
@@ -894,8 +884,6 @@ async function makeAttemptHistoryFixture() {
     requiredChecksText: '- [RC-1] command: `node --version`',
   });
   await startFixtureAttempt(fixture, 'attempt-history');
-  git(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs/dispatch']);
-  git(fixture.root, ['commit', '-m', 'record the history-bound attempt start\n\nTask: T-001\nAgent: maintainer']);
   const head = git(fixture.root, ['rev-parse', 'HEAD']);
   const replacement = git(fixture.root, ['rev-parse', 'HEAD~1']);
   git(fixture.root, ['replace', head, replacement]);

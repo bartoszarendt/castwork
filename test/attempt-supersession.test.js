@@ -45,7 +45,8 @@ function assertOk(result, label) {
 
 /**
  * Drive one more role start against a fresh packet, exactly as a resumed
- * attempt does: mint, consume, commit the workflow state it produced.
+ * attempt does: mint and consume. The protected command commits the workflow
+ * state it produces.
  */
 async function consumePacket(fixture, cli, sequence, { acknowledgeFinal = false } = {}) {
   const root = fixture.root;
@@ -67,12 +68,7 @@ async function consumePacket(fixture, cli, sequence, { acknowledgeFinal = false 
     '--output', packetPath, '--json',
     ...(acknowledgeFinal ? ['--acknowledge-final-attempt'] : []),
   ]), `mint packet ${sequence}`);
-  const started = await cli(['task', 'role-start', 'T-001', '--packet', packetPath, '--json']);
-  if (started.status === 0) {
-    git(root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(root, ['commit', '-m', `start attempt ${sequence}\n\nTask: T-001\nAgent: engineer`]);
-  }
-  return started;
+  return cli(['task', 'role-start', 'T-001', '--packet', packetPath, '--json']);
 }
 
 async function startedTask(name, options = {}) {
@@ -130,9 +126,6 @@ describe('consuming a packet retires the attempt it supersedes', () => {
     ]), 'explicit abandonment');
     const after = await attemptStatus(cli);
     assert.equal(after.attempts.at(-1).abandonment.disposition, 'abandoned');
-    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
-    git(fixture.root, ['commit', '-m', 'record explicit abandonment\n\nTask: T-001\nAgent: maintainer']);
-
     const preflight = await cli(['task', 'handoff-preflight', 'T-001', '--host', 'opencode', '--json']);
     assert.equal(preflight.status, 0, 'serial preflight ignores obsolete decomposition evidence');
     const result = JSON.parse(preflight.stdout);
@@ -157,8 +150,6 @@ describe('attempt_budget is a bound, not a comment', () => {
       '--reason', 'Engineering attempt made no acceptable progress and requires a fresh approach.',
       '--authority', 'maintainer:budget-test', '--json',
     ]), 'record real no-progress attempt');
-    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
-    git(fixture.root, ['commit', '-m', 'record no-progress attempt\n\nTask: T-001\nAgent: maintainer']);
     // The second mint is the last the budget allows, so it now requires the
     // acknowledgement the case below covers.
     assertOk(await consumePacket(fixture, cli, 2, { acknowledgeFinal: true }), 'second role start');
@@ -183,8 +174,6 @@ describe('attempt_budget is a bound, not a comment', () => {
       '--reason', 'Retire the live attempt before the human-authorized budget-only carrier edit.',
       '--authority', 'human:budget-repair-test', '--json',
     ]), 'retire live attempt before budget edit');
-    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
-    git(fixture.root, ['commit', '-m', 'record live attempt retirement\n\nTask: T-001\nAgent: maintainer']);
     writeFileSync(carrier, readFileSync(carrier, 'utf8').replace('attempt_budget: 2', 'attempt_budget: 3'), 'utf8');
     git(fixture.root, ['add', '.agenticloop/tasks/T-001.md']);
     git(fixture.root, ['commit', '-m', 'raise attempt budget under human authority\n\nTask: T-001\nAgent: maintainer']);
@@ -215,8 +204,6 @@ describe('attempt_budget is a bound, not a comment', () => {
       '--reason', 'Engineering attempt made no acceptable progress and requires a fresh approach.',
       '--authority', 'maintainer:budget-test', '--json',
     ]), 'record real no-progress attempt');
-    git(fixture.root, ['add', '.agenticloop/handoffs/attempts']);
-    git(fixture.root, ['commit', '-m', 'record no-progress attempt\n\nTask: T-001\nAgent: maintainer']);
 
     const refused = await cli([
       'task', 'prepare-dispatch', 'T-001', '--host', 'opencode', '--role', 'engineer',

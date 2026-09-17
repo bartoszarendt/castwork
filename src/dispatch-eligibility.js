@@ -56,6 +56,13 @@
 import { createHash } from 'node:crypto';
 
 import { canonicalJson, canonicalSha256 } from './canonical-json.js';
+import {
+  PREPARE_DISPATCH_DIMENSIONS,
+  evaluateSemanticInput,
+} from './semantic-evaluator.js';
+import {
+  normalizeDispatchSemanticInput,
+} from './semantic-dispatch-normalizer.js';
 import { explainReasonFactOwner } from './explain-reason.js';
 import { gitTreeObjectId, isGitObjectId, sameGitObjectFormat } from './git-oid.js';
 import {
@@ -162,7 +169,7 @@ export const CONTRACT_DIGEST_RE = /^sha256:v1:[a-f0-9]{64}$/;
 
 export const SEMANTIC_DIGEST_RE = /^sha256:agenticloop\.[a-z-]+\.v[1-9]\d*:[a-f0-9]{64}$/;
 
-export const CLEAN_STATE_IDENTITY_RE = /^sha256:agenticloop\.dispatch-clean-state\.v4:[a-f0-9]{64}$/;
+export const CLEAN_STATE_IDENTITY_RE = /^sha256:agenticloop\.dispatch-clean-state\.v6:[a-f0-9]{64}$/;
 
 export const INTEGRITY_STATES = new Set(['verified', 'missing', 'mismatch']);
 
@@ -1331,6 +1338,12 @@ export function evaluateInitialState({ runGit, scopePatterns, intendedCreations,
 export function resolveDispatchActivation(input, findings) {
   const { evidence, snapshot, contract, decomposition, repository, capabilities, verifyActivationSignature } = input;
   const repositoryIdentity = targetRepositoryIdentity(repository?.worktree);
+  if (evidence === null || evidence === undefined) {
+    findings.missing('current activation evidence is unavailable for this task', {
+      code: 'activation.capture.missing',
+    });
+    return null;
+  }
   if (evidence?.source === 'activation_grant') {
     if (typeof verifyActivationSignature !== 'function') {
       findings.missing(
@@ -1427,27 +1440,7 @@ export function resolveDispatchActivation(input, findings) {
  * dimension must be accounted for in the returned decision ledger, so a new
  * prerequisite cannot quietly reach one boundary and miss another.
  */
-export const DISPATCH_ELIGIBILITY_DIMENSIONS = Object.freeze([
-  'task_identity',
-  'lifecycle',
-  'task_contract',
-  'contract_baseline',
-  'required_checks',
-  'activation',
-  'activation_assurance',
-  'readiness',
-  'dependency_evidence',
-  'decomposition',
-  'work_unit_membership',
-  'maintainer_attribution',
-  'task_eligibility',
-  'repository_identity',
-  'base_identity',
-  'clean_state',
-  'assignment',
-  'host_role_capability',
-  'return_capability',
-]);
+export const DISPATCH_ELIGIBILITY_DIMENSIONS = PREPARE_DISPATCH_DIMENSIONS;
 
 /**
  * One canonical diagnostic code per shared dimension.
@@ -2543,7 +2536,17 @@ export function evaluateDispatchEligibility(candidate) {
   const shapeError = candidateShapeError(candidate);
   if (shapeError) return shapeRefusal(candidate?.factShape ?? null, shapeError);
   try {
-    return SHAPE_EVALUATORS[candidate.factShape](candidate);
+    const resolved = SHAPE_EVALUATORS[candidate.factShape](candidate);
+    const semanticInput = normalizeDispatchSemanticInput(candidate, resolved);
+    const semanticEvaluation = evaluateSemanticInput(semanticInput);
+    const semanticLegal = semanticEvaluation.verdict === 'legal';
+    return Object.freeze({
+      ...resolved,
+      ok: semanticLegal,
+      packetEligible: semanticLegal && resolved.packetEligible,
+      semanticInput,
+      semanticEvaluation,
+    });
   } catch (error) {
     return shapeRefusal(candidate.factShape, `dispatch eligibility could not be evaluated: ${error.message}`);
   }
@@ -2560,6 +2563,7 @@ export function evaluateDispatchEligibility(candidate) {
  */
 export function projectReadOnlyDispatchEligibility(decision) {
   const dimensions = decision?.dimensions ?? {};
+  const semantic = decision?.semanticEvaluation ?? null;
   const facts = DISPATCH_ELIGIBILITY_DIMENSIONS.map(dimension => {
     const observed = dimensions[dimension];
     return Object.freeze({
@@ -2569,31 +2573,29 @@ export function projectReadOnlyDispatchEligibility(decision) {
       policyCode: observed?.code ?? null,
     });
   });
-  const reasons = DISPATCH_ELIGIBILITY_DIMENSIONS.flatMap(dimension => {
+  const reasons = (semantic?.reasons ?? []).map(reason => {
+    const dimension = reason.factId.slice('dispatch.'.length);
     const observed = dimensions[dimension];
-    if (observed?.state === 'satisfied') return [];
-    const unavailable = observed?.state === 'not_applicable' || observed?.state === 'not_reached' || !observed;
-    return [Object.freeze({
-      fact: `dispatch.${dimension}`,
+    const unavailable = ['missing', 'unsupported', 'unavailable', 'unknown', 'not_applicable'].includes(reason.evidenceState);
+    return Object.freeze({
+      fact: reason.factId,
       factOwner: explainReasonFactOwner(observed?.code ?? null, 'dispatch_eligibility'),
       observedState: observed?.state ?? 'unavailable',
       state: unavailable ? 'unknown' : 'failed',
       policyCode: observed?.code ?? null,
       ...(observed?.note ? { detail: observed.note } : {}),
-    })];
+    });
   });
-  const verdict = reasons.some(reason => reason.state === 'failed')
-    ? 'illegal'
-    : reasons.length > 0 ? 'unknown' : 'legal';
+  const verdict = semantic?.verdict ?? 'unknown';
   return Object.freeze({
     id: 'prepare_dispatch',
     verdict,
     applicability: 'applicable',
     facts: Object.freeze(facts),
     reasons: Object.freeze(reasons),
-    prerequisites: Object.freeze(reasons.map(reason => Object.freeze({
-      fact: reason.fact,
-      condition: `canonical dispatch dimension '${reason.fact.slice('dispatch.'.length)}' must be satisfied`,
+    prerequisites: Object.freeze((semantic?.requirements ?? []).map(requirement => Object.freeze({
+      fact: requirement.factId,
+      condition: requirement.condition,
     }))),
   });
 }

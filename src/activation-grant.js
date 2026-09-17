@@ -44,6 +44,8 @@ export const TASK_ACTIVATION_BINDING_KIND = 'agenticloop.task-activation-binding
 export const TASK_ACTIVATION_BINDING_SCHEMA_VERSION = 1;
 export const ACTIVATION_REVOCATION_KIND = 'agenticloop.activation-revocation';
 export const ACTIVATION_REVOCATION_SCHEMA_VERSION = 1;
+export const ACTIVATION_BINDING_REVOCATION_KIND = 'agenticloop.activation-binding-revocation';
+export const ACTIVATION_BINDING_REVOCATION_SCHEMA_VERSION = 1;
 
 /**
  * Activation assurance, weakest first. `absent` is not a grade: an unactivated
@@ -133,6 +135,12 @@ export const TASK_ACTIVATION_BINDING_FIELDS = Object.freeze([
 export const ACTIVATION_REVOCATION_FIELDS = Object.freeze([
   'kind', 'schemaVersion', 'revocationId', 'grantId', 'grantDigest',
   'repositoryIdentity', 'revokedAt', 'reason',
+]);
+
+export const ACTIVATION_BINDING_REVOCATION_FIELDS = Object.freeze([
+  'kind', 'schemaVersion', 'revocationId', 'grantId', 'grantDigest',
+  'bindingId', 'bindingDigest', 'repositoryIdentity', 'backend', 'taskId',
+  'revokedAt', 'reason',
 ]);
 
 const PRODUCER_FIELDS = Object.freeze(['id', 'channel']);
@@ -511,6 +519,46 @@ export function createActivationRevocation(input = {}) {
   return deepFreeze(record);
 }
 
+/** Build one exact task-binding revocation without denying sibling bindings. */
+export function createActivationBindingRevocation(input = {}) {
+  const known = ['grant', 'binding', 'reason', 'revokedAt', 'revocationId'];
+  const unknown = Object.keys(input).filter(key => !known.includes(key));
+  if (unknown.length) {
+    throw refuse(`invalid activation binding revocation: unknown input field(s): ${unknown.join(', ')}`);
+  }
+  const grant = input.grant;
+  const binding = input.binding;
+  if (!isObject(grant) || !isObject(binding)) {
+    throw refuse('an activation binding revocation requires the grant and binding it denies');
+  }
+  const record = {
+    kind: ACTIVATION_BINDING_REVOCATION_KIND,
+    schemaVersion: ACTIVATION_BINDING_REVOCATION_SCHEMA_VERSION,
+    revocationId: input.revocationId ?? `revocation:${randomUUID()}`,
+    grantId: grant.grantId ?? null,
+    grantDigest: grant.digest ?? null,
+    bindingId: binding.bindingId ?? null,
+    bindingDigest: binding.digest ?? null,
+    repositoryIdentity: binding.repositoryIdentity ?? null,
+    backend: binding.backend ?? null,
+    taskId: binding.taskId ?? null,
+    revokedAt: input.revokedAt ?? new Date().toISOString(),
+    reason: typeof input.reason === 'string' && input.reason.trim()
+      ? input.reason.trim()
+      : 'operator stop',
+  };
+  const errors = [];
+  validateActivationBindingRevocationInto(record, errors);
+  if (record.grantId !== grant.grantId || record.grantDigest !== grant.digest) {
+    fail(errors, 'activation binding revocation must bind the exact grant named by the task binding');
+  }
+  if (binding.grantId !== grant.grantId || binding.grantDigest !== grant.digest) {
+    fail(errors, 'activation binding revocation grant and binding do not form one authority chain');
+  }
+  if (errors.length) throw refuse(`invalid activation binding revocation: ${errors[0].message}`);
+  return deepFreeze(record);
+}
+
 // ---------------------------------------------------------------------------
 // Shape validation (pure, total over any JSON value)
 // ---------------------------------------------------------------------------
@@ -807,10 +855,87 @@ function validateActivationRevocationInto(record, errors) {
   if (typeof record.reason !== 'string' || !record.reason.trim()) fail(errors, 'activation revocation reason is required');
 }
 
+function validateActivationBindingRevocationInto(record, errors) {
+  if (!shapeErrors(record, ACTIVATION_BINDING_REVOCATION_FIELDS, 'activation binding revocation', errors)) return;
+  if (record.kind !== ACTIVATION_BINDING_REVOCATION_KIND) {
+    fail(errors, `activation binding revocation kind must be '${ACTIVATION_BINDING_REVOCATION_KIND}'`);
+  }
+  if (record.schemaVersion !== ACTIVATION_BINDING_REVOCATION_SCHEMA_VERSION) {
+    fail(errors, `activation binding revocation schemaVersion must be ${ACTIVATION_BINDING_REVOCATION_SCHEMA_VERSION}`);
+  }
+  if (!REVOCATION_ID_RE.test(String(record.revocationId ?? ''))) {
+    fail(errors, 'activation binding revocation revocationId must be revocation:<uuid-v4>');
+  }
+  if (!GRANT_ID_RE.test(String(record.grantId ?? ''))) {
+    fail(errors, 'activation binding revocation grantId must be grant:<uuid-v4>');
+  }
+  if (!GRANT_DIGEST_RE.test(String(record.grantDigest ?? ''))) {
+    fail(errors, 'activation binding revocation grantDigest must be a canonical grant semantic digest');
+  }
+  if (!BINDING_ID_RE.test(String(record.bindingId ?? ''))) {
+    fail(errors, 'activation binding revocation bindingId must be binding:<uuid-v4>');
+  }
+  if (!BINDING_DIGEST_RE.test(String(record.bindingDigest ?? ''))) {
+    fail(errors, 'activation binding revocation bindingDigest must be a canonical binding semantic digest');
+  }
+  if (typeof record.repositoryIdentity !== 'string' || !record.repositoryIdentity.startsWith('file:')) {
+    fail(errors, 'activation binding revocation repositoryIdentity must be a canonical target repository identity');
+  }
+  if (!['files', 'github'].includes(record.backend)) {
+    fail(errors, 'activation binding revocation backend must be files or github');
+  }
+  if (!TASK_ID_RE.test(String(record.taskId ?? ''))) {
+    fail(errors, 'activation binding revocation taskId is invalid');
+  }
+  if (instantMs(record.revokedAt) === null) {
+    fail(errors, 'activation binding revocation revokedAt must be an ISO-8601 UTC instant');
+  }
+  if (typeof record.reason !== 'string' || !record.reason.trim()) {
+    fail(errors, 'activation binding revocation reason is required');
+  }
+}
+
 export function validateActivationRevocation(record) {
   const errors = [];
   validateActivationRevocationInto(record, errors);
   return { ok: errors.length === 0, errors };
+}
+
+export function validateActivationBindingRevocation(record) {
+  const errors = [];
+  validateActivationBindingRevocationInto(record, errors);
+  return { ok: errors.length === 0, errors };
+}
+
+/** Validate either immutable deny record stored in the shared revocation inventory. */
+export function validateActivationDenial(record) {
+  if (record?.kind === ACTIVATION_REVOCATION_KIND) return validateActivationRevocation(record);
+  if (record?.kind === ACTIVATION_BINDING_REVOCATION_KIND) {
+    return validateActivationBindingRevocation(record);
+  }
+  return {
+    ok: false,
+    errors: [{
+      code: 'activation.grant.revoked',
+      evidenceState: 'malformed',
+      message: 'activation deny record kind is unsupported',
+    }],
+  };
+}
+
+/** True only when valid deny evidence names this exact grant or task binding. */
+export function activationDenialMatches(record, { grant, binding, backend, taskId } = {}) {
+  if (record?.kind === ACTIVATION_REVOCATION_KIND) {
+    return record.grantId === grant?.grantId || record.revocationId === grant?.revocation?.id;
+  }
+  if (record?.kind !== ACTIVATION_BINDING_REVOCATION_KIND) return false;
+  return record.grantId === grant?.grantId &&
+    record.grantDigest === grant?.digest &&
+    record.bindingId === binding?.bindingId &&
+    record.bindingDigest === binding?.digest &&
+    record.repositoryIdentity === binding?.repositoryIdentity &&
+    record.backend === backend &&
+    record.taskId === taskId;
 }
 
 // ---------------------------------------------------------------------------
@@ -918,15 +1043,24 @@ export function resolveTaskActivationBinding(input = {}) {
     fail(errors, 'task activation binding cannot outlive its activation grant', 'malformed', 'activation.binding.malformed');
   }
 
-  // Revocation. A malformed revocation record is treated as a revocation.
+  // Denial. A malformed record is treated as a revocation so corrupting a
+  // tombstone cannot re-enable either a grant or one exact binding.
   for (const record of input.revocations ?? []) {
-    const checked = validateActivationRevocation(record);
+    const checked = validateActivationDenial(record);
     if (!checked.ok) {
       fail(errors, `an activation revocation record for this target is malformed: ${checked.errors[0].message}`, 'malformed', 'activation.grant.revoked');
       continue;
     }
-    if (record.grantId === grant.grantId || record.revocationId === grant.revocation.id) {
-      fail(errors, `activation grant ${grant.grantId} was revoked at ${record.revokedAt}`, 'negative', 'activation.grant.revoked');
+    if (activationDenialMatches(record, {
+      grant,
+      binding,
+      backend: input.backend,
+      taskId: input.taskId,
+    })) {
+      const subject = record.kind === ACTIVATION_BINDING_REVOCATION_KIND
+        ? `task activation binding ${binding.bindingId}`
+        : `activation grant ${grant.grantId}`;
+      fail(errors, `${subject} was revoked at ${record.revokedAt}`, 'negative', 'activation.grant.revoked');
     }
   }
 

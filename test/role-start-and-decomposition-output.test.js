@@ -258,19 +258,19 @@ describe('N5: nextSequence', () => {
     const seq = deriveHandoffSequence({ taskId: 'T-001', backend: 'files' });
     const roleStart = seq.steps.find(s => /role-start/.test(s.command));
     assert.ok(roleStart, 'sequence must include role-start step');
-    assert.equal(roleStart.commitRequired, true);
+    assert.equal(roleStart.commitRequired, false);
 
     const evidenceSteps = seq.steps.filter(s => /evidence/.test(s.command));
     assert.ok(evidenceSteps.length >= 1, 'must have evidence steps');
 
     const step1 = evidenceSteps.find(s => /implementation_artifact/.test(s.command));
     if (step1) {
-      assert.ok(!step1.command.includes('<refetch-after-commit>'), 'step 1 must use concrete digest');
+      assert.ok(!step1.command.includes('<refetch-after-command>'), 'step 1 must use concrete digest');
     }
 
     const step2 = evidenceSteps.find(s => /implementation_summary/.test(s.command));
     if (step2) {
-      assert.ok(step2.command.includes('<refetch-after-commit>'), 'step 2 must use refetch placeholder');
+      assert.ok(step2.command.includes('<refetch-after-command>'), 'step 2 must use refetch placeholder');
     }
   });
 
@@ -362,15 +362,19 @@ describe('N7: role-start behavioral tests', () => {
     const productCommit = commands.findIndex(command => command.includes('prepare-product-commit'));
     const artifact = commands.findIndex(command => command.includes('implementation_artifact_evidence'));
     const summary = commands.findIndex(command => command.includes('implementation_summary_evidence'));
+    const structured = commands.findIndex(command => command.includes('structured_task_evidence'));
     const outcome = commands.findIndex(command => command.includes('implementation_outcome_evidence'));
     const initialize = commands.findIndex(command => command.includes('check-evidence-init'));
     const update = commands.findIndex(command => command.includes('check-evidence-update'));
     const prepare = commands.findIndex(command => command.includes('prepare-return'));
     const receiverCommands = output1.nextSequence.receiverSteps.map(step => step.command);
-    assert.ok(productCommit >= 0 && productCommit < artifact && artifact < summary && summary < outcome && outcome < initialize && initialize < update && update < prepare,
+    assert.ok(productCommit >= 0 && productCommit < artifact && artifact < summary && summary < initialize && initialize < update && update < structured && structured < outcome && outcome < prepare,
       `unexpected lifecycle order: ${commands.join(' | ')}`);
     assert.equal(commands.some(command => command.includes('verify-return')), false);
     assert.match(receiverCommands[0], /verify-return/);
+    assert.deepEqual(output1.nextSequence.receiverSteps[0].writes, [
+      '.agenticloop/returns/verifications/',
+    ]);
     for (const step of output1.nextSequence.steps) {
       if (step.commitRequired) {
         assert.ok(step.commitClass && step.commitReason);

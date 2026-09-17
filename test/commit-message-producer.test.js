@@ -103,9 +103,9 @@ describe('task commit-message', () => {
     const root = target('produced');
     const output = '.agenticloop/tmp/message.txt';
     const result = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
-      '--subject', 'record the implementation artifact',
-      '--body', 'Binds the product head derived from Git.',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
+      '--subject', 'implement the product change',
+      '--body', 'Records the task-owned product change.',
       '--output', output, '--json', '--target', root,
     ]);
     assert.equal(result.status, 0, result.stderr);
@@ -125,16 +125,15 @@ describe('task commit-message', () => {
     assert.equal(evaluateCommitAttribution({ message, taskId: 'T-001', role: 'engineer' }).ok, true);
   });
 
-  it('attributes a maintainer-owned class to the maintainer', async () => {
+  it('refuses superseded role-authored bookkeeping classes', async () => {
     const root = target('maintainer-class');
     const output = '.agenticloop/tmp/message.txt';
     const result = await runCliInProcess([
       'task', 'commit-message', 'T-001', '--class', 'attempt_abandonment',
       '--subject', 'abandon the expired attempt', '--output', output, '--json', '--target', root,
     ]);
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).role, 'maintainer');
-    assert.match(readFileSync(join(root, output), 'utf8'), /\nAgent: maintainer\n$/);
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(JSON.parse(result.stdout).errors.join('; '), /Invalid --class value/);
   });
 
   it('refuses a task-carrier output path without replacing carrier bytes', async () => {
@@ -143,7 +142,7 @@ describe('task commit-message', () => {
     const before = 'authoritative task carrier\n';
     writeFileSync(carrier, before, 'utf8');
     const result = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', '.agenticloop/tasks/T-001.md',
       '--json', '--target', root,
     ]);
@@ -169,7 +168,7 @@ describe('task commit-message', () => {
     const before = 'authoritative root task carrier\n';
     writeFileSync(carrier, before, 'utf8');
     const refused = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', 'T-001.md',
       '--json', '--target', root,
     ]);
@@ -179,7 +178,7 @@ describe('task commit-message', () => {
 
     // An unused carrier-shaped filename is still an ordinary public output.
     const differentTaskId = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', 'T-002.md',
       '--json', '--target', root,
     ]);
@@ -191,7 +190,7 @@ describe('task commit-message', () => {
     // public output. The exclusive create must leave that new carrier intact.
     const concurrentCarrier = 'concurrently created root carrier\n';
     const concurrent = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', 'T-003.md',
       '--json', '--target', root,
     ], {
@@ -208,7 +207,7 @@ describe('task commit-message', () => {
     const crossTaskBefore = before.replaceAll('T-001', 'T-002');
     writeFileSync(crossTaskCarrier, crossTaskBefore, 'utf8');
     const crossTaskRefusal = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', 'T-002.md',
       '--json', '--target', root,
     ]);
@@ -217,7 +216,7 @@ describe('task commit-message', () => {
     assert.equal(readFileSync(crossTaskCarrier, 'utf8'), crossTaskBefore);
 
     const allowed = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', 'other.md',
       '--json', '--target', root,
     ]);
@@ -249,7 +248,7 @@ describe('task commit-message', () => {
 
     for (const output of [template.replaceAll('{taskId}', 'T-001'), template.replaceAll('{taskId}', 'T-002')]) {
       const refused = await runCliInProcess([
-        'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+        'task', 'commit-message', 'T-001', '--class', 'product_implementation',
         '--subject', 'record the implementation artifact', '--output', output,
         '--json', '--target', root,
       ]);
@@ -267,7 +266,7 @@ describe('task commit-message', () => {
       projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
     }).requiresExclusiveCreate, true);
     const created = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', template.replaceAll('{taskId}', 'T-004'),
       '--json', '--target', root,
     ]);
@@ -277,7 +276,7 @@ describe('task commit-message', () => {
     const concurrentOutput = template.replaceAll('{taskId}', 'T-003');
     const concurrentBytes = 'concurrent carrier\n';
     const concurrent = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', concurrentOutput,
       '--json', '--target', root,
     ], {
@@ -294,7 +293,7 @@ describe('task commit-message', () => {
 
     const ordinary = 'workflow/T-001/task-T-00112.md';
     const allowed = await runCliInProcess([
-      'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+      'task', 'commit-message', 'T-001', '--class', 'product_implementation',
       '--subject', 'record the implementation artifact', '--output', ordinary,
       '--json', '--target', root,
     ]);
@@ -329,7 +328,7 @@ describe('task commit-message', () => {
 
       for (const output of [active, crossTask]) {
         const refused = await runCliInProcess([
-          'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+          'task', 'commit-message', 'T-001', '--class', 'product_implementation',
           '--subject', 'record the implementation artifact', '--output', output,
           '--json', '--target', root,
         ]);
@@ -345,7 +344,7 @@ describe('task commit-message', () => {
         projectConfig: { task_file_template: template }, activeTaskId: 'T-001',
       }).requiresExclusiveCreate, true);
       const created = await runCliInProcess([
-        'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+        'task', 'commit-message', 'T-001', '--class', 'product_implementation',
         '--subject', 'record the implementation artifact', '--output', absent,
         '--json', '--target', root,
       ]);
@@ -355,7 +354,7 @@ describe('task commit-message', () => {
       const ordinary = `workflow/${template.includes('__protected_output_probe__') ? '__protected_output_probe__' : '$&[]()+^'}/T-002/notes/message.txt`;
       mkdirSync(join(root, ordinary, '..'), { recursive: true });
       const allowed = await runCliInProcess([
-        'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+        'task', 'commit-message', 'T-001', '--class', 'product_implementation',
         '--subject', 'record the implementation artifact', '--output', ordinary,
         '--json', '--target', root,
       ]);
@@ -373,7 +372,7 @@ describe('task commit-message', () => {
     assert.equal(result.status, 2);
     const errors = JSON.parse(result.stdout).errors.join('\n');
     assert.match(errors, /Invalid --class value 'invented_class'/);
-    assert.match(errors, /implementation_artifact_evidence/);
-    assert.match(errors, /attempt_abandonment/);
+    assert.match(errors, /product_implementation/);
+    assert.doesNotMatch(errors, /attempt_abandonment/);
   });
 });

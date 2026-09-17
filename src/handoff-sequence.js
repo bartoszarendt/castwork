@@ -15,14 +15,9 @@
  * not survive its own prescribed next action is a false green.
  *
  * So preflight reports the whole ordered sequence - every step it is about to
- * require, what each step writes, and which of those writes must be committed
- * before the following step's gate can pass. This is the `readiness-plan`
- * ordered-sequence idea applied to the recovery path.
+ * require and what each step writes. Protected commands commit their own
+ * durable workflow paths; only product implementation remains role-authored.
  */
-
-/** Workflow state a step writes must be committed before the next gate reads it. */
-const CLEAN_GATE_REASON =
-  'the dispatch clean gate refuses relevant untracked workflow state, so this write must be committed before the next step';
 
 function step(order, {
   command = null, action = null, writes = [], scratchWrites = [], commitRequired = false, reason = null, gate = null,
@@ -34,7 +29,7 @@ function step(order, {
     writes: Object.freeze([...writes]),
     scratchWrites: Object.freeze([...scratchWrites]),
     commitRequired,
-    commitReason: commitRequired ? (reason ?? CLEAN_GATE_REASON) : null,
+    commitReason: commitRequired ? reason : null,
     gate,
   });
 }
@@ -64,15 +59,15 @@ export function deriveHandoffSequence({
   let order = 0;
 
   // A live attempt that has recorded Engineer work is conserved: it reaches a
-  // canonical return or it is explicitly abandoned. Either exit writes durable
-  // state, and the abandonment receipt is the one the field run tripped over.
+  // canonical return or it is explicitly abandoned. The protected abandonment
+  // command writes and commits that durable state itself.
   if (!newPacketPermitted && liveAttempt) {
     steps.push(step(order += 1, {
       command:
         `npx agenticloop task abandon-attempt ${id} --attempt ${liveAttempt.attemptId} ` +
         '--reason <text> --authority <kind:reference>',
       writes: [`.agenticloop/handoffs/attempts/${id}/`],
-      commitRequired: true,
+      commitRequired: false,
       gate: 'worktree.clean_gate.failed',
     }));
   }
@@ -100,9 +95,7 @@ export function deriveHandoffSequence({
         ...(liveAttempt ? [`.agenticloop/handoffs/attempts/${id}/`] : []),
       ],
       scratchWrites: [`.agenticloop/tmp/${id}-checks.json`],
-      commitRequired: true,
-      reason:
-        'role start mutates the carrier and writes a dispatch consumption record; commit those durable outputs before the evidence chain reads them from Git; the mutable check aggregate remains scratch',
+      commitRequired: false,
        gate: 'handoff.evidence.mismatched',
     }));
   } else {
@@ -114,10 +107,7 @@ export function deriveHandoffSequence({
         `.agenticloop/tasks/${id}.md`,
         `.agenticloop/handoffs/dispatch/${id}/`,
       ],
-      commitRequired: true,
-      reason:
-        'role start mutates the carrier and writes a dispatch consumption record; commit both before the ' +
-        'evidence chain reads them from Git, and mint no further packet against the pre-start digest',
+      commitRequired: false,
       gate: 'dispatch.packet.stale',
     }));
   }
@@ -131,7 +121,7 @@ export function deriveHandoffSequence({
         `.agenticloop/tasks/${id}.md`,
         `.agenticloop/handoffs/task-mutations/${id}/`,
       ],
-      commitRequired: true,
+      commitRequired: false,
       gate: 'verification.context.stale',
     }));
   }
@@ -184,8 +174,7 @@ export function deriveLiveAttemptSequence({ taskId, nextStep, currentCarrierDige
       writes: [`.agenticloop/checks/${id}/<check-id>.execution.json`],
       scratchWrites: [`.agenticloop/tmp/${id}-checks.json`],
       gate: 'evidence.missing',
-      commitRequired: true,
-      reason: 'commit immutable execution evidence; the mutable aggregate remains scratch',
+      commitRequired: false,
     },
     prepare_return: {
       command: `npx agenticloop task prepare-return ${id} --packet <retained-packet.json> --check-evidence .agenticloop/tmp/${id}-checks.json --outcome implementation_ready_for_review --output .agenticloop/tmp/${id}-return.json --json`,
@@ -207,21 +196,21 @@ export function deriveLiveAttemptSequence({ taskId, nextStep, currentCarrierDige
   const chosen = definitions[nextStep] ?? definitions.implementation_artifact_evidence;
   const first = step(1, {
     ...chosen,
-    commitRequired: chosen.commitRequired ?? true,
-    reason: chosen.reason ?? 'commit the carrier and its mutation receipt before the next evidence gate',
+    commitRequired: chosen.commitRequired ?? false,
+    reason: chosen.reason ?? null,
   });
   return { steps: Object.freeze([first]), commitCount: first.commitRequired ? 1 : 0 };
 }
 
 /**
- * Render the sequence for human output, including the commits it forces.
+ * Render the sequence for human output, including any role-authored commits it forces.
  *
  * @param {{ steps: object[], commitCount: number }} sequence
  * @returns {string[]}
  */
 export function renderHandoffSequence(sequence) {
   const lines = [
-    `  next ordered sequence (${sequence.steps.length} steps, ${sequence.commitCount} commit${sequence.commitCount === 1 ? '' : 's'} required):`,
+    `  next ordered sequence (${sequence.steps.length} steps, ${sequence.commitCount} role-authored commit${sequence.commitCount === 1 ? '' : 's'} required):`,
   ];
   for (const item of sequence.steps) {
     lines.push(`    ${item.order}. ${item.command ?? item.action}`);

@@ -140,17 +140,16 @@ if required metadata is missing, report the blocker without changing modes.
   `role_return_receive` verifies its Ed25519 signature and current revocation
   state against the fixed operator-pinned authority; record digest consistency
   alone is not authorization.
-- Before `agent-ready`, run readiness and establish the trusted baseline. On a
-  files-backed target, read the whole sequence first with `task readiness-plan`
-  and settle it with `task readiness-apply --plan <path> --yes`, which produces
-  one Maintainer-attributed commit instead of the multi-command, two-commit
-  sequence; review its `--dry-run` result before confirming. A consumed plan is
-  stale after any later commit - regenerate it rather than reuse it. Readiness
-  never activates. Run handoff preflight after settlement and request the
-  separate operator activation only when activation is the remaining blocker.
-  A delegated Maintainer records `actor: maintainer` and references the human
-  authority separately; it never presents the human's name as its own actor.
-  Own correction/recovery provenance; never widen `allowed_paths`.
+- Before `agent-ready`, establish the trusted baseline. For files serial, run
+  `task readiness-plan <id> --actor <name> --authority <kind:reference> --base
+  <ref> --json`, then `task readiness-apply --plan <path> --yes`. It reads
+  declared dependency carriers directly; no snapshot or decomposition is
+  needed. Review `--dry-run` first. Regenerate a consumed plan after later
+  commits. Readiness never activates. After settlement, run handoff preflight
+  and request operator activation only when it is the remaining blocker. A
+  delegated Maintainer records `actor: maintainer`, cites human authority
+  separately, owns correction/recovery provenance, and never widens
+  `allowed_paths`.
 - The review window is a valid publication boundary for Maintainer-owned review
   records and for validating Engineer-owned resolution matrices, but it is not the only route for Engineer
   completion evidence: guarded `task evidence` mutations publish artifact,

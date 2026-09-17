@@ -56,7 +56,7 @@ export const STORAGE_CLASSES = Object.freeze({
     committed: true,
     cleanGate: 'fails_closed_until_committed',
     retention: 'for the life of the project history; append-only where the class says so',
-    rule: 'Evidence a later gate reads to make a decision. It must be committed by its owning role before the gate that consumes it runs; uncommitted durable evidence fails closed rather than being auto-staged.',
+    rule: 'Evidence a later gate reads to make a decision. Its protected command commits the exact invocation write set before the gate that consumes it; uncommitted durable evidence fails closed.',
   }),
   material_transient_transaction_state: Object.freeze({
     id: 'material_transient_transaction_state',
@@ -313,8 +313,8 @@ export const EVIDENCE_INVENTORY = Object.freeze({
     consumer: 'review entry, closeout',
     decision: 'whether an authenticated return may enter review',
     derivable: false,
-    retention: 'until review entry or closeout consumes the exact authenticated return verification',
-    storageClass: 'machine_local_operator_state',
+    retention: 'project history; review entry and closeout consume the exact authenticated return verification',
+    storageClass: 'durable_project_evidence',
     visibleTo: Object.freeze(['orchestrator', 'maintainer', 'auditor']),
   }),
   historical_adoption: entry({

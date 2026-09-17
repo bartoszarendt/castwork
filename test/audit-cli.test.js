@@ -12,9 +12,11 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { git, initTestGitRepository } from './helpers/git-fixture.js';
 import { parseAuditRecord } from '../src/audit-record.js';
 
 let tmpDir;
+const candidateArtifacts = new Map();
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-audit-cli-')); });
 after(() => { rmSync(tmpDir, { recursive: true, force: true }); });
 
@@ -53,7 +55,18 @@ function makeTarget(name, projectMapLines = []) {
       'utf-8'
     );
   }
+  initTestGitRepository(target, { initialBranch: 'main' });
+  git(target, ['add', '.agenticloop/project.md', '.agenticloop/tasks']);
+  git(target, ['commit', '-m', 'initialize audit fixture']);
+  const primary = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
+  git(target, ['commit', '--allow-empty', '-m', 'second audit candidate']);
+  const secondary = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
+  candidateArtifacts.set(target, { primary, secondary });
   return target;
+}
+
+function artifact(target, which = 'primary') {
+  return candidateArtifacts.get(target)[which];
 }
 
 function run(args, target) {
@@ -69,10 +82,10 @@ async function seedRecord(target) {
     'new',
     '--work-unit', 'phase:4',
     '--covered-tasks', 'T-041,T-042',
-    '--artifact', 'commit:abc1230000000000000000000000000000000000',
+    '--artifact', artifact(target),
     '--goal', 'Deliver Phase 4.',
     '--completion-oracle', 'All covered outcomes and checks pass.',
-    '--evidence', 'Integrated verification for commit:abc1230000000000000000000000000000000000.',
+    '--evidence', `Integrated verification for ${artifact(target)}.`,
   ], target);
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
   return result;
@@ -160,13 +173,13 @@ describe('audit CLI', () => {
       '--completion-oracle', 'Duplicate outcome exists.', '--evidence', 'Duplicate evidence.',
     ], target);
     assert.equal(invalid.status, 1);
-    assert.match(invalid.stderr, /cannot resolve short commit candidate/);
+    assert.match(invalid.stderr, /does not resolve to exactly one commit/);
 
     const dup = await run([
       'new',
       '--work-unit', 'phase:4',
       '--covered-tasks', 'T-099',
-      '--artifact', `commit:${'a'.repeat(40)}`,
+      '--artifact', artifact(target),
       '--goal', 'Duplicate Phase 4.',
       '--completion-oracle', 'Duplicate outcome exists.',
       '--evidence', 'Duplicate evidence.',
@@ -238,9 +251,9 @@ describe('audit CLI', () => {
 
     const rebaseline = await run([
       'baseline', 'AUD-001',
-      '--artifact', 'commit:def4560000000000000000000000000000000000',
+      '--artifact', artifact(target, 'secondary'),
       '--covered-tasks', 'T-041,T-042,T-055',
-      '--evidence', 'Integrated verification for commit:def4560000000000000000000000000000000000.',
+      '--evidence', `Integrated verification for ${artifact(target, 'secondary')}.`,
     ], target);
     assert.equal(rebaseline.status, 0);
     const record = readRecord(target);
@@ -253,7 +266,7 @@ describe('audit CLI', () => {
     const target = makeTarget('baseline-evidence');
     await seedRecord(target);
     const result = await run([
-      'baseline', 'AUD-001', '--artifact', 'commit:def4560000000000000000000000000000000000',
+      'baseline', 'AUD-001', '--artifact', artifact(target, 'secondary'),
     ], target);
     assert.equal(result.status, 2);
     assert.match(result.stderr, /requires --evidence/);
@@ -289,7 +302,7 @@ describe('audit CLI', () => {
     writeFileSync(
       file,
       readFileSync(file, 'utf-8').replace(
-        'Audited artifact: commit:abc1230000000000000000000000000000000000',
+        `Audited artifact: ${artifact(target)}`,
         'Audited artifact: commit:other'
       ),
       'utf-8'
@@ -302,7 +315,7 @@ describe('audit CLI', () => {
     assert.equal(payload.certification_current, false);
 
     const gate = await run([
-      'gate', 'phase:4', '--candidate', 'commit:abc1230000000000000000000000000000000000',
+      'gate', 'phase:4', '--candidate', artifact(target),
       '--covered-tasks', 'T-041,T-042', '--json',
     ], target);
     assert.equal(gate.status, 1);
@@ -318,7 +331,7 @@ describe('audit CLI', () => {
       '--assessment', 'clean', '--evidence', 'npm test (pass)',
     ], target);
     const exactGateArgs = [
-      'gate', 'AUD-001', '--candidate', 'commit:abc1230000000000000000000000000000000000',
+      'gate', 'AUD-001', '--candidate', artifact(target),
       '--covered-tasks', 'T-041,T-042',
     ];
     assert.equal((await run(exactGateArgs, target)).status, 0);
@@ -329,7 +342,7 @@ describe('audit CLI', () => {
       'utf-8'
     );
     const blocked = await run([
-      'gate', 'phase:4', '--candidate', 'commit:abc1230000000000000000000000000000000000',
+      'gate', 'phase:4', '--candidate', artifact(target),
       '--covered-tasks', 'T-041,T-042',
     ], target);
     assert.equal(blocked.status, 1);
@@ -348,7 +361,7 @@ describe('audit CLI', () => {
     assert.equal(bothPayload.safeToRetry, true);
 
     const missingTasks = await run([
-      'gate', 'AUD-001', '--candidate', 'commit:abc1230000000000000000000000000000000000', '--json',
+      'gate', 'AUD-001', '--candidate', artifact(target), '--json',
     ], target);
     assert.notEqual(missingTasks.status, 0);
     assert.equal(JSON.parse(missingTasks.stdout).state, 'audit_task_set_missing');
@@ -436,9 +449,9 @@ describe('audit CLI', () => {
     assert.equal(readRecord(target).auditBudget, 4);
 
     const override = await run([
-      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', 'commit:def4560000000000000000000000000000000000',
+      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', artifact(target, 'secondary'),
       '--goal', 'Deliver Phase 5.', '--completion-oracle', 'The outcome is observable.',
-      '--evidence', 'Integrated verification for commit:def4560000000000000000000000000000000000.', '--budget', '6',
+      '--evidence', `Integrated verification for ${artifact(target, 'secondary')}.`, '--budget', '6',
     ], target);
     assert.equal(override.status, 0, override.stderr);
     assert.equal(readRecord(target, 'AUD-002').auditBudget, 6);
@@ -447,9 +460,9 @@ describe('audit CLI', () => {
   it('lets an explicit --budget win even when the lower-precedence project default is invalid', async () => {
     const target = makeTarget('explicit-budget-invalid-project-default', ['default_audit_budget: nope']);
     const result = await run([
-      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', 'commit:def4560000000000000000000000000000000000',
+      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', artifact(target, 'secondary'),
       '--goal', 'Deliver Phase 5.', '--completion-oracle', 'The outcome is observable.',
-      '--evidence', 'Integrated verification for commit:def4560000000000000000000000000000000000.', '--budget', '4',
+      '--evidence', `Integrated verification for ${artifact(target, 'secondary')}.`, '--budget', '4',
     ], target);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(readRecord(target).auditBudget, 4);

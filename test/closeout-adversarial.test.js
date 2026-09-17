@@ -208,7 +208,6 @@ describe('reproduced closeout-integrity failure sequence', () => {
       '--type', 'follow_up', '--ref', proposalId, '--note', 'docs follow-up tracked',
     ], target);
     assert.equal(disposed.status, 0, `${disposed.stdout}${disposed.stderr}`);
-    commitAll(target, 'record disposition');
 
     // 9. The activation-only compatibility waiver cannot replace dispatch
     //    consumption or a verified Engineer return.

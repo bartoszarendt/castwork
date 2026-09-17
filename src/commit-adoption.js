@@ -11,7 +11,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { canonicalSha256 } from './canonical-json.js';
+import { COLLAPSED_WORKFLOW_COMMIT_CLASSES, commitWorkflowClass } from './commit-attribution.js';
 import { isGitObjectId, sameGitObjectFormat } from './git-oid.js';
+import { isWorkflowPath } from './product-lineage.js';
 import { fileMatchesScopePattern } from './scope-matcher.js';
 
 const INVALIDATED_CERTIFICATION = Object.freeze(['required_checks', 'review', 'audit', 'closeout']);
@@ -290,7 +292,21 @@ export function evaluateCommitAdoption(input = {}) {
       reasons.push(`adoption cannot derive changed paths for commit ${commit}`);
       break;
     }
-    for (const path of lines(changed.stdout)) changedPathSet.add(path);
+    const paths = lines(changed.stdout);
+    const message = gitOk(runGit, ['show', '-s', '--format=%B', commit]);
+    if (!message || message.status !== 0) {
+      reasons.push(`adoption cannot read commit message for ${commit}`);
+      break;
+    }
+    const workflowClass = commitWorkflowClass(String(message.stdout ?? ''));
+    if (COLLAPSED_WORKFLOW_COMMIT_CLASSES.includes(workflowClass)) {
+      if (paths.some(path => !isWorkflowPath(path))) {
+        reasons.push(`adoption refuses commit ${commit}: Workflow-Class ${workflowClass} authors a product path`);
+        break;
+      }
+      continue;
+    }
+    for (const path of paths) changedPathSet.add(path);
   }
   const changedPaths = [...changedPathSet].sort();
   if (changedPaths.some(path => !allowedPaths.some(pattern => fileMatchesScopePattern(path, pattern)))) {

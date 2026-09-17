@@ -19,6 +19,7 @@ import {
 import { git } from './git-fixture.js';
 import { protectedHostBoundary } from './host-trust-fixture.js';
 import { runCliInProcess } from './run-cli.js';
+import { attachAcceptedReview, recordCompletedTaskEvidence } from './accepted-review-fixture.js';
 
 const TEST_TMP_ROOT = fileURLToPath(new URL('../../.agenticloop/tmp/', import.meta.url));
 
@@ -178,6 +179,7 @@ export function createCloseoutPlanSyncFixture() {
     cacheStats.lastRestoredCheckpoint = null;
     assert.ok(fixture.taskFixtures.has('T-001'), 'plan-sync certification includes T-001');
     const cli = { operatorTrustRoot: fixture.operatorTrustRoot, hostAuthority: protectedHostBoundary(fixture.trust) };
+    const invoke = args => runCliInProcess(args, cli);
     const taskBody = () => readFileSync(fixture.taskPath, 'utf8');
     const carrierDigest = () => sha256(taskBody());
 
@@ -210,13 +212,10 @@ export function createCloseoutPlanSyncFixture() {
       '--expect-digest', carrierDigest(), '--product-head', productHead, '--json', '--target', target,
     ], cli);
     assert.equal(evidenced.status, 0, `${evidenced.stdout}${evidenced.stderr}`);
-    fixtureGit(target, ['add', '.agenticloop/tasks/T-001.md']);
-    fixtureGit(target, ['add', '-f', '.agenticloop/handoffs']);
-    fixtureGit(target, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
-
+    await recordCompletedTaskEvidence({ target, packet, productHead, carrierDigest, invoke });
     const verifiedHead = fixtureGit(target, ['rev-parse', 'HEAD']);
     const changedPaths = fixtureGit(target, ['diff', '--name-only', `${packet.repository.head}..${verifiedHead}`]).split(/\r?\n/).filter(Boolean);
-    const productChangedPaths = fixtureGit(target, ['diff', '--name-only', `${packet.repository.head}..${productHead}`]).split(/\r?\n/).filter(Boolean);
+    const productChangedPaths = ['src/existing.js'];
     const commits = fixtureGit(target, ['rev-list', '--reverse', `${packet.repository.head}..${productHead}`]).split(/\r?\n/).filter(Boolean);
     const lineage = resolveCarrierLineage(target, 'T-001', {
       backend: 'files', taskContractDigest: packet.task.taskContractDigest,
@@ -264,42 +263,26 @@ export function createCloseoutPlanSyncFixture() {
       '--return', returnPath, '--repository-evidence', evidencePath, '--target', target,
     ], cli);
     assert.equal(verified.status, 0, `${verified.stdout}${verified.stderr}`);
-    git(target, ['add', '-f', '.agenticloop/returns/verifications']);
-    git(target, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
-
     // Maintainer review provenance, then acceptance under its own authority,
     // then the audit of the accepted work unit.
-    writeFileSync(
-      fixture.taskPath,
-      `${taskBody()
-        .replace(/^review_status:.*$/m, 'review_status: accepted')
-        .replace(/^reviewed_artifact:.*$/m, `reviewed_artifact: commit:${productHead}`)
-        .replace(/^review_mode:.*$/m, 'review_mode: host_subagent')}` +
-      '\n## Scope Completed\n\n- Delivered the closeout candidate.\n' +
-      '\n## Evidence\n\n- npm test (pass)\n',
-      'utf8'
-    );
-    git(target, ['add', '.agenticloop/tasks/T-001.md']);
-    git(target, ['commit', '-m', 'record maintainer review\n\nTask: T-001\nAgent: maintainer']);
+    await attachAcceptedReview({
+      target, fixture, invoke,
+      taskContractDigest: packet.task.taskContractDigest,
+      productHead,
+    });
     const accepted = await runCliInProcess([
       'task', 'status', 'T-001', 'accepted', '--expect-digest', carrierDigest(), '--json', '--target', target,
     ], cli);
     assert.equal(accepted.status, 0, `${accepted.stdout}${accepted.stderr}`);
-    git(target, ['add', '.agenticloop/tasks/T-001.md']);
-    git(target, ['commit', '-m', 'record accepted task\n\nTask: T-001\nAgent: maintainer']);
     const artifact = `commit:${fixtureGit(target, ['rev-parse', 'HEAD'])}`;
 
     assert.equal((await audit([
       'new', '--work-unit', 'milestone:M00', '--covered-tasks', 'T-001',
       '--artifact', artifact, '--goal', 'g', '--completion-oracle', 'o', '--evidence', 'npm test',
     ], target)).status, 0);
-    fixtureGit(target, ['add', '.agenticloop/audits']);
-    fixtureGit(target, ['commit', '-m', 'record audit\n\nTask: T-001\nAgent: maintainer']);
     const reportPath = join(target, '.agenticloop', 'tmp', 'run-1.json');
     writeFileSync(reportPath, JSON.stringify(wireReport(artifact, ['T-001'])), 'utf-8');
     assert.equal((await audit(['report', 'AUD-001', '--file', reportPath], target)).status, 0);
-    fixtureGit(target, ['add', '.agenticloop/audits']);
-    fixtureGit(target, ['commit', '-m', 'record audit report\n\nTask: T-001\nAgent: maintainer']);
     if (checkpoint) {
       const restoredState = closeoutCertificationFingerprint(target, {}, externalPaths);
       assert.ok(restoredState, `successful certification must end at a clean committed checkpoint: ${fixtureGit(target, ['status', '--porcelain', '--untracked-files=all'])}`);

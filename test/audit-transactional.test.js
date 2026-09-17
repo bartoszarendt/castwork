@@ -19,13 +19,14 @@ import {
 } from '../src/auditor-return-receipt.js';
 import { signHostPayload } from '../src/host-trust.js';
 import { createTestHostTrust, protectedHostBoundary, writeHostTrustStore } from './helpers/host-trust-fixture.js';
+import { initTestGitRepository, git, spawnGit } from './helpers/git-fixture.js';
 
 let tmpDir;
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-audit-txn-')); });
 after(() => { rmSync(tmpDir, { recursive: true, force: true }); });
 
-const FULL_A = 'a'.repeat(40);
 const FULL_B = 'b'.repeat(40);
+const candidates = new Map();
 
 const PROJECT_MAP = [
   '---',
@@ -52,30 +53,42 @@ function makeTarget(name) {
       'utf-8'
     );
   }
+  initTestGitRepository(target, { quiet: true });
+  git(target, ['add', '-A']);
+  const committed = spawnGit(target, ['commit', '-q', '-m', 'initialize audit transaction fixture'], {
+    env: {
+      GIT_AUTHOR_DATE: '2026-08-08T12:00:00.000Z',
+      GIT_COMMITTER_DATE: '2026-08-08T12:00:00.000Z',
+    },
+  });
+  assert.equal(committed.status, 0, committed.stderr);
+  candidates.set(target, git(target, ['rev-parse', 'HEAD']));
   return target;
 }
+
+const candidate = target => candidates.get(target);
 
 function run(args, target, options = {}) {
   return runCliInProcess(['audit', ...args, '--target', target], options);
 }
 
-function newArgs() {
+function newArgs(target) {
   return [
     'new',
     '--work-unit', 'phase:4',
     '--covered-tasks', 'T-041,T-042',
-    '--artifact', `commit:${FULL_A}`,
+    '--artifact', `commit:${candidate(target)}`,
     '--goal', 'Deliver Phase 4.',
     '--completion-oracle', 'All covered outcomes and checks pass.',
     '--evidence', 'npm test (pass); integration suite (pass).',
   ];
 }
 
-function wireReport(overrides = {}) {
+function wireReport(target, overrides = {}) {
   return {
     report_schema: 'auditor_report_v1',
     producer: { roleId: 'auditor' },
-    artifact: `commit:${FULL_A}`,
+    artifact: `commit:${candidate(target)}`,
     covered_tasks: ['T-001', 'T-002'],
     invocation: { mode: 'host_subagent', reference: 'r-1', provenance: 'verified', receipt: 'auditor-receipt-0001' },
     perspectives: Object.fromEntries(
@@ -91,14 +104,14 @@ function wireReport(overrides = {}) {
 }
 
 async function seedRecord(target) {
-  const result = await run(newArgs(), target);
+  const result = await run(newArgs(target), target);
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
 }
 
 describe('transactional audit creation', () => {
   it('creates no residue when the prospective record is invalid', async () => {
     const target = makeTarget('invalid-new');
-    const args = newArgs();
+    const args = newArgs(target);
     args.splice(args.indexOf('--goal'), 2);
     const result = await run(args, target);
     // Missing --goal is a usage failure before any write.
@@ -108,7 +121,7 @@ describe('transactional audit creation', () => {
 
   it('fails before write on unknown covered tasks with a repair command', async () => {
     const target = makeTarget('unknown-tasks');
-    const args = newArgs();
+    const args = newArgs(target);
     args[args.indexOf('--covered-tasks') + 1] = 'T-041,T-999';
     const result = await run(args, target);
     assert.equal(result.status, 1);
@@ -122,7 +135,7 @@ describe('transactional audit creation', () => {
     await seedRecord(target);
     const content = readFileSync(join(target, '.agenticloop', 'audits', 'AUD-001.md'), 'utf-8');
     const evidence = content.split('## Evidence Available')[1].split('##')[0];
-    assert.ok(evidence.includes(`- Candidate artifact: commit:${FULL_A}`));
+    assert.ok(evidence.includes(`- Candidate artifact: commit:${candidate(target)}`));
     assert.ok(evidence.includes('npm test (pass); integration suite (pass).'));
     assert.equal((await run(['lint'], target)).status, 0);
   });
@@ -250,7 +263,7 @@ describe('legacy record migration', () => {
     const target = makeTarget('canonicalize-full');
     writeFileSync(
       join(target, '.agenticloop', 'audits', 'AUD-001.md'),
-      legacyRecord().replaceAll('commit:0000000', `commit:${FULL_A}`),
+      legacyRecord().replaceAll('commit:0000000', `commit:${candidate(target)}`),
       'utf-8'
     );
     const result = await run([
@@ -260,7 +273,7 @@ describe('legacy record migration', () => {
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     const record = parseAuditRecord(readFileSync(join(target, '.agenticloop', 'audits', 'AUD-001.md'), 'utf-8'));
     assert.equal(record.auditSchemaVersion, 3);
-    assert.equal(record.candidateArtifact, `commit:${FULL_A}`);
+    assert.equal(record.candidateArtifact, `commit:${candidate(target)}`);
     assert.equal((await run(['lint'], target)).status, 0);
   });
 });
@@ -268,7 +281,7 @@ describe('legacy record migration', () => {
 describe('finding dispositions', () => {
   async function seedReportedRecord(target, findings) {
     await seedRecord(target);
-    const report = wireReport({
+    const report = wireReport(target, {
       covered_tasks: ['T-041', 'T-042'],
       findings,
       verdict: findings.some(finding => finding.blocking) ? 'needs_remediation' : 'certified',
@@ -343,7 +356,7 @@ describe('finding dispositions', () => {
       '--type', 'remediation_task', '--ref', 'T-055',
     ], target);
     const gate = await run([
-      'gate', 'AUD-001', '--candidate', `commit:${FULL_A}`,
+      'gate', 'AUD-001', '--candidate', `commit:${candidate(target)}`,
       '--covered-tasks', 'T-041,T-042', '--json',
     ], target);
     assert.equal(gate.status, 1);
@@ -359,8 +372,8 @@ describe('report ingestion modes', () => {
     mkdirSync(operatorRoot, { recursive: true });
     const trust = createTestHostTrust({ target });
     writeHostTrustStore(operatorRoot, trust);
-    const report = wireReport({
-      artifact: `commit:${FULL_A}`,
+    const report = wireReport(target, {
+      artifact: `commit:${candidate(target)}`,
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'negative-auditor-ref', provenance: 'verified', receipt: null },
     });
@@ -425,8 +438,8 @@ describe('report ingestion modes', () => {
     mkdirSync(operatorRoot, { recursive: true });
     const trust = createTestHostTrust({ target });
     writeHostTrustStore(operatorRoot, trust);
-    const report = wireReport({
-      artifact: `commit:${FULL_A}`,
+    const report = wireReport(target, {
+      artifact: `commit:${candidate(target)}`,
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'protected-auditor-ref', provenance: 'verified', receipt: null },
     });
@@ -490,8 +503,8 @@ describe('report ingestion modes', () => {
     mkdirSync(operatorRoot, { recursive: true });
     const trust = createTestHostTrust({ target });
     writeHostTrustStore(operatorRoot, trust);
-    const report = wireReport({
-      artifact: `commit:${FULL_A}`,
+    const report = wireReport(target, {
+      artifact: `commit:${candidate(target)}`,
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'identical-replay-ref', provenance: 'verified', receipt: null },
     });
@@ -558,8 +571,8 @@ describe('report ingestion modes', () => {
     // The Auditor's raw wire document carries permitted surrounding whitespace
     // and non-canonical forms throughout. A protected host cannot digest this
     // document directly; it must prepare it first.
-    const raw = wireReport({
-      artifact: `  commit:${FULL_A}\n`,
+    const raw = wireReport(target, {
+      artifact: `  commit:${candidate(target)}\n`,
       covered_tasks: [' T-041 ', '\tT-042\n'],
       invocation: {
         mode: ' host_subagent ', reference: '  prepared-auditor-ref\n',
@@ -647,8 +660,8 @@ describe('report ingestion modes', () => {
     mkdirSync(operatorRoot, { recursive: true });
     const trust = createTestHostTrust({ target });
     writeHostTrustStore(operatorRoot, trust);
-    const raw = wireReport({
-      artifact: `commit:${FULL_A}`,
+    const raw = wireReport(target, {
+      artifact: `commit:${candidate(target)}`,
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'raw-digest-ref', provenance: 'verified' },
       assessment: '  Consolidated with whitespace.  ',
@@ -694,7 +707,7 @@ describe('report ingestion modes', () => {
     const spacedDir = join(target, 'reports with spaces');
     mkdirSync(spacedDir, { recursive: true });
     const reportPath = join(spacedDir, 'run 1.json');
-    writeFileSync(reportPath, JSON.stringify(wireReport({ covered_tasks: ['T-041', 'T-042'] })), 'utf-8');
+    writeFileSync(reportPath, JSON.stringify(wireReport(target, { covered_tasks: ['T-041', 'T-042'] })), 'utf-8');
     const result = await run(['report', 'AUD-001', '--file', reportPath], target);
     assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
     const record = parseAuditRecord(readFileSync(join(target, '.agenticloop', 'audits', 'AUD-001.md'), 'utf-8'));
@@ -703,24 +716,30 @@ describe('report ingestion modes', () => {
   });
 
   it('persists the same canonical record from piped stdin as from a file', async () => {
-    const report = JSON.stringify(wireReport({ covered_tasks: ['T-041', 'T-042'] }));
     const targetFile = makeTarget('via-file');
     await seed(targetFile);
+    const fileCandidate = candidate(targetFile);
+    const report = JSON.stringify(wireReport(targetFile, { covered_tasks: ['T-041', 'T-042'] }));
     const filePath = join(targetFile, 'report.json');
     writeFileSync(filePath, report, 'utf-8');
     assert.equal((await run(['report', 'AUD-001', '--file', filePath], targetFile)).status, 0);
 
     const targetStdin = makeTarget('via-stdin');
     await seed(targetStdin);
+    const stdinCandidate = candidate(targetStdin);
+    const stdinReport = JSON.stringify(wireReport(targetStdin, { covered_tasks: ['T-041', 'T-042'] }));
     const stdinResult = await runCliInProcess(
       ['audit', 'report', 'AUD-001', '--stdin', '--target', targetStdin],
-      { stdin: scriptedStdin([report]) }
+      { stdin: scriptedStdin([stdinReport]) }
     );
     assert.equal(stdinResult.status, 0, `${stdinResult.stdout}${stdinResult.stderr}`);
 
     const fromFile = readFileSync(join(targetFile, '.agenticloop', 'audits', 'AUD-001.md'), 'utf-8');
     const fromStdin = readFileSync(join(targetStdin, '.agenticloop', 'audits', 'AUD-001.md'), 'utf-8');
-    assert.equal(fromStdin, fromFile);
+    assert.equal(
+      fromStdin.replaceAll(stdinCandidate, '<candidate>'),
+      fromFile.replaceAll(fileCandidate, '<candidate>')
+    );
   });
 
   it('fails conflicting source modes before any file or stdin read', async () => {
@@ -760,7 +779,7 @@ describe('report ingestion modes', () => {
     const target = makeTarget('receipt-asserted');
     await seed(target);
     const reportPath = join(target, 'report.json');
-    writeFileSync(reportPath, JSON.stringify(wireReport({
+    writeFileSync(reportPath, JSON.stringify(wireReport(target, {
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'receipt-claim', provenance: 'verified', receipt: 'claimed-receipt' },
     })), 'utf-8');
@@ -775,13 +794,13 @@ describe('report ingestion modes', () => {
     const target = makeTarget('receipt-unique');
     await seedRecord(target);
     const second = await run([
-      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', `commit:${FULL_A}`,
+      'new', '--work-unit', 'phase:5', '--covered-tasks', 'T-055', '--artifact', `commit:${candidate(target)}`,
       '--goal', 'Deliver Phase 5.', '--completion-oracle', 'All covered outcomes pass.', '--evidence', 'npm test',
     ], target);
     assert.equal(second.status, 0, `${second.stdout}${second.stderr}`);
     const firstPath = join(target, 'first.json');
     const secondPath = join(target, 'second.json');
-    const first = wireReport({
+    const first = wireReport(target, {
       covered_tasks: ['T-041', 'T-042'],
       invocation: { mode: 'host_subagent', reference: 'shared-reference', provenance: 'verified', receipt: 'shared-receipt' },
     });

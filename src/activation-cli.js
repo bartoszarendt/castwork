@@ -44,10 +44,13 @@ import {
   MAX_GRANT_TTL_SECONDS,
   OPERATOR_CONFIRMATION_PHRASE,
   RETURN_ASSURANCE_LIMITATIONS,
+  activationDenialMatches,
   createActivationGrant,
+  createActivationBindingRevocation,
   createActivationRevocation,
   createTaskActivationBinding,
   resolveTaskActivationBinding,
+  validateActivationBindingRevocation,
   validateActivationGrantShape,
   validateTaskActivationBindingShape,
 } from './activation-grant.js';
@@ -73,6 +76,7 @@ import {
   listTaskActivationBindings,
   readActivationGrant,
   readActivationRevocations,
+  readTaskActivationBinding,
   writeActivationRecords,
   writeActivationRevocation,
 } from './activation-store.js';
@@ -87,7 +91,7 @@ import { buildGitHubTaskIdentityInventory, resolveCoveredGitHubTask } from './gi
 import { resolveGitHubRepository, runGhJson } from './gh-helpers.js';
 import { createHash } from 'node:crypto';
 
-const ACTIVATION_SUBCOMMANDS = ['status', 'revoke', 'provision-key', 'identity-status', 'migrate-identity'];
+const ACTIVATION_SUBCOMMANDS = ['status', 'stop', 'revoke', 'provision-key', 'identity-status', 'migrate-identity'];
 
 function sha256(text) {
   return `sha256:${createHash('sha256').update(String(text ?? ''), 'utf8').digest('hex')}`;
@@ -847,6 +851,104 @@ export async function cmdActivation(args, io = createIo()) {
         for (const reason of row.reasons) io.out(`      ${reason}`);
       }
       return rows.every(row => !row.usable) ? 1 : 0;
+    }
+
+    if (sub === 'stop') {
+      const taskId = positional[0];
+      if (!taskId) throw new CliUsageError('activation stop requires the exact task id');
+      const bindingRead = readTaskActivationBinding(target, backend, taskId);
+      if (!bindingRead.ok) {
+        throw new VerificationContextMalformedError(
+          `Activation binding for task '${taskId}' is unreadable: ${bindingRead.errors.join('; ')}`
+        );
+      }
+      if (bindingRead.state !== 'present') {
+        throw new VerificationContextError(`Task '${taskId}' has no activation binding to stop`);
+      }
+      const binding = bindingRead.record;
+      const bindingShape = validateTaskActivationBindingShape(binding);
+      if (!bindingShape.ok) {
+        throw new VerificationContextMalformedError(
+          `Activation binding for task '${taskId}' is malformed: ${bindingShape.errors[0].message}`
+        );
+      }
+      const grantRead = readActivationGrant(target, binding.grantId);
+      if (!grantRead.ok) {
+        throw new VerificationContextMalformedError(
+          `Activation grant for task '${taskId}' is unreadable: ${grantRead.errors.join('; ')}`
+        );
+      }
+      if (grantRead.state !== 'present') {
+        throw new VerificationContextError(
+          `Task '${taskId}' names activation grant '${binding.grantId}', which is not present`
+        );
+      }
+      const grant = grantRead.record;
+      const grantShape = validateActivationGrantShape(grant);
+      if (!grantShape.ok) {
+        throw new VerificationContextMalformedError(
+          `Activation grant '${binding.grantId}' is malformed: ${grantShape.errors[0].message}`
+        );
+      }
+
+      const externalInventory = readExternalActivationRevocations(target, {
+        operatorActivationRoot: io.operatorActivationRoot ?? undefined,
+      });
+      if (!externalInventory.ok) {
+        throw new VerificationContextMalformedError(
+          `External activation revocation inventory is unavailable: ${externalInventory.errors.join('; ')}`
+        );
+      }
+      const localInventory = readActivationRevocations(target);
+      const existing = [...externalInventory.revocations, ...localInventory.revocations]
+        .filter(record => validateActivationBindingRevocation(record).ok)
+        .find(record => activationDenialMatches(record, { grant, binding, backend, taskId }));
+      const revocation = existing ?? createActivationBindingRevocation({
+        grant,
+        binding,
+        reason: opts.reason ? String(opts.reason) : 'operator stop',
+      });
+      const external = writeExternalActivationRevocation(target, revocation, {
+        operatorActivationRoot: io.operatorActivationRoot ?? undefined,
+      });
+      if (!external.ok) {
+        throw new VerificationContextMalformedError(
+          `External activation stop could not be established: ${external.errors.join('; ')}`
+        );
+      }
+      const written = writeActivationRevocation(target, revocation);
+      if (!written.ok) {
+        const result = createValidationResult({
+          command,
+          ok: false,
+          evidenceState: written.receipt.unresolved ? 'changed' : 'negative',
+          disposition: written.receipt.unresolved ? 'superseded' : 'blocked',
+          errors: written.receipt.errors,
+          firstSafeRepair: written.receipt.recovery,
+          receipt: written.receipt,
+        });
+        return printGateResult(command, result, asJson, io);
+      }
+      const report = {
+        command,
+        taskId,
+        grantId: grant.grantId,
+        bindingId: binding.bindingId,
+        revocationId: revocation.revocationId,
+        revokedAt: revocation.revokedAt,
+        reason: revocation.reason,
+        externalTombstone: external.path,
+        receipt: written.receipt,
+        resumeCommand: `npx agenticloop activate ${taskId}`,
+        cancellation: 'not_attempted',
+      };
+      if (asJson) io.out(JSON.stringify(report, null, 2));
+      else {
+        io.out(`Stopped future protected transitions for task ${taskId} (${written.receipt.mutationDisposition}).`);
+        io.out('  An in-flight host operation was not cancelled.');
+        io.out(`  Resume only with fresh authorization: ${report.resumeCommand}`);
+      }
+      return 0;
     }
 
     if (sub === 'revoke') {

@@ -290,8 +290,6 @@ async function buildDispatchFixture(temp, name, options = {}) {
     ]);
     assert.equal(baseline.status, 0, baseline.stderr);
   }
-  git(root, ['add', '.agenticloop/task-contract-history']);
-  git(root, ['commit', '-m', 'task baseline']);
 
   const tree = git(root, ['rev-parse', 'HEAD^{tree}']);
   const basePaths = git(root, ['ls-tree', '-r', '--name-only', tree]).split(/\r?\n/).filter(Boolean);

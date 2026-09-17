@@ -76,16 +76,20 @@ All commands:
 - `task abandon-attempt` and `task attempt-status` respectively discard a
   named live attempt under durable authority and report whether a new packet may
   be minted.
-- `task commit-message` writes a canonically trailered workflow commit message
-  without committing. `task prepare-product-commit` derives the exact task-owned
+- `task commit-message` writes a canonically trailered product commit message
+  without committing. Protected lifecycle commands commit their own bounded
+  workflow paths. `task prepare-product-commit` derives the exact task-owned
   product paths after work and writes the corresponding product commit message.
 - `task refresh-handoff-receipt` refreshes only stale derived handoff evidence
   under its guarded plan; it cannot change the task contract, activation,
   review decision, or product files.
 - `task review-attach-outcome <id> --return-verification <record-id>
-  --maintainer-receipt <receipt.json>` atomically attaches one later
-  host-authenticated Maintainer outcome to the already prepared files-backed
-  review entry for that exact verified return and current review history.
+  (--maintainer-receipt <receipt.json>|--session-report <report.json>)`
+  atomically attaches one later Maintainer outcome to the already prepared
+  files-backed review entry. `--session-report` is an explicitly
+  unauthenticated standard-mode path and is refused when
+  `independent_review_required` is true; hardened mode requires the signed
+  receipt.
 
 Help conventions:
 
@@ -396,7 +400,8 @@ warning here while refusing it there produced a green preflight and a blocked
 dispatch over identical facts. Transient output under `.agenticloop/tmp/` and
 operator-owned state are excluded by that evaluator at both boundaries, so
 scratch never self-blocks the next gate; durable uncommitted evidence still
-fails closed and has to be committed by the Maintainer first.
+fails closed. Protected commands prevent that state by committing exactly their
+own durable write set before returning success.
 
 Preflight is permitted to refuse *earlier* than a later boundary would. The
 property is one-directional: it forbids the false green, not the early refusal.
@@ -442,13 +447,13 @@ the decomposition provenance under `.agenticloop/decompositions/`, and at most
 one bound dependency snapshot — the exact path named by the decomposition's
 `scan.readinessContext.dependencies.sourceRef`. It cannot change task contracts,
 activation, human decisions, review dispositions, acceptance, closeout, or
-product files. A durable Maintainer update is cooperative and must use the
-emitted final trailer block; it does not authenticate the producer.
-`refresh-handoff-evidence` remains a compatibility alias. A write returns
-`written_pending_commit` and a non-proceed disposition until the exact changed
-files are committed and a new preflight passes. Human and JSON output report
-receipt state, decomposition regenerated/stale state, canonical commit subject
-and trailers, and the exact next operation.
+product files. The protected command commits exactly its invocation's durable
+write set with canonical Maintainer attribution; it does not authenticate the
+producer. `refresh-handoff-evidence` remains a compatibility alias. A successful
+write returns committed metadata, while dispatch remains unavailable until a
+new preflight passes. Human and JSON output report receipt state, decomposition
+regenerated/stale state, the exact workflow commit and paths, and the next
+operation.
 
 The dependency-observation category renews the observation *window*, not the
 observation: it carries the Maintainer-recorded statuses forward unchanged and
@@ -729,8 +734,7 @@ toolkit repository's own durable evidence.
 
 ```text
 npx agenticloop task readiness-plan <task-id> [--actor <git-author>] [--authority <kind:reference>]
-                                              [--work-unit <id>] [--base <ref> | --base-paths <path>]
-                                              [--dependencies <path>] [--json]
+                                              [--base <ref> | --base-paths <path>] [--json]
 ```
 
 For one bounded sibling set:
@@ -757,6 +761,12 @@ settled, what it depends on, its owner (always the Maintainer), and — where th
 command is derivable from current state — the exact command with the current
 HEAD and any supplied `--actor`/`--authority` already substituted.
 
+On the default serial route, dependency observation reads declared task
+carriers and their trusted baselines directly. `work_unit_identity` and
+`committed_decomposition` are `not_applicable`; serial does not produce a
+snapshot, inventory, work-unit binding, or decomposition. Explicit parallel
+planning retains those requirements.
+
 The plan shows its **complete write set before anything is written**, naming
 only real paths; a placeholder in a write set would defeat the point. Every
 write is workflow or task evidence, never a product file, and the plan names one
@@ -778,14 +788,14 @@ activation.
 
 #### Display-only and executable plans
 
-A plan produced from current facts alone is **display-only**: `applicable` is
-`false` and `blockers` lists the exact inputs it lacks. Supply every apply input
-— `--actor`, `--authority`, `--work-unit`, exactly one of `--base`/`--base-paths`,
-and `--dependencies` — and the plan becomes **executable**: `applicable` is
+A serial plan without actor, authority, or base is **display-only**:
+`applicable` is `false` and `blockers` lists the missing inputs. Supply
+`--actor`, `--authority`, and exactly one of `--base`/`--base-paths`, and it
+becomes **executable**: `applicable` is
 `true`, `blockers` is empty, and the plan additionally binds `expectedHead`,
 `expectedTaskDigest`, the repository authority identity, the resolved base tree,
-the committed dependency snapshot and its source commit, the observed task
-inventory, the exact write set with each path's expected predecessor state
+the current direct dependency evidence, and the exact write set with each
+path's expected predecessor state
 (`absent` or an exact digest), `finalCommitMessage`, `activationPlanned: false`,
 and a `planDigest` over the whole closed plan.
 
@@ -811,18 +821,15 @@ settles the whole sequence as a single transaction: one filesystem batch through
 the shared mutation kernel, then **at most one** Maintainer-attributed commit.
 
 `readiness-plan` removed the discovery loop. This removes the execution loop:
-settling readiness by hand meant `establish-baseline`, a commit,
-`prepare-decomposition` redirected to a file, `task status agent-ready`, and a
-second commit — and a repair in the middle could invalidate what an earlier
-command had already produced.
+serial apply writes the missing baseline and task-carrier transition together,
+without a snapshot or decomposition repair between them.
 
 The two-phase flow:
 
 ```text
 npx agenticloop task readiness-plan T-018 \
   --actor "<git-author>" --authority "<kind:reference>" \
-  --work-unit "milestone:M2" --base "<ref>" \
-  --dependencies ".agenticloop/dependencies/T-018.json" \
+  --base "<ref>" \
   --json > .agenticloop/tmp/T-018-readiness-plan.json
 
 npx agenticloop task readiness-apply T-018 --plan .agenticloop/tmp/T-018-readiness-plan.json --dry-run --json
@@ -858,11 +865,14 @@ commands call, so the two routes cannot accept different evidence.
 Before writing anything it parses the plan against a closed schema (unknown
 fields and unsupported versions fail closed), verifies `planDigest`, verifies the
 task, backend, repository authority and root, then **re-resolves every bound
-input** — base evidence, the committed dependency snapshot, the task inventory —
+input** — base evidence and, for serial, current declared dependency carriers —
 recomputes the plan, and compares it. A moved HEAD, a changed carrier digest, a
-changed status, damaged trusted history, a refreshed dependency snapshot, changed
-inventory membership, or a changed predecessor path state each refuse with one
-root cause and one safe repair.
+changed status, damaged trusted history, changed direct dependency evidence, or
+a changed predecessor path state each refuse with one root cause and one safe
+repair. At the serial atomic boundary, apply observes direct dependencies again
+under the task and dependency lifecycle locks. Missing, malformed, untrusted,
+non-terminal, or changed evidence refuses without writing. Parallel apply still
+revalidates its snapshots, complete inventory, and decomposition.
 
 Repository safety is conservative:
 
@@ -1180,7 +1190,7 @@ product mutation. No disposition must be rewritten to plain `abandoned`.
 ### `agenticloop task commit-message`
 
 ```text
-npx agenticloop task commit-message <task-id> --class <implementation_artifact_evidence|attempt_abandonment|...> --subject <text> [--body <text> | --body-file <path>] --output <message-file> [--json]
+npx agenticloop task commit-message <task-id> --class product_implementation --subject <text> [--body <text> | --body-file <path>] --output <message-file> [--json]
 ```
 
 Agentic Loop requires `Task:` and `Agent:` in the final contiguous trailer block
@@ -1190,13 +1200,14 @@ multi-line message — inserts a blank line between every `-m`, which strands
 the producer that emits a compliant message file; commit it with `git commit -F
 <message-file>`, never with repeated `-m` arguments.
 
-The **commit class decides the attributed role**, so no role has to guess it:
+The only role-authored class is `product_implementation`, attributed to the
+Engineer. Protected commands author bookkeeping commits themselves using the
+collapsed classes `workflow_evidence` and `workflow_disposition`; those classes
+are not inputs to `task commit-message`.
 
 | Class | Agent |
 | --- | --- |
-| `product_implementation`, `role_start_status`, `implementation_artifact_evidence`, `implementation_summary_evidence`, `implementation_outcome_evidence` | `engineer` |
-| `attempt_abandonment`, `handoff_evidence_refresh`, `readiness_settlement`, `review_record`, `acceptance_transition` | `maintainer` |
-| `audit_record` | `auditor` |
+| `product_implementation` | `engineer` |
 
 The producer and the `commit-attribution check` validator share one renderer, so
 a message this command emits can never be one the validator rejects, and every
@@ -1206,6 +1217,7 @@ refusal that reports a trailer defect names this command as its repair.
 
 ```text
 npx agenticloop activation status [<task-id>] [--json]
+npx agenticloop activation stop <task-id> [--reason <text>] [--json]
 npx agenticloop activation revoke <grant-id> [--reason <text>] [--json]
 npx agenticloop activation provision-key [--json]
 npx agenticloop activation identity-status [--json]
@@ -1213,9 +1225,13 @@ npx agenticloop activation migrate-identity [--json]
 ```
 
 `status` reports every stored binding, whether it is still usable against
-current task state, and the effective policy with its source. `revoke` creates
-an externally authoritative repository-specific create-only tombstone; every binding derived from that grant is then refused
-by dispatch. `provision-key` creates the external operator confirmation key
+current task state, and the effective policy with its source. `stop` creates an
+externally authoritative, create-only tombstone for one exact task binding;
+sibling bindings under a wider grant remain usable. It blocks future protected
+transitions but does not cancel an in-flight host operation. Resume with a
+fresh interactive `activate <task-id>`; the old tombstone and old-packet
+refusal remain. `revoke` creates a grant-wide tombstone, so every binding
+derived from that grant is refused. `provision-key` creates the external operator confirmation key
 explicitly; `activate` provisions it lazily, so running it separately is
 optional.
 
@@ -1533,8 +1549,9 @@ npx agenticloop task verify-return T-001 --packet .agenticloop/tmp/dispatch.json
 `role-start` creates the aggregate once at
 `.agenticloop/tmp/T-001-checks.json`. That aggregate is mutable scratch and is
 never committed. Each passing command check writes its immutable durable proof
-to `.agenticloop/checks/T-001/RC-N.execution.json` by default; commit that proof
-with canonical Engineer attribution. No mutating workflow command is legal
+to `.agenticloop/checks/T-001/RC-N.execution.json` by default and commits that
+invocation's proof with canonical Engineer attribution. Do not stage or combine
+those paths manually. No mutating workflow command is legal
 between the last check update and `prepare-return`. Repeating the exact public
 `verify-return` reuses the first observation time and reports `already_current`;
 changed semantic evidence remains a conflict.
@@ -1596,9 +1613,8 @@ path. That is deliberate: proof that a required check ran belongs to the
 repository, not to the machine that ran it, and an artifact written into
 gitignored scratch is invisible on every other checkout - so a reviewer is
 pointed at a file that does not exist for them, and a later attempt rebuilds
-identical proof it cannot see. Commit that evidence with the rest of the
-workflow state after the return is produced; committing it beforehand moves the
-repository state the execution evidence is bound to. Manual, failed, blocked, and not-run
+identical proof it cannot see. The protected command commits that evidence as
+its own bounded invocation write set. Manual, failed, blocked, and not-run
 observations retain their existing bounded observation form.
 
 On Windows, the runner resolves `.cmd` and `.bat` shims on `PATH` (preferring
@@ -1702,6 +1718,16 @@ after persistence and changes only its marked section blocks. Raw returns and re
 `productBaseHead`, `productHead`, `workflowHead`, `candidateHead`, separate
 product/workflow paths, and exact chain references. `task review-prepare` uses
 one command-local carrier snapshot and writes no review receipt when it changes.
+
+For files tasks, a later `task review-attach-outcome` accepts exactly one of a
+host-signed `--maintainer-receipt` or a `--session-report` input containing
+`reviewerSession` and the closed review `outcome`. The latter is prospective,
+standard-mode reduced assurance: it is stored with `assurance:
+session_reported` and `producerAuthenticated: false`, and its durable digest
+binds the reviewer session, task contract, product candidate, verified return,
+current review history, and outcome. It is available only when
+`independent_review_required` is not true. Hardened mode and every task that
+requires independent review still require a valid host-signed receipt.
 
 `task review-prepare --json` also emits two revision-routing fields,
 `findingResolutionMatrix` and `matrixDecision`. Both are `null` on a first
@@ -1906,10 +1932,12 @@ deprecated `github_trusted_actors` alias is honored with a warning.
 
 Files-backed current tasks use `task_contract_schema: 2`. Run
 `task establish-baseline <id> --actor <git-author> --authority <kind:reference>`
-and commit the task history artifact separately before moving to `agent-ready`.
+before moving to `agent-ready`; the command commits its exact appended history
+path itself.
 A material contract change after the baseline uses
 `task authorize-correction <id> --expect-prior-digest <digest> --reason <text>
---authority <kind:reference> --actor <git-author>`, also committed separately.
+--authority <kind:reference> --actor <git-author>` and likewise commits its
+exact appended history path itself.
 Files history is verified append-only against first-parent Git history with
 per-record commit provenance (see `agenticloop/backends/files.md`).
 
@@ -1933,8 +1961,9 @@ npx agenticloop task status T-001 in-progress --expect-digest sha256:<digest>
 
 `--expect-digest` is required for every task-status transition, including
 records with no `task_contract_schema`. An `agent-ready` transition additionally
-requires exactly one of `--base <ref>` or `--base-paths <inventory.json>`, plus
-`--dependencies <snapshot.json>`. Supplying both base forms is refused.
+requires exactly one of `--base <ref>` or `--base-paths <inventory.json>`.
+Files-backed serial transitions observe declared dependency carriers and their
+trusted baselines directly. Supplying both base forms is refused.
 
 An `in-progress` transition is the role start, and it accepts
 `--dispatch-packet <packet.json>` naming a canonical `task prepare-dispatch`
@@ -1963,7 +1992,8 @@ never selects `HEAD`, a default branch, or a dependency disposition on the
 author's behalf, and it resolves `--base <ref>` to that ref's exact Git tree
 object id so a later branch move cannot redefine the recorded baseline.
 
-The dependency snapshot is a validated document, not a bare status map:
+Explicit parallel readiness and GitHub transitions use a validated dependency
+snapshot, not a bare status map:
 
 ```json
 {
@@ -1976,18 +2006,18 @@ The dependency snapshot is a validated document, not a bare status map:
 }
 ```
 
-An explicit empty `"statuses": {}` is a positive declaration that the task has
-no dependencies and evaluates as satisfied. It is not equivalent to omitting
-the dependency snapshot: every guarded `agent-ready` mutation still requires
-the versioned snapshot, source identity, observation time, and freshness policy.
+An explicit empty `"statuses": {}` is a positive declaration that the parallel
+or GitHub task has no dependencies and evaluates as satisfied. Files serial
+readiness instead derives an empty dependency set from the task carrier.
 
-Missing, malformed, stale, and changed evidence stay distinct: a snapshot older
+Missing, malformed, stale, and changed snapshot evidence stay distinct: a snapshot older
 than its own freshness policy is `stale`, an unparseable one is `malformed`, an
 absent one is `missing`, and a superseded `--expect-digest` is `changed`.
 
 Receipt revalidation is read-only and executable verbatim from the target
 directory. A readiness transition emits a `task-readiness` command carrying the
-resulting digest and the exact base and dependency inputs; a non-readiness
+resulting digest and exact base plus `--serial-dependencies <task-carrier-template>` for files, or the snapshot input
+for GitHub; a non-readiness
 transition emits the lint verifier bound to the resulting digest:
 
 Arguments that need quoting are emitted only when one double-quoted spelling is
@@ -1998,7 +2028,7 @@ An otherwise-safe value containing one interior backslash is double quoted
 because an unquoted POSIX shell would consume the backslash as an escape.
 
 ```text
-npx agenticloop task-readiness --task-body <carrier> --mode authoring --expect-task-digest sha256:<digest> --base <tree-oid> --dependencies <snapshot.json>
+npx agenticloop task-readiness --task-body <carrier> --mode authoring --expect-task-digest sha256:<digest> --base <tree-oid> --serial-dependencies '.agenticloop/tasks/{taskId}.md'
 npx agenticloop task lint T-001 --expect-task-digest sha256:<digest>
 npx agenticloop task-body lint --issue <n> --expect-task-digest sha256:<digest>
 ```
@@ -2011,11 +2041,12 @@ recognized mutation regardless of launcher spelling.
 `task-readiness --expect-task-digest` also re-evaluates the trusted
 task-contract chain, so revalidating an already-`agent-ready` task is never
 confirmed on scope and dependency facts alone. A later verifier run without the
-exact base and dependency inputs reports missing context; it must not treat the
+exact base reports missing context; files-backed serial verification re-observes
+dependencies. It must not treat the
 committed record as invalid or compensate by rolling it back.
 
 The read-only command emits `agenticloop.task-readiness-evidence`, a separately
-validated summary that may record `dependencies: null`. It does not claim the
+validated summary; non-files modes may record `dependencies: null`. It does not claim the
 mutation-only `agenticloop.task-evidence-context` kind because a read-only
 evaluation has no authoritative predecessor-to-successor transition. Guarded
 mutations continue to carry the complete mutation evidence context in their
@@ -2111,14 +2142,13 @@ npx agenticloop commit-attribution repair-record-lint --record record.json
 They render and validate provenance only; they never amend, push, force-push,
 or publish a record.
 
-Before committing GitHub-backed work, use a message file and one contiguous
-final trailer block:
+Before committing GitHub-backed product work, use a message file and one
+contiguous final trailer block:
 
 ```text
 npx agenticloop commit-attribution check --task T-001 --message-file .agenticloop/tmp/T-001-commit-message.txt
 git commit -F .agenticloop/tmp/T-001-commit-message.txt
 npx agenticloop commit-attribution check --task T-001
-npx agenticloop commit-attribution check --task T-001 --role maintainer --commit HEAD
 ```
 
 Push only after both checks pass. Separate `git commit -m` paragraphs for

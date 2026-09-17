@@ -301,9 +301,10 @@ an operator-pinned policy. See [Host adapters](docs/host-adapters.md) and the
 
 ## Stop Agentic Loop
 
-Stopping deactivates Agentic Loop only for the current conversation. It safely
-checkpoints unfinished work when needed; it does not accept or close a task,
-commit, push, merge, or clean up a worktree.
+Stopping durably denies future protected transitions for the active task and
+deactivates Agentic Loop for the current conversation. It safely checkpoints
+unfinished work when needed; it does not claim to cancel an in-flight host
+operation, accept or close a task, commit, push, merge, or clean up a worktree.
 
 `stop` takes no task ID or other arguments: it must be the exact and only
 activation argument. The task or context forms below are separate resume
@@ -318,8 +319,11 @@ invocations.
 | Copilot CLI | `/agenticloop stop` | `/agenticloop <task or context>` |
 | Cursor | `/agenticloop stop` | `/agenticloop <task or context>` |
 
-This is not host exit (`/exit` or `/quit`), Codex's built-in `/stop` terminal
-control, task closeout, or worktree cleanup. See [Host Adapters](docs/host-adapters.md#stop-agentic-loop).
+Resume requires a fresh interactive task authorization as well as the host
+invocation shown above. The old stop record remains and old packets stay
+refused. This is not host exit (`/exit` or `/quit`), Codex's built-in `/stop`
+terminal control, task closeout, or worktree cleanup. See
+[Host Adapters](docs/host-adapters.md#stop-agentic-loop).
 
 ## Cost-quality routing by role
 
@@ -442,6 +446,7 @@ npx agenticloop validate                             Validate skills, config, li
 npx agenticloop status                               Show configured adapters, artifacts, and next steps
 npx agenticloop activate <task-id...>                Interactively authorize existing tasks for dispatch
 npx agenticloop activation status                    Inspect activation authority
+npx agenticloop activation stop <task-id>            Durably stop one exact task binding
 npx agenticloop activation revoke <grant-id>         Revoke one activation grant
 npx agenticloop activation provision-key             Provision operator activation material
 npx agenticloop host-trust status                    Inspect protected host trust

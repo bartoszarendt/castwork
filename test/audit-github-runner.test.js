@@ -19,11 +19,13 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { runCliInProcess } from './helpers/run-cli.js';
+import { initTestGitRepository, git } from './helpers/git-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const BIN = join(REPO_ROOT, 'bin', 'agenticloop.js');
 
 let tmpDir;
+const candidates = new Map();
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-audit-gh-runner-')); });
 after(() => { rmSync(tmpDir, { recursive: true, force: true }); });
 
@@ -47,6 +49,10 @@ function makeGitHubTarget(name) {
     '# Project',
     '',
   ].join('\n'), 'utf-8');
+  initTestGitRepository(target, { quiet: true });
+  git(target, ['add', '-A']);
+  git(target, ['commit', '-q', '-m', 'initialize GitHub audit fixture']);
+  candidates.set(target, git(target, ['rev-parse', 'HEAD']));
   return target;
 }
 
@@ -54,7 +60,7 @@ const AUDIT_NEW_ARGS = (target) => [
   'audit', 'new',
   '--work-unit', 'milestone:M00',
   '--covered-tasks', 'T-001',
-  '--artifact', `commit:${'a'.repeat(40)}`,
+  '--artifact', `commit:${candidates.get(target)}`,
   '--goal', 'Ship the milestone',
   '--completion-oracle', 'Marker recorded',
   '--evidence', 'npm test passed',
@@ -146,7 +152,7 @@ describe('one GitHub inventory snapshot per command', () => {
       'audit', 'new',
       '--work-unit', workUnit,
       '--covered-tasks', tasks,
-      '--artifact', `commit:${'a'.repeat(40)}`,
+      '--artifact', `commit:${candidates.get(target)}`,
       '--goal', 'goal',
       '--completion-oracle', 'oracle',
       '--evidence', 'evidence',
@@ -196,7 +202,7 @@ describe('one GitHub inventory snapshot per command', () => {
       'audit', 'new',
       '--work-unit', 'milestone:M00',
       '--covered-tasks', 'T-007',
-      '--artifact', `commit:${'a'.repeat(40)}`,
+      '--artifact', `commit:${candidates.get(target)}`,
       '--goal', 'g', '--completion-oracle', 'o', '--evidence', 'npm test',
       '--target', target,
     ], { ghCommandRunner });
@@ -215,7 +221,7 @@ describe('one GitHub inventory snapshot per command', () => {
     const lint = await runCliInProcess(['audit', 'lint', '--target', target], { ghCommandRunner: failing });
     assert.equal(lint.status, 0); // no records exist; lint of nothing passes
     const gate = await runCliInProcess([
-      'audit', 'gate', 'milestone:M00', '--candidate', `commit:${'a'.repeat(40)}`,
+      'audit', 'gate', 'milestone:M00', '--candidate', `commit:${candidates.get(target)}`,
       '--covered-tasks', 'T-001,T-002', '--target', target,
     ], { ghCommandRunner: failing });
     assert.equal(gate.status, 1);

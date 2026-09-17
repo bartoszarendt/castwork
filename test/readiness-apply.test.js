@@ -3,20 +3,19 @@
  *
  * Showing the whole sequence removed the *discovery* loop. It did not remove the
  * *execution* loop, and the field record measured both. Settling readiness by hand
- * meant `establish-baseline`, a commit, `prepare-decomposition` redirected to a
- * file, `task status agent-ready`, and a second commit - four or five commands,
- * usually two commits, with every repair able to invalidate what an earlier
- * command had already produced.
+ * meant `establish-baseline`, `prepare-decomposition` redirected to a file and
+ * committed as authored planning evidence, and `task status agent-ready` - four
+ * or five commands and three commits, with every repair able to invalidate what
+ * an earlier command had already produced.
  *
  * ## What these cases are
  *
  * They are **current-artifact property regressions for the new implementation**,
  * not reproductions of a pre-remediation baseline failure. `task readiness-apply` did
  * not exist at that baseline, and neither did the executable plan it consumes, so there
- * is no command or fixture there to fail. The two characterization cases that
- * *do* describe the prior artifact are named as such: they assert that the
- * manual route needs more than one commit and that an intermediate state is
- * genuinely untrusted, both of which are still true of the standalone commands.
+ * is no command or fixture there to fail. The standalone-route cases assert
+ * that CLI-authored protected evidence is immediately trusted and that the
+ * remaining authored decomposition is still an explicit commit.
  *
  * The properties pinned here:
  *
@@ -91,6 +90,28 @@ async function settle(name, options = {}) {
   return { target, taskId, baseHead, plan, applied, result: receipt(applied) };
 }
 
+async function addDeclaredDependency(target, dependencyId, {
+  status = 'accepted',
+  trusted = true,
+  malformed = false,
+} = {}) {
+  if (malformed) {
+    mkdirSync(join(target, '.agenticloop', 'tasks'), { recursive: true });
+    writeFileSync(join(target, '.agenticloop', 'tasks', `${dependencyId}.md`), `---\ntask_id: ${dependencyId}\nstatus: accepted\n---\n`, 'utf8');
+  } else {
+    makePreflightTask(target, dependencyId, { status });
+  }
+  git(target, ['add', '--', `.agenticloop/tasks/${dependencyId}.md`]);
+  git(target, ['commit', '-m', `author ${dependencyId}\n\nTask: ${dependencyId}\nAgent: maintainer`]);
+  if (trusted && !malformed) {
+    const established = await runCliInProcess([
+      'task', 'establish-baseline', dependencyId,
+      '--actor', ACTOR, '--authority', AUTHORITY, '--json', '--target', target,
+    ]);
+    assert.equal(established.status, 0, established.stderr);
+  }
+}
+
 describe('one transaction, one commit', () => {
   it('takes a draft task to agent-ready in exactly one Maintainer-attributed commit', async () => {
     const { target, taskId, baseHead, result } = await settle('one-commit');
@@ -99,7 +120,6 @@ describe('one transaction, one commit', () => {
     assert.equal(result.commitCount, 1);
     assert.equal(commitCountSince(target, baseHead), 1);
     assert.deepEqual(result.changedPaths, [
-      DECOMPOSITION_REF(taskId),
       HISTORY_REF(taskId),
       `.agenticloop/tasks/${taskId}.md`,
     ]);
@@ -160,11 +180,9 @@ describe('one transaction, one commit', () => {
       'task', 'establish-baseline', taskId, '--actor', ACTOR, '--authority', AUTHORITY, '--target', target,
     ]);
     assert.equal(baseline.status, 0, baseline.stderr);
-    git(target, ['add', '--', HISTORY_REF(taskId)]);
-    git(target, ['commit', '-m', `establish baseline\n\nTask: ${taskId}\nAgent: maintainer`]);
     const baseHead = head(target);
     const { plan } = await writePlan(target, taskId);
-    assert.deepEqual([...plan.writeSet], [DECOMPOSITION_REF(taskId), `.agenticloop/tasks/${taskId}.md`]);
+    assert.deepEqual([...plan.writeSet], [`.agenticloop/tasks/${taskId}.md`]);
     const result = receipt(await applyPlan(target, taskId));
     assert.equal(result.mutationDisposition, 'committed');
     assert.equal(commitCountSince(target, baseHead), 1);
@@ -203,6 +221,15 @@ describe('atomic work-unit settlement', () => {
       git(target, ['add', '--', `.agenticloop/tasks/${taskId}.md`, DEPENDENCY_REF(taskId)]);
       git(target, ['commit', '-m', `author ${taskId}\n\nTask: ${taskId}\nAgent: maintainer`]);
     }
+    for (const taskId of taskIds) {
+      const path = taskPath(target, taskId);
+      const body = readFileSync(path, 'utf8')
+        .replace('task_contract_schema: 2', `owned_paths:\n  - "src/${taskId.toLowerCase()}/**"\ntask_contract_schema: 2`)
+        .replace('## Reviewer Checklist', '## Parallel Safety\n- **Parallel eligibility**: eligible\n- **Knowledge coupling**: independent\n\n## Reviewer Checklist');
+      writeFileSync(path, body, 'utf8');
+    }
+    git(target, ['add', '-A']);
+    git(target, ['commit', '-m', 'declare disjoint parallel ownership\n\nWork-Unit: milestone:M2\nTasks: T-020, T-021, T-022\nAgent: maintainer']);
     const baseHead = head(target);
     const dependencyMapRef = '.agenticloop/tmp/work-unit-dependencies.json';
     writeFileSync(join(target, dependencyMapRef), `${JSON.stringify(Object.fromEntries(
@@ -254,6 +281,7 @@ describe('atomic work-unit settlement', () => {
     assert.equal(new Set(scans.map(scan => scan.inventory.membershipDigest)).size, 1);
     const message = git(target, ['show', '-s', '--format=%B', 'HEAD']);
     assert.equal(git(target, ['show', '-s', '--format=%s', 'HEAD']), `chore(${WORK_UNIT}): settle readiness`);
+    assert.match(message, /^Workflow-Class: workflow_evidence$/m);
     assert.equal(evaluateWorkUnitCommitAttribution({ message, workUnitId: WORK_UNIT, taskIds }).ok, true);
 
     const replay = await runCliInProcess([
@@ -357,57 +385,131 @@ describe('authoring readiness diagnostics are consistent', () => {
   });
 });
 
-describe('the prior artifact genuinely needed more than one commit', () => {
-  // Current-artifact characterization of the standalone route. These commands
-  // still behave exactly as they did, which is why the orchestration exists.
-  it('refuses an uncommitted baseline as untrusted intermediate state', async () => {
+describe('serial direct dependency evidence', () => {
+  it('settles an accepted declared dependency without a snapshot or decomposition', async () => {
+    const dependencyId = 'T-017';
+    const { target, taskId } = createReadinessTarget(temp, 'serial-dependency-accepted', {
+      dependsOn: [dependencyId],
+    });
+    await addDeclaredDependency(target, dependencyId);
+    const baseHead = head(target);
+    const { plan } = await writePlan(target, taskId);
+    assert.equal(plan.applicable, true, JSON.stringify(plan.blockers));
+    assert.equal(plan.executable.dependencies.sourceRef, null);
+    assert.deepEqual(plan.executable.dependencies.revalidationArgs, [
+      '--serial-dependencies', '.agenticloop/tasks/{taskId}.md',
+    ]);
+    assert.equal(plan.steps.find(item => item.id === 'work_unit_identity').state, 'not_applicable');
+    assert.equal(plan.steps.find(item => item.id === 'committed_decomposition').state, 'not_applicable');
+    assert.equal(plan.writeSet.includes(DECOMPOSITION_REF(taskId)), false);
+    const result = receipt(await applyPlan(target, taskId));
+    assert.equal(result.mutationDisposition, 'committed', JSON.stringify(result.errors));
+    assert.equal(commitCountSince(target, baseHead), 1);
+    assert.equal(existsSync(join(target, DECOMPOSITION_REF(taskId))), false);
+  });
+
+  for (const scenario of [
+    { name: 'missing', state: 'missing', code: 'dependency.unresolved' },
+    { name: 'malformed', state: 'malformed', code: 'task.contract.malformed' },
+    { name: 'untrusted', state: 'untrusted', code: 'contract.baseline.invalid' },
+    { name: 'non-terminal', state: 'non_terminal', code: 'dependency.unresolved' },
+  ]) {
+    it(`refuses ${scenario.name} declared dependency evidence without mutation`, async () => {
+      const dependencyId = 'T-017';
+      const { target, taskId } = createReadinessTarget(temp, `serial-dependency-${scenario.name}`, {
+        dependsOn: [dependencyId],
+      });
+      if (scenario.state !== 'missing') {
+        await addDeclaredDependency(target, dependencyId, {
+          malformed: scenario.state === 'malformed',
+          trusted: scenario.state !== 'untrusted',
+          status: scenario.state === 'non_terminal' ? 'draft' : 'accepted',
+        });
+      }
+      const before = head(target);
+      const { plan } = await writePlan(target, taskId);
+      assert.equal(plan.applicable, false);
+      assert.match(plan.steps.find(item => item.id === 'dependency_observation').detail, new RegExp(scenario.state));
+      assert.ok(plan.blockers.some(item => item.includes(`[${scenario.code}]`)), JSON.stringify(plan.blockers));
+      const result = receipt(await applyPlan(target, taskId));
+      assert.equal(result.mutationDisposition, 'blocked');
+      assert.equal(result.commitCount, 0);
+      assert.equal(head(target), before);
+      assert.match(taskBody(target, taskId), /^status: draft$/m);
+    });
+  }
+
+  it('refuses direct dependency drift between plan and apply', async () => {
+    const dependencyId = 'T-017';
+    const { target, taskId } = createReadinessTarget(temp, 'serial-dependency-drift', {
+      dependsOn: [dependencyId],
+    });
+    await addDeclaredDependency(target, dependencyId);
+    await writePlan(target, taskId);
+    const dependencyPath = taskPath(target, dependencyId);
+    writeFileSync(dependencyPath, readFileSync(dependencyPath, 'utf8').replace(/^status: accepted$/m, 'status: draft'), 'utf8');
+    const result = receipt(await applyPlan(target, taskId));
+    assert.equal(result.mutationDisposition, 'stale');
+    assert.ok(result.errors.some(error => /dependency evidence changed/.test(error)), JSON.stringify(result.errors));
+    assert.equal(result.commitCount, 0);
+    assert.match(taskBody(target, taskId), /^status: draft$/m);
+  });
+
+  it('revalidates direct dependencies at the atomic write boundary', async () => {
+    const dependencyId = 'T-017';
+    const { target, taskId } = createReadinessTarget(temp, 'serial-dependency-atomic', {
+      dependsOn: [dependencyId],
+    });
+    await addDeclaredDependency(target, dependencyId);
+    const { plan } = await writePlan(target, taskId);
+    const dependencyPath = taskPath(target, dependencyId);
+    const applied = applyReadinessPlan({
+      target, taskId, plan, projectConfig: {},
+      ...createReadinessApplyBindings(target, {}, taskId),
+      beforeWrite: () => {
+        writeFileSync(dependencyPath, readFileSync(dependencyPath, 'utf8').replace(/^status: accepted$/m, 'status: draft'), 'utf8');
+      },
+    });
+    assert.equal(applied.mutationDisposition, 'rolled_back', JSON.stringify(applied.errors));
+    assert.ok(applied.errors.some(error => /direct declared dependency evidence/.test(error)), JSON.stringify(applied.errors));
+    assert.equal(applied.commitCount, 0);
+    assert.match(taskBody(target, taskId), /^status: draft$/m);
+  });
+});
+
+describe('standalone protected commands own their evidence commits', () => {
+  it('makes the CLI-authored baseline trusted immediately', async () => {
     const { target, taskId } = createReadinessTarget(temp, 'characterize-untrusted');
+    const before = head(target);
     const baseline = await runCliInProcess([
       'task', 'establish-baseline', taskId, '--actor', ACTOR, '--authority', AUTHORITY, '--json', '--target', target,
     ]);
     assert.equal(baseline.status, 0, baseline.stderr);
-    assert.match(JSON.parse(baseline.stdout).warning, /commit it separately/);
-    // Until that append is committed it is not a trusted baseline, and the plan
-    // says so rather than treating the write as progress.
+    const result = JSON.parse(baseline.stdout);
+    assert.equal(result.workflowCommit.committed, true);
+    assert.equal(commitCountSince(target, before), 1);
     const plan = buildReadinessPlan(target, taskId, {});
     const step = plan.steps.find(item => item.id === 'trusted_contract_baseline');
-    assert.equal(step.settled, false);
-    assert.match(step.detail, /must be committed separately/);
+    assert.equal(step.settled, true);
   });
 
-  it('needs two commits when the standalone commands are used in sequence', async () => {
+  it('creates one bounded commit per protected invocation without a follow-up bookkeeping commit', async () => {
     const { target, taskId } = createReadinessTarget(temp, 'characterize-two-commits');
     const baseHead = head(target);
     await runCliInProcess([
       'task', 'establish-baseline', taskId, '--actor', ACTOR, '--authority', AUTHORITY, '--target', target,
     ]);
-    const revision = `git-commit:${head(target)}`;
-    const decomposition = await runCliInProcess([
-      'task', 'prepare-decomposition', taskId,
-      '--work-unit', WORK_UNIT, '--source-ref', DECOMPOSITION_REF(taskId),
-      '--source-revision', revision, '--base', 'HEAD',
-      '--dependencies', DEPENDENCY_REF(taskId), '--target', target,
-    ]);
-    assert.equal(decomposition.status, 0, decomposition.stderr);
-    mkdirSync(join(target, '.agenticloop', 'decompositions'), { recursive: true });
-    writeFileSync(join(target, DECOMPOSITION_REF(taskId)), `${decomposition.stdout.trimEnd()}\n`, 'utf8');
-    // Commit one: the readiness evidence, because `task status agent-ready`
-    // refuses an uncommitted baseline and an uncommitted decomposition.
-    git(target, ['add', '--', HISTORY_REF(taskId), DECOMPOSITION_REF(taskId)]);
-    git(target, ['commit', '-m', `settle evidence\n\nTask: ${taskId}\nAgent: maintainer`]);
     const linted = JSON.parse((await runCliInProcess(['task', 'lint', taskId, '--json', '--target', target])).stdout);
     const transition = await runCliInProcess([
       'task', 'status', taskId, 'agent-ready',
       '--expect-digest', linted[0].digest,
-      '--base', 'HEAD', '--dependencies', DEPENDENCY_REF(taskId),
+      '--base', 'HEAD',
       '--json', '--target', target,
     ]);
     assert.equal(transition.status, 0, `${transition.stderr}\n${transition.stdout}`);
-    // Commit two: the carrier the transition just wrote.
-    git(target, ['add', '--', `.agenticloop/tasks/${taskId}.md`]);
-    git(target, ['commit', '-m', `settle lifecycle\n\nTask: ${taskId}\nAgent: maintainer`]);
     assert.equal(commitCountSince(target, baseHead), 2,
-      'the standalone sequence needs two readiness commits; the orchestration needs one');
+      'baseline and lifecycle are each CLI-authored; serial readiness creates no decomposition commit');
+    assert.match(git(target, ['show', '-s', '--format=%B', 'HEAD']), /^Workflow-Class: workflow_disposition$/m);
   });
 });
 
@@ -433,9 +535,9 @@ describe('readiness-plan stays read-only', () => {
     assert.equal(plan.applicable, false);
     assert.ok(plan.blockers.some(item => /--actor/.test(item)));
     assert.ok(plan.blockers.some(item => /--authority/.test(item)));
-    assert.ok(plan.blockers.some(item => /--work-unit/.test(item)));
     assert.ok(plan.blockers.some(item => /--base/.test(item)));
-    assert.ok(plan.blockers.some(item => /--dependencies/.test(item)));
+    assert.equal(plan.steps.find(item => item.id === 'work_unit_identity').state, 'not_applicable');
+    assert.equal(plan.steps.find(item => item.id === 'committed_decomposition').state, 'not_applicable');
   });
 
   it('refuses to apply a display-only plan', async () => {
@@ -458,12 +560,13 @@ describe('readiness-plan stays read-only', () => {
     }
   });
 
-  it('never renders git add -A for the readiness commit', async () => {
+  it('never asks the Maintainer to hand-author the readiness commit', async () => {
     const { target, taskId } = createReadinessTarget(temp, 'plan-no-add-all');
     const { plan } = await writePlan(target, taskId);
     const attribution = plan.steps.find(item => item.id === 'maintainer_attribution');
-    assert.doesNotMatch(attribution.command, /add\s+-A/);
-    for (const path of plan.writeSet) assert.match(attribution.command, new RegExp(path.replace(/[.]/g, '\\.')));
+    assert.equal(attribution.command, null);
+    assert.match(attribution.detail, /readiness-apply commits the exact readiness write set/);
+    assert.match(plan.executable.finalCommitMessage, /^Workflow-Class: workflow_evidence$/m);
   });
 
   it('contains no unresolved placeholder in an applicable plan', async () => {
@@ -518,10 +621,10 @@ describe('plan integrity fails closed', () => {
       plan.executable.actor = '<git-author>';
       plan.planDigest = readinessPlanDigest(plan);
     }, /no unresolved placeholders/],
-    ['a per-task work-unit fallback', plan => {
-      plan.executable.workUnit.id = 'work-unit:T-018';
+    ['a serial work-unit binding', plan => {
+      plan.executable.workUnit = { id: 'work-unit:T-018', backend: 'files' };
       plan.planDigest = readinessPlanDigest(plan);
-    }, /durable work-unit identity/],
+    }, /work-unit and inventory bindings must be null/],
     ['a planted activationPlanned', plan => {
       plan.activationPlanned = true;
       plan.planDigest = readinessPlanDigest(plan);
@@ -656,8 +759,8 @@ describe('unrelated work is never committed', () => {
   it('refuses an untracked collision on a planned create path', async () => {
     const { target, taskId } = createReadinessTarget(temp, 'safety-collision');
     await writePlan(target, taskId);
-    mkdirSync(join(target, '.agenticloop', 'decompositions'), { recursive: true });
-    writeFileSync(join(target, DECOMPOSITION_REF(taskId)), '{"planted":true}\n', 'utf8');
+    mkdirSync(join(target, '.agenticloop', 'task-contract-history'), { recursive: true });
+    writeFileSync(join(target, HISTORY_REF(taskId)), '{"planted":true}\n', 'utf8');
     const result = receipt(await applyPlan(target, taskId));
     // A planned create path that unexpectedly exists changes the plan's bound
     // predecessor state, so it is refused as stale before any repository-safety
@@ -666,24 +769,20 @@ describe('unrelated work is never committed', () => {
     assert.ok(result.errors.some(error => /predecessor path states changed/.test(error)), JSON.stringify(result.errors));
     assert.equal(result.commitCount, 0);
     // The planted bytes are preserved exactly, never overwritten or discarded.
-    assert.equal(readFileSync(join(target, DECOMPOSITION_REF(taskId)), 'utf8'), '{"planted":true}\n');
+    assert.equal(readFileSync(join(target, HISTORY_REF(taskId)), 'utf8'), '{"planted":true}\n');
   });
 
   it('refuses a dirty planned path whose bytes the plan did not bind', async () => {
     const { target, taskId } = createReadinessTarget(temp, 'safety-dirty-planned');
-    // Plan while the decomposition is absent, then plant bytes and re-plan so the
-    // predecessor state matches; only the repository-safety policy can refuse it.
-    mkdirSync(join(target, '.agenticloop', 'decompositions'), { recursive: true });
-    writeFileSync(join(target, DECOMPOSITION_REF(taskId)), '{"planted":true}\n', 'utf8');
     const { plan } = await writePlan(target, taskId);
-    const entry = plan.executable.writes.find(item => item.role === 'committed_decomposition');
+    const entry = plan.executable.writes.find(item => item.role === 'task_carrier');
     assert.equal(entry.state, 'file');
     // Now change the bytes without re-planning: the plan no longer binds them.
-    writeFileSync(join(target, DECOMPOSITION_REF(taskId)), '{"planted":"changed"}\n', 'utf8');
+    writeFileSync(join(target, plan.executable.task.path), `${readFileSync(join(target, plan.executable.task.path), 'utf8')}\n`, 'utf8');
     const result = receipt(await applyPlan(target, taskId));
     assert.ok(['stale', 'blocked'].includes(result.mutationDisposition), result.mutationDisposition);
     assert.equal(result.commitCount, 0);
-    assert.equal(readFileSync(join(target, DECOMPOSITION_REF(taskId)), 'utf8'), '{"planted":"changed"}\n');
+    assert.match(readFileSync(join(target, plan.executable.task.path), 'utf8'), /\n\n$/);
   });
 
   it('permits transient plan scratch under .agenticloop/tmp/', async () => {
@@ -797,7 +896,7 @@ describe('failure injection and rollback', () => {
       ...createReadinessApplyBindings(target, {}, taskId),
       // Replace one candidate path after the batch wrote it, before verification.
       afterWrite: () => {
-        writeFileSync(join(target, DECOMPOSITION_REF(taskId)), '{"external":true}\n', 'utf8');
+        writeFileSync(join(target, HISTORY_REF(taskId)), '{"external":true}\n', 'utf8');
       },
     });
     assert.equal(applied.mutationDisposition, 'unresolved', JSON.stringify(applied.errors));
@@ -806,8 +905,8 @@ describe('failure injection and rollback', () => {
     assert.ok(applied.errors.some(error => /was replaced between the write and its verification/.test(error)),
       JSON.stringify(applied.errors));
     // External progress is preserved, never overwritten.
-    assert.equal(readFileSync(join(target, DECOMPOSITION_REF(taskId)), 'utf8'), '{"external":true}\n');
-    assert.match(applied.recovery, /decompositions/);
+    assert.equal(readFileSync(join(target, HISTORY_REF(taskId)), 'utf8'), '{"external":true}\n');
+    assert.match(applied.recovery, /task-contract-history/);
   });
 
   it('refuses staging drift when a candidate path changes before staging', async () => {
@@ -821,7 +920,7 @@ describe('failure injection and rollback', () => {
       projectConfig: {},
       ...createReadinessApplyBindings(target, {}, taskId),
       beforeCommit: () => {
-        writeFileSync(join(target, DECOMPOSITION_REF(taskId)), '{"drifted":true}\n', 'utf8');
+        writeFileSync(join(target, HISTORY_REF(taskId)), '{"drifted":true}\n', 'utf8');
       },
     });
     assert.notEqual(applied.mutationDisposition, 'committed');

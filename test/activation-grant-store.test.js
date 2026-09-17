@@ -316,25 +316,26 @@ describe('durable activation storage', () => {
     assert.equal(readTaskActivationBinding(target, 'files', 'T-016').record.grantId, third.grantId);
   });
 
-  it('is ignored by default and permitted untracked at the dispatch clean gate', async () => {
+  it('permits only machine-local operator records untracked at the dispatch clean gate', async () => {
     const target = mkdtempSync(join(temp, 'store-gitignore-'));
     const initialized = await runCliInProcess(['init', '--target', target]);
     assert.equal(initialized.status, 0, initialized.stderr);
     const ignored = readFileSync(join(target, '.gitignore'), 'utf8').split('\n').map(line => line.trim());
     assert.ok(ignored.includes('.agenticloop/activations/'));
     assert.ok(ignored.includes('.agenticloop/returns/verifications/'));
-    // The clean gate names the class explicitly rather than folding it into
-    // scratch, and the return boundary still refuses those paths as work.
+    // Return verifications remain ignored for storage compatibility, but they
+    // are durable evidence and must be force-added by their protected command.
+    // Only short-lived operator records remain permitted untracked.
     assert.deepEqual([...PERMITTED_OPERATOR_STATE_PREFIXES], [
-      '.agenticloop/activations/', '.agenticloop/returns/verifications/', '.agenticloop/closeout-waivers/',
+      '.agenticloop/activations/', '.agenticloop/closeout-waivers/',
     ]);
     assert.deepEqual([...PERMITTED_UNTRACKED_PREFIXES], [
-      '.agenticloop/tmp/', '.agenticloop/activations/', '.agenticloop/returns/verifications/', '.agenticloop/closeout-waivers/',
-      '.agenticloop/local/',
+      '.agenticloop/tmp/', '.agenticloop/activations/', '.agenticloop/closeout-waivers/',
+      '.agenticloop/local/', '.agenticloop/logs/',
     ]);
     assert.ok(ignored.includes('.agenticloop/local/'), 'the toolkit ignores its own clone-local state');
-    assert.deepEqual([...PERMITTED_MACHINE_LOCAL_PREFIXES], ['.agenticloop/local/']);
-    assert.match(CLEAN_DISPATCH_STATE_IDENTITY, /^sha256:agenticloop\.dispatch-clean-state\.v4:[a-f0-9]{64}$/);
+    assert.deepEqual([...PERMITTED_MACHINE_LOCAL_PREFIXES], ['.agenticloop/local/', '.agenticloop/logs/']);
+    assert.match(CLEAN_DISPATCH_STATE_IDENTITY, /^sha256:agenticloop\.dispatch-clean-state\.v6:[a-f0-9]{64}$/);
   });
 
   it('surfaces a malformed revocation record as an unusable entry', () => {

@@ -71,6 +71,7 @@ import {
 import {
   COMMIT_MESSAGE_CLASSES,
   COMMIT_MESSAGE_CLASS_LIST,
+  commitWorkflowClass,
   evaluateCommitAttribution,
   renderCommitMessage,
 } from './commit-attribution.js';
@@ -81,6 +82,7 @@ import { COMMAND_REGISTRY, parseCommandArgs, suggestName } from './cli-registry.
 import { evaluateTaskReadiness } from './task-readiness.js';
 import { resolveSerialDependencyEvidence } from './serial-dependency-evidence.js';
 import { executeMutationBatch, recoverDurableMutationBatch, resolveTargetPath } from './fs-mutation-kernel.js';
+import { commitWorkflowPaths } from './workflow-evidence-commit.js';
 import { createTaskContractBaselineRecord, createTaskContractCorrectionRecord, taskContractDigest, trustedChainTerminal, validActivationCaptureRef, validateTaskContractBaseline } from './task-contract-baseline.js';
 import { appendFilesTaskContractRecord, loadFilesTaskContractRecords } from './files-task-contract.js';
 import { genericTerminalRefusalMessage, resolveCanonicalTerminalScope } from './terminal-scope.js';
@@ -147,7 +149,7 @@ import {
   validateFindingResolutionMatrix,
   validateFixupEpisode,
 } from './maintainer-fixup.js';
-import { parseFilesReviewHistory } from './review-history.js';
+import { appendFilesReviewOutcome, parseFilesReviewHistory } from './review-history.js';
 import {
   createAuthenticatedReturnVerification,
   createReturnVerification,
@@ -177,6 +179,8 @@ import {
 } from './handoff-consumption.js';
 import { measureTaskWorkflow } from './workflow-measurement.js';
 import { runTaskExplain } from './task-explain-cli.js';
+import { recordActionObservation } from './action-observation.js';
+import { evaluateSemanticValidation, semanticEvaluationFor } from './semantic-validation-normalizer.js';
 import {
   evaluateProductHeadEvidence,
   implementationArtifactHead,
@@ -219,6 +223,9 @@ import { normalizeAuditorInvocationProvenance } from './audit-provenance.js';
 import { parseAuditorWireReport, wireReportToAuditRun } from './audit-report-schema.js';
 import {
   authenticateFreshMaintainerReviewOutcomeReceipt,
+  createMaintainerReviewSessionReport,
+  MAINTAINER_REVIEW_SESSION_REPORT_KIND,
+  verifyMaintainerReviewSessionReport,
   verifyRecordedMaintainerReviewOutcomeReceipt,
 } from './maintainer-review-receipt.js';
 import {
@@ -580,21 +587,22 @@ function deriveRoleStartSequence({ taskId, packetPath, checksPath, postStartDige
       `.agenticloop/tasks/${id}.md`,
       `.agenticloop/handoffs/task-mutations/${id}/`,
     ]),
-    commitRequired: true,
-    commitReason: 'commit the implementation-artifact carrier mutation immediately after this step',
-    commitClass: 'implementation_artifact_evidence',
+    commitRequired: false,
+    commitReason: null,
+    commitClass: null,
     gate: 'verification.context.stale',
   }));
 
   // Step 2: implementation_summary_evidence. Uses a refetch placeholder
   // because step 1 mutated the carrier and invalidated the previous digest.
-  // The caller must refetch the carrier digest after committing step 1.
+  // The protected command commits its own bounded workflow paths; the caller
+  // only refetches the carrier digest before the next command.
   steps.push(Object.freeze({
     order: order += 1,
     command: [
       'npx', 'agenticloop', 'task', 'evidence', id,
       '--class', 'implementation_summary_evidence',
-      '--expect-digest', '<refetch-after-commit>',
+      '--expect-digest', '<refetch-after-command>',
       '--summary', '<text>',
       '--check-evidence', '<text>',
       '--json',
@@ -603,25 +611,9 @@ function deriveRoleStartSequence({ taskId, packetPath, checksPath, postStartDige
       `.agenticloop/tasks/${id}.md`,
       `.agenticloop/handoffs/task-mutations/${id}/`,
     ]),
-    commitRequired: true,
-    commitReason: 'commit the implementation-summary carrier mutation immediately after this step',
-    commitClass: 'implementation_summary_evidence',
-    gate: 'verification.context.stale',
-  }));
-
-  steps.push(Object.freeze({
-    order: order += 1,
-    command: [
-      'npx', 'agenticloop', 'task', 'evidence', id,
-      '--class', 'implementation_outcome_evidence',
-      '--expect-digest', '<refetch-after-commit>',
-      '--outcome', 'implementation_ready_for_review',
-      '--json',
-    ].join(' '),
-    writes: Object.freeze([`.agenticloop/tasks/${id}.md`, `.agenticloop/handoffs/task-mutations/${id}/`]),
-    commitRequired: true,
-    commitReason: 'commit the implementation-outcome carrier mutation immediately after this step',
-    commitClass: 'implementation_outcome_evidence',
+    commitRequired: false,
+    commitReason: null,
+    commitClass: null,
     gate: 'verification.context.stale',
   }));
 
@@ -650,14 +642,33 @@ function deriveRoleStartSequence({ taskId, packetPath, checksPath, postStartDige
       command: command.join(' '),
       writes: Object.freeze(executionPath ? [executionPath] : []),
       scratchWrites: Object.freeze([chk]),
-      commitRequired: executionPath !== null,
-      commitReason: executionPath === null
-        ? null
-        : 'commit the immutable CLI execution artifact; keep the mutable aggregate in scratch',
-      commitClass: executionPath === null ? null : 'required_check_evidence',
+      commitRequired: false,
+      commitReason: null,
+      commitClass: null,
       gate: 'required_check_evidence.invalid',
     }));
   }
+
+  steps.push(Object.freeze({
+    order: order += 1,
+    command: `npx agenticloop task evidence ${id} --class structured_task_evidence --expect-digest <refetch-after-command> --input .agenticloop/tmp/${id}-structured-evidence.json --json`,
+    writes: Object.freeze([`.agenticloop/tasks/${id}.md`, `.agenticloop/handoffs/task-mutations/${id}/`]),
+    scratchWrites: Object.freeze([`.agenticloop/tmp/${id}-structured-evidence.json`]),
+    commitRequired: false,
+    commitReason: null,
+    commitClass: null,
+    gate: 'verification.context.stale',
+  }));
+
+  steps.push(Object.freeze({
+    order: order += 1,
+    command: `npx agenticloop task evidence ${id} --class implementation_outcome_evidence --expect-digest <refetch-after-command> --outcome implementation_ready_for_review --json`,
+    writes: Object.freeze([`.agenticloop/tasks/${id}.md`, `.agenticloop/handoffs/task-mutations/${id}/`]),
+    commitRequired: false,
+    commitReason: null,
+    commitClass: null,
+    gate: 'verification.context.stale',
+  }));
 
   steps.push(Object.freeze({
     order: order += 1,
@@ -686,7 +697,7 @@ function deriveRoleStartSequence({ taskId, packetPath, checksPath, postStartDige
       '--json',
     ].join(' '),
     writes: Object.freeze([
-      `.agenticloop/handoffs/return-verifications/${id}/`,
+      `.agenticloop/returns/verifications/`,
     ]),
     commitRequired: false,
     commitReason: null,
@@ -718,9 +729,26 @@ function persistedRoleStartResult(consumption, disposition) {
 }
 
 /** Refuse a packet whose persisted repository base no longer names live HEAD. */
-function repositoryBaseHeadInvalidator(target, productBaseHead) {
-  const currentHead = String(targetGitRunner(target)(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
+function repositoryBaseHeadInvalidator(target, productBaseHead, {
+  taskId = null,
+  allowedWorkflowPaths = [],
+} = {}) {
+  const runGit = targetGitRunner(target);
+  const currentHead = String(runGit(['rev-parse', '--verify', 'HEAD']).stdout ?? '').trim();
   if (currentHead === productBaseHead) return null;
+  if (taskId && allowedWorkflowPaths.length > 0) {
+    const parent = String(runGit(['rev-parse', `${currentHead}^`]).stdout ?? '').trim();
+    const message = String(runGit(['show', '-s', '--format=%B', currentHead]).stdout ?? '');
+    const changed = String(runGit(['diff-tree', '--root', '--no-commit-id', '--name-only', '-r', currentHead]).stdout ?? '')
+      .split(/\r?\n/).filter(Boolean);
+    const pathAllowed = path => allowedWorkflowPaths.some(candidate =>
+      candidate.endsWith('/') ? path.startsWith(candidate) : path === candidate);
+    if (parent === productBaseHead && changed.length > 0 && changed.every(pathAllowed) &&
+        commitWorkflowClass(message) === 'workflow_evidence' &&
+        evaluateCommitAttribution({ message, taskId, role: 'engineer' }).ok) {
+      return null;
+    }
+  }
   return new PublicCommandError(
     'prepared dispatch product base head changed after preparation',
     {
@@ -1418,6 +1446,26 @@ function writeCheckEvidenceUpdate(
       `check evidence could not be written atomically: ${[...applied.errors, ...applied.rollbackErrors].join('; ')}`
     );
   }
+  return applied;
+}
+
+function commitProtectedWorkflowPaths({ target, taskId, paths, role, commitClass, subject }) {
+  const result = commitWorkflowPaths({ target, taskId, paths, role, commitClass, subject });
+  if (!result.ok) {
+    throw new PublicCommandError(
+      `protected workflow evidence was written but its bounded commit failed: ${result.errors.join('; ')}`,
+      {
+        code: 'task.evidence.atomic_write',
+        evidenceState: 'negative',
+        disposition: 'blocked',
+        committedStateEvaluated: true,
+        safeRepair: result.committed
+          ? `Preserve commit ${result.commit}; inspect its exact paths before any further lifecycle mutation.`
+          : 'Resolve the reported Git condition, then retry the same protected command; do not hand-author a bookkeeping commit.',
+      },
+    );
+  }
+  return result;
 }
 
 
@@ -1809,10 +1857,24 @@ async function verifyAuthenticatedAuditRecord({ record, latest, taskId, candidat
   return { ok: true, errors: [] };
 }
 
-function verifyAuthenticatedMaintainerReviewOutcome({
+function verifyMaintainerReviewOutcome({
   receipt, taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome, independentReviewRequired,
-  initialAuthentication = null,
+  initialAuthentication = null, policyMode,
 }, target, io, hostTrustStore) {
+  if (receipt?.kind === MAINTAINER_REVIEW_SESSION_REPORT_KIND) {
+    const verified = verifyMaintainerReviewSessionReport(receipt, {
+      target, taskId, taskContractDigest, returnVerification, candidate, history, reviewOutcome,
+      independentReviewRequired: independentReviewRequired === true,
+      policyMode: policyMode ?? resolveEffectiveActivationPolicy(target, io).mode,
+    });
+    return verified.verified === true
+      ? { ok: true, errors: [], initialAuthentication: null, assurance: verified.assurance, producerAuthenticated: false }
+      : {
+          ok: false,
+          errors: [verified.error ?? 'Maintainer review session report did not verify'],
+          diagnosticType: verified.state === 'independence_required' ? 'maintainer_review_independence_required' : null,
+        };
+  }
   if (!receipt || typeof receipt !== 'object') {
     return { ok: false, errors: ['protected Maintainer review outcome receipt is missing'] };
   }
@@ -1839,6 +1901,8 @@ function verifyAuthenticatedMaintainerReviewOutcome({
         ok: true,
         errors: [],
         initialAuthentication: initialAuthentication ?? verified.initialAuthentication,
+        assurance: 'host_receipt',
+        producerAuthenticated: true,
       }
     : {
         ok: false,
@@ -2158,6 +2222,8 @@ export const DECOMPOSITION_RESCAN_TRIGGER =
  */
 function readinessPlanInputs({ target, taskId, opts, projectConfig, backend }) {
   const inputBlockers = [];
+  const route = opts.route ? String(opts.route) : 'serial';
+  const serial = route === 'serial';
   let base = null;
   let dependencies = null;
   let inventory = null;
@@ -2168,17 +2234,34 @@ function readinessPlanInputs({ target, taskId, opts, projectConfig, backend }) {
       inputBlockers.push(error instanceof Error ? error.message : String(error));
     }
   }
-  if (opts.dependencies) {
+  if (serial && opts.dependencies) {
+    inputBlockers.push('serial readiness derives declared dependency truth from current task carriers; --dependencies is parallel-only');
+  } else if (!serial && opts.dependencies) {
     try {
       dependencies = readDependencyEvidence(target, opts.dependencies, taskId);
     } catch (error) {
       inputBlockers.push(error instanceof Error ? error.message : String(error));
     }
   }
-  try {
-    inventory = enumerateFilesTaskInventory(target, projectConfig);
-  } catch (error) {
-    inputBlockers.push(`the authoritative task inventory could not be enumerated: ${error instanceof Error ? error.message : String(error)}`);
+  if (serial) {
+    const taskPath = taskPathForId(target, projectConfig, taskId);
+    if (existsSync(taskPath)) {
+      try {
+        dependencies = resolveSerialDependencyEvidence({
+          target,
+          taskBody: readFileSync(taskPath, 'utf8'),
+          projectConfig,
+        });
+      } catch (error) {
+        inputBlockers.push(`current declared dependency evidence could not be observed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  } else {
+    try {
+      inventory = enumerateFilesTaskInventory(target, projectConfig);
+    } catch (error) {
+      inputBlockers.push(`the authoritative task inventory could not be enumerated: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   return {
     projectConfig,
@@ -2193,7 +2276,7 @@ function readinessPlanInputs({ target, taskId, opts, projectConfig, backend }) {
       ? defaultDecompositionFreshnessSeconds(backend)
       : Number(opts.maxAgeSeconds),
     rescanTrigger: opts.rescanTrigger ? String(opts.rescanTrigger) : DECOMPOSITION_RESCAN_TRIGGER,
-    route: opts.route ? String(opts.route) : 'serial',
+    route,
     inputBlockers,
   };
 }
@@ -3132,6 +3215,7 @@ export async function cmdTask(args, io = createIo()) {
       const asJson = Boolean(opts.json);
       const advancedInput = Boolean(opts.input);
       const serialRoute = !opts.packet && opts.route !== 'parallel';
+      const operationAttemptId = `operation:${randomUUID()}`;
       if (!taskId || (opts.input && opts.packet) || (!opts.packet && !advancedInput && (!opts.host || opts.role !== 'engineer'))) {
         const error = new CliUsageError('task prepare-dispatch requires <id>; ordinary packet creation requires --host <host> and --role engineer, while --input remains an advanced compatibility route; --input and --packet are mutually exclusive');
         return printGateResult('task prepare-dispatch', commandFailure('task prepare-dispatch', error, 'usage', {}, target), asJson, io, EXIT_USAGE);
@@ -3403,6 +3487,30 @@ export async function cmdTask(args, io = createIo()) {
         } catch (error) {
           return printGateResult('task prepare-dispatch', commandFailure('task prepare-dispatch', error, 'operational_error', {}, target), asJson, io);
         }
+        if (backend === 'files') {
+          const currentSnapshot = refetchTask();
+          const currentStatus = taskStatusFromBody(currentSnapshot?.body ?? '');
+          const consumptions = listDispatchConsumptions(target, taskId, { backend: 'files' });
+          const alreadyConsumed = consumptions.ok && consumptions.records.some(record => record.packetId === packet?.packetId);
+          if (currentStatus === 'in-progress' && alreadyConsumed) {
+            const error = new PublicCommandError(
+              `dispatch packet ${packet.packetId} has already started task ${taskId}; the current in-progress lifecycle is not dispatchable`,
+              {
+                code: 'task.lifecycle.not_dispatchable',
+                evidenceState: 'negative',
+                disposition: 'blocked',
+                committedStateEvaluated: true,
+                safeRepair: 'Continue the consumed attempt to a verified return, or abandon it through the protected command.',
+              },
+            );
+            return printGateResult(
+              'task prepare-dispatch',
+              commandFailure('task prepare-dispatch', error, 'operational_error', { task_id: taskId }, target),
+              asJson,
+              io,
+            );
+          }
+        }
         prepared = verifyDispatchBeforeMutation({
           packet,
           refetchTask,
@@ -3516,6 +3624,17 @@ export async function cmdTask(args, io = createIo()) {
       const outputPath = prepared.ok && !opts.packet && opts.output
         ? writeTargetJson(target, opts.output, prepared.packet, projectConfig, taskId, io?.fsMutationOptions)
         : null;
+      if (outputPath && prepared.semanticEvaluation) {
+        recordActionObservation({
+          target,
+          backend,
+          host: opts.host ?? prepared.packet?.assignment?.host ?? 'unknown',
+          operationAttemptId,
+          semanticEvaluation: prepared.semanticEvaluation,
+          finalOutcome: 'recorded',
+          occurredAt: Number.isFinite(io?.now) ? io.now : undefined,
+        });
+      }
       if (asJson) {
         if (prepared.ok && opts.packet) printGateResult('task prepare-dispatch', presentedValidation, true, io);
         else if (prepared.ok && outputPath) io.out(JSON.stringify(artifactSuccess({
@@ -3696,7 +3815,14 @@ export async function cmdTask(args, io = createIo()) {
             !samePathAuthority(matchingConsumption.worktreeRoot, target) ||
             matchingConsumption.productBaseHead !== (dispatchPacket.repository?.head ?? null) ||
             matchingConsumption.assuranceGrade !== (dispatchPacket.assurance?.activation ?? null);
-          const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead);
+          const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead, {
+            taskId,
+            allowedWorkflowPaths: [
+              carrier,
+              dispatchConsumptionRelativePath(matchingConsumption),
+              `.agenticloop/handoffs/attempts/${taskId}/`,
+            ],
+          });
           if (bindingMismatch || baseHeadInvalidator) {
             return printGateResult('task role-start', commandFailure('task role-start', new PublicCommandError(
               baseHeadInvalidator
@@ -4067,6 +4193,15 @@ export async function cmdTask(args, io = createIo()) {
         return 1;
       }
 
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target,
+        taskId,
+        paths: committed.writtenFiles.filter(path => path !== checkEvidencePath.relPath),
+        role: 'engineer',
+        commitClass: 'workflow_evidence',
+        subject: `Record role start for ${taskId}`,
+      });
+
       // A1: nextSequence uses a safe placeholder for the post-start digest
       // because step 1 (evidence) runs after the carrier mutation.
       const nextSequence = deriveRoleStartSequence({
@@ -4081,6 +4216,7 @@ export async function cmdTask(args, io = createIo()) {
           dispatchCarrierDigest: roleStartRecognition.boundIdentity.dispatchCarrierDigest,
           packetId: dispatchPacket.packetId, transitionKey,
           protectedInputDigest: roleStartBinding.digest, checkEvidenceOutput: checkEvidencePath.relPath,
+          workflowCommit,
           nextSequence,
         }, null, 2));
       } else {
@@ -4284,12 +4420,37 @@ export async function cmdTask(args, io = createIo()) {
           io,
           hostTrustStore: opts.hostTrustStore,
         });
-        const applied = applyHandoffEvidenceRefresh({ target, plan, preflight: current });
+        let applied = applyHandoffEvidenceRefresh({ target, plan, preflight: current });
+        if (applied.disposition === 'written_pending_commit') {
+          const workflowCommit = commitProtectedWorkflowPaths({
+            target,
+            taskId,
+            paths: applied.changedFiles,
+            role: 'maintainer',
+            commitClass: 'workflow_evidence',
+            subject: `Refresh handoff evidence for ${taskId}`,
+          });
+          applied = {
+            ...applied,
+            ok: true,
+            disposition: 'committed',
+            errors: [],
+            receiptState: 'committed',
+            workflowCommit,
+            nextOperation: applied.decompositionStale
+              ? applied.nextOperation?.replace(
+                  /^After this invocation's bounded workflow commit, /,
+                  '',
+                )
+              : `Rerun: npx agenticloop task handoff-preflight ${taskId} --json`,
+            firstSafeRepair: null,
+          };
+        }
         if (asJson) {
           io.out(JSON.stringify(applied, null, 2));
         } else {
           io.out(`agenticloop task refresh-handoff-receipt ${taskId}`);
-          io.out(`  status: ${applied.disposition === 'written_pending_commit' ? 'WRITTEN PENDING COMMIT' : (applied.ok ? 'REFRESHED' : 'BLOCKED')}`);
+          io.out(`  status: ${applied.ok ? 'REFRESHED AND COMMITTED' : 'BLOCKED'}`);
           io.out(`  evidence: ${applied.evidenceState}`);
           io.out(`  disposition: ${applied.disposition}`);
           io.out(`  changed files: ${(applied.changedFiles ?? []).join(', ') || '(none)'}`);
@@ -4297,9 +4458,8 @@ export async function cmdTask(args, io = createIo()) {
             io.out(`  decomposition regenerated: ${applied.decompositionRegenerated ? 'yes' : 'no'}`);
             io.out(`  decomposition stale: ${applied.decompositionStale ? 'yes' : 'no'}`);
           }
-          if (applied.commitSubject) {
-            io.out(`  commit subject: ${applied.commitSubject}`);
-            io.out(`  trailers: ${applied.maintainerTrailerBlock.replace(/\n/g, ' / ')}`);
+          if (applied.workflowCommit?.commit) {
+            io.out(`  workflow commit: ${applied.workflowCommit.commit}`);
           }
           if (applied.nextOperation) io.out(`  next: ${applied.nextOperation}`);
           for (const error of applied.errors ?? []) io.err(`  ERROR: ${error}`);
@@ -4570,7 +4730,7 @@ export async function cmdTask(args, io = createIo()) {
         })) {
           throw new VerificationContextMalformedError(`updated check evidence is invalid: ${checked.errors.join('; ')}`);
         }
-        writeCheckEvidenceUpdate(
+        const checkWrite = writeCheckEvidenceUpdate(
           target, execution, persistedExecutionPath, checked.checks, paths.output,
           { executionCondition: persistedExecutionCondition, checksCondition, fsMutationOptions: io?.fsMutationOptions },
         );
@@ -4596,6 +4756,16 @@ export async function cmdTask(args, io = createIo()) {
             currentCarrierDigest: current.currentCarrierDigest,
           }),
         );
+        const workflowCommit = execution === null
+          ? null
+          : commitProtectedWorkflowPaths({
+              target,
+              taskId,
+              paths: checkWrite.writtenFiles.filter(path => path !== paths.output.relPath),
+              role: 'engineer',
+              commitClass: 'workflow_evidence',
+              subject: `Record required check ${required.id} for ${taskId}`,
+            });
         if (observedExecutionFailure) {
           throw new PublicCommandError(
             `required command check '${required.id}' was observed failing and the negative execution was retained ` +
@@ -4613,9 +4783,12 @@ export async function cmdTask(args, io = createIo()) {
           );
         }
         const outputPath = paths.output.path;
-        io.out(JSON.stringify(checkEvidenceSuccess({
-          taskId, outputPath, checks: checked.checks, assuranceGrade: packet.assurance?.activation ?? 'unknown',
-        })));
+        io.out(JSON.stringify({
+          ...checkEvidenceSuccess({
+            taskId, outputPath, checks: checked.checks, assuranceGrade: packet.assurance?.activation ?? 'unknown',
+          }),
+          workflowCommit,
+        }));
         return 0;
       } catch (error) {
         return printGateResult(`task ${sub}`, commandFailure(`task ${sub}`, error, error instanceof CliUsageError ? 'usage' : 'operational_error', {}, target), asJson, io, error instanceof CliUsageError ? EXIT_USAGE : 1);
@@ -4625,6 +4798,7 @@ export async function cmdTask(args, io = createIo()) {
     if (sub === 'prepare-return') {
       const taskId = positional[0];
       const asJson = Boolean(opts.json);
+      const operationAttemptId = `operation:${randomUUID()}`;
       // Keep this producer cancellation-only: accepting ordinary workflow or
       // tooling blockers here would turn unauthenticated session observations
       // into transition evidence. Those blockers intentionally return status
@@ -4817,7 +4991,19 @@ export async function cmdTask(args, io = createIo()) {
             : null,
           freshness: { invalidatedBy: packet.freshness.invalidatedBy },
         });
+        const semanticEvaluation = semanticEvaluationFor(roleReturn);
+        if (semanticEvaluation?.verdict !== 'legal') {
+          throw new VerificationContextError('semantic prepare-return evaluation did not authorize artifact creation');
+        }
         const outputPath = writeTargetJson(target, opts.output, roleReturn, projectConfig, taskId, io?.fsMutationOptions);
+        recordActionObservation({
+          target,
+          backend: 'files',
+          host: packet.assignment?.host ?? 'unknown',
+          operationAttemptId,
+          semanticEvaluation,
+          finalOutcome: 'recorded',
+        });
         io.out(JSON.stringify(artifactSuccess({
           taskId, outputPath, artifact: roleReturn,
           assuranceGrade: lineage.dispatchConsumption.assuranceGrade,
@@ -4831,6 +5017,7 @@ export async function cmdTask(args, io = createIo()) {
     if (sub === 'verify-return') {
       const taskId = positional[0];
       const asJson = Boolean(opts.json);
+      const operationAttemptId = `operation:${randomUUID()}`;
       if (!taskId || !opts.packet || !opts.return) {
         const error = new CliUsageError('task verify-return requires <id>, --packet <packet.json>, and --return <role-return.json>');
         return printGateResult('task verify-return', commandFailure('task verify-return', error, 'usage', {}, target), asJson, io, EXIT_USAGE);
@@ -4988,7 +5175,7 @@ export async function cmdTask(args, io = createIo()) {
                   commandRunner: resolveGhRunner(io),
                   repo: opts.repo ?? currentGitHubSnapshot().repo,
                 })
-              : refetchFilesReturnEvidence(target, packet, repositoryEvidence);
+              : refetchFilesReturnEvidence(target, packet, repositoryEvidence, { historicalCloseout: true });
             return verifiedRepositoryEvidence;
           }
         : opts.fromCurrentRepository
@@ -5055,6 +5242,7 @@ export async function cmdTask(args, io = createIo()) {
         },
         workflowRoleRegistry,
         runGit: targetGitRunner(target),
+        historicalCloseout: backend === 'files',
       }, {
         capabilities,
         hostRoleCapabilities,
@@ -5070,6 +5258,7 @@ export async function cmdTask(args, io = createIo()) {
       const presentedValidation = presentGateResultForTarget(received.validation, target);
       let returnVerification = null;
       let verificationStorageDisposition = null;
+      let workflowCommit = null;
       if (received.ok && received.exceptional === undefined) {
         try {
           const wireReturn = JSON.parse(raw);
@@ -5167,10 +5356,34 @@ export async function cmdTask(args, io = createIo()) {
           return printGateResult('task verify-return', commandFailure('task verify-return', error, error instanceof CliUsageError ? 'usage' : 'operational_error', {}, target), asJson, io, error instanceof CliUsageError ? EXIT_USAGE : 1);
         }
       }
+      if (returnVerification && verificationStorageDisposition !== 'already_current') {
+        workflowCommit = commitProtectedWorkflowPaths({
+          target,
+          taskId,
+          paths: [returnVerification.path],
+          role: 'maintainer',
+          commitClass: 'workflow_evidence',
+          subject: `Record verified return for ${taskId}`,
+        });
+      }
+      if (returnVerification && received.semanticEvaluation) {
+        recordActionObservation({
+          target,
+          backend,
+          host: packet.assignment?.host ?? 'unknown',
+          operationAttemptId,
+          semanticEvaluation: received.semanticEvaluation,
+          finalOutcome: 'recorded',
+        });
+      }
       if (asJson) {
         printGateResult('task verify-return', {
           ...presentedValidation,
-          details: { ...(presentedValidation.details ?? {}), storageDisposition: verificationStorageDisposition },
+          details: {
+            ...(presentedValidation.details ?? {}),
+            storageDisposition: verificationStorageDisposition,
+            workflowCommit,
+          },
         }, true, io);
       }
       else if (received.ok && received.exceptional?.state === 'exception_requested') {
@@ -5512,11 +5725,23 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId, file: carrier }, target), asJson, io);
       }
+      const evidenceRole = mutationClass === 'structured_task_evidence'
+        ? structuredEvidence.actorRole
+        : 'engineer';
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target,
+        taskId,
+        paths: [carrier, receiptPath],
+        role: evidenceRole,
+        commitClass: 'workflow_evidence',
+        subject: `Record ${mutationClass} for ${taskId}`,
+      });
       const result = {
         ok: true, task_id: taskId, mutationClass, taskContractDigest: contract.digest,
         dispatchCarrierDigest: lineage.dispatchCarrierDigest, currentCarrierDigest,
         bindingAlreadyCurrent: false,
-        receipt, receiptPath, productHead: mutationClass === 'implementation_artifact_evidence' ? opts.productHead : null,
+        receipt, receiptPath, workflowCommit,
+        productHead: mutationClass === 'implementation_artifact_evidence' ? opts.productHead : null,
       };
       if (asJson) io.out(JSON.stringify(result, null, 2));
       else io.out(`Recorded ${mutationClass} for ${taskId}; current carrier: ${currentCarrierDigest}`);
@@ -5559,7 +5784,8 @@ export async function cmdTask(args, io = createIo()) {
         currentCarrierDigest, productHead: implementationArtifactHead(body),
         refetchTask: () => snapshot,
         refetchRepositoryEvidence: record => refetchFilesReturnEvidence(
-          target, record.evidence.packet, record.evidence.repositoryEvidence
+          target, record.evidence.packet, record.evidence.repositoryEvidence,
+          { historicalCloseout: true }
         ),
         hostTrustStore: opts.hostTrustStore,
       });
@@ -5709,7 +5935,7 @@ export async function cmdTask(args, io = createIo()) {
           type: 'outcome',
           ...(maintainerOutcome?.binding?.outcome ?? {}),
         };
-        const authenticated = verifyAuthenticatedMaintainerReviewOutcome({
+        const authenticated = verifyMaintainerReviewOutcome({
           receipt: maintainerOutcome, taskId, taskContractDigest: contract.digest,
           returnVerification: verifiedReturn, candidate: verifiedReturn.finishCandidate,
           history: reviewHistory, reviewOutcome: signedOutcome,
@@ -5830,12 +6056,23 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
+      const workflowCommit = alreadyCurrent
+        ? null
+        : commitProtectedWorkflowPaths({
+            target,
+            taskId,
+            paths: [reviewPath],
+            role: 'maintainer',
+            commitClass: 'workflow_evidence',
+            subject: `Record review entry for ${taskId}`,
+          });
       const result = {
         ok: true, task_id: taskId, taskContractDigest: contract.digest,
         dispatchCarrierDigest: receipt.dispatchCarrierDigest, currentCarrierDigest,
         productHead: receipt.productHead, workflowHead: receipt.workflowHead, candidateHead: receipt.candidateHead,
         reviewEntryPath: reviewPath,
         mutationDisposition: alreadyCurrent ? 'already_current' : 'created',
+        workflowCommit,
         verifiedReturn: receipt.verifiedReturn,
         carrierLineageTerminalDigest: receipt.carrierLineageTerminalDigest,
         handoff_recognition: recognition,
@@ -5850,8 +6087,10 @@ export async function cmdTask(args, io = createIo()) {
     if (sub === 'review-attach-outcome') {
       const taskId = positional[0];
       const asJson = Boolean(opts.json);
-      if (!taskId || !opts.maintainerReceipt || !opts.returnVerification) {
-        io.err('task review-attach-outcome requires <id>, --maintainer-receipt, and --return-verification');
+      const hasReceipt = Boolean(opts.maintainerReceipt);
+      const hasSessionReport = Boolean(opts.sessionReport);
+      if (!taskId || !opts.returnVerification || hasReceipt === hasSessionReport) {
+        io.err('task review-attach-outcome requires <id>, --return-verification, and exactly one of --maintainer-receipt or --session-report');
         return EXIT_USAGE;
       }
       const filePath = taskPathForId(target, projectConfig, taskId);
@@ -5864,9 +6103,20 @@ export async function cmdTask(args, io = createIo()) {
       const body = readFileSync(filePath, 'utf8');
       const currentCarrierDigest = taskRecordDigest(body);
       const contract = taskContractDigest(body);
-      let maintainerOutcome;
+      let maintainerOutcome = null;
+      let sessionReportInput = null;
       try {
-        maintainerOutcome = readTargetJson(target, opts.maintainerReceipt, 'Maintainer review outcome receipt');
+        if (hasReceipt) {
+          maintainerOutcome = readTargetJson(target, opts.maintainerReceipt, 'Maintainer review outcome receipt');
+        } else {
+          sessionReportInput = readTargetJson(target, opts.sessionReport, 'Maintainer review session report');
+          const inputFields = ['reviewerSession', 'outcome'];
+          if (!sessionReportInput || typeof sessionReportInput !== 'object' || Array.isArray(sessionReportInput) ||
+              Object.keys(sessionReportInput).length !== inputFields.length ||
+              !Object.keys(sessionReportInput).every(key => inputFields.includes(key))) {
+            throw new TypeError('Maintainer review session report input fields must equal reviewerSession and outcome');
+          }
+        }
       } catch (error) {
         return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
           error.message, { code: 'handoff.evidence.malformed', evidenceState: 'malformed', disposition: 'blocked' }
@@ -5922,7 +6172,12 @@ export async function cmdTask(args, io = createIo()) {
         Object.keys(entry).every(key => entryFields.includes(key)) &&
         entry.schemaVersion === 5 &&
         digest === `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(entryProjection)}`;
-      const entryMatches = (isV3 || isV5) &&
+      const isV6 = Object.keys(entry).length === entryFields.length &&
+        Object.keys(entry).every(key => entryFields.includes(key)) &&
+        entry.schemaVersion === 6 && entry.maintainerOutcome?.kind === MAINTAINER_REVIEW_SESSION_REPORT_KIND &&
+        entry.initialAuthentication === null &&
+        digest === `sha256:agenticloop.files-review-entry-receipt.v5:${canonicalSha256(entryProjection)}`;
+      const entryMatches = (isV3 || isV5 || isV6) &&
         entry.kind === 'agenticloop.files-review-entry-receipt' && entry.backend === 'files' &&
         entry.taskId === taskId && entry.taskContractDigest === contract.digest &&
         entry.verifiedReturn?.recordId === verifiedReturn.recordId &&
@@ -5937,9 +6192,99 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
+      if (hasSessionReport && isV3) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'session-reported review assurance cannot reinterpret or migrate a historical unsigned review entry', {
+            code: 'review.entry.persistence_conflict', evidenceState: 'negative', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      let outcomeBody = body;
+      let reviewHistory = parseFilesReviewHistory(body);
+      let latestReview = reviewHistory.events.filter(event => event.type === 'outcome').at(-1) ?? null;
+      if (!latestReview) {
+        const appended = appendFilesReviewOutcome(
+          body,
+          hasReceipt ? maintainerOutcome?.binding?.outcome : sessionReportInput?.outcome,
+        );
+        if (!appended.ok) {
+          return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+            `the authenticated Maintainer outcome could not be rendered into the task carrier: ${appended.errors.join('; ')}`, {
+              code: 'review.entry.persistence_conflict', evidenceState: 'malformed', disposition: 'blocked',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
+        outcomeBody = appended.content;
+        reviewHistory = parseFilesReviewHistory(outcomeBody);
+        latestReview = appended.event;
+      }
+      if (latestReview) {
+        outcomeBody = replaceFrontmatterField(outcomeBody, 'review_status', latestReview.status);
+        outcomeBody = replaceFrontmatterField(outcomeBody, 'review_mode', latestReview.mode);
+        outcomeBody = replaceFrontmatterField(outcomeBody, 'reviewed_artifact', latestReview.artifact);
+        outcomeBody = replaceFrontmatterField(
+          outcomeBody,
+          'human_review_ref',
+          latestReview.mode === 'independent_human' ? latestReview.sourceReference : null,
+        );
+        reviewHistory = parseFilesReviewHistory(outcomeBody);
+      }
+      if (!latestReview || String(latestReview.artifact).replace(/^commit:/, '') !== verifiedReturn.finishCandidate.productRange.head) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          'a current Maintainer review outcome for the exact candidate is required before attachment', {
+            code: 'handoff.evidence.unauthenticated', evidenceState: 'missing', disposition: 'needs_context',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
+      let policyMode;
+      if (hasSessionReport) {
+        try {
+          policyMode = resolveEffectiveActivationPolicy(target, io).mode;
+          maintainerOutcome = createMaintainerReviewSessionReport({
+            target,
+            reviewerSession: sessionReportInput.reviewerSession,
+            policyMode,
+            independentReviewRequired: contract.projection.independent_review_required === 'true',
+            taskId,
+            taskContractDigest: contract.digest,
+            returnVerification: verifiedReturn,
+            candidate: verifiedReturn.finishCandidate,
+            history: reviewHistory,
+            reviewOutcome: { type: 'outcome', ...sessionReportInput.outcome },
+          });
+        } catch (error) {
+          return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+            error instanceof Error ? error.message : String(error), {
+              code: contract.projection.independent_review_required === 'true'
+                ? 'review_prepare.independent_review_policy' : 'handoff.evidence.unauthenticated',
+              evidenceState: 'negative', disposition: 'blocked',
+            }
+          ), 'operational_error', { task_id: taskId }, target), asJson, io);
+        }
+      }
+      const authenticated = verifyMaintainerReviewOutcome({
+        receipt: maintainerOutcome, taskId, taskContractDigest: contract.digest,
+        returnVerification: verifiedReturn, candidate: verifiedReturn.finishCandidate,
+        history: reviewHistory, reviewOutcome: latestReview,
+        independentReviewRequired: contract.projection.independent_review_required === 'true',
+        policyMode,
+      }, target, io, opts.hostTrustStore);
+      if (!authenticated.ok) {
+        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
+          `Maintainer review outcome authentication failed: ${authenticated.errors.join('; ')}`, {
+            code: authenticated.diagnosticType === 'maintainer_review_independence_required'
+              ? 'review_prepare.independent_review_policy' : 'handoff.evidence.unauthenticated',
+            evidenceState: 'malformed', disposition: 'blocked',
+          }
+        ), 'operational_error', { task_id: taskId }, target), asJson, io);
+      }
       if (entry.maintainerOutcome !== null) {
-        if (isV5 && canonicalJson(entry.maintainerOutcome) === canonicalJson(maintainerOutcome)) {
-          const result = { ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'already_current' };
+        if ((isV5 || isV6) && canonicalJson(entry.maintainerOutcome) === canonicalJson(maintainerOutcome)) {
+          const result = {
+            ok: true, task_id: taskId, reviewEntryPath: reviewPath, mutationDisposition: 'already_current',
+            assurance: authenticated.assurance,
+            producerAuthenticated: authenticated.producerAuthenticated,
+          };
           if (asJson) io.out(JSON.stringify(result, null, 2));
           else io.out(`Maintainer review outcome is already attached for ${taskId}: ${reviewPath}`);
           return 0;
@@ -5951,30 +6296,6 @@ export async function cmdTask(args, io = createIo()) {
             }
           ), 'operational_error', { task_id: taskId }, target), asJson, io);
         }
-      }
-      const reviewHistory = parseFilesReviewHistory(body);
-      const latestReview = reviewHistory.events.filter(event => event.type === 'outcome').at(-1) ?? null;
-      if (!latestReview || String(latestReview.artifact).replace(/^commit:/, '') !== verifiedReturn.finishCandidate.productRange.head) {
-        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
-          'a current Maintainer review outcome for the exact candidate is required before attachment', {
-            code: 'handoff.evidence.unauthenticated', evidenceState: 'missing', disposition: 'needs_context',
-          }
-        ), 'operational_error', { task_id: taskId }, target), asJson, io);
-      }
-      const authenticated = verifyAuthenticatedMaintainerReviewOutcome({
-        receipt: maintainerOutcome, taskId, taskContractDigest: contract.digest,
-        returnVerification: verifiedReturn, candidate: verifiedReturn.finishCandidate,
-        history: reviewHistory, reviewOutcome: latestReview,
-        independentReviewRequired: contract.projection.independent_review_required === 'true',
-      }, target, io, opts.hostTrustStore);
-      if (!authenticated.ok) {
-        return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
-          `Maintainer review outcome authentication failed: ${authenticated.errors.join('; ')}`, {
-            code: authenticated.diagnosticType === 'maintainer_review_independence_required'
-              ? 'review_prepare.independent_review_policy' : 'handoff.evidence.unauthenticated',
-            evidenceState: 'malformed', disposition: 'blocked',
-          }
-        ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
       // V3 has no durable initial-authentication record. Authenticate first so
       // stale or forged fresh submissions retain their unauthenticated refusal;
@@ -5997,14 +6318,43 @@ export async function cmdTask(args, io = createIo()) {
       // from historical unsigned metadata.
       const updated = {
         ...entry,
-        ...(isV3 ? { schemaVersion: 5 } : {}),
+        ...((isV3 || hasSessionReport) ? { schemaVersion: hasSessionReport ? 6 : 5 } : {}),
         maintainerOutcome,
         initialAuthentication: authenticated.initialAuthentication,
+        reviewHistory: filesReviewHistoryBinding(reviewHistory),
         digest: null,
       };
       const { digest: _updatedDigest, ...updatedProjection } = updated;
-      updated.digest = `sha256:agenticloop.files-review-entry-receipt.v4:${canonicalSha256(updatedProjection)}`;
+      updated.digest = `sha256:agenticloop.files-review-entry-receipt.v${hasSessionReport ? 5 : 4}:${canonicalSha256(updatedProjection)}`;
       const updatedText = `${JSON.stringify(updated, null, 2)}\n`;
+      const reviewRecordEvaluation = evaluateSemanticValidation({
+        actionId: 'review_record',
+        validation: {
+          ok: true,
+          evidenceState: 'current',
+          disposition: 'allowed',
+          diagnostics: [],
+          detail: {
+            reviewEntryDigest: updated.digest,
+            returnVerificationId: verifiedReturn.recordId,
+          },
+        },
+        repositoryId: targetRepositoryIdentity(target),
+        taskId,
+        bindings: {
+          candidateId: verifiedReturn.finishCandidate.productRange.head,
+          reviewRoundId: updated.digest,
+        },
+        scopeKind: 'review_round',
+        scopeKey: `${taskId}:${updated.digest}`,
+        sourceKind: authenticated.producerAuthenticated
+          ? 'authenticated_maintainer_outcome' : 'session_reported_maintainer_outcome',
+        sourceId: maintainerOutcome.receiptId ?? maintainerOutcome.digest ?? updated.digest,
+        factOwner: { kind: 'workflow_role', id: 'maintainer' },
+      });
+      if (reviewRecordEvaluation.verdict !== 'legal') {
+        throw new Error(`review outcome produced unexpected semantic verdict '${reviewRecordEvaluation.verdict}'`);
+      }
       // Historical terminal attachment is permitted, but the same in-lock
       // lifecycle reader rejects malformed carriers before their review entry
       // bytes can be changed. A terminal state that arrives after planning
@@ -6012,7 +6362,7 @@ export async function cmdTask(args, io = createIo()) {
       let persistenceLifecycle = { ok: true };
       const applied = executeMutationBatch(target, [
         {
-          type: 'write', path: carrier, content: body, expectedDigest: currentCarrierDigest, expectedKind: 'file',
+          type: 'write', path: carrier, content: outcomeBody, expectedDigest: currentCarrierDigest, expectedKind: 'file',
           validateCurrent: bytes => {
             persistenceLifecycle = resolveReviewEntryLifecycle(bytes.toString('utf8'), { allowTerminalHistory: true });
             return persistenceLifecycle.ok
@@ -6038,13 +6388,21 @@ export async function cmdTask(args, io = createIo()) {
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
-      if (readFileSync(filePath, 'utf8') !== body || readFileSync(reviewAbsolute, 'utf8') !== updatedText) {
+      if (readFileSync(filePath, 'utf8') !== outcomeBody || readFileSync(reviewAbsolute, 'utf8') !== updatedText) {
         return printGateResult('task review-attach-outcome', commandFailure('task review-attach-outcome', new PublicCommandError(
           'review-outcome attachment did not refetch to the exact intended carrier and receipt bytes', {
             ...reviewEntryPersistenceFailure('refetch'),
           }
         ), 'operational_error', { task_id: taskId }, target), asJson, io);
       }
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target,
+        taskId,
+        paths: [carrier, reviewPath],
+        role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record review outcome for ${taskId}`,
+      });
       // Terminal review storage is historical evidence only.  It may preserve
       // an already-completed review outcome, but the former remediation command always
       // rechecks the lifecycle and therefore cannot turn this write into a
@@ -6053,6 +6411,9 @@ export async function cmdTask(args, io = createIo()) {
       const result = {
         ok: true, task_id: taskId, reviewEntryPath: reviewPath,
         mutationDisposition: isV3 ? 'migrated_and_attached' : (terminalLifecycle ? 'attached_historical' : 'attached'),
+        workflowCommit,
+        assurance: authenticated.assurance,
+        producerAuthenticated: authenticated.producerAuthenticated,
         ...(terminalLifecycle ? { authorization: 'historical_recording' } : {}),
       };
       if (asJson) io.out(JSON.stringify(result, null, 2));
@@ -6089,7 +6450,9 @@ export async function cmdTask(args, io = createIo()) {
       const rejected = paths.filter(path => classifier.isWorkflowPath(path) || !allowed.some(pattern => fileMatchesScopePattern(path, pattern)));
       if (paths.length === 0) throw new VerificationContextError('product commit helper found no changed product paths');
       if (rejected.length > 0) throw new VerificationContextError(`product commit helper rejects out-of-scope path(s): ${rejected.join(', ')}`);
-      const rendered = renderCommitMessage({ taskId, role: 'engineer', subject: opts.subject });
+      const rendered = renderCommitMessage({
+        taskId, role: 'engineer', subject: opts.subject, commitClass: 'product_implementation',
+      });
       if (!rendered.ok) throw new VerificationContextMalformedError(rendered.errors.join('; '));
       const destination = publicOutputTargetRelativePath(target, opts.messageOutput, 'message output path', {
         projectConfig,
@@ -6145,7 +6508,7 @@ export async function cmdTask(args, io = createIo()) {
         const body = typeof opts.bodyFile === 'string' && opts.bodyFile.trim()
           ? readTargetText(target, opts.bodyFile, 'commit message body')
           : typeof opts.body === 'string' ? opts.body : null;
-        const rendered = renderCommitMessage({ taskId, role, subject: opts.subject, body });
+        const rendered = renderCommitMessage({ taskId, role, subject: opts.subject, body, commitClass });
         if (!rendered.ok) {
           throw new VerificationContextMalformedError(
             `commit message could not be rendered: ${rendered.errors.join('; ')}`
@@ -6282,7 +6645,11 @@ export async function cmdTask(args, io = createIo()) {
         options: readinessPlanInputs({
           target,
           taskId,
-          opts: { ...opts, dependencies: dependencyPaths[taskId] ?? opts.dependencies },
+          opts: {
+            ...opts,
+            route: opts.tasks ? 'parallel' : opts.route,
+            dependencies: dependencyPaths[taskId] ?? opts.dependencies,
+          },
           projectConfig,
           backend: selectedBackend.backend,
         }),
@@ -6308,8 +6675,9 @@ export async function cmdTask(args, io = createIo()) {
         }
         io.out(`Readiness plan for ${taskIds[0]}: ${plan.ready ? 'settled' : `${plan.pendingSteps.length} step(s) remaining`}`);
         for (const item of plan.steps) {
-          io.out(`  [${item.settled ? 'x' : ' '}] ${item.id} (${item.owner}) - ${item.detail}`);
-          if (!item.settled && item.command) io.out(`        ${item.command.replace(/\n/g, ' ')}`);
+          const marker = item.state === 'not_applicable' ? '-' : item.settled ? 'x' : ' ';
+          io.out(`  [${marker}] ${item.id} (${item.owner}; ${item.state}) - ${item.detail}`);
+          if (item.state === 'pending' && item.command) io.out(`        ${item.command.replace(/\n/g, ' ')}`);
         }
         if (plan.writeSet.length) {
           io.out('  write set:');
@@ -6620,12 +6988,31 @@ export async function cmdTask(args, io = createIo()) {
         type: 'create', path: relPath, content: `${JSON.stringify(record, null, 2)}\n`,
       }], { ...(io?.fsMutationOptions ?? {}), lifecycleAuthorityTaskIds: [taskId] });
       if (!applied.ok) {
+        // A lifecycle or authorization fact can change after the initial
+        // evaluation but before the atomic write. Re-evaluate the current
+        // carrier so JSON callers receive the same typed refusal they would
+        // have received if that fact had changed before command entry. The
+        // mutation kernel remains the authority boundary; this read only
+        // explains why its guarded write did not occur.
+        try {
+          const current = resolveLiveAdoptionState(readFileSync(filePath, 'utf8'));
+          if (!current.ok) return adoptionRefusal(current);
+        } catch {
+          // Preserve the mutation kernel's exact error when the carrier itself
+          // is no longer readable enough to classify.
+        }
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
       }
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target, taskId, paths: [relPath], role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record commit adoption for ${taskId}`,
+      });
       const payload = {
         command: 'task adopt-commit', taskId, path: relPath, assurance: evaluation.assurance,
         adoption: evaluation.adoption, preserved: evaluation.preserved, certification: evaluation.certification,
+        workflowCommit,
       };
       if (asJson) io.out(JSON.stringify(payload, null, 2));
       else io.out(`Recorded non-authenticated claimed attribution for ${evaluation.adoption.range.head} on ${taskId}; required checks, Maintainer review, and audit must rerun.`);
@@ -6713,9 +7100,14 @@ export async function cmdTask(args, io = createIo()) {
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
       }
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target, taskId, paths: [relPath], role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record historical adoption for ${taskId}`,
+      });
       const projection = projectHistoricalAdoption(record);
       if (asJson) {
-        io.out(JSON.stringify({ command: 'task adopt-historical', path: relPath, projection, record }, null, 2));
+        io.out(JSON.stringify({ command: 'task adopt-historical', path: relPath, projection, record, workflowCommit }, null, 2));
       } else {
         io.out(`Adopted ${taskId} as ${projection.status} (assurance: ${projection.assurance})`);
         io.out(`  canonical closure:  no`);
@@ -6824,10 +7216,15 @@ export async function cmdTask(args, io = createIo()) {
         for (const error of [...applied.errors, ...applied.rollbackErrors]) io.err(error);
         return 1;
       }
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target, taskId, paths: [relPath], role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record attempt abandonment for ${taskId}`,
+      });
       if (asJson) {
         io.out(JSON.stringify({
           command: 'task abandon-attempt', taskId, attemptId: attempt.attemptId,
-          packetId: attempt.packetId, path: relPath, record,
+          packetId: attempt.packetId, path: relPath, record, workflowCommit,
         }, null, 2));
       } else {
         io.out(`Abandoned execution attempt ${attempt.attemptId} for ${taskId}`);
@@ -6870,8 +7267,14 @@ export async function cmdTask(args, io = createIo()) {
       }
       const record = prepared.record;
       const historyPath = appendFilesTaskContractRecord(target, record);
-      const message = `Wrote ${relative(target, historyPath).replace(/\\/g, '/')}; commit it separately before it can become a trusted baseline.`;
-      if (opts.json) io.out(JSON.stringify({ ok: true, record, historyPath, warning: message }));
+      const historyRelPath = relative(target, historyPath).replace(/\\/g, '/');
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target, taskId, paths: [historyRelPath], role: 'maintainer',
+        commitClass: 'workflow_evidence',
+        subject: `Establish trusted contract baseline for ${taskId}`,
+      });
+      const message = `Established and committed the trusted contract baseline in ${historyRelPath}.`;
+      if (opts.json) io.out(JSON.stringify({ ok: true, record, historyPath, workflowCommit, message }));
       else io.out(message);
       return 0;
     }
@@ -6947,8 +7350,8 @@ export async function cmdTask(args, io = createIo()) {
         affectedArtifact: relative(target, filePath).replace(/\\/g, '/'),
         timestamp: new Date().toISOString(),
       });
-      // Validate the prospective correction against the committed chain
-      // before writing; it becomes trusted only after a separate commit.
+      // Validate the prospective correction against the committed chain before
+      // writing. The protected command commits the exact appended history path.
       const prospective = validateTaskContractBaseline(body, {
         lifecycle: 'transition',
         trustedRecords: history.trustedRecords,
@@ -6959,8 +7362,14 @@ export async function cmdTask(args, io = createIo()) {
         return 1;
       }
       const historyPath = appendFilesTaskContractRecord(target, record);
-      const message = `Wrote ${relative(target, historyPath).replace(/\\/g, '/')}; commit it separately before it can become a trusted correction.`;
-      if (opts.json) io.out(JSON.stringify({ ok: true, record, historyPath, warning: message }));
+      const historyRelPath = relative(target, historyPath).replace(/\\/g, '/');
+      const workflowCommit = commitProtectedWorkflowPaths({
+        target, taskId, paths: [historyRelPath], role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Authorize task-contract correction for ${taskId}`,
+      });
+      const message = `Authorized and committed the trusted contract correction in ${historyRelPath}.`;
+      if (opts.json) io.out(JSON.stringify({ ok: true, record, historyPath, workflowCommit, message }));
       else io.out(message);
       return 0;
     }
@@ -7098,6 +7507,7 @@ export async function cmdTask(args, io = createIo()) {
 
       // --- 2. Exact readiness evidence, required for every record ---
       let evidenceContext = null;
+      let serialDependencyEvidence = null;
       if (nextStatus === 'agent-ready' && currentStatus !== 'agent-ready') {
         try {
           assertLifecycleHandoffResolved(target);
@@ -7108,7 +7518,12 @@ export async function cmdTask(args, io = createIo()) {
         let evidence;
         try {
           const base = readExplicitBaseEvidence(target, opts);
-          const dependencies = readDependencyEvidence(target, opts.dependencies, taskId);
+          const dependencies = resolveSerialDependencyEvidence({
+            target,
+            taskBody: currentContent,
+            projectConfig,
+          });
+          serialDependencyEvidence = dependencies;
           // The one shared preparer. `task readiness-apply` calls it with a
           // prospective baseline entering the same commit; this standalone route
           // supplies none, so it still requires an already-committed trusted
@@ -7213,7 +7628,14 @@ export async function cmdTask(args, io = createIo()) {
               !samePathAuthority(matchingConsumption.worktreeRoot, target) ||
               matchingConsumption.productBaseHead !== (suppliedPacket.repository?.head ?? null) ||
               matchingConsumption.assuranceGrade !== (suppliedPacket.assurance?.activation ?? null);
-            const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead);
+            const baseHeadInvalidator = repositoryBaseHeadInvalidator(target, matchingConsumption.productBaseHead, {
+              taskId,
+              allowedWorkflowPaths: [
+                relPath,
+                dispatchConsumptionRelativePath(matchingConsumption),
+                `.agenticloop/handoffs/attempts/${taskId}/`,
+              ],
+            });
             if (bindingMismatch || baseHeadInvalidator) {
               return failure(new PublicCommandError(
                 baseHeadInvalidator
@@ -7455,6 +7877,7 @@ export async function cmdTask(args, io = createIo()) {
         resultKind: VALIDATION_RESULT_KIND,
         digest: validationResultDigest(result),
       });
+      let workflowCommit = null;
       const emitReceipt = receipt => {
         if (asJson) {
           const roleStart = roleStartConsumption
@@ -7463,6 +7886,7 @@ export async function cmdTask(args, io = createIo()) {
           io.out(JSON.stringify({
             ...domain,
             receipt,
+            workflowCommit,
             ...(roleStartRecognition ? { handoff_recognition: roleStartRecognition } : {}),
             ...(roleStart ? {
               ok: true,
@@ -7572,6 +7996,14 @@ export async function cmdTask(args, io = createIo()) {
             for (const error of recorded.errors) io.err(`task status failed: ${error}`);
             return 1;
           }
+          workflowCommit = commitProtectedWorkflowPaths({
+            target,
+            taskId,
+            paths: recorded.writtenFiles,
+            role: 'engineer',
+            commitClass: 'workflow_evidence',
+            subject: `Record role start for ${taskId}`,
+          });
         }
         const result = createValidationResult({
           command: 'task status', ok: true, evidenceState: 'current', disposition: 'proceed', ...domain,
@@ -7604,6 +8036,26 @@ export async function cmdTask(args, io = createIo()) {
       const mutationActions = [{
         type: 'write', path: relPath, content: candidate,
         expectedDigest: currentDigest, expectedKind: 'file',
+        ...(serialDependencyEvidence ? {
+          validateCurrent: bytes => {
+            const observed = resolveSerialDependencyEvidence({
+              target,
+              taskBody: bytes.toString('utf8'),
+              projectConfig,
+            });
+            if (observed.evidence.digest !== serialDependencyEvidence.evidence.digest) {
+              return { ok: false, error: 'direct declared dependency evidence changed at the atomic agent-ready boundary' };
+            }
+            if (observed.evidence.evaluatedState !== 'satisfied') {
+              const detail = observed.records
+                .filter(record => record.state !== 'satisfied')
+                .map(record => `${record.taskId}:${record.state}`)
+                .join(', ');
+              return { ok: false, error: `direct declared dependency evidence is not satisfied: ${detail}` };
+            }
+            return { ok: true };
+          },
+        } : {}),
       }];
       if (roleStartConsumption) {
         mutationActions.push({
@@ -7613,7 +8065,12 @@ export async function cmdTask(args, io = createIo()) {
         });
         mutationActions.push(...supersessionMutations(attemptSupersessions));
       }
-      const committed = executeMutationBatch(target, mutationActions, { lifecycleAuthorityTaskIds: [taskId] });
+      const committed = executeMutationBatch(target, mutationActions, {
+        lifecycleAuthorityTaskIds: [
+          taskId,
+          ...(serialDependencyEvidence?.records.map(record => record.taskId) ?? []),
+        ],
+      });
       if (!committed.ok) {
         const rolledBack = committed.rollbackErrors.length === 0;
         const result = createValidationResult({
@@ -7710,6 +8167,17 @@ export async function cmdTask(args, io = createIo()) {
         if (asJson) io.out(JSON.stringify({ ...domain, receipt }, null, 2));
         return 1;
       }
+
+      workflowCommit = commitProtectedWorkflowPaths({
+        target,
+        taskId,
+        paths: committed.writtenFiles,
+        role: roleStartConsumption ? 'engineer' : 'maintainer',
+        commitClass: roleStartConsumption ? 'workflow_evidence' : 'workflow_disposition',
+        subject: roleStartConsumption
+          ? `Record role start for ${taskId}`
+          : `Record ${nextStatus} disposition for ${taskId}`,
+      });
 
       const result = createValidationResult({
         command: 'task status', ok: true, evidenceState: 'current', disposition: 'proceed', ...domain,

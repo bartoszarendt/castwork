@@ -127,11 +127,11 @@ decomposition provenance under `.agenticloop/decompositions/`, and at most one
 bound dependency snapshot (the path named by the decomposition's
 `scan.readinessContext.dependencies.sourceRef`); it never touches task contracts,
 activation, human decisions, review dispositions, acceptance, closeout, or
-product files. It refetches after the atomic write and emits the cooperative
-Maintainer `Task:`/`Agent:` trailer block when a durable update is required. A
-successful write is `written_pending_commit`, not `proceed`; JSON and human
-output name exact changed files, decomposition regenerated/stale state, and the
-next required commit/regeneration and preflight.
+product files. It refetches after the atomic write and the protected command
+commits exactly that invocation's durable write set with canonical attribution.
+JSON and human output name the exact changed and committed paths,
+decomposition regenerated/stale state, and the next required
+regeneration or preflight.
 Refreshing the dependency snapshot renews the observation *window*, not the
 observation: the Maintainer-recorded statuses are carried forward unchanged and
 only `observedAt` is re-stamped (resetting the `maxAgeSeconds` window). The
@@ -142,8 +142,8 @@ statuses being currently true.
 After product work and all Engineer-owned carrier evidence are committed, the
 Engineer updates the role-start aggregate at
 `.agenticloop/tmp/<id>-checks.json`, runs and records every check with `task
-check-evidence-update`, commits only immutable artifacts under
-`.agenticloop/checks/<id>/`, and performs no
+check-evidence-update`; each invocation commits its own immutable artifact under
+`.agenticloop/checks/<id>/`. The Engineer performs no
 mutating workflow command before `task prepare-return`. The receiver runs `task verify-return <id> --packet
 <packet-path> --return <return-path> --from-current-repository` before `task
 review-prepare <id>` or review. All these artifact paths are target-relative.
@@ -159,12 +159,11 @@ protected contract, product candidate, check id, command, and argv. Carrier and
 workflow HEAD observations are separate lineage evidence checked at return
 consumption. Schema-v2/v3 evidence is typed incompatible and must be regenerated.
 
-Commit classes map directly to ownership: Engineer uses
-`product_implementation`, `role_start_status`,
-`implementation_artifact_evidence`, `implementation_summary_evidence`, and
-`implementation_outcome_evidence`; Maintainer uses `attempt_abandonment`,
-`handoff_evidence_refresh`, `readiness_settlement`, `review_record`, and
-`acceptance_transition`; Auditor uses `audit_record`.
+The only role-authored commit class is Engineer-owned
+`product_implementation`. Protected commands commit their exact workflow write
+sets under `workflow_evidence` or `workflow_disposition`; evidence mutation
+classes such as `implementation_artifact_evidence` remain record semantics, not
+role-authored commit classes.
 
 The receiving role verifies the packet before mutation and returns raw
 `agenticloop.role-return` JSON. `task verify-return --from-current-repository`
@@ -199,6 +198,14 @@ that continuous chain is refused at return and review. Task carriers and canonic
 workflow records are workflow paths, never implementation deviations. After a
 verified return, `task review-prepare <id>` writes a files review-entry receipt
 only when its one command-local carrier snapshot remains current.
+`task review-attach-outcome` normally consumes a fresh host-signed review
+receipt. In standard mode, when `independent_review_required` is not `true`, the
+same command may instead consume `--session-report` and records the result
+explicitly as `session_reported` with `producerAuthenticated: false`. That
+record binds the task contract, product candidate, verified return, current
+review history, reviewer session, and outcome. Hardened mode and every task
+requiring independent review continue to require the host-signed receipt; an
+unsigned session report is never upgraded, backfilled, or treated as one.
 
 That chain is conserved. Each consumption under `.agenticloop/handoffs/dispatch/`
 starts one **execution attempt**, identified by a value derived from its packet,
@@ -269,8 +276,8 @@ and the clean gate implements the taxonomy rather than restating it:
 
 The rule that follows: a command may not write ordinary output into a class its
 next required gate rejects. Scratch is excluded at every boundary so transient
-output can never self-block the next step; durable evidence fails closed until
-its owning role commits it, and is never auto-staged.
+output can never self-block the next step; protected commands stage and commit
+only their own exact durable evidence write set before returning success.
 
 Each persisted class is accounted for individually — producer, consumer, the
 decision it changes, whether it could be derived instead, retention, storage
@@ -459,10 +466,11 @@ Optional frontmatter conventions:
 ### Trusted task-contract records
 
 The carrier is `.agenticloop/task-contract-history/<task-id>.jsonl`, verified
-against first-parent committed Git history. `task establish-baseline` and
-`task authorize-correction` only append; a record becomes trusted only after a
-separate commit, its Git author matching the record actor, validated by the
-shared digest-linked validator.
+against first-parent committed Git history. For `task establish-baseline` and
+`task authorize-correction`, each protected command atomically appends and
+commits exactly its own history path/write-set; no role-authored,
+operator-authored, or follow-up bookkeeping commit is allowed. The record's Git
+author must match its actor as validated by the shared digest-linked validator.
 
 Append-only verification walks the first-parent commits touching the history
 path from introduction to HEAD:
@@ -489,7 +497,8 @@ touching the file is never treated as provenance for every line.
 The mutable task file cannot authorize its own dispatched contract. For a new
 task or transition to `agent-ready`, store a versioned
 `agenticloop.task-contract-record` in the append-only task-history projection
-that is committed separately from the task-file edit. Its stable carrier id is
+through `task establish-baseline`; that protected command commits its exact
+appended history path. Its stable carrier id is
 the committed history artifact (`commit:<full-sha>:<path>:<line>`), and its verified
 author is the introducing commit's author as checked by the repository's normal
 review/commit provenance. It records task id, digest, authority, actor,
@@ -504,20 +513,21 @@ synthesize past records.
 committed trusted chain, requires its terminal digest to equal
 `--expect-prior-digest`, computes the current task file's projection and
 exact canonical changed fields, validates the correction prospectively
-against the chain, and appends it. The correction becomes trusted only after
-a separate commit. `task establish-baseline` refuses to create a second
-baseline when trusted history already contains one.
+against the chain, then atomically appends and commits exactly that invocation's
+history path/write-set. No role-authored, operator-authored, or follow-up
+bookkeeping commit is allowed. `task establish-baseline` refuses to create a
+second baseline when trusted history already contains one.
 
 ### Readiness As One Transaction
 
 `task readiness-plan <id>` is read-only and reports the whole ordered readiness
-sequence. Supplied with every exact apply input (`--actor`, `--authority`,
-`--work-unit`, one of `--base`/`--base-paths`, `--dependencies`) it emits an
-**executable** plan: `applicable: true`, no blockers, and a `planDigest` over the
-expected HEAD, the expected carrier digest, the trusted-chain terminal state, the
-resolved base tree, the committed dependency snapshot, the observed task
-inventory, and the exact write set with each path's expected predecessor state.
-Without those inputs the plan is display-only and says so.
+sequence. The default single-task serial route needs `--actor`, `--authority`,
+and one of `--base`/`--base-paths`. It reads each declared dependency carrier and
+trusted baseline directly. Work-unit identity, snapshot, inventory, and
+decomposition steps are reported `not_applicable`, never satisfied. The
+executable plan binds HEAD, carrier and contract-chain state, base evidence,
+direct dependency evidence, and the exact write set. Explicit parallel planning
+retains `--work-unit`, committed snapshots, complete inventory, and decomposition.
 
 The plan runs the same authoring readiness evaluator as lint and apply. Warnings
 are digest-bound, visible, and non-blocking; error diagnostics make it
@@ -526,15 +536,18 @@ diagnostic and plan-regeneration commands.
 
 `task readiness-apply <id> --plan <path> (--dry-run|--yes)` is the Maintainer-owned
 mutation that consumes one reviewed executable plan. It writes workflow and task
-evidence only - the task-contract history append, the decomposition source, and
-the task carrier - through `src/fs-mutation-kernel.js`, then creates **at most one**
+evidence only - for serial, the needed task-contract history append and task
+carrier; for parallel, also the decomposition source - through
+`src/fs-mutation-kernel.js`, then creates **at most one**
 Maintainer-attributed commit (`chore(<id>): settle readiness`, `Task: <id>`,
 `Agent: maintainer`).
 Mutation without `--yes` is refused, and `--dry-run` and `--yes` are mutually
 exclusive.
 
 Every bound input is re-resolved and the plan is recomputed before the first
-write, so a stale plan fails closed rather than mutating. Any staged entry -
+write. Serial dependency carriers are re-read again under the lifecycle locks at
+the atomic write boundary. Missing, malformed, untrusted, changed, or
+non-terminal evidence refuses without mutation. Any staged entry -
 including force-staged scratch under `.agenticloop/tmp/` - any unrelated tracked
 or untracked change, any dirty planned path whose bytes the plan did not bind,
 and a detached HEAD are refused; only untracked or unstaged transient scratch
@@ -552,7 +565,7 @@ compare-and-swap ref update; every other divergence - additional hook-created
 commits, a switched branch, a moved ref - is preserved and reported
 `unresolved`. Git hooks and signing policy are never bypassed.
 
-The decomposition is prepared over the **prospective** agent-ready carrier the
+For explicit parallel readiness, the decomposition is prepared over the **prospective** agent-ready carrier the
 same commit introduces, so the committed decomposition is not stale against its
 own commit. After the commit, the readiness plan, the trusted chain,
 committed-source and Maintainer-attribution verification, and the canonical
@@ -618,15 +631,17 @@ Operation mapping:
   <category> --note <text>`.
 - Lint task records: `agenticloop task lint [<task-id>] [--json]`.
 - Establish a contract baseline: `agenticloop task establish-baseline <id>
-  --actor <git-author> --authority <kind:reference>`, then commit separately.
-- Report the whole readiness sequence (read-only): `agenticloop task
-  readiness-plan <id> [--actor <git-author>] [--authority <kind:reference>]
-  [--work-unit <id>] [--base <ref>] [--dependencies <path>] [--json]`.
+  --actor <git-author> --authority <kind:reference>`. The command commits the
+  exact appended baseline path itself.
+- Report executable serial readiness (read-only): `agenticloop task
+  readiness-plan <id> --actor <git-author> --authority <kind:reference>
+  --base <ref> [--json]`. It observes declared dependency carriers directly.
 - Settle readiness in one transaction and one Maintainer commit: `agenticloop
   task readiness-apply [<id>] --plan <path> (--dry-run|--yes)`. It never activates.
 - Authorize a contract correction: `agenticloop task authorize-correction <id>
   --expect-prior-digest <digest> --reason <text> --authority <kind:reference>
-  --actor <git-author>`, then commit separately.
+  --actor <git-author>`. The command commits the exact appended correction path
+  itself.
 
 ### Create Task Record
 
@@ -992,8 +1007,9 @@ Silent correction of published claims is a review blocker.
 ### Durability rule
 
 `.agenticloop/tasks/*.md` task records are durable tracked state by default.
-They should be committed at workflow gates: task creation, evidence publication,
-review result, revision, and acceptance or closure.
+Protected commands commit their exact task-record and receipt write sets at
+evidence publication, review result, revision, acceptance, and closure gates.
+New task creation remains subject to the target project's authoring policy.
 
 `.agenticloop/tmp/` and `.agenticloop/logs/` remain local or ignored unless a
 target project explicitly chooses otherwise. Event logs (`.jsonl`) are gitignored

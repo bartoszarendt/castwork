@@ -21,9 +21,10 @@ import {
 } from './activation-resolution.js';
 import {
   ACTIVATION_GRANT_CLOCK_SKEW_MS,
+  ACTIVATION_REVOCATION_KIND,
   activationGrantSignaturePayload,
   validateActivationGrantShape,
-  validateActivationRevocation,
+  validateActivationDenial,
   validateTaskActivationBindingShape,
 } from './activation-grant.js';
 import { targetRepositoryIdentity } from './host-trust.js';
@@ -167,8 +168,9 @@ function activeGrantScopes(target, io) {
       );
       const now = Date.now();
       const revoked = [...external.revocations, ...local.revocations].some(record => {
-        const valid = validateActivationRevocation(record);
-        return !valid.ok || record.grantId === grant.grantId || record.revocationId === grant.revocation.id;
+        const valid = validateActivationDenial(record);
+        return !valid.ok || (record.kind === ACTIVATION_REVOCATION_KIND &&
+          (record.grantId === grant.grantId || record.revocationId === grant.revocation.id));
       });
       const issuedAt = Date.parse(grant.issuedAt);
       if (issuedAt - ACTIVATION_GRANT_CLOCK_SKEW_MS > now) {

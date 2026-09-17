@@ -363,7 +363,7 @@ describe('frozen corrective baseline', () => {
       assert.deepEqual(
         [result.counters.workflowCommits, result.counters.productCommits, result.counters.totalCommits],
         pinned.counts,
-        `the frozen pre-change baseline for ${result.scenario} requires deliberate re-measurement with evidence`
+        `the current CLI-authored evidence baseline for ${result.scenario} requires deliberate re-measurement with evidence`
       );
       if (pinned.step) {
         assert.deepEqual(result.refusal, { step: pinned.step, code: 'verification.context.malformed' });

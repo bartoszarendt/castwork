@@ -61,13 +61,13 @@ function cliFor(fixture) {
 }
 
 async function canonicalCommit(cli, root, commitClass, subject, paths) {
-  const messagePath = `.agenticloop/tmp/${commitClass}.commit-message.txt`;
-  assertOk(await cli([
-    'task', 'commit-message', TASK_ID, '--class', commitClass,
-    '--subject', subject, '--output', messagePath, '--json',
-  ]), `prepare ${commitClass} commit message`);
-  git(root, ['add', '--', ...paths]);
-  git(root, ['commit', '-F', messagePath]);
+  const pending = git(root, ['status', '--porcelain', '--untracked-files=all', '--', ...paths]);
+  assert.equal(pending, '', `${commitClass} left role-authored bookkeeping work:\n${pending}`);
+  const expectedClass = commitClass === 'attempt_abandonment'
+    ? 'workflow_disposition'
+    : 'workflow_evidence';
+  const message = git(root, ['show', '-s', '--format=%B', 'HEAD']);
+  assert.match(message, new RegExp(`Workflow-Class: ${expectedClass}`), `${subject} must be CLI-authored`);
   return git(root, ['rev-parse', 'HEAD']);
 }
 
@@ -223,7 +223,7 @@ describe('canonical files-backend lifecycle', () => {
     const history = git(root, ['rev-list', '--reverse', 'HEAD']).split(/\r?\n/).filter(Boolean);
     const subject = commit => git(root, ['show', '-s', '--format=%s', commit]);
     const authorizationHead = history.find(commit => subject(commit) === 'configure closeout fixture');
-    const taskContractCommit = history.find(commit => subject(commit) === 'task baseline');
+    const taskContractCommit = history.find(commit => subject(commit) === `Establish trusted contract baseline for ${TASK_ID}`);
     assert.ok(authorizationHead, 'the measured fixture must retain its authorization anchor commit');
     assert.ok(taskContractCommit, 'the measured fixture must retain its excluded task-contract commit');
     const measurement = measureTaskWorkflow(root, TASK_ID, {
@@ -235,7 +235,7 @@ describe('canonical files-backend lifecycle', () => {
       'the measured task-contract commit must remain outside the authorization-to-closeout lifecycle range');
     assert.deepEqual(
       [measurement.counters.workflowCommits, measurement.counters.productCommits, excludedTaskContractCommits],
-      [5, 1, 1],
+      [9, 1, 1],
       'M1 must bind workflow, product, and excluded task-contract commits to the measured fixture range'
     );
     assert.deepEqual(
@@ -384,6 +384,7 @@ describe('canonical files-backend lifecycle', () => {
       '--output', returnPath, '--json',
     ]), 'prepare return');
     const roleReturn = JSON.parse(readFileSync(join(root, returnPath), 'utf8'));
+    const returnedWorkflowHead = git(root, ['rev-parse', 'HEAD']);
     const verified = JSON.parse(assertOk(await cli([
       'task', 'verify-return', TASK_ID, '--packet', packetPath,
       '--return', returnPath, '--from-current-repository', '--json',
@@ -391,7 +392,7 @@ describe('canonical files-backend lifecycle', () => {
 
     assert.equal(roleReturn.productBaseHead, packet.repository.head);
     assert.equal(roleReturn.productHead, productHead);
-    assert.equal(roleReturn.workflowHead, git(root, ['rev-parse', 'HEAD']));
+    assert.equal(roleReturn.workflowHead, returnedWorkflowHead);
     assert.equal(roleReturn.packet.packetId, packet.packetId);
     assert.equal(roleReturn.task.currentCarrierDigest, digestCarrier(root));
     assert.deepEqual(roleReturn.productChangedPaths, ['src/existing.js']);

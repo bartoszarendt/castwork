@@ -749,3 +749,68 @@ export function parseFilesReviewHistory(content) {
   if (repairedHistory.events.some(event => event.type === 'outcome' && event.status === 'needs_revision')) result.findingLifecycle = lifecycle;
   return result;
 }
+
+/** Append one closed, host-bound Maintainer outcome to the files carrier. */
+export function appendFilesReviewOutcome(content, outcome) {
+  const current = parseFilesReviewHistory(content);
+  if (current.errors.length > 0) {
+    return { ok: false, errors: current.errors, content: null, event: null };
+  }
+  const reviewNumber = current.events.filter(event => event.type === 'outcome').length + 1;
+  const sourceReference = `review:${reviewNumber}`;
+  const event = {
+    type: 'outcome',
+    status: String(outcome?.status ?? ''),
+    mode: String(outcome?.mode ?? ''),
+    artifact: String(outcome?.artifact ?? ''),
+    findingIds: Array.isArray(outcome?.findingIds) ? outcome.findingIds.map(String) : [],
+    classification: outcome?.classification ?? null,
+    roleId: String(outcome?.roleId ?? ''),
+    actorAccount: String(outcome?.actorAccount ?? ''),
+    sourceReference,
+  };
+  if (outcome?.sourceReference !== sourceReference) {
+    return { ok: false, errors: [`review outcome sourceReference must equal '${sourceReference}'`], content: null, event: null };
+  }
+  try {
+    if (!['accepted', 'needs_revision'].includes(event.status)) throw new TypeError('review outcome status is invalid');
+    if (!isValidReviewMode(event.mode)) throw new TypeError('review outcome mode is invalid');
+    if (!/^commit:[0-9a-f]{40,64}$/.test(event.artifact)) throw new TypeError('review outcome artifact is invalid');
+    if (event.roleId !== 'maintainer') throw new TypeError("review outcome roleId must be 'maintainer'");
+    if (!event.actorAccount || /[\r\n]/.test(event.actorAccount)) throw new TypeError('review outcome actorAccount is invalid');
+    if (event.status === 'accepted' && event.findingIds.length > 0) throw new TypeError('accepted review outcome cannot carry findings');
+    if (event.status === 'needs_revision' && event.findingIds.length === 0) throw new TypeError('needs_revision review outcome requires findings');
+    const classification = parseRevisionClassification(event.classification);
+    if (classification.error) throw new TypeError(classification.error);
+    event.classification = classification.classification;
+  } catch (error) {
+    return { ok: false, errors: [error.message], content: null, event: null };
+  }
+  const lines = [
+    `### Review ${reviewNumber}`,
+    '',
+    `- Status: ${event.status}`,
+    `- Mode: ${event.mode}`,
+    `- Artifact: ${event.artifact}`,
+    ...(event.findingIds.length ? [`- Findings: ${event.findingIds.join(', ')}`] : []),
+    ...(event.classification ? [`- Classification: ${event.classification}`] : []),
+    ...renderReviewRoleCarrier({ roleId: event.roleId, actorAccount: event.actorAccount }),
+  ];
+  const normalized = String(content ?? '').replace(/\r\n/g, '\n');
+  const section = markdownSection(normalized, '## Review History');
+  let candidate;
+  if (!section) {
+    candidate = `${normalized.trimEnd()}\n\n## Review History\n\n${lines.join('\n')}\n`;
+  } else {
+    const sourceLines = normalized.split('\n');
+    const prefix = sourceLines.slice(0, section.endLine).join('\n').trimEnd();
+    const suffix = sourceLines.slice(section.endLine).join('\n').trimStart();
+    candidate = `${prefix}\n\n${lines.join('\n')}\n${suffix ? `\n${suffix}\n` : ''}`;
+  }
+  const parsed = parseFilesReviewHistory(candidate);
+  const appended = parsed.events.filter(item => item.type === 'outcome').at(-1) ?? null;
+  if (parsed.errors.length > 0 || !appended || appended.sourceReference !== sourceReference) {
+    return { ok: false, errors: parsed.errors.length ? parsed.errors : ['rendered review outcome did not round-trip'], content: null, event: null };
+  }
+  return { ok: true, errors: [], content: candidate, event: appended };
+}

@@ -157,7 +157,7 @@ describe('the plan is read-only and converges', () => {
     git(target, ['add', '-A']);
     git(target, ['commit', '-m', 'settle readiness\n\nTask: T-019\nAgent: maintainer']);
 
-    const after = buildReadinessPlan(target, 'T-019');
+    const after = buildReadinessPlan(target, 'T-019', { route: 'parallel' });
     assert.equal(stepById(after, 'trusted_contract_baseline').settled, true, 'the repaired step is settled');
     assert.equal(stepById(after, 'committed_decomposition').settled, true);
     assert.equal(stepById(after, 'dependency_observation').settled, true);
@@ -178,7 +178,7 @@ describe('the plan is read-only and converges', () => {
     git(target, ['add', '-A']);
     git(target, ['commit', '-m', 'settle readiness\n\nTask: T-020\nAgent: maintainer']);
 
-    const plan = buildReadinessPlan(target, 'T-020');
+    const plan = buildReadinessPlan(target, 'T-020', { route: 'parallel' });
     assert.equal(plan.ready, true, `pending: ${plan.pendingSteps.join(', ')}`);
     assert.deepEqual([...plan.writeSet], []);
     assert.equal(plan.nextStep, null);
@@ -204,7 +204,7 @@ describe('the plan renders exact commands where it can', () => {
   it('binds the decomposition command to the current HEAD', () => {
     const target = newTarget('head', 'T-018');
     const head = String(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: target, encoding: 'utf8' }).stdout).trim();
-    const plan = buildReadinessPlan(target, 'T-018');
+    const plan = buildReadinessPlan(target, 'T-018', { route: 'parallel' });
     assert.match(stepById(plan, 'committed_decomposition').command, new RegExp(head));
   });
 
@@ -214,7 +214,7 @@ describe('the plan renders exact commands where it can', () => {
     makeDecomposition(target, 'T-021');
     git(target, ['add', '-A']);
     git(target, ['commit', '-m', 'decomposition\n\nTask: T-021\nAgent: maintainer']);
-    const plan = buildReadinessPlan(target, 'T-021');
+    const plan = buildReadinessPlan(target, 'T-021', { route: 'parallel' });
     const workUnit = stepById(plan, 'work_unit_identity');
     assert.equal(workUnit.settled, false);
     assert.match(workUnit.detail, /per-task fallback/);

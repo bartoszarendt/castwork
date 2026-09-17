@@ -250,7 +250,7 @@ describe('schema-less readiness transitions require baseline migration', () => {
       const digest = `sha256:${createHash('sha256').update(readFileSync(path, 'utf8'), 'utf8').digest('hex')}`;
       const result = await runCliInProcess([
         'task', 'status', 'T-001', 'agent-ready', '--expect-digest', digest,
-        '--base', 'HEAD', '--dependencies', dependencies, '--target', target,
+        '--base', 'HEAD', '--target', target,
       ]);
       assert.notEqual(result.status, 0, 'schema-less task must not enter agent-ready without a trusted baseline');
       assert.match(result.stdout + result.stderr, /baseline/i);

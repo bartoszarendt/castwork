@@ -44,6 +44,11 @@ export {
 import { createDiagnostic } from './repair-policy.js';
 import { deriveEvidenceState, dispositionForEvidenceState } from './result-envelope.js';
 import {
+  associateHandoffSemanticEvaluation,
+  evaluateSemanticHandoff,
+  semanticEvaluationForHandoff,
+} from './semantic-handoff-normalizer.js';
+import {
   DISPATCH_PREPARATION_KIND,
   DISPATCH_PREPARATION_SCHEMA_VERSION,
   dispatchPreparationDigest,
@@ -412,8 +417,19 @@ function boundIdentity(values = {}) {
 }
 
 function verdict({ transition, requirement, diagnostics, observations, identity, observedGrade, authenticated }) {
-  const recognized = diagnostics.length === 0;
-  const evidenceState = recognized ? 'current' : (deriveEvidenceState(diagnostics) ?? 'negative');
+  const evaluatedEvidenceState = diagnostics.length === 0
+    ? 'current'
+    : (deriveEvidenceState(diagnostics) ?? 'negative');
+  const semanticEvaluation = evaluateSemanticHandoff({
+    transition,
+    requirement,
+    diagnostics,
+    evidenceState: evaluatedEvidenceState,
+    identity,
+    observedGrade: observedGrade ?? null,
+  });
+  const recognized = semanticEvaluation?.verdict === 'legal';
+  const evidenceState = recognized ? 'current' : evaluatedEvidenceState;
   const record = {
     kind: HANDOFF_RECOGNITION_KIND,
     schemaVersion: HANDOFF_RECOGNITION_SCHEMA_VERSION,
@@ -430,7 +446,8 @@ function verdict({ transition, requirement, diagnostics, observations, identity,
     digest: null,
   };
   record.digest = handoffRecognitionDigest(record);
-  return Object.freeze(record);
+  const frozen = Object.freeze(record);
+  return associateHandoffSemanticEvaluation(frozen, semanticEvaluation);
 }
 
 /**
@@ -1042,6 +1059,35 @@ export function projectReadOnlyHandoffRecognition(actionId, recognition, {
   prerequisite,
   inputUnavailable = false,
 } = {}) {
+  const semantic = semanticEvaluationForHandoff(recognition);
+  if (semantic) {
+    const details = Array.isArray(recognition?.diagnostics) ? recognition.diagnostics : [];
+    return Object.freeze({
+      id: semantic.request.actionId,
+      verdict: semantic.verdict,
+      applicability: semantic.verdict === 'not_applicable' ? 'not_applicable' : 'applicable',
+      facts: Object.freeze(semantic.facts.map(item => Object.freeze({
+        fact: item.id,
+        factOwner: item.owner.id,
+        observedState: item.state,
+        policyCode: item.value?.policyCodes?.[0] ?? null,
+      }))),
+      reasons: Object.freeze(semantic.reasons.map((reason, index) => Object.freeze({
+        fact: reason.factId,
+        factOwner: reason.owner.id,
+        observedState: reason.evidenceState,
+        state: semantic.verdict === 'unknown' ? 'unknown' : 'failed',
+        policyCode: semantic.facts.find(item => item.id === reason.factId)?.value?.policyCodes?.[0] ?? null,
+        ...(details[index]?.message ? { detail: details[index].message } : {}),
+        reasonId: reason.reasonId,
+      }))),
+      prerequisites: Object.freeze(semantic.requirements.map(item => Object.freeze({
+        fact: item.factId,
+        condition: item.condition,
+      }))),
+      semanticEvaluation: semantic,
+    });
+  }
   const diagnostics = Array.isArray(recognition?.diagnostics) ? recognition.diagnostics : [];
   // A missing current return does not erase a concurrently observed malformed
   // or stale return-store fact.  Read-only callers must retain that distinction

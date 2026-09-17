@@ -116,8 +116,6 @@ async function implementedTask(name, {
     'task', 'status', 'T-001', 'in-progress',
     '--expect-digest', carrierDigest(root), '--dispatch-packet', packetPath, '--json',
   ]), 'role start');
-  git(root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-  git(root, ['commit', '-m', 'start the engineer role\n\nTask: T-001\nAgent: engineer']);
 
   // Inside the return range, and untrailered: the toolkit updater is not the
   // loop and does not write canonical Task:/Agent: trailers.
@@ -154,8 +152,6 @@ async function produceReturn({ root, cli, packetPath }, productHead, slug) {
     'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
     '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
   ]), 'implementation artifact evidence');
-  git(root, ['add', '.agenticloop/tasks']);
-  git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
   const checksPath = `.agenticloop/tmp/${slug}-checks.json`;
   assertOk(await cli([
@@ -192,8 +188,6 @@ describe('return gates are scoped to the task surface', () => {
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
     ]), 'implementation artifact evidence');
-    git(root, ['add', '.agenticloop/tasks']);
-    git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
     const checksPath = '.agenticloop/tmp/full-return-checks.json';
     assertOk(await cli([
       'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath, '--json',
@@ -274,8 +268,6 @@ describe('return gates are scoped to the task surface', () => {
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json',
     ]), 'implementation artifact evidence');
-    git(root, ['add', '.agenticloop/tasks']);
-    git(root, ['commit', '-m', 'record the implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     // The operator syncs the toolkit mid-attempt, inside this attempt's own
     // region. That rewrites the generator's output manifest and the project
@@ -326,14 +318,9 @@ describe('return gates are scoped to the task surface', () => {
 
     assertOk(await cli(['task', 'review-prepare', 'T-001', '--json']), 'review entry from the verified return');
 
-    // Proof that a required check ran is written to a tracked path by default,
-    // so committing it is the intended end state, and every later refetch reads
-    // that history. Until this family was recognized, the refetch aborted on the
-    // toolkit's own artifact. Committing still advances the workflow head, so a
-    // return produced before it is legitimately stale afterwards - that refusal
-    // is the honest one, and it is the only one left.
-    git(root, ['add', '.agenticloop/checks']);
-    git(root, ['commit', '-m', 'track the check execution artifacts\n\nTask: T-001\nAgent: engineer']);
+    // The protected check update commits its own execution artifacts. Every
+    // later refetch therefore reads that history without a role-authored
+    // bookkeeping commit or an unknown-path classification.
     const afterCommit = await cli(['task', 'review-prepare', 'T-001', '--json']);
     assert.doesNotMatch(
       `${afterCommit.stdout}${afterCommit.stderr}`,

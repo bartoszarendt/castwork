@@ -22,6 +22,10 @@ import {
   isValidReviewMode,
 } from './review-provenance.js';
 import { resolveTaskBackend } from './task-backend.js';
+import {
+  ACTION_OBSERVATION_KIND,
+  validateActionObservation,
+} from './action-observation-contract.js';
 
 export const EVENT_SCHEMA_VERSION = 1;
 export const DEFAULT_LOG_DIR = join('.agenticloop', 'logs');
@@ -919,6 +923,8 @@ export function validateNewEvent(event, options = {}) {
       errors.push(...validateRoleInvokedProducer(event));
     } else if (event.event_type === 'review.result') {
       errors.push(...validateReviewResultProducer(event));
+    } else if (event.event_type === 'decision.recorded' && event.data?.kind === ACTION_OBSERVATION_KIND) {
+      errors.push(...validateActionObservation(event.data));
     }
   }
 

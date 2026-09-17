@@ -308,6 +308,14 @@ describe('help rendering', () => {
     assert.match(renderCommandHelp('setup'), /--yes is a compatibility alias for --non-interactive/);
   });
 
+  it('shows an executable default serial readiness path without parallel placeholders', () => {
+    const usage = COMMAND_REGISTRY.task.subcommands['readiness-plan'].usage;
+    const serialUsage = usage.split(' | ')[0];
+    assert.match(serialUsage, /task readiness-plan <id>/);
+    assert.doesNotMatch(serialUsage, /--dependencies|--work-unit|prepare-decomposition/);
+    assert.match(renderCommandHelp('task readiness-plan'), /Serial is the default/);
+  });
+
   it('renders a short first-use screen pointing at setup', () => {
     const firstUse = renderFirstUse();
     assert.match(firstUse, /agenticloop setup/);

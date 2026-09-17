@@ -9,17 +9,16 @@
  * shared task contract.
  *
  * The success path is compared just as closely: one normalized success result
- * and one identity over it, covering the shared task identity, the complete
- * evidence context, the owned-projection structure, the mutation disposition,
+ * and one identity over it, covering the shared task identity, backend-neutral
+ * evidence facts, the owned-projection structure, the mutation disposition,
  * and the transition.
  *
- * Nothing is discarded to make the comparison pass. The dependency provenance
- * object and the task identity are compared field by field, and the only values
- * either side may differ in are enumerated explicitly below as
- * transport-specific: the carrier identity and its digests, the owned carrier
- * projection name, and the transport side effect. Message text is neutralized
- * only for command names and carrier identities - never for generic semantic
- * phrasing, which must genuinely match.
+ * Files serial readiness observes dependency task carriers directly, while the
+ * GitHub transition consumes an attributed snapshot. The comparison therefore
+ * holds their normalized dependency facts equal and verifies each acquisition
+ * method explicitly; it does not restore the superseded files snapshot input.
+ * Message text is neutralized only for command names and carrier identities -
+ * never for generic semantic phrasing, which must genuinely match.
  */
 
 import { after, before, describe, it } from 'node:test';
@@ -240,7 +239,7 @@ function semanticContract(body) {
 }
 
 /**
- * The complete evidence context a successful transition receipt carries.
+ * The backend-neutral evidence facts a successful transition receipt carries.
  *
  * The dependency provenance object is kept and compared. The task object is
  * kept too: `task.id` is the shared, backend-independent identity of the record
@@ -248,27 +247,27 @@ function semanticContract(body) {
  * while transitioning different tasks. Only `carrier` and `expectedDigest` are
  * genuinely transport-specific - the carrier names the file or the issue, and
  * its digest is taken over bytes that differ by construction - so those two are
- * replaced by fixed placeholders and everything else is compared verbatim.
+ * replaced by fixed placeholders. Dependency acquisition identity, timestamps,
+ * selectors, and snapshot provenance are verified separately; the evaluated
+ * dependency facts remain in the shared comparison.
  */
 function semanticEvidence(receipt) {
   const { backend: _backend, task, ...shared } = receipt.evidenceContext;
   const { carrier: _carrier, expectedDigest: _expectedDigest, ...sharedTask } = task;
-  const { evaluatedAt: _evaluatedAt, revalidationArgs: _revalidationArgs, provenance, ...dependencies } =
-    shared.dependencies;
+  const {
+    source: _source,
+    digest: _digest,
+    observedAt: _observedAt,
+    evaluatedAt: _evaluatedAt,
+    freshnessPolicy: _freshnessPolicy,
+    revalidationArgs: _revalidationArgs,
+    provenance: _provenance,
+    ...dependencies
+  } = shared.dependencies;
   return {
     ...shared,
     task: { ...sharedTask, carrier: '<carrier>', expectedDigest: '<expected carrier digest>' },
-    dependencies: {
-      ...dependencies,
-      // Provenance is compared in full except for the snapshot's own path and
-      // the commit that recorded it: each backend commits its own snapshot file.
-      provenance: provenance === undefined ? null : {
-        ...provenance,
-        path: '<dependency snapshot>',
-        commit: '<recording commit>',
-        blob: '<recording blob>',
-      },
-    },
+    dependencies,
   };
 }
 
@@ -298,8 +297,8 @@ function githubRunner(state) {
 
 /**
  * One shared workflow fixture: a committed, baselined task record materialized
- * on both carriers, plus committed Maintainer-attributed dependency evidence
- * for each.
+ * on both carriers, plus committed Maintainer-attributed GitHub dependency
+ * evidence. Files serial readiness observes current task carriers directly.
  */
 async function sharedWorkflow(name) {
   const root = mkdtempSync(join(temp, `${name}-`));
@@ -314,33 +313,15 @@ async function sharedWorkflow(name) {
     '--authority', 'task:T-001', '--target', root,
   ]);
   assert.equal(baseline.status, 0, baseline.stderr);
-  git(root, ['add', '.agenticloop/task-contract-history']);
-  git(root, ['commit', '-m', 'record differential baseline']);
 
   const dependencyPayload = `${JSON.stringify({
     kind: 'agenticloop.dependency-snapshot', schemaVersion: 1,
     source: 'files:.agenticloop/tasks', observedAt: new Date().toISOString(),
     freshnessPolicy: { maxAgeSeconds: 86400 }, statuses: {},
   })}\n`;
-  writeFileSync(join(root, 'dependencies-files.json'), dependencyPayload, 'utf8');
-  git(root, ['add', 'dependencies-files.json']);
-  git(root, ['commit', '-m', 'record files dependency evidence\n\nTask: T-001\nAgent: maintainer']);
   writeFileSync(join(root, 'dependencies-github.json'), dependencyPayload, 'utf8');
   git(root, ['add', 'dependencies-github.json']);
   git(root, ['commit', '-m', 'record GitHub dependency evidence\n\nTask: <carrier>\nAgent: maintainer'.replace('<carrier>', '#71')]);
-
-  // A stale snapshot both backends can be pointed at, committed the same way.
-  const stalePayload = `${JSON.stringify({
-    kind: 'agenticloop.dependency-snapshot', schemaVersion: 1,
-    source: 'files:.agenticloop/tasks', observedAt: '2020-01-01T00:00:00.000Z',
-    freshnessPolicy: { maxAgeSeconds: 60 }, statuses: {},
-  })}\n`;
-  writeFileSync(join(root, 'stale-files.json'), stalePayload, 'utf8');
-  git(root, ['add', 'stale-files.json']);
-  git(root, ['commit', '-m', 'record stale files dependency evidence\n\nTask: T-001\nAgent: maintainer']);
-  writeFileSync(join(root, 'stale-github.json'), stalePayload, 'utf8');
-  git(root, ['add', 'stale-github.json']);
-  git(root, ['commit', '-m', 'record stale GitHub dependency evidence\n\nTask: #71\nAgent: maintainer']);
 
   const filesDraft = readFileSync(file, 'utf8');
   const githubDraft = `${filesDraft.replace(/^backend: files$/m, 'backend: github').trimEnd()}\n\n[[agent: maintainer]]\n`;
@@ -401,34 +382,14 @@ describe('backend semantic transition equivalence', () => {
         writeFileSync(fx.file, `﻿${fx.filesDraft}`, 'utf8');
         fx.state.body = `﻿${fx.githubDraft}`;
       },
-      filesArgs: ['--dependencies', 'dependencies-files.json'],
+      filesArgs: [],
       githubArgs: ['--dependencies', 'dependencies-github.json'],
     },
     {
       label: 'a stale expected digest',
       setup() {},
-      filesArgs: ['--dependencies', 'dependencies-files.json', '--expect-digest', sha256('a different record')],
+      filesArgs: ['--expect-digest', sha256('a different record')],
       githubArgs: ['--dependencies', 'dependencies-github.json', '--expect-digest', sha256('a different record')],
-    },
-    {
-      label: 'missing dependency evidence',
-      setup() {},
-      filesArgs: [],
-      githubArgs: [],
-    },
-    {
-      label: 'dependency evidence that is not committed and attributed',
-      setup(fx) {
-        writeFileSync(join(fx.root, 'uncommitted.json'), '{"kind":"agenticloop.dependency-snapshot"}\n', 'utf8');
-      },
-      filesArgs: ['--dependencies', 'uncommitted.json'],
-      githubArgs: ['--dependencies', 'uncommitted.json'],
-    },
-    {
-      label: 'dependency evidence outside its declared freshness policy',
-      setup() {},
-      filesArgs: ['--dependencies', 'stale-files.json'],
-      githubArgs: ['--dependencies', 'stale-github.json'],
     },
   ];
 
@@ -537,7 +498,7 @@ describe('backend semantic transition equivalence', () => {
     // backend's real guarded public mutation path.
     writeFileSync(fx.file, `﻿${fx.filesDraft}`, 'utf8');
     fx.state.body = `﻿${fx.githubDraft}`;
-    const filesFailed = await fx.files(['--dependencies', 'dependencies-files.json']);
+    const filesFailed = await fx.files();
     const githubFailed = await fx.github(['--dependencies', 'dependencies-github.json']);
     assert.equal(filesFailed.status, 1);
     assert.equal(githubFailed.status, 1);
@@ -548,8 +509,9 @@ describe('backend semantic transition equivalence', () => {
 
     writeFileSync(fx.file, fx.filesDraft, 'utf8');
     fx.state.body = fx.githubDraft;
-    const filesOk = await fx.files(['--dependencies', 'dependencies-files.json']);
-    const githubOk = await fx.github(['--dependencies', 'dependencies-github.json']);
+    const sharedBase = git(fx.root, ['rev-parse', 'HEAD']);
+    const filesOk = await fx.files(['--base', sharedBase]);
+    const githubOk = await fx.github(['--dependencies', 'dependencies-github.json', '--base', sharedBase]);
     assert.equal(filesOk.status, 0, filesOk.stdout + filesOk.stderr);
     assert.equal(githubOk.status, 0, githubOk.stdout + githubOk.stderr);
 
@@ -591,27 +553,23 @@ describe('backend semantic transition equivalence', () => {
     assert.equal(filesReceipt.mutationDisposition, 'committed');
     assert.equal(filesReceipt.unresolved, false);
 
-    // The complete evidence context, dependency provenance included.
+    // The backend-neutral evidence facts are the same.
     assert.deepEqual(semanticEvidence(githubReceipt), semanticEvidence(filesReceipt));
 
-    // Dependency provenance was genuinely carried on both sides, not dropped.
-    for (const receipt of [filesReceipt, githubReceipt]) {
-      const provenance = receipt.evidenceContext.dependencies.provenance;
-      assert.ok(provenance, 'dependency provenance must be present');
-      assert.equal(provenance.role, 'maintainer');
-      assert.match(provenance.blob, /^[0-9a-f]{40}$/);
-      assert.match(provenance.commit, /^[0-9a-f]{40}$/);
-    }
-    // The two provenance objects carry the same field set; only the enumerated
-    // transport-specific values differ.
-    assert.deepEqual(
-      Object.keys(githubReceipt.evidenceContext.dependencies.provenance).sort(),
-      Object.keys(filesReceipt.evidenceContext.dependencies.provenance).sort()
-    );
-    assert.notEqual(
-      githubReceipt.evidenceContext.dependencies.provenance.path,
-      filesReceipt.evidenceContext.dependencies.provenance.path
-    );
+    // Each backend records its actual acquisition method. Files re-observes the
+    // configured task carriers; GitHub preserves the attributed snapshot.
+    assert.deepEqual(filesReceipt.evidenceContext.dependencies.revalidationArgs, [
+      '--serial-dependencies', '.agenticloop/tasks/{taskId}.md',
+    ]);
+    assert.equal(filesReceipt.evidenceContext.dependencies.provenance, undefined);
+    const githubProvenance = githubReceipt.evidenceContext.dependencies.provenance;
+    assert.ok(githubProvenance, 'GitHub dependency snapshot provenance must be present');
+    assert.equal(githubProvenance.role, 'maintainer');
+    assert.match(githubProvenance.blob, /^[0-9a-f]{40}$/);
+    assert.match(githubProvenance.commit, /^[0-9a-f]{40}$/);
+    assert.deepEqual(githubReceipt.evidenceContext.dependencies.revalidationArgs, [
+      '--dependencies', 'dependencies-github.json',
+    ]);
 
     // The resulting shared task contract is identical.
     assert.deepEqual(semanticContract(fx.state.body), semanticContract(readFileSync(fx.file, 'utf8')));

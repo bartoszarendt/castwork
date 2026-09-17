@@ -14,6 +14,7 @@ import {
   activationAssuranceMeets,
   activationGrantDigest,
   createActivationGrant,
+  createActivationBindingRevocation,
   createActivationRevocation,
   resolveTaskActivationBinding,
   returnAssuranceMeets,
@@ -200,6 +201,38 @@ describe('activation binding resolution', () => {
     const resolved = resolveWith({ grant, input: { revocations: [revocation] } });
     assert.equal(resolved.ok, false);
     assert.ok(resolved.errors.some(item => item.code === 'activation.grant.revoked'));
+  });
+
+  it('stops one exact binding without revoking a sibling under the same grant', () => {
+    const grant = grantFor();
+    const stoppedBinding = bindingFor(grant);
+    const siblingBinding = bindingFor(grant, {
+      taskId: 'T-017',
+      carrier: '.agenticloop/tasks/T-017.md',
+    });
+    const revocation = createActivationBindingRevocation({
+      grant,
+      binding: stoppedBinding,
+      reason: 'pause this task only',
+    });
+    const stopped = resolveWith({
+      grant,
+      binding: stoppedBinding,
+      input: { revocations: [revocation] },
+    });
+    assert.equal(stopped.ok, false);
+    assert.ok(stopped.errors.some(item => item.code === 'activation.grant.revoked'));
+
+    const sibling = resolveWith({
+      grant,
+      binding: siblingBinding,
+      input: {
+        taskId: 'T-017',
+        carrier: '.agenticloop/tasks/T-017.md',
+        revocations: [revocation],
+      },
+    });
+    assert.equal(sibling.ok, true, JSON.stringify(sibling.errors));
   });
 
   it('treats a malformed revocation record as a revocation rather than ignoring it', () => {

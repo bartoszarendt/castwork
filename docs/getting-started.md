@@ -560,8 +560,15 @@ Other forms:
 ```text
 npx agenticloop activate --work-unit phase:4   # the committed decomposition's ready set
 npx agenticloop activation status              # what is activated and still usable
+npx agenticloop activation stop T-016          # stop one exact binding durably
 npx agenticloop activation revoke grant:<uuid>
 ```
+
+`activation stop` blocks future protected transitions for that task and
+survives a lost host session. It does not cancel work already running in the
+host. Resume by running `activate T-016` interactively again; this creates a
+new grant and binding while the old stop tombstone remains effective for old
+packets.
 
 ### Migrating an existing project
 

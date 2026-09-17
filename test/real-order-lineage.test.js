@@ -129,8 +129,6 @@ async function realOrderAttempt(name, { projectMapContent = CLOSEOUT_PROJECT_MAP
     '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json', '--target', root,
   ], cli);
   assert.equal(evidenced.status, 0, `${evidenced.stdout}${evidenced.stderr}`);
-  fixtureGit(root, ['add', '.agenticloop/tasks/T-001.md']);
-  fixtureGit(root, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
   const returnHead = fixtureGit(root, ['rev-parse', 'HEAD']);
   const returnCarrierDigest = carrierDigest(root);
@@ -140,8 +138,7 @@ async function realOrderAttempt(name, { projectMapContent = CLOSEOUT_PROJECT_MAP
   });
   assert.equal(lineage.ok, true, lineage.errors?.join('; '));
 
-  const productChangedPaths = fixtureGit(root, ['diff', '--name-only', `${attemptBase}..${productHead}`])
-    .split(/\r?\n/).filter(Boolean);
+  const productChangedPaths = ['src/existing.js'];
   const allPaths = fixtureGit(root, ['diff', '--name-only', `${attemptBase}..${returnHead}`])
     .split(/\r?\n/).filter(Boolean);
   const commits = fixtureGit(root, ['rev-list', '--reverse', `${attemptBase}..${productHead}`])
@@ -187,8 +184,6 @@ async function realOrderAttempt(name, { projectMapContent = CLOSEOUT_PROJECT_MAP
     '--repository-evidence', evidencePath, '--target', root,
   ], cli);
   assert.equal(verified.status, 0, `${verified.stdout}${verified.stderr}`);
-  fixtureGit(root, ['add', '-f', '.agenticloop/returns/verifications']);
-  fixtureGit(root, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
 
   return {
     fixture, root, cli, packet, attemptBase, productHead, returnHead,
@@ -247,7 +242,7 @@ describe('the closeout fixture builds one attempt in real order', () => {
     const productRange = fixtureGit(target, ['rev-list', `${packet.repository.head}..${artifact.slice('commit:'.length)}`])
       .split(/\r?\n/).filter(Boolean);
     assert.ok(productRange.length > 1, 'the workflow head is ahead of the product head');
-    const acceptanceCommit = fixtureGit(target, ['log', '-1', '--format=%H', '--grep', 'record accepted task']);
+    const acceptanceCommit = fixtureGit(target, ['log', '-1', '--format=%H', '--grep', 'Record accepted disposition']);
     assert.ok(acceptanceCommit, 'the acceptance transition has its own commit');
     const engineerProductCommits = fixtureGit(target, [
       'rev-list', `${packet.repository.head}..HEAD`, '--grep', 'Agent: engineer',
@@ -260,9 +255,10 @@ describe('the closeout fixture builds one attempt in real order', () => {
       backend: 'files', taskContractDigest: packet.task.taskContractDigest, boundary: 'engineer_return',
     });
     assert.equal(lineage.ok, true, lineage.errors?.join('; '));
-    assert.equal(lineage.receipts.length, 1, 'one Engineer carrier mutation, with its receipt');
+    assert.equal(lineage.receipts.length, 2, 'the Engineer artifact and structured evidence mutations retain their receipts');
     assert.equal(lineage.receipts[0].mutationClass, 'implementation_artifact_evidence');
-    assert.equal(lineage.receipts[0].producer.workflowRole, 'engineer');
+    assert.equal(lineage.receipts[1].mutationClass, 'structured_engineer_evidence');
+    assert.ok(lineage.receipts.every(receipt => receipt.producer.workflowRole === 'engineer'));
     assert.notEqual(lineage.currentCarrierDigest, carrierDigest(target),
       'the execution terminal and the live lifecycle carrier are different digests');
 
@@ -618,7 +614,7 @@ describe('an elapsed grant remains valid until a semantic invalidator', () => {
     // A deliberately short-lived operator grant, created through the only
     // command that can mint `operator_confirmed`.
     const activated = await runCliInProcess(
-      ['activate', 'T-001', '--expires-in-hours', '0.0125', '--json', '--target', root],
+      ['activate', 'T-001', '--expires-in-hours', '0.002', '--json', '--target', root],
       interactiveOptions(fixture)
     );
     assert.equal(activated.status, 0, `${activated.stdout}${activated.stderr}`);
@@ -665,8 +661,6 @@ describe('an elapsed grant remains valid until a semantic invalidator', () => {
       '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json', '--target', root,
     ], cli);
     assert.equal(evidenced.status, 0, `${evidenced.stdout}${evidenced.stderr}`);
-    fixtureGit(root, ['add', '.agenticloop/tasks/T-001.md']);
-    fixtureGit(root, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     const returnHead = fixtureGit(root, ['rev-parse', 'HEAD']);
     const returnCarrierDigest = carrierDigest(root);
@@ -678,9 +672,12 @@ describe('an elapsed grant remains valid until a semantic invalidator', () => {
     const evidence = repositoryEvidence(packet, { head: productHead, changedPaths: ['src/existing.js'] });
     evidence.workflowHead = returnHead;
     evidence.productChangedPaths = ['src/existing.js'];
-    evidence.workflowChangedPaths = ['.agenticloop/tasks/T-001.md'];
+    evidence.workflowChangedPaths = fixtureGit(root, ['diff', '--name-only', `${packet.repository.head}..${returnHead}`])
+      .split(/\r?\n/).filter(path => path && path !== 'src/existing.js');
     evidence.productAttribution = {
-      range: { base: packet.repository.head, head: productHead }, commits: [productHead],
+      range: { base: packet.repository.head, head: productHead },
+      commits: fixtureGit(root, ['rev-list', '--reverse', `${packet.repository.head}..${productHead}`])
+        .split(/\r?\n/).filter(Boolean),
     };
     evidence.task.currentCarrierDigest = returnCarrierDigest;
     evidence.carrierLineage = {
@@ -717,8 +714,6 @@ describe('an elapsed grant remains valid until a semantic invalidator', () => {
       '--repository-evidence', '.agenticloop/tmp/engineer-evidence.json', '--target', root,
     ], cli);
     assert.equal(verified.status, 0, `${verified.stdout}${verified.stderr}`);
-    fixtureGit(root, ['add', '-f', '.agenticloop/returns/verifications']);
-    fixtureGit(root, ['commit', '-m', 'record return verification\n\nTask: T-001\nAgent: maintainer']);
 
     // Let the historical grant expiry pass. Nothing about the protected
     // authorization changes, so ordinary work stays authorized.
@@ -731,8 +726,6 @@ describe('an elapsed grant remains valid until a semantic invalidator', () => {
       'task', 'status', 'T-001', 'accepted', '--expect-digest', carrierDigest(root), '--json', '--target', root,
     ], cli);
     assert.equal(accepted.status, 0, `${accepted.stdout}${accepted.stderr}`);
-    fixtureGit(root, ['add', '.agenticloop/tasks/T-001.md']);
-    fixtureGit(root, ['commit', '-m', 'record accepted task\n\nTask: T-001\nAgent: maintainer']);
     const artifact = `commit:${fixtureGit(root, ['rev-parse', 'HEAD'])}`;
 
     const closeoutOptions = {

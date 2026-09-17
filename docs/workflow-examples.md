@@ -80,9 +80,18 @@ record:
 - For GitHub: create an issue using the task-record template from `[[task-record-contract]]`.
 
 Before requesting operator activation, establish the initial contract baseline,
-prepare dependencies and decomposition, apply the readiness transaction to
-`agent-ready`, and run handoff preflight. Stop for human approval only after
-dispatch readiness is otherwise clean.
+settle the serial readiness transaction, and run handoff preflight. Serial
+readiness observes declared dependency carriers directly; it needs no snapshot
+or decomposition:
+
+```text
+npx agenticloop task readiness-plan T-001 --actor "<git-author>" --authority "<kind:reference>" --base HEAD --json > .agenticloop/tmp/T-001-readiness-plan.json
+npx agenticloop task readiness-apply T-001 --plan .agenticloop/tmp/T-001-readiness-plan.json --dry-run --json
+npx agenticloop task readiness-apply T-001 --plan .agenticloop/tmp/T-001-readiness-plan.json --yes --json
+npx agenticloop task handoff-preflight T-001 --json
+```
+
+Stop for human approval only after activation is the remaining blocker.
 
 ### 8. Activate the tasks
 
@@ -145,7 +154,7 @@ After approval, the orchestrator delegates to the engineer. The engineer:
 3. Completes and commits product work, then publishes artifact, summary/check
    summary, and non-authoritative outcome with `task evidence`.
 4. Updates the role-start scratch aggregate with `task check-evidence-update`,
-   commits only immutable execution artifacts under
+   which commits each invocation's immutable execution artifact under
    `.agenticloop/checks/<id>/`, and performs no mutation
    before `task prepare-return`.
 5. Has the receiver run `task verify-return <id> --packet <packet-path> --return

@@ -134,8 +134,9 @@ describe('handoff derived-evidence refresh', () => {
     assert.equal(readFileSync(join(value, '.agenticloop', 'tasks', 'T-001.md'), 'utf8'), taskBefore);
     assert.equal(validateHandoffRefreshReceipt(applied.receipt, { target: value, taskId: 'T-001' }).ok, true);
     assert.match(applied.receipt.decomposition.eligibilityDigest, ELIGIBILITY_DIGEST_RE);
-    assert.equal(applied.attributionValidation.ok, true);
-    assert.equal(applied.maintainerTrailerBlock, 'Task: T-001\nAgent: maintainer');
+    assert.equal(applied.commitSubject, undefined);
+    assert.equal(applied.maintainerTrailerBlock, undefined);
+    assert.match(applied.nextOperation, /calling protected command must commit exactly this invocation/);
   });
 
   it('rejects stale carrier or repository observations before writing', () => {
@@ -1243,22 +1244,24 @@ describe('handoff derived-evidence refresh', () => {
       '--plan', '.agenticloop/tmp/refresh-plan.json',
       '--yes', '--json',
     ], { cwd: value });
-    assert.equal(refreshRun.status, 1, `refresh should report pending commit\nstderr:\n${refreshRun.stderr}`);
+    assert.equal(refreshRun.status, 0, `refresh should commit its durable write set\nstderr:\n${refreshRun.stderr}`);
     const refreshResult = JSON.parse(refreshRun.stdout);
     assert.ok(refreshResult.receipt, 'refresh result should have a receipt');
     assert.ok(refreshResult.changedFiles, 'refresh result should have changedFiles');
     assert.ok(refreshResult.changedFiles.length > 0, 'should have at least one changed file');
     assert.ok(refreshResult.changedFiles.some(f => f.includes('T-001')), 'changed files should reference the task');
-    assert.equal(refreshResult.disposition, 'written_pending_commit');
-    assert.match(refreshResult.errors.join('\n'), /handoff\.refresh\.pending_commit/);
-    assert.match(refreshResult.nextOperation, /commit exactly these files/);
+    assert.equal(refreshResult.disposition, 'committed');
+    assert.equal(refreshResult.receiptState, 'committed');
+    assert.equal(refreshResult.workflowCommit.committed, true);
+    assert.deepEqual(refreshResult.workflowCommit.paths, [...refreshResult.changedFiles].sort());
+    const commitMessage = git(value, ['show', '-s', '--format=%B', refreshResult.workflowCommit.commit]);
+    assert.match(commitMessage, /Workflow-Class: workflow_evidence\nTask: T-001\nAgent: maintainer/);
+    assert.match(refreshResult.nextOperation, /handoff-preflight/);
     const nextPreflightRun = await runCliInProcess([
       'task', 'handoff-preflight', 'T-001', '--json',
     ], { cwd: value });
-    assert.notEqual(nextPreflightRun.status, 0, 'the uncommitted receipt must immediately block preflight');
     const nextPreflight = JSON.parse(nextPreflightRun.stdout);
-    assert.notEqual(nextPreflight.disposition, 'proceed');
-    assert.match(JSON.stringify(nextPreflight), /clean|uncommitted|checkout|worktree/i);
+    assert.doesNotMatch(JSON.stringify(nextPreflight), /uncommitted|dirty relevant checkout/i);
   });
 
   it('CLI e2e: refresh-handoff-evidence rejects missing --yes', async () => {
@@ -1344,8 +1347,9 @@ describe('handoff derived-evidence refresh', () => {
       '--plan', '.agenticloop/tmp/plan.json',
       '--yes',
     ], { cwd: value });
-    assert.equal(run.status, 1, `refresh should report pending commit\nstderr:\n${run.stderr}`);
-    assert.match(run.stdout, /WRITTEN PENDING COMMIT/);
+    assert.equal(run.status, 0, `refresh should report committed success\nstderr:\n${run.stderr}`);
+    assert.match(run.stdout, /REFRESHED AND COMMITTED/);
+    assert.match(run.stdout, /workflow commit:/);
     assert.match(run.stdout, /T-001/);
   });
 

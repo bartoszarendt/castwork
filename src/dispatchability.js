@@ -130,12 +130,13 @@ export function dispatchableLifecycleRepairPlan(taskId, status) {
 
   if (status === 'draft') {
     // `task status` requires the exact current digest and exactly one baseline
-    // form. Both are represented as what they are: one read-only command that
-    // produces the digest, and one operator choice between two baselines.
+    // form. Files-backed serial readiness observes declared dependencies from
+    // their current task carriers, so the repair must not ask the operator to
+    // prepare or supply a parallel dependency snapshot.
     return Object.freeze({
       ...base,
       prerequisite:
-        `${id} must be authored to the 'agent-ready' status with explicit base and dependency evidence`,
+        `${id} must be authored to the 'agent-ready' status with an explicit base; declared dependencies are observed from current task carriers`,
       reads: Object.freeze([
         Object.freeze({
           command: `npx agenticloop task lint ${id} --json`,
@@ -145,16 +146,16 @@ export function dispatchableLifecycleRepairPlan(taskId, status) {
       primary: Object.freeze({
         command:
           `npx agenticloop task status ${id} agent-ready ` +
-          '--expect-digest <digest> --base <base-ref> --dependencies <dependencies.json>',
-        placeholders: Object.freeze(['<digest>', '<base-ref>', '<dependencies.json>']),
+          '--expect-digest <digest> --base <base-ref>',
+        placeholders: Object.freeze(['<digest>', '<base-ref>']),
       }),
       alternatives: Object.freeze([
         Object.freeze({
           when: 'the baseline is an explicit path inventory rather than a Git ref',
           command:
             `npx agenticloop task status ${id} agent-ready ` +
-            '--expect-digest <digest> --base-paths <base-paths.json> --dependencies <dependencies.json>',
-          placeholders: Object.freeze(['<digest>', '<base-paths.json>', '<dependencies.json>']),
+            '--expect-digest <digest> --base-paths <base-paths.json>',
+          placeholders: Object.freeze(['<digest>', '<base-paths.json>']),
         }),
       ]),
     });

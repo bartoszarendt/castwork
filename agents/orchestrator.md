@@ -88,8 +88,8 @@ refresh.
   and commit product work; publish implementation artifact, summary/check
   summary, and non-authoritative outcome through `task evidence`; update the
   role-start scratch aggregate and run and record every
-  required check with `task check-evidence-update`, committing the artifacts
-  once after the last check; then immediately run `task
+  required check with `task check-evidence-update`; each protected command
+  commits its own durable workflow artifacts. Then immediately run `task
   prepare-return` without an intervening mutation. Do not prepare a review
   packet or treat a raw return as current until `task verify-return <id> --packet
   <packet-path> --return <return-path> --from-current-repository` succeeds.

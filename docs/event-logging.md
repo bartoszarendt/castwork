@@ -36,6 +36,18 @@ Event logs are local JSONL files under `.agenticloop/logs/`. They should
 contain short workflow-gate summaries only – never raw prompts, raw assistant
 messages, token streams, terminal dumps, secrets, or host telemetry.
 
+When logging is enabled, a successful protected `task prepare-dispatch`
+invocation that writes its packet also records one compact action observation.
+The observation binds the attempted action to the exact semantic evaluation
+the command consumed. Read-only `status`, `explain`, and `measure` calls do not
+record action attempts.
+
+These logs are optional, machine-local observations rather than lifecycle
+authority. A logging failure never blocks the protected action, and log files
+do not make the repository dirty for dispatch purposes. Missing observations
+remain missing and reduce only the coverage of measurements that depend on
+them.
+
 ## Relationship to completion summaries
 
 Per-task completion summaries are always written inline into

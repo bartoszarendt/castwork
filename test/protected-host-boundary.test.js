@@ -18,6 +18,7 @@ import { createAuditorReturnReceipt } from '../src/auditor-return-receipt.js';
 import { generateHostSigningKey, targetRepositoryIdentity } from '../src/host-trust.js';
 import { createTestHostTrust, writeHostTrustStore } from './helpers/host-trust-fixture.js';
 import { runProcess } from './helpers/process-runner.js';
+import { initTestGitRepository, git } from './helpers/git-fixture.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const BIN = join(REPO_ROOT, 'bin', 'agenticloop.js');
@@ -72,6 +73,9 @@ function makeTarget(name) {
     '---', 'task_id: T-001', 'status: accepted', '---', '', '# T-001', '',
     '## Grouping', '', 'milestone:M00', '', '## Comments', '', '',
   ].join('\n'), 'utf8');
+  initTestGitRepository(target, { quiet: true });
+  git(target, ['add', '-A']);
+  git(target, ['commit', '-q', '-m', 'initialize protected host fixture']);
   return target;
 }
 
@@ -95,7 +99,7 @@ function wireReport(artifact, reference) {
 
 async function setup(name) {
   const target = makeTarget(name);
-  const artifact = `commit:${'a'.repeat(40)}`;
+  const artifact = `commit:${git(target, ['rev-parse', 'HEAD'])}`;
   assert.equal((await runSource([
     'audit', 'new', '--work-unit', 'milestone:M00', '--covered-tasks', 'T-001',
     '--artifact', artifact, '--goal', 'g', '--completion-oracle', 'o',

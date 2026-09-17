@@ -332,6 +332,20 @@ describe('initial repository state binds the dispatch', () => {
     assert.deepEqual(evaluated.state.ignoredRelevantPaths, ['.agenticloop/locks/lifecycle-authority/held.lock']);
   });
 
+  it('keeps uncommitted durable return verification visible to the clean-state gate', () => {
+    const evaluated = evaluateDispatchCleanState({
+      runGit: args => ({
+        status: 0,
+        stdout: args.includes('--ignored') ? '.agenticloop/returns/verifications/T-001.json\n' : '',
+      }),
+      scopePatterns: ['src/**'],
+    });
+    assert.equal(evaluated.ok, false);
+    assert.deepEqual(evaluated.state.ignoredRelevantPaths, [
+      '.agenticloop/returns/verifications/T-001.json',
+    ]);
+  });
+
   it('blocks dispatch when an ignored file shadows an intended creation or shared state', async () => {
     const fixture = await createDispatchFixture(temp, 'ignored-creation');
     writeFileSync(join(fixture.root, '.gitignore'), 'src/new.js\n.agenticloop/owned.json\n', 'utf8');
@@ -658,6 +672,49 @@ describe('return ancestry is proven, not assumed', () => {
     assert.equal(multiple.ok, true, multiple.message);
     assert.deepEqual(multiple.commits, [first, second]);
     assert.deepEqual(multiple.changedPaths, ['b.txt', 'c.txt']);
+  });
+
+  it('keeps collapsed workflow commits out of the task-authored product range', () => {
+    const root = scratchRepo('ancestry-collapsed-workflow');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(join(root, '.agenticloop'), { recursive: true });
+    const base = commit(root, 'src/x.js', 'base\n', trailer('base'));
+    commit(
+      root,
+      '.agenticloop/evidence.json',
+      '{}\n',
+      'record workflow evidence\n\nWorkflow-Class: workflow_evidence\nTask: T-001\nAgent: maintainer',
+    );
+    const head = commit(
+      root,
+      'src/x.js',
+      'changed\n',
+      'implement product\n\nWorkflow-Class: product_implementation\nTask: T-001\nAgent: engineer',
+    );
+    const derived = range(root, base, head, {
+      allowedPaths: ['src/**'], attemptStartProductHead: base,
+    });
+    assert.equal(derived.ok, true, derived.message);
+    assert.deepEqual(derived.taskAuthoredChangedPaths, ['src/x.js']);
+    assert.deepEqual(derived.changedPaths, ['.agenticloop/evidence.json', 'src/x.js']);
+  });
+
+  it('refuses a collapsed workflow class on a packet-scoped product path', () => {
+    const root = scratchRepo('ancestry-false-workflow-class');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    const base = commit(root, 'src/x.js', 'base\n', trailer('base'));
+    const head = commit(
+      root,
+      'src/x.js',
+      'changed\n',
+      'misclassify product work\n\nWorkflow-Class: workflow_evidence\nTask: T-001\nAgent: engineer',
+    );
+    const derived = range(root, base, head, {
+      allowedPaths: ['src/**'], attemptStartProductHead: base,
+    });
+    assert.equal(derived.ok, false);
+    assert.equal(derived.evidenceState, 'malformed');
+    assert.match(derived.message, /Workflow-Class: workflow_evidence.*packet-scoped product path/);
   });
 
   it('derives a merge commit range when every commit carries canonical trailers', () => {

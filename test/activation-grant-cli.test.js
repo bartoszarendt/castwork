@@ -214,6 +214,130 @@ describe('agenticloop activate', () => {
     assert.equal(new Set(report.tasks.map(() => report.grantId)).size, 1);
   });
 
+  it('durably stops one exact binding and resumes only with fresh authorization', async () => {
+    const fixture = await scaffoldFixture(temp, 'activate-stop');
+    writeSecondTask(fixture, 'T-002');
+    const activated = await runCliInProcess(
+      ['activate', 'T-001', 'T-002', '--json', '--target', fixture.root],
+      interactiveOptions(fixture)
+    );
+    assert.equal(activated.status, 0, activated.stderr);
+    const first = JSON.parse(activated.stdout);
+    const oldBinding = JSON.parse(readFileSync(
+      join(fixture.root, bindingRecordPath('files', 'T-001')),
+      'utf8'
+    ));
+
+    const prepared = await runPrepareDispatch(fixture, [
+      '--output', '.agenticloop/tmp/stopped-packet.json', '--json',
+    ]);
+    assert.equal(prepared.status, 0, prepared.stderr || prepared.stdout);
+
+    const stopped = await runCliInProcess([
+      'activation', 'stop', 'T-001', '--reason', 'operator hold', '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(stopped.status, 0, stopped.stderr || stopped.stdout);
+    const stopRecord = JSON.parse(stopped.stdout);
+    assert.equal(stopRecord.taskId, 'T-001');
+    assert.equal(stopRecord.bindingId, oldBinding.bindingId);
+    assert.equal(stopRecord.cancellation, 'not_attempted');
+
+    const stopRetry = await runCliInProcess([
+      'activation', 'stop', 'T-001', '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(stopRetry.status, 0, stopRetry.stderr || stopRetry.stdout);
+    const retryRecord = JSON.parse(stopRetry.stdout);
+    assert.equal(retryRecord.revocationId, stopRecord.revocationId);
+    assert.equal(retryRecord.receipt.mutationDisposition, 'already_current');
+
+    const stoppedStatus = await runCliInProcess([
+      'activation', 'status', 'T-001', '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(stoppedStatus.status, 1);
+    const stoppedRow = JSON.parse(stoppedStatus.stdout).bindings[0];
+    assert.equal(stoppedRow.evidenceState, 'negative');
+    assert.match(stoppedRow.reasons.join('; '), /was revoked/);
+
+    const orientation = await runCliInProcess(['status', '--json', '--target', fixture.root], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(orientation.status, 0, orientation.stderr || orientation.stdout);
+    const orientationSnapshot = JSON.parse(orientation.stdout);
+    assert.equal(
+      orientationSnapshot.tasks.find(task => task.taskId === 'T-001').operatorAuthorization.state,
+      'revoked'
+    );
+    assert.equal(
+      orientationSnapshot.tasks.find(task => task.taskId === 'T-002').operatorAuthorization.state,
+      'present'
+    );
+    assert.notEqual(orientationSnapshot.activationScope.state, 'invalid');
+    assert.deepEqual(
+      orientationSnapshot.operatorAuthorizedSet.bindings.map(item => item.taskId),
+      ['T-002']
+    );
+
+    const siblingStatus = await runCliInProcess([
+      'activation', 'status', 'T-002', '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(siblingStatus.status, 0, siblingStatus.stderr || siblingStatus.stdout);
+    assert.equal(JSON.parse(siblingStatus.stdout).bindings[0].usable, true);
+
+    rmSync(join(fixture.root, ACTIVATION_STORE_ROOT, 'revocations'), { recursive: true, force: true });
+    const afterSessionLoss = await runPrepareDispatch(fixture, ['--json']);
+    assert.equal(afterSessionLoss.status, 1);
+    assert.match(afterSessionLoss.stdout, /was revoked/);
+
+    const oldPacketStart = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/stopped-packet.json',
+      '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(oldPacketStart.status, 1);
+    assert.match(oldPacketStart.stdout, /was revoked/);
+
+    const reactivated = await runCliInProcess(
+      ['activate', 'T-001', '--json', '--target', fixture.root],
+      interactiveOptions(fixture)
+    );
+    assert.equal(reactivated.status, 0, reactivated.stderr);
+    const second = JSON.parse(reactivated.stdout);
+    const newBinding = JSON.parse(readFileSync(
+      join(fixture.root, bindingRecordPath('files', 'T-001')),
+      'utf8'
+    ));
+    assert.notEqual(second.grantId, first.grantId);
+    assert.notEqual(newBinding.bindingId, oldBinding.bindingId);
+    assert.equal(existsSync(stopRecord.externalTombstone), true);
+
+    const resumed = await runPrepareDispatch(fixture, ['--json']);
+    assert.equal(resumed.status, 0, resumed.stderr || resumed.stdout);
+    const stillOld = await runCliInProcess([
+      'task', 'role-start', 'T-001', '--packet', '.agenticloop/tmp/stopped-packet.json',
+      '--json', '--target', fixture.root,
+    ], {
+      operatorTrustRoot: fixture.operatorTrustRoot,
+      operatorActivationRoot: fixture.operatorActivationRoot,
+    });
+    assert.equal(stillOld.status, 1);
+    assert.match(stillOld.stdout, /was revoked/);
+  });
+
   it('produces no partial authority when one task in the set does not resolve', async () => {
     const fixture = await scaffoldFixture(temp, 'activate-partial');
     const activated = await runCliInProcess(

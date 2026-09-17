@@ -56,6 +56,7 @@ import { resolveReturnUseFreshnessPolicy } from './return-use-freshness.js';
 import { evaluatePullRequestLifecycle } from './closeout-github.js';
 import { validateEvent, DEFAULT_LOG_DIR } from './event-logging.js';
 import { deriveConfiguredGroupScopes, deriveExplicitScopes, listTaskRecords } from './terminal-scope.js';
+import { associateSemanticEvaluation, evaluateSemanticValidation } from './semantic-validation-normalizer.js';
 import {
   IMPROVEMENT_ID_PATTERN,
   IMPROVEMENTS_DIRECTORY_RELATIVE_PATH,
@@ -723,7 +724,7 @@ export function summarizeCloseoutAssurance(input, coveredTasks = []) {
  * @param {object} [params.validationOptions] taskIdRegex/taskExists/decisionAccepted overrides.
  * @returns {{ packet: object, reasons: object[], gates: object[], markerState: object }}
  */
-export function evaluateCloseout(target, params) {
+function evaluateCloseoutFeature(target, params) {
   const config = params?.config ?? PROJECT_MAP_DEFAULTS;
   const backend = params?.backend === 'github' ? 'github' : 'files';
   const gates = [];
@@ -760,6 +761,7 @@ export function evaluateCloseout(target, params) {
 
   // --- audit gate (the public audit-only subset evaluator) -----------------
   const auditGate = evaluateAuditCloseoutGate(target, {
+    repositoryIdentity: params?.repositoryIdentity,
     workUnit,
     workUnitAudit,
     taskIdRegex: params?.validationOptions?.taskIdRegex ?? config.task_id_regex,
@@ -1179,6 +1181,55 @@ export function evaluateCloseout(target, params) {
     },
     contractErrors: finalized.contractErrors,
   };
+}
+
+function closeoutSemanticEvidenceState(result) {
+  if (result.packet?.completion_eligible === true) return 'current';
+  const categories = new Set((result.reasons ?? []).map(item => item.category));
+  if (categories.has('audit_stale') || categories.has('product_drift')) return 'stale';
+  if (categories.has('marker_contradictory') || categories.has('identity_conflict') ||
+      categories.has('audit_invalid')) return 'malformed';
+  if (categories.has('candidate_missing') || categories.has('audit_missing') ||
+      categories.has('membership_underivable') || categories.has('plan_sync_missing') ||
+      categories.has('candidate_unverifiable') || categories.has('audit_awaiting_human')) return 'missing';
+  return 'negative';
+}
+
+/**
+ * Keep closeout certification feature-specific while making its final shared
+ * legality interpretation portable and single-owned.
+ */
+export function evaluateCloseout(target, params) {
+  const result = evaluateCloseoutFeature(target, params);
+  const candidate = String(result.packet?.candidate_artifact ?? '').trim();
+  const workUnit = String(result.packet?.work_unit ?? params?.workUnit ?? '').trim();
+  const semanticEvaluation = evaluateSemanticValidation({
+    actionId: 'closeout_prepare',
+    validation: {
+      ok: result.packet?.completion_eligible === true,
+      evidenceState: closeoutSemanticEvidenceState(result),
+      disposition: result.packet?.completion_eligible ? 'allowed' : 'blocked',
+      diagnostics: (result.reasons ?? []).map(item => ({ code: `closeout.${item.gate}.${item.category}` })),
+      detail: {
+        digest: result.packet?.digest ?? null,
+        recommendedStatus: result.packet?.recommended_status ?? null,
+      },
+    },
+    backend: result.packet?.backend,
+    repositoryId: String(params?.repositoryIdentity ?? 'repository:unavailable'),
+    taskId: `work-unit:${workUnit || 'unavailable'}`,
+    workUnitId: workUnit || null,
+    bindings: {
+      candidateId: candidate || null,
+      closeoutId: result.packet?.digest ?? null,
+    },
+    scopeKind: 'work_unit_candidate',
+    scopeKey: `${workUnit || 'unavailable'}:${candidate || 'unavailable'}`,
+    sourceKind: 'closeout_evaluation',
+    sourceId: result.packet?.digest ?? 'closeout:unresolved',
+    factOwner: { kind: 'workflow_role', id: 'maintainer' },
+  });
+  return associateSemanticEvaluation(result, semanticEvaluation);
 }
 
 // ---------------------------------------------------------------------------

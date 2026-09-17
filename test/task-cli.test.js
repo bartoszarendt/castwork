@@ -316,8 +316,6 @@ async function establishBaseline(target, taskId = 'T-001') {
   git(target, ['add', '.agenticloop/tasks']);
   git(target, ['commit', '-m', `task ${taskId}`]);
   assertOk(await run(['task', 'establish-baseline', taskId, '--actor', 'Agentic Loop Test', '--authority', `task:${taskId}`, '--target', target]));
-  git(target, ['add', '.agenticloop/task-contract-history']);
-  git(target, ['commit', '-m', `baseline ${taskId}`]);
 }
 
 function verificationHistory(classification, reference) {
@@ -531,7 +529,7 @@ describe('task CLI', () => {
     assert.match(lint.stdout, /T-001\.md: ok/);
 
     await establishBaseline(target);
-    const status = await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--dependencies', dependencySnapshot(target), '--target', target]);
+    const status = await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--target', target]);
     assertOk(status);
     const status2 = await run(['task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(target, 'T-001'), '--note', 'Started implementation', '--target', target]);
     assert.notEqual(status2.status, 0);
@@ -1465,8 +1463,6 @@ describe('task CLI', () => {
       '--json', '--target', fixture.root,
     ], options);
     assertOk(artifact);
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record implementation artifact evidence\n\nTask: T-001\nAgent: engineer']);
 
     const checks = await runCliInProcess([
       'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath,
@@ -1576,8 +1572,6 @@ describe('task CLI', () => {
       '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead,
       '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record implementation artifact\n\nTask: T-001\nAgent: engineer']);
 
     // Simulate a Maintainer review round: add a ## Review History entry with
     // a needs_revision outcome and a ## Maintainer Review Fixup subsection to
@@ -2222,8 +2216,6 @@ describe('task CLI', () => {
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead, '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record implementation artifact evidence\n\nTask: T-001\nAgent: engineer']);
     assertOk(await runCliInProcess([
       'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath, '--json', '--target', fixture.root,
     ], options));
@@ -2278,8 +2270,6 @@ describe('task CLI', () => {
       '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead,
       '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record synthetic artifact\n\nTask: T-001\nAgent: engineer']);
     assertOk(await runCliInProcess([
       'task', 'check-evidence-init', 'T-001', '--packet', packetPath,
       '--output', checksPath, '--json', '--target', fixture.root,
@@ -2348,8 +2338,6 @@ describe('task CLI', () => {
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead, '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record implementation artifact evidence\n\nTask: T-001\nAgent: engineer']);
     assertOk(await runCliInProcess([
       'task', 'check-evidence-init', 'T-001', '--packet', firstPacketPath, '--output', checksPath, '--json', '--target', fixture.root,
     ], options));
@@ -2419,6 +2407,13 @@ describe('task CLI', () => {
         provenance: { ...provenance, invocationId: 'invocation-for-another-dispatch' },
       }, 'task.evidence.provenance_mismatch'],
     ];
+    writeFileSync(join(fixture.root, engineerInput), '{}', 'utf8');
+    const malformed = await runCliInProcess([
+      'task', 'evidence', 'T-001', '--class', 'structured_task_evidence', '--input', engineerInput,
+      '--expect-digest', currentDigest(fixture.root, 'T-001'), '--target', fixture.root,
+    ], options);
+    assert.notEqual(malformed.status, 0);
+    assert.match(malformed.stderr, /fields must equal kind, schemaVersion, actorRole, provenance, sections/);
     for (const [mismatched, expectedCode] of mismatchedInputs) {
       writeFileSync(join(fixture.root, engineerInput), JSON.stringify(mismatched), 'utf8');
       const refused = await runCliInProcess([
@@ -2482,7 +2477,7 @@ describe('task CLI', () => {
     const target = makeTarget('trans-dr-ar');
     assertOk(await run(['task', 'new', 'Test', '--scaffold', '--target', target]));
     await establishBaseline(target);
-    const result = await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--dependencies', dependencySnapshot(target), '--target', target]);
+    const result = await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--target', target]);
     assertOk(result);
   });
 
@@ -2520,7 +2515,7 @@ describe('task CLI', () => {
     const target = makeTarget('trans-ar-ip');
     assertOk(await run(['task', 'new', 'Test', '--scaffold', '--target', target]));
     await establishBaseline(target);
-    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--dependencies', dependencySnapshot(target), '--target', target]));
+    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--target', target]));
     const result = await run(['task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(target, 'T-001'), '--note', 'Starting', '--target', target]);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /canonical prepared dispatch/);
@@ -2530,7 +2525,7 @@ describe('task CLI', () => {
     const target = makeTarget('trans-ip-ac');
     assertOk(await run(['task', 'new', 'Test', '--scaffold', '--target', target]));
     await establishBaseline(target);
-    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--dependencies', dependencySnapshot(target), '--target', target]));
+    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--target', target]));
     writeFileSync(
       taskPath(target, 'T-001'),
       readFileSync(taskPath(target, 'T-001'), 'utf-8').replace(/^status: agent-ready$/m, 'status: in-progress'),
@@ -2586,7 +2581,7 @@ describe('task CLI', () => {
     const target = makeTarget('trans-ar-cl');
     assertOk(await run(['task', 'new', 'Test', '--scaffold', '--target', target]));
     await establishBaseline(target);
-    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--dependencies', dependencySnapshot(target), '--target', target]));
+    assertOk(await run(['task', 'status', 'T-001', 'agent-ready', '--expect-digest', currentDigest(target, 'T-001'), '--base', baseTree(target), '--target', target]));
     const result = await run(['task', 'status', 'T-001', 'closed', '--expect-digest', currentDigest(target, 'T-001'), '--target', target]);
     assert.notEqual(result.status, 0);
   });
@@ -2638,8 +2633,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
       '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    fixtureGit(fixture.root, ['commit', '-m', 'Start Engineer work\n\nTask: T-001\nAgent: engineer']);
     writeFileSync(join(fixture.root, 'src', 'existing.js'), 'export const current = "returned";\n', 'utf8');
     fixtureGit(fixture.root, ['add', 'src/existing.js']);
     fixtureGit(fixture.root, ['commit', '-m', 'implement return\n\nTask: T-001\nAgent: engineer']);
@@ -2649,8 +2642,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
       '--expect-digest', currentDigest(fixture.root, 'T-001'), '--product-head', productHead,
       '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks/T-001.md', '.agenticloop/handoffs/task-mutations']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record implementation artifact evidence\n\nTask: T-001\nAgent: engineer']);
     return productHead;
   }
 
@@ -3067,8 +3058,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
     assert.equal(state.commandCalls, 1, 'only the public command execution step may run the required command');
 
     const execution = JSON.parse(readFileSync(join(fixture.root, '.agenticloop', 'checks', 'T-001', 'RC-1.execution.json'), 'utf8'));
-    fixtureGit(fixture.root, ['add', '.agenticloop/checks/T-001/RC-1.execution.json']);
-    fixtureGit(fixture.root, ['commit', '-m', 'record required check evidence\n\nTask: T-001\nAgent: engineer']);
     const checks = JSON.parse(readFileSync(join(fixture.root, checksPath), 'utf8'));
     const repositoryChecks = checks.map(check => {
       const { executionEvidence, ...observation } = check;
@@ -3296,8 +3285,6 @@ describe('return evidence, cancellation provenance, and current-repository verif
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', currentDigest(fixture.root, 'T-001'),
       '--dispatch-packet', packetPath, '--json', '--target', fixture.root,
     ], options));
-    fixtureGit(fixture.root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    fixtureGit(fixture.root, ['commit', '-m', 'Start Engineer work\n\nTask: T-001\nAgent: engineer']);
     assertOk(await runCliInProcess([
       'task', 'check-evidence-init', 'T-001', '--packet', packetPath, '--output', checksPath,
       '--json', '--target', fixture.root,
@@ -3496,7 +3483,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
         {
           name: 'commit-message',
           invoke: output => runCliInProcess([
-            'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+            'task', 'commit-message', 'T-001', '--class', 'product_implementation',
             '--subject', 'record the implementation artifact', '--output', output,
             '--json', '--target', fixture.root,
           ], options),
@@ -3570,7 +3557,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
       {
         name: 'commit-message',
         invoke: output => runCliInProcess([
-          'task', 'commit-message', 't-001', '--class', 'implementation_artifact_evidence',
+          'task', 'commit-message', 't-001', '--class', 'product_implementation',
           '--subject', 'record the implementation artifact', '--output', output,
           '--json', '--target', fixture.root,
         ], options),
@@ -3842,7 +3829,7 @@ describe('return evidence, cancellation provenance, and current-repository verif
         {
           name: 'commit-message',
           invoke: (fixture, options, output, extra = {}) => runCliInProcess([
-            'task', 'commit-message', 'T-001', '--class', 'implementation_artifact_evidence',
+            'task', 'commit-message', 'T-001', '--class', 'product_implementation',
             '--subject', 'record the implementation artifact', '--output', output,
             '--json', '--target', fixture.root,
           ], { ...options, ...extra }),

@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runCliInProcess } from './helpers/run-cli.js';
 import { createImprovementProposal, parseImprovementProposal } from '../src/improvement.js';
+import { initTestGitRepository, git } from './helpers/git-fixture.js';
 
 let tmpDir;
 before(() => { tmpDir = mkdtempSync(join(tmpdir(), 'al-improvement-')); });
@@ -55,11 +56,15 @@ async function seedEvidence(target) {
     `AGENT_CLOSEOUT_GATE: ${MARKER_DIGEST}`,
     '',
   ].join('\n'), 'utf-8');
+  initTestGitRepository(target, { quiet: true });
+  git(target, ['add', '-A']);
+  git(target, ['commit', '-q', '-m', 'initialize improvement evidence fixture']);
+  const candidate = git(target, ['rev-parse', 'HEAD']);
   const created = await runCliInProcess([
     'audit', 'new',
     '--work-unit', 'milestone:M00',
     '--covered-tasks', 'T-001',
-    '--artifact', `commit:${'a'.repeat(40)}`,
+    '--artifact', `commit:${candidate}`,
     '--goal', 'g', '--completion-oracle', 'o', '--evidence', 'npm test',
     '--target', target,
   ]);

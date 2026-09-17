@@ -42,13 +42,16 @@ export function dependencySnapshot({ observedAt = new Date().toISOString(), stat
  *
  * @param {string} parent  Directory the caller owns.
  * @param {string} name
- * @param {{ taskId?: string, status?: string, snapshot?: string }} [options]
+ * @param {{ taskId?: string, status?: string, snapshot?: string, dependsOn?: string[] }} [options]
  */
 export function createReadinessTarget(parent, name, options = {}) {
   const taskId = options.taskId ?? 'T-018';
   const target = mkdtempSync(join(parent, `${name}-`));
   createTaskProjectFixture(target);
-  makePreflightTask(target, taskId, { status: options.status ?? 'draft' });
+  makePreflightTask(target, taskId, {
+    status: options.status ?? 'draft',
+    dependsOn: options.dependsOn ?? [],
+  });
   mkdirSync(join(target, 'src'), { recursive: true });
   mkdirSync(join(target, 'docs'), { recursive: true });
   mkdirSync(join(target, '.agenticloop', 'dependencies'), { recursive: true });
@@ -68,9 +71,7 @@ export function planArgs(target, taskId, overrides = {}) {
     'task', 'readiness-plan', taskId,
     '--actor', overrides.actor ?? ACTOR,
     '--authority', overrides.authority ?? AUTHORITY,
-    '--work-unit', overrides.workUnit ?? WORK_UNIT,
     '--base', overrides.base ?? 'HEAD',
-    '--dependencies', overrides.dependencies ?? DEPENDENCY_REF(taskId),
     '--json', '--target', target,
   ];
 }

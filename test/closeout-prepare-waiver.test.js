@@ -143,7 +143,6 @@ describe('marker states', () => {
       'new', '--work-unit', 'milestone:M00', '--covered-tasks', 'T-001',
       '--artifact', artifact, '--goal', 'g', '--completion-oracle', 'o', '--evidence', 'npm test',
     ], target)).status, 0);
-    commitAll(target, 'record audit');
     const reportPath = join(target, '.agenticloop', 'tmp', 'run-1.json');
     writeFileSync(reportPath, JSON.stringify(wireReport(artifact, ['T-001'], {
       verdict: 'needs_human_decision',
@@ -162,7 +161,6 @@ describe('marker states', () => {
       'new', '--work-unit', 'milestone:M00', '--covered-tasks', 'T-001',
       '--artifact', artifact, '--goal', 'g', '--completion-oracle', 'o', '--evidence', 'npm test',
     ], target)).status, 0);
-    commitAll(target, 'record audit');
     for (let index = 0; index < 3; index++) {
       const reportPath = join(target, '.agenticloop', 'tmp', `run-${index}.json`);
       writeFileSync(reportPath, JSON.stringify(wireReport(artifact, ['T-001'], {

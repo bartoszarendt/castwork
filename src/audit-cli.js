@@ -58,6 +58,7 @@ import { resolveCandidateArtifact } from './candidate.js';
 import { createAuditorReportResumePacket, findAuditorInvocationEvent, normalizeAuditorInvocationProvenance } from './audit-provenance.js';
 import { auditorReturnReceiptIdentity } from './auditor-return-receipt.js';
 import { executeMutationBatch } from './fs-mutation-kernel.js';
+import { commitWorkflowPaths } from './workflow-evidence-commit.js';
 import { AUDITS_DIRECTORY_RELATIVE_PATH } from './layout.js';
 import {
   loadProjectMap,
@@ -73,7 +74,8 @@ import {
   loadTaskActivationEvidence,
   resolveEffectiveActivationPolicy,
 } from './activation-resolution.js';
-import { loadHostTrustStore } from './host-trust.js';
+import { loadHostTrustStore, targetRepositoryIdentity } from './host-trust.js';
+import { evaluateSemanticValidation } from './semantic-validation-normalizer.js';
 
 // Memory safety valve for the stdin reader, not a report-size policy: a valid
 // report is never rejected for ordinary size.
@@ -173,7 +175,44 @@ function auditMutationReceipt({ entry, before, after, disposition, cause = null 
   };
 }
 
-function commitAuditMutation(target, relPath, content) {
+function commitAuditMutation(target, relPath, content, {
+  role = 'maintainer',
+  commitClass = 'workflow_evidence',
+  subject = 'Record audit evidence',
+} = {}) {
+  const record = parseAuditRecord(content);
+  const validationErrors = validateAuditRecord(content, relPath);
+  const semanticEvaluation = evaluateSemanticValidation({
+    actionId: 'audit_record',
+    validation: {
+      ok: validationErrors.length === 0,
+      evidenceState: validationErrors.length === 0 ? 'current' : 'malformed',
+      disposition: validationErrors.length === 0 ? 'allowed' : 'blocked',
+      diagnostics: validationErrors.map((_error, index) => ({ code: `audit.record.invalid.${index + 1}` })),
+      detail: { auditId: record.auditId || null, validationErrors },
+    },
+    repositoryId: targetRepositoryIdentity(target),
+    taskId: `work-unit:${record.workUnit || 'unavailable'}`,
+    workUnitId: record.workUnit || null,
+    bindings: {
+      candidateId: record.candidateArtifact || null,
+      auditRunId: record.auditId ? `${record.auditId}:run:${record.history.length}` : null,
+    },
+    scopeKind: 'audit_record',
+    scopeKey: `${record.auditId || relPath}:${record.history.length}`,
+    sourceKind: 'prospective_audit_record',
+    sourceId: relPath,
+    factOwner: { kind: 'workflow_role', id: 'maintainer' },
+  });
+  if (semanticEvaluation.verdict !== 'legal') {
+    return {
+      ok: false,
+      errors: validationErrors.length > 0
+        ? validationErrors.map(error => `audit mutation refused before write: ${error}`)
+        : [`audit mutation refused by semantic verdict '${semanticEvaluation.verdict}'`],
+      semanticEvaluation,
+    };
+  }
   const result = executeMutationBatch(target, [{ type: 'write', path: relPath, content }]);
   if (!result.ok) {
     return {
@@ -197,7 +236,23 @@ function commitAuditMutation(target, relPath, content) {
   if (errors.length > 0) {
     return { ok: false, errors: errors.map(error => `audit mutation committed but post-write validation failed: ${error}`) };
   }
-  return { ok: true, errors: [], content: refetched };
+  const workflowCommit = commitWorkflowPaths({
+    target,
+    workUnitId: record.workUnit,
+    taskIds: normalizeCoveredTasks(record.coveredTasks),
+    paths: [relPath],
+    role,
+    commitClass,
+    subject,
+  });
+  if (!workflowCommit.ok) {
+    return {
+      ok: false,
+      errors: [`audit evidence was written but its bounded commit failed: ${workflowCommit.errors.join('; ')}`],
+      workflowCommit,
+    };
+  }
+  return { ok: true, errors: [], content: refetched, semanticEvaluation, workflowCommit };
 }
 
 /** Reject global invocation/receipt reuse before a mutation can make lint fail. */
@@ -794,6 +849,30 @@ export async function cmdAudit(args, io = createIo()) {
         }
       }
 
+      const integrated = parseAuditRecord(updated);
+      const integrationEvaluation = evaluateSemanticValidation({
+        actionId: 'integrate',
+        validation: {
+          ok: true, evidenceState: 'current', disposition: 'allowed', diagnostics: [],
+          detail: {
+            evidence: integrated.sections?.['## Baseline Evidence'] ?? null,
+            coveredTasks: integrated.coveredTasks,
+          },
+        },
+        repositoryId: targetRepositoryIdentity(target),
+        taskId: `work-unit:${integrated.workUnit}`,
+        workUnitId: integrated.workUnit,
+        bindings: { candidateId: integrated.candidateArtifact },
+        scopeKind: 'work_unit_candidate',
+        scopeKey: `${integrated.workUnit}:${integrated.candidateArtifact}`,
+        sourceKind: 'audit_baseline',
+        sourceId: entry.relPath,
+        factOwner: { kind: 'integration_owner', id: 'maintainer' },
+      });
+      if (integrationEvaluation.verdict !== 'legal') {
+        io.err(`audit baseline: integrated candidate has semantic verdict '${integrationEvaluation.verdict}'`);
+        return 1;
+      }
       const committed = commitAuditMutation(target, entry.relPath, updated);
       if (!committed.ok) {
         printMutationErrors(committed.errors, null, io);
@@ -991,7 +1070,11 @@ export async function cmdAudit(args, io = createIo()) {
         printAuditorResume(result.errors, run, io);
         return 1;
       }
-      const committed = commitAuditMutation(target, entry.relPath, result.content);
+      const committed = commitAuditMutation(target, entry.relPath, result.content, {
+        role: 'auditor',
+        commitClass: 'workflow_evidence',
+        subject: `Record audit report ${entry.record.auditId}`,
+      });
       if (!committed.ok) {
         printMutationErrors(committed.errors, null, io);
         return 1;
@@ -1064,7 +1147,34 @@ export async function cmdAudit(args, io = createIo()) {
         for (const error of result.errors) io.err(`Cannot record finding disposition: ${error}`);
         return 1;
       }
-      const committed = commitAuditMutation(target, entry.relPath, result.content);
+      const remediationEvaluation = evaluateSemanticValidation({
+        actionId: 'remediate',
+        validation: {
+          ok: true, evidenceState: 'current', disposition: 'allowed', diagnostics: [],
+          detail: { auditId: entry.record.auditId, run: Number(runRaw), findingId, type },
+        },
+        repositoryId: targetRepositoryIdentity(target),
+        taskId: `work-unit:${entry.record.workUnit}`,
+        workUnitId: entry.record.workUnit,
+        bindings: {
+          candidateId: entry.record.candidateArtifact,
+          auditRunId: `${entry.record.auditId}:run:${Number(runRaw)}`,
+        },
+        scopeKind: 'audit_finding',
+        scopeKey: `${entry.record.auditId}:${Number(runRaw)}:${findingId}`,
+        sourceKind: 'audit_finding_disposition',
+        sourceId: `${entry.record.auditId}:${findingId}`,
+        factOwner: { kind: 'workflow_role', id: 'maintainer' },
+      });
+      if (remediationEvaluation.verdict !== 'legal') {
+        io.err(`audit disposition: remediation has semantic verdict '${remediationEvaluation.verdict}'`);
+        return 1;
+      }
+      const committed = commitAuditMutation(target, entry.relPath, result.content, {
+        role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record audit disposition ${entry.record.auditId}`,
+      });
       if (!committed.ok) {
         printMutationErrors(committed.errors, null, io);
         return 1;
@@ -1134,6 +1244,7 @@ export async function cmdAudit(args, io = createIo()) {
         selected?.record ?? null
       );
       const result = evaluateAuditCloseoutGate(target, {
+        repositoryIdentity: targetRepositoryIdentity(target),
         workUnit: identity.canonical,
         workUnitAudit: auditMode,
         taskIdRegex: gateOptions.taskIdRegex,
@@ -1241,7 +1352,11 @@ export async function cmdAudit(args, io = createIo()) {
         for (const error of result.errors) io.err(`Cannot record budget override: ${error}`);
         return 1;
       }
-      const committed = commitAuditMutation(target, entry.relPath, result.content);
+      const committed = commitAuditMutation(target, entry.relPath, result.content, {
+        role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record audit override ${entry.record.auditId}`,
+      });
       if (!committed.ok) {
         printMutationErrors(committed.errors, null, io);
         return 1;
@@ -1277,7 +1392,11 @@ export async function cmdAudit(args, io = createIo()) {
         for (const error of result.errors) io.err(`Cannot resolve audit decision: ${error}`);
         return 1;
       }
-      const committed = commitAuditMutation(target, entry.relPath, result.content);
+      const committed = commitAuditMutation(target, entry.relPath, result.content, {
+        role: 'maintainer',
+        commitClass: 'workflow_disposition',
+        subject: `Record audit resolution ${entry.record.auditId}`,
+      });
       if (!committed.ok) {
         printMutationErrors(committed.errors, null, io);
         return 1;

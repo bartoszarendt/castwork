@@ -52,7 +52,7 @@ import { cmdActivation } from '../src/activation-cli.js';
 
 import { createTaskProjectFixture } from './helpers/task-fixture.js';
 import { git } from './helpers/git-fixture.js';
-import { makePreflightTask, makeDecomposition, taskPath } from './helpers/preflight-fixture.js';
+import { makePreflightTask, taskPath } from './helpers/preflight-fixture.js';
 import { runCliInProcess } from './helpers/run-cli.js';
 
 let temp;
@@ -118,7 +118,6 @@ describe('every rendered lifecycle repair is a real, valid command', () => {
       '<digest>': `sha256:${'0'.repeat(64)}`,
       '<base-ref>': 'HEAD',
       '<base-paths.json>': '.agenticloop/tmp/base-paths.json',
-      '<dependencies.json>': '.agenticloop/tmp/dependencies.json',
     };
     for (const status of domain) {
       const plan = dispatchableLifecycleRepairPlan('T-018', status);
@@ -192,14 +191,11 @@ describe('every rendered lifecycle repair is a real, valid command', () => {
     writeFileSync(join(target, 'docs', 'existing.md'), '# d\n', 'utf8');
     git(target, ['add', '-A']);
     git(target, ['commit', '-m', 'task\n\nTask: T-018\nAgent: maintainer']);
-    makeDecomposition(target, 'T-018');
     const baseline = await runCliInProcess([
       'task', 'establish-baseline', 'T-018',
       '--actor', 'Agentic Loop Test', '--authority', 'plan:x', '--target', target,
     ]);
     assert.equal(baseline.status, 0, baseline.stderr);
-    git(target, ['add', '-A']);
-    git(target, ['commit', '-m', 'readiness evidence\n\nTask: T-018\nAgent: maintainer']);
 
     const lint = await runCliInProcess(['task', 'lint', 'T-018', '--json', '--target', target]);
     assert.equal(lint.status, 0, lint.stderr);
@@ -211,7 +207,6 @@ describe('every rendered lifecycle repair is a real, valid command', () => {
       switch (token) {
         case '<digest>': return digest;
         case '<base-ref>': return head;
-        case '<dependencies.json>': return '.agenticloop/decompositions/T-018.dependencies.json';
         default: return token;
       }
     });

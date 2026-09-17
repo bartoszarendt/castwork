@@ -421,7 +421,9 @@ carriers are ignored noise, an edited authority carrier is rejected without
 poisoning the chain, a malformed record on a trusted carrier is fatal, and
 missing carrier metadata fails safely as an adapter error. Files history is
 verified append-only against first-parent commits with per-record commit
-provenance; a record becomes trusted only after its own separate commit.
+provenance. Each protected command atomically appends and commits exactly its
+own history path/write-set; no role-authored, operator-authored, or follow-up
+bookkeeping commit is allowed.
 Recovery from an edited or invalid authority carrier never edits the carrier:
 publish a new versioned record on a fresh carrier and revalidate the chain.
 

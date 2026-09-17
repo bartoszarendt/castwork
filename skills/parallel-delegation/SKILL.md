@@ -47,10 +47,12 @@ a cross-lane finding changes.
 --source-ref <path> --source-revision <ref> (--base <ref> | --base-paths <path>)
 --dependencies <path>`. It enumerates the configured task surface itself,
 issues a typed enumeration receipt, validates the emitted record with the same
-validator dispatch uses, and prints the committable decomposition source as
-canonical JSON. It mutates nothing: redirect its output to `--source-ref` and
-commit that file with canonical Maintainer attribution. Producer, persister, and
-freshness rules come from the canonical transition fact definitions.
+validator dispatch uses, and prints canonical JSON for read-only inspection.
+It mutates nothing and is not a manual bookkeeping-commit route. Use the
+guarded `task readiness-plan` / `task readiness-apply` transaction when the
+decomposition must become durable; that transaction commits its exact workflow
+write set. Producer, persister, and freshness rules come from the canonical
+transition fact definitions.
 
 For each ready task, the scan must cover:
 

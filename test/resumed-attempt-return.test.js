@@ -107,7 +107,6 @@ describe('a resumed attempt whose product work is already committed can return',
       'task', 'status', 'T-001', 'in-progress',
       '--expect-digest', carrierDigest(root), '--dispatch-packet', firstPacket, '--json',
     ]), 'first role start');
-    commitWorkflow(root, 'start the engineer role', 'engineer');
 
     // An operator sync inside attempt 1's span, untrailered, rewriting files the
     // target genuinely owns: its own `agenticloop.json` and the lockfile the
@@ -155,7 +154,6 @@ describe('a resumed attempt whose product work is already committed can return',
       '--reason', 'the attempt window closed while the toolkit-mandated repairs were running',
       '--authority', 'operator:field-run', '--json',
     ]), 'abandon the expired attempt');
-    commitWorkflow(root, 'abandon the expired attempt', 'maintainer');
 
     // ── the repairs preflight demands, each one another workflow commit ───
     const blocked = await cli([
@@ -182,7 +180,6 @@ describe('a resumed attempt whose product work is already committed can return',
       '--expect-digest', carrierDigest(root), '--dispatch-packet', secondPacket,
       '--note', 'resuming the task under a fresh packet', '--json',
     ]), 'second role start');
-    commitWorkflow(root, 'start the resumed engineer role', 'engineer');
 
     // ── the evidence chain, with a product head that is no longer HEAD ─────
     assert.notEqual(git(root, ['rev-parse', 'HEAD']), productHead, 'HEAD is past the product commits, exactly as in the field');
@@ -195,7 +192,6 @@ describe('a resumed attempt whose product work is already committed can return',
       new RegExp(`implementation_artifact: commit:${productHead}`),
       'the task record names the implementation, not the workflow commit that follows it'
     );
-    commitWorkflow(root, 'record the implementation artifact', 'engineer');
 
     const checksPath = '.agenticloop/tmp/checks.json';
     assertOk(await cli([
@@ -257,7 +253,6 @@ describe('a resumed attempt whose product work is already committed can return',
       'task', 'status', 'T-001', 'in-progress',
       '--expect-digest', carrierDigest(root), '--dispatch-packet', packetPath, '--json',
     ]), 'role start');
-    commitWorkflow(root, 'start the engineer role', 'engineer');
 
     const workflowOnlyHead = git(root, ['rev-parse', 'HEAD']);
     const refused = await cli([

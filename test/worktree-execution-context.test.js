@@ -126,8 +126,6 @@ describe('attempt state is a property of the task, not of the checkout', () => {
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', carrierDigest(root),
       '--dispatch-packet', packetPath, '--json', '--target', root,
     ], options), 'role start in the carrier root');
-    git(root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(root, ['commit', '-m', `start the engineer role${ENGINEER_TRAILER}`]);
 
     // The return lane is cut before the attempt records, exactly as the field
     // lane was: the worktree checkout genuinely does not contain them.
@@ -168,8 +166,6 @@ describe('a return lane that has not re-applied the implementation cannot return
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', carrierDigest(root),
       '--dispatch-packet', packetPath, '--json', '--target', root,
     ], options), 'role start');
-    git(root, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(root, ['commit', '-m', `start the engineer role${ENGINEER_TRAILER}`]);
     const laneBase = git(root, ['rev-parse', 'HEAD']);
 
     writeFileSync(join(root, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
@@ -181,8 +177,6 @@ describe('a return lane that has not re-applied the implementation cannot return
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(root), '--product-head', productHead, '--json', '--target', root,
     ], options), 'implementation artifact evidence');
-    git(root, ['add', '.agenticloop/tasks']);
-    git(root, ['commit', '-m', `record the implementation artifact${ENGINEER_TRAILER}`]);
     const evidenceCommit = git(root, ['rev-parse', 'HEAD']);
 
     const checksPath = '.agenticloop/tmp/checks.json';
@@ -258,8 +252,6 @@ describe('a worktree lane that re-applies the implementation reaches a verified 
       'task', 'status', 'T-001', 'in-progress', '--expect-digest', carrierDigest(lane),
       '--dispatch-packet', packetPath, '--json',
     ]), 'role start in the lane');
-    git(lane, ['add', '.agenticloop/tasks', '.agenticloop/handoffs']);
-    git(lane, ['commit', '-m', `start the engineer role${ENGINEER_TRAILER}`]);
 
     // The re-application the lane exists for.
     writeFileSync(join(lane, 'src', 'existing.js'), 'export const current = "implemented";\n', 'utf8');
@@ -271,8 +263,6 @@ describe('a worktree lane that re-applies the implementation reaches a verified 
       'task', 'evidence', 'T-001', '--class', 'implementation_artifact_evidence',
       '--expect-digest', carrierDigest(lane), '--product-head', productHead, '--json',
     ]), 'implementation artifact evidence in the lane');
-    git(lane, ['add', '.agenticloop/tasks']);
-    git(lane, ['commit', '-m', `record the implementation artifact${ENGINEER_TRAILER}`]);
 
     const checksPath = '.agenticloop/tmp/checks.json';
     assertOk(await cli([

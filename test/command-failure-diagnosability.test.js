@@ -165,7 +165,7 @@ describe('a usage error stays a usage error, and --debug adds something', () => 
       'this is the sentence a plain invalid-enum refusal was rendered as in the field'
     );
     assert.match(envelope.errors.join('\n'), /Invalid --class value 'evidence'/);
-    assert.match(envelope.errors.join('\n'), /Use: product_implementation, /,
+    assert.match(envelope.errors.join('\n'), /Use: product_implementation(?:\.|$)/,
       'the refusal names the accepted values rather than a debug reference');
   });
 

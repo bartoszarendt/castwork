@@ -176,8 +176,9 @@ task-record obligation.
   the CLI executes
    the exact inert argv and produces schema-v4 execution evidence; older
    evidence is typed incompatible and must be regenerated, never relabeled; do not claim a
-  pass with prose or `--exit-code 0`. Commit the execution artifacts once after
-  the last check, not once per check. After final checks, derive the raw return
+  pass with prose or `--exit-code 0`. Each protected check update commits its
+  own immutable execution artifact; do not stage or combine those paths. After
+  final checks, derive the raw return
   only with `task prepare-return <id> --packet <packet-path> --check-evidence
   <evidence-path> --outcome implementation_ready_for_review --output
   <return-path>`. Do not inspect or hand-author packet, evidence, return JSON,
@@ -275,22 +276,18 @@ task-record obligation.
   legacy issue without `task_id`, use `#<issue-number>`. End the PR body with
   the matching final `[[agent: engineer]]` trailer and the commit with
   `Task: <resolved task id>` plus `Agent: engineer`.
-- Produce every commit message with `task commit-message <id> --class
-  <commit-class> --subject <text> --output .agenticloop/tmp/<task>-commit-message.txt`,
+- Produce the product commit message with `task commit-message <id> --class
+  product_implementation --subject <text> --output .agenticloop/tmp/<task>-commit-message.txt`,
   for GitHub-backed work only validate it with `commit-attribution check
   --message-file .agenticloop/tmp/<task>-commit-message.txt`, commit with `git
   commit -F .agenticloop/tmp/<task>-commit-message.txt`, then recheck HEAD
   before push. Never split trailers across `-m` paragraphs: Git inserts a blank
   line between every `-m`, which strands `Task:` outside the final contiguous
   trailer block. `Agent:` is content ownership, not a repair operator.
-- Engineer commit classes are `product_implementation`, `role_start_status`,
-  `implementation_artifact_evidence`, `implementation_summary_evidence`, and
-  `implementation_outcome_evidence`. Maintainer classes are
-  `attempt_abandonment`, `handoff_evidence_refresh`, `readiness_settlement`,
-  `review_record`, and `acceptance_transition`; `audit_record` is Auditor-owned.
-  An orchestrator may mechanically execute `git add` and `git commit -F` for
-  CLI-authored bookkeeping, but the `Agent:` trailer continues to name the role
-  that owns the content and does not broaden mutation authority.
+- Protected lifecycle commands commit the exact workflow paths they write under
+  `workflow_evidence` or `workflow_disposition`. Do not stage, commit, amend, or
+  combine those bookkeeping paths yourself. `product_implementation` is the
+  only role-authored commit class.
 - For a pushed malformed trailer, follow the GitHub backend exception; never
   automate it.
 - Honor any delegation lease from the orchestrator, including observable-step
@@ -397,9 +394,9 @@ attaching evidence or linking the implementation artifact unless
 instead.
 
 Files-backed task files are durable tracked state. Ensure task-record updates are
-committed at workflow gates (evidence publication, revision, review result) unless
-the project has an explicit local-only exception recorded in
-`.agenticloop/project.md` or the task file.
+made through the guarded lifecycle commands, which commit their exact workflow
+write sets at evidence publication, revision, and review gates. Do not stage or
+combine those bookkeeping paths manually.
 
 For `task_backend: files` (the default), implementation artifacts are local
 branch, commit, range, patch, or diff references recorded in the task file. Do not

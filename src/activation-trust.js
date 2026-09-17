@@ -32,7 +32,7 @@ import { createHash, generateKeyPairSync } from 'node:crypto';
 import { isAbsolute, join, parse, relative, resolve } from 'node:path';
 
 import { atomicCreateFile, atomicWriteFile } from './fs-mutation-kernel.js';
-import { CLI_OPERATOR_PRODUCER_ID, validateActivationRevocation } from './activation-grant.js';
+import { CLI_OPERATOR_PRODUCER_ID, validateActivationDenial } from './activation-grant.js';
 import { createDiagnostic } from './repair-policy.js';
 import {
   durableMutationIntentSignaturePayload,
@@ -124,7 +124,7 @@ export function assertSafeExternalActivationRevocationPath(target, root, path) {
 
 /** Create the externally authoritative deny tombstone. Existing tombstones are immutable. */
 export function writeExternalActivationRevocation(target, revocation, options = {}) {
-  const checked = validateActivationRevocation(revocation);
+  const checked = validateActivationDenial(revocation);
   if (!checked.ok) return { ok: false, errors: checked.errors.map(item => item.message), path: null, created: false };
   if (revocation.repositoryIdentity !== targetRepositoryIdentity(target)) {
     return { ok: false, errors: ['external activation revocation targets a different repository'], path: null, created: false };
@@ -139,7 +139,7 @@ export function writeExternalActivationRevocation(target, revocation, options = 
   if (existsSync(path)) {
     try {
       const existing = JSON.parse(readFileSync(path, 'utf8'));
-      const valid = validateActivationRevocation(existing);
+      const valid = validateActivationDenial(existing);
       if (!valid.ok || JSON.stringify(existing) !== JSON.stringify(revocation)) {
         return { ok: false, errors: ['external activation revocation tombstone already exists with malformed or different content'], path, created: false };
       }
@@ -206,7 +206,7 @@ export function readExternalActivationRevocations(target, options = {}) {
         }
         try {
           const record = JSON.parse(readFileSync(path, 'utf8'));
-          const checked = validateActivationRevocation(record);
+          const checked = validateActivationDenial(record);
           if (!checked.ok || !accepted.has(record.repositoryIdentity)) {
             errors.push(`${name} is not a valid revocation for this repository`);
           } else revocations.push(record);

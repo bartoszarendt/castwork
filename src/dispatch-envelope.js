@@ -107,6 +107,10 @@ import {
 } from './activation-grant.js';
 import { ACTIVATION_MODES, MODE_MINIMUMS } from './activation-policy.js';
 import { readPrepareReturnFacts } from './task-fact-readers.js';
+import {
+  associateSemanticEvaluation,
+  evaluateSemanticValidation,
+} from './semantic-validation-normalizer.js';
 
 // The canonical dispatch-eligibility evaluator and every shared dimension
 // validator it orchestrates. This module resolves facts, mints packets, and
@@ -943,10 +947,13 @@ export function prepareRoleDispatch(input = {}, options = {}) {
     options.onBeforeEligibilityEvaluation?.(evaluationInput);
     const eligibility = evaluateDispatchEligibility(evaluationInput);
     options.onAfterEligibilityEvaluation?.(evaluationInput, eligibility);
-    if (!eligibility.ok) {
+    if (eligibility.semanticEvaluation?.verdict !== 'legal') {
       const findings = findingSet(command);
       findings.extend(eligibility.findings);
-      return failure(command, findings);
+      return {
+        ...failure(command, findings),
+        semanticEvaluation: eligibility.semanticEvaluation ?? null,
+      };
     }
     // A packet may only be minted from a decision that actually bound an
     // assignment over live facts. A read-only readiness decision is
@@ -1013,6 +1020,7 @@ export function prepareRoleDispatch(input = {}, options = {}) {
     return {
       ok: true,
       packet: frozenClone(packet),
+      semanticEvaluation: eligibility.semanticEvaluation,
       validation: validation(command, true, 'current', 'proceed', null, {
         warningDiagnostics: degradedWarningDiagnostics(
           boundAssignment.degradedEnforcementReports,
@@ -1699,7 +1707,30 @@ export function createRoleReturn(input = {}) {
   value.digest = semanticDigest(`agenticloop.role-return.v${ROLE_RETURN_SCHEMA_VERSION}`, projection(value));
   const checked = validateRoleReturn(value);
   if (!checked.ok) throw refuseRoleReturn(`invalid role return: ${checked.errors.join('; ')}`);
-  return deepFreeze(value);
+  const frozen = deepFreeze(value);
+  const semanticEvaluation = evaluateSemanticValidation({
+    actionId: 'prepare_return',
+    validation: validation('role return preparation', true, 'current', 'proceed', null),
+    backend: value.task?.backend,
+    repositoryId: value.worktree,
+    taskId: value.task?.id,
+    roleId: value.producerRole,
+    authoritySource: 'producing_role',
+    hostEnforcement: 'advisory',
+    bindings: {
+      protectedContractId: value.task?.taskContractDigest,
+      attemptId: value.packet?.packetId,
+      candidateId: value.productHead,
+    },
+    scopeKind: 'task_attempt',
+    scopeKey: value.packet?.packetId,
+    sourceKind: 'role_return',
+    sourceId: value.returnId,
+  });
+  if (semanticEvaluation.verdict !== 'legal') {
+    throw refuseRoleReturn(`semantic return preparation was ${semanticEvaluation.verdict}`);
+  }
+  return associateSemanticEvaluation(frozen, semanticEvaluation);
 }
 
 /**
@@ -2144,7 +2175,7 @@ function returnAssuranceStatement(packet, returnAssurance, minimumReturn) {
  * @param {any} input
  * @param {{ capabilities?: Record<string, any> }} [options]
  */
-export function receiveRoleReturn(input = {}, options = {}) {
+function receiveRoleReturnFeature(input = {}, options = {}) {
   const command = 'role return receive';
   const producerRole = input?.packet?.assignment?.roleId;
   const producerDomain = WORKFLOW_ROLE_SET.has(producerRole) ? { producerRole } : {};
@@ -2528,4 +2559,34 @@ export function receiveRoleReturn(input = {}, options = {}) {
   } catch (error) {
     return singleFailure(command, 'malformed', 'rejected', `role return could not be evaluated: ${error.message}`, producerDomain);
   }
+}
+
+export function receiveRoleReturn(input = {}, options = {}) {
+  const result = receiveRoleReturnFeature(input, options);
+  const packet = input?.packet ?? {};
+  const semanticEvaluation = evaluateSemanticValidation({
+    actionId: 'verify_return',
+    validation: result.validation,
+    backend: packet.backend,
+    repositoryId: packet.repository?.worktree,
+    taskId: packet.task?.id,
+    roleId: packet.assignment?.roleId ?? 'engineer',
+    authoritySource: 'protected_return_verifier',
+    hostEnforcement: result.returnAssurance === 'host_receipt' ? 'enforced' : 'advisory',
+    requestedAssurance: packet.assurance?.minimumReturn,
+    bindings: {
+      protectedContractId: packet.task?.taskContractDigest,
+      attemptId: packet.assignment?.invocationId,
+      candidateId: result.finishCandidate?.artifact ?? result.roleReturn?.productHead,
+    },
+    scopeKind: 'task_attempt',
+    scopeKey: packet.assignment?.invocationId ?? packet.packetId,
+    sourceKind: 'return_verification',
+    sourceId: result.roleReturn?.returnId ?? packet.packetId,
+  });
+  return {
+    ...result,
+    ok: result.ok === true && semanticEvaluation.verdict === 'legal',
+    semanticEvaluation,
+  };
 }
