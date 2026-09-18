@@ -1,35 +1,27 @@
 ---
-decision_id: D-YYYY-MM-DD-001
-status: proposed
-date: YYYY-MM-DD
-# Examples: process, architecture, quality, verification, release.
-scope: process
-proposed_at: YYYY-MM-DDTHH:mm:ssZ
-proposed_by_role: engineer
-proposed_by: agent
-resolved_at:
-resolved_by_role:
-resolved_by:
-supersedes: []
-related_tasks: []
-source_refs: []
+schema: 1
+id: D-001
+title: Short decision title
+date: 2026-01-01
+status: accepted
 ---
 
-# D-YYYY-MM-DD-001: Short Decision Title
-
 ## Decision
-State the decision in one to three sentences.
+
+State the decision in one or two sentences.
 
 ## Context
-Explain why this decision matters now. For verification-scoped decisions,
-summarize the future operating rule and cite evidence in context; do not paste
-raw command output.
+
+What made this decision necessary.
+
+## Alternatives considered
+
+- What else was on the table, and why it was not chosen.
 
 ## Consequences
-Explain what future agents or maintainers must do differently.
 
-## Revisit When
-List conditions that should trigger reconsideration.
+What this commits the project to, and what it rules out.
 
-## Alternatives Considered
-Optional. Include only when the tradeoff earns its place.
+## Revisit if
+
+The observation that would reopen this.

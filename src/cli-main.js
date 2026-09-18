@@ -1,256 +1,218 @@
 /**
- * Importable CLI execution API.
+ * The CLI: thirteen command paths.
  *
- * `runCli` executes a single agenticloop command in-process and returns its
- * numeric exit code without mutating global process state. Every command runs
- * through the injected-I/O contract: handlers receive an `io` context
- * (stdin/stdout/stderr, cwd, env, AbortSignal, prompt factory, and TTY/CI/
- * color capabilities) and return numeric exit codes. The thin binary
- * (`bin/agenticloop.js`) is the only entrypoint that assigns the returned code
- * to `process.exitCode`.
- *
- * Exit statuses:
- *   0    success, safe no-op, displayed help/version, or cancellation before apply
- *   1    operational, configuration, validation, or apply failure
- *   2    invalid command-line usage (CliUsageError)
- *   130  user interruption propagated through the cancellation contract
- *
- * Importing this module (or `./cli.js`) does not execute any command, so tests
- * can drive commands in-process.
+ * Installation, diagnostics, and minimal record operations. A dedicated command
+ * exists only where it does something materially better than editing a record
+ * by hand.
  */
 
-import {
-  createIo,
-  CliAbortError,
-  CliUsageError,
-  EXIT_FAILURE,
-  EXIT_INTERRUPTED,
-  EXIT_USAGE,
-  resolveCliTarget,
-} from './cli-io.js';
-import { dispatch } from './cli.js';
-import { COMMAND_REGISTRY } from './cli-registry.js';
-import { debugReferenceFor, runWithDebugTrace } from './debug-trace.js';
-import { createDiagnostic, repairPolicyFor } from './repair-policy.js';
-import { minimalUnexpectedFailureResult, presentDiagnostic } from './diagnostic-presentation.js';
-import { getProjectRoleCapabilities } from './role-capabilities.js';
-import { createValidationResult, emitValidationResult } from './result-envelope.js';
-import { OPERATIONAL_FAILURE_MESSAGE } from './public-error.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const UNEXPECTED_FAILURE_MESSAGE = 'Validation or evaluation did not complete; rerun with --debug and provide the debug reference if support is required.';
-const UNEXPECTED_FAILURE_REPAIR = 'Rerun once with --debug. If it fails again, report the debug reference; do not retry automatically.';
+import { err, json, out } from './cli-io.js';
+import { decisionNew } from './decision-cli.js';
+import { toolkitRoot } from './adapter-generation.js';
+import { HOSTS } from './layout.js';
+import { PublicError } from './public-error.js';
+import { doctor, remove, setup, update } from './setup.js';
+import { taskLint, taskList, taskNew, taskSet, taskShow } from './task-cli.js';
+import { validate } from './validate.js';
 
-function commandSpec(argv) {
-  const token = argv[0];
-  const entry = COMMAND_REGISTRY[token]
-    ?? Object.values(COMMAND_REGISTRY).find(candidate => candidate.aliases?.includes(token));
-  if (!entry) return null;
-  const subcommand = entry.subcommands?.[argv[1]];
-  if (subcommand) return subcommand;
-  if (entry.eventTypeOptions && argv[1] && !entry.subcommands?.[argv[1]]) {
-    return { options: entry.eventTypeOptions };
+/** Every command path this CLI answers to. The help output is generated from it. */
+export const COMMAND_PATHS = Object.freeze([
+  { path: 'setup', summary: 'Install for the selected hosts and record what was generated.' },
+  { path: 'update', summary: 'Regenerate owned files; skip ones you modified unless forced.' },
+  { path: 'remove', summary: 'Remove generated files we still own. Records are kept.' },
+  { path: 'doctor', summary: 'Read-only diagnosis of the installation.' },
+  { path: 'validate', summary: 'Check skills, config, links, and generated adapter output.' },
+  { path: 'task new', summary: 'Create a task record from the template.' },
+  { path: 'task list', summary: 'List task records with their ids, titles, and statuses.' },
+  { path: 'task show', summary: 'Print one record. --json adds the three check outputs.' },
+  { path: 'task lint', summary: 'Report structural validity, references, and requirements. Never writes.' },
+  { path: 'task set', summary: 'One safe frontmatter write.' },
+  { path: 'decision new', summary: 'Create a decision record from the template.' },
+  { path: 'version', summary: 'Print the version.' },
+  { path: 'help', summary: 'Print this list.' },
+]);
+
+/** @param {string[]} argv */
+export function parseArgs(argv) {
+  const positionals = [];
+  /** @type {Record<string, string|boolean>} */
+  const flags = {};
+  const repeated = { host: /** @type {string[]} */ ([]), 'force-generated': /** @type {string[]} */ ([]) };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (!token.startsWith('--')) {
+      positionals.push(token);
+      continue;
+    }
+    const [name, inline] = token.slice(2).split('=', 2);
+    if (name === 'host' || name === 'force-generated') {
+      const value = inline ?? argv[++i];
+      if (value === undefined) throw new PublicError(`--${name} needs a value`);
+      repeated[name].push(value);
+      continue;
+    }
+    flags[name] = inline ?? true;
   }
-  return entry;
+  return { positionals, flags, hosts: repeated.host, force: repeated['force-generated'] };
 }
 
-/**
- * Extract the global debug flag without treating a string-option value or a
- * token after `--` as a flag. Command parsing still owns every other token.
- */
-function extractGlobalDebug(argv) {
-  const stringOptions = new Set(
-    (commandSpec(argv)?.options ?? [])
-      .filter(option => option.type === 'string')
-      .map(option => `--${option.name}`)
-  );
-  const publicArgv = [];
-  let debug = false;
-  let afterTerminator = false;
-  let pendingStringOption = null;
-  let targetOption;
-  for (const argument of argv) {
-    if (afterTerminator) {
-      publicArgv.push(argument);
-      continue;
-    }
-    if (pendingStringOption) {
-      publicArgv.push(argument);
-      if (pendingStringOption === '--target') targetOption = argument;
-      pendingStringOption = null;
-      continue;
-    }
-    if (argument === '--') {
-      afterTerminator = true;
-      publicArgv.push(argument);
-      continue;
-    }
-    if (argument === '--debug') {
-      debug = true;
-      continue;
-    }
-    publicArgv.push(argument);
-    if (stringOptions.has(argument)) {
-      pendingStringOption = argument;
-      continue;
-    }
-    const equals = argument.indexOf('=');
-    if (equals > 0 && stringOptions.has(argument.slice(0, equals)) && argument.slice(0, equals) === '--target') {
-      targetOption = argument.slice(equals + 1);
-    }
-  }
-  return { debug, publicArgv, targetOption };
+function version() {
+  return JSON.parse(fs.readFileSync(path.join(toolkitRoot(), 'package.json'), 'utf8')).version;
 }
 
-function debugReference(argv, error, boundaryError = null) {
-  return debugReferenceFor(argv.join(' '), error, boundaryError);
+function help() {
+  out('agenticloop <command> [options]\n');
+  out('Agentic Loop provides a small, portable vocabulary for agent work.');
+  out('Agents choose the workflow. Hosts execute it.\n');
+  out('Commands:');
+  const width = Math.max(...COMMAND_PATHS.map((entry) => entry.path.length));
+  for (const entry of COMMAND_PATHS) out(`  ${entry.path.padEnd(width)}  ${entry.summary}`);
+  out('\nOptions:');
+  out('  --json                    Machine-readable output where supported.');
+  out(`  --host <name>             Select a host (${HOSTS.join(', ')}). Repeatable.`);
+  out('  --force-generated <path>  Overwrite one generated file you modified. Repeatable.');
+  out('  --debug                   Print internal stack details.');
+  out('\nRecords are ordinary Markdown. Editing one by hand is a first-class way to use this.');
 }
 
-/**
- * Last-resort result that has no target capability, repair-policy, or
- * constructor dependency. Key insertion order is canonical JSON order so the
- * direct JSON.stringify fallback remains deterministic if serialization fails.
- */
-function minimalPublicFailure(argv, error, boundaryError = null) {
-  const command = argv.join(' ');
-  const reference = debugReference(argv, error, boundaryError);
-  return minimalUnexpectedFailureResult({
-    command,
-    debugReference: reference,
-    message: UNEXPECTED_FAILURE_MESSAGE,
-    repair: UNEXPECTED_FAILURE_REPAIR,
-  });
-}
-
-function publicFailure(argv, error, target) {
-  const internalMessage = error instanceof Error ? error.message : String(error);
-  const requestedCode = typeof error?.code === 'string' ? error.code : error instanceof CliUsageError ? 'cli.usage' : 'cli.unexpected';
-  let code = requestedCode;
-  try { repairPolicyFor(code); } catch { code = error instanceof CliUsageError ? 'cli.usage' : 'cli.unexpected'; }
-  const unexpected = code === 'cli.unexpected';
-  const message = unexpected
-    ? UNEXPECTED_FAILURE_MESSAGE
-    : typeof error?.publicMessage === 'string'
-      ? error.publicMessage
-      : error instanceof CliUsageError
-        ? internalMessage
-        : OPERATIONAL_FAILURE_MESSAGE;
-  const evidenceState = unexpected ? 'missing' : error?.evidenceState ?? (error instanceof CliUsageError ? 'negative' : 'missing');
-  const disposition = unexpected
-    ? 'blocked'
-    : error?.disposition ?? (evidenceState === 'missing' ? 'needs_context' : evidenceState === 'changed' || evidenceState === 'stale' ? 'superseded' : 'blocked');
-  const repairHint = unexpected ? UNEXPECTED_FAILURE_REPAIR : error?.safeRepair ?? error?.hint ?? null;
-  const diagnostic = presentDiagnostic(createDiagnostic({
-    code,
-    message,
-    evidence: {
-      state: evidenceState,
-      committedStateEvaluated: unexpected ? false : error?.committedStateEvaluated ?? (error instanceof CliUsageError),
-      rollbackAuthorized: false,
-    },
-    repairHint,
-  }), getProjectRoleCapabilities(target));
-  const command = argv.join(' ');
-  return createValidationResult({
-    command,
-    evidenceState,
-    disposition,
-    diagnostics: [diagnostic],
-    firstSafeRepair: repairHint ?? diagnostic.nextAction ?? null,
-    debugReference: debugReference(argv, error),
-    requiredContext: Array.isArray(error?.requiredContext) && error.requiredContext.length > 0
-      ? error.requiredContext
-      : code === 'task.record.structure'
-        ? ['a trusted prior canonical record or human-authorized reconstruction of the duplicated structure']
-        : [],
-  });
-}
-
-function emitHumanFailure(io, result, error) {
-  const diagnostic = result?.diagnostics?.[0] ?? {};
-  const message = result?.errors?.[0] ?? UNEXPECTED_FAILURE_MESSAGE;
-  const hint = error?.hint;
-  io.err(`[${diagnostic.code ?? 'cli.unexpected'}] ${message}`);
-  if (error instanceof CliUsageError && hint) io.err(hint);
-  if (result?.debugReference) io.err(`debug reference: ${result.debugReference}`);
-  if (result?.firstSafeRepair && (!hint || result.firstSafeRepair !== hint)) {
-    io.err(`first safe repair: ${result.firstSafeRepair}`);
+/** @param {{findings: {level: string, where?: string, message: string, next?: string}[]}} report */
+function printFindings(report) {
+  for (const finding of report.findings) {
+    const where = finding.where ? `${finding.where}: ` : '';
+    out(`${finding.level.padEnd(5)} ${where}${finding.message}`);
+    if (finding.next) out(`      → ${finding.next}`);
   }
 }
 
 /**
- * @param {string[]} argv  Arguments after the node/bin prefix (e.g. process.argv.slice(2)).
- * @param {object} [options]
- * @param {string} [options.cwd]       Working directory for relative target resolution.
- * @param {NodeJS.ProcessEnv} [options.env]  Environment for env-sensitive behavior.
- * @param {NodeJS.ReadableStream} [options.stdin]
- * @param {NodeJS.WritableStream} [options.stdout]
- * @param {NodeJS.WritableStream} [options.stderr]
- * @param {AbortSignal} [options.signal]  Cancellation propagated to prompts/planning/apply.
- * @param {boolean} [options.isTTY]     Override stdout TTY capability.
- * @param {boolean} [options.ci]        Override CI detection.
- * @param {boolean} [options.color]     Override color capability.
- * @param {Function} [options.promptFactory]  Injectable prompt factory for tests.
- * @param {Function} [options.ghCommandRunner]  Injectable read-only GitHub command runner for tests.
- * @param {string} [options.operatorTrustRoot]  Per-user host trust registry root.
- * @param {string} [options.operatorActivationRoot]  Per-user operator activation root.
- * @returns {Promise<number>} exit code
+ * @param {string[]} argv
+ * @param {{cwd?: string}} [options]
+ * @returns {number} exit code
  */
-export async function runCli(argv, options = {}) {
-  const io = createIo(options);
-  const extracted = extractGlobalDebug(argv);
-  const debug = extracted.debug || io.env.AGENTICLOOP_DEBUG === '1';
-  const publicArgv = extracted.publicArgv;
+export function run(argv, options = {}) {
+  const root = options.cwd ?? process.cwd();
+  const { positionals, flags, hosts, force } = parseArgs(argv);
+  const asJson = flags.json === true;
+  const command = positionals[0];
+
+  if (command === undefined || command === 'help' || flags.help === true) {
+    help();
+    return 0;
+  }
+
+  switch (command) {
+    case 'version': {
+      out(version());
+      return 0;
+    }
+
+    case 'setup': {
+      const result = setup(root, { hosts, force });
+      if (asJson) { json(result); return 0; }
+      out(`installed for ${result.hosts.join(', ')}`);
+      for (const created of result.created) out(`  created ${created}`);
+      for (const written of result.written) out(`  wrote   ${written}`);
+      for (const skipped of result.skipped) out(`  skipped ${skipped} (modified locally)`);
+      for (const collision of result.collisions) out(`  kept    ${collision} (yours; not overwritten)`);
+      return 0;
+    }
+
+    case 'update': {
+      const result = update(root, { force });
+      if (asJson) { json(result); return 0; }
+      for (const written of result.written) out(`  wrote   ${written}`);
+      for (const skipped of result.skipped) out(`  skipped ${skipped} (modified locally; pass --force-generated to overwrite)`);
+      for (const collision of result.collisions) out(`  kept    ${collision} (yours; not overwritten)`);
+      for (const removed of result.removed) out(`  removed ${removed} (no longer generated)`);
+      if (result.written.length === 0 && result.skipped.length === 0) out('everything is up to date');
+      return 0;
+    }
+
+    case 'remove': {
+      const result = remove(root);
+      if (asJson) { json(result); return 0; }
+      for (const removed of result.removed) out(`  removed ${removed}`);
+      for (const kept of result.kept) out(`  kept    ${kept} (modified locally)`);
+      out('records under .agenticloop/ were not touched');
+      return 0;
+    }
+
+    case 'doctor': {
+      const report = doctor(root);
+      if (asJson) { json(report); return 0; }
+      out(`hosts: ${report.hosts.length > 0 ? report.hosts.join(', ') : 'none configured'}`);
+      out(`generated files: ${report.generated_files}`);
+      if (report.findings.length === 0) out('no findings');
+      printFindings(report);
+      return report.ok ? 0 : 1;
+    }
+
+    case 'validate': {
+      const report = validate(root);
+      if (asJson) { json(report); return 0; }
+      if (report.findings.length === 0) out('validate: no findings');
+      printFindings(report);
+      return report.ok ? 0 : 1;
+    }
+
+    case 'task': {
+      const sub = positionals[1];
+      switch (sub) {
+        case 'new':
+          taskNew(root, positionals.slice(2).join(' '));
+          return 0;
+        case 'list':
+          taskList(root, { json: asJson });
+          return 0;
+        case 'show':
+          if (!positionals[2]) throw new PublicError('a task id is required', { hint: 'agenticloop task show T-001' });
+          taskShow(root, positionals[2], { json: asJson });
+          return 0;
+        case 'lint': {
+          const result = taskLint(root, positionals[2] ?? null, { json: asJson });
+          return result.ok ? 0 : 1;
+        }
+        case 'set':
+          taskSet(root, positionals[2], positionals[3], positionals.slice(4).join(' '));
+          return 0;
+        default:
+          throw new PublicError(`unknown command: task ${sub ?? ''}`.trim(), {
+            hint: 'Known: task new, task list, task show, task lint, task set.',
+          });
+      }
+    }
+
+    case 'decision': {
+      if (positionals[1] !== 'new') {
+        throw new PublicError(`unknown command: decision ${positionals[1] ?? ''}`.trim(), { hint: 'Known: decision new.' });
+      }
+      decisionNew(root, positionals.slice(2).join(' '));
+      return 0;
+    }
+
+    default:
+      throw new PublicError(`unknown command: ${command}`, { hint: 'Run `agenticloop help` for the command list.' });
+  }
+}
+
+/** @param {string[]} argv */
+export function main(argv) {
+  const debug = argv.includes('--debug');
   try {
-    io.throwIfAborted();
-    // Commands that catch their own failures never reach this handler, so the
-    // debug switch is bound to the whole execution rather than to this catch.
-    return await runWithDebugTrace({ debug, io }, () => dispatch(publicArgv, io));
+    return run(argv.filter((token) => token !== '--debug'));
   } catch (error) {
-    if (error instanceof CliAbortError || error?.name === 'AbortError') {
-      io.err('Interrupted.');
-      return EXIT_INTERRUPTED;
+    if (error instanceof PublicError) {
+      err(`error: ${error.message}`);
+      if (error.hint) err(error.hint);
+      if (debug && error.stack) err(error.stack);
+      return error.exitCode;
     }
-    const boundaryErrors = [];
-    let result;
-    try {
-      result = publicFailure(publicArgv, error, resolveCliTarget(io, extracted.targetOption));
-    } catch (boundaryError) {
-      boundaryErrors.push(boundaryError);
-      result = minimalPublicFailure(publicArgv, error, boundaryError);
-    }
-    if (publicArgv.includes('--json')) {
-      try {
-        emitValidationResult(io, result);
-      } catch (boundaryError) {
-        boundaryErrors.push(boundaryError);
-        result = minimalPublicFailure(publicArgv, error, boundaryError);
-        io.out(JSON.stringify(result));
-      }
-    } else {
-      try {
-        emitHumanFailure(io, result, error);
-      } catch (boundaryError) {
-        boundaryErrors.push(boundaryError);
-        result = minimalPublicFailure(publicArgv, error, boundaryError);
-        try {
-          emitHumanFailure(io, result, null);
-        } catch (fallbackError) {
-          boundaryErrors.push(fallbackError);
-        }
-      }
-    }
-    if (debug) {
-      try {
-        io.err(error?.stack ?? String(error));
-        for (const boundaryError of boundaryErrors) {
-          io.err(`Failure rendering error: ${boundaryError?.stack ?? String(boundaryError)}`);
-        }
-      } catch {
-        // Debug output is best-effort and must never replace the command's exit.
-      }
-    }
-    return error instanceof CliUsageError ? EXIT_USAGE : EXIT_FAILURE;
+    err(`error: ${error instanceof Error ? error.message : String(error)}`);
+    if (debug && error instanceof Error && error.stack) err(error.stack);
+    return 1;
   }
 }
-
-export { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_USAGE };

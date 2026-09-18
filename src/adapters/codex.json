@@ -1,0 +1,9 @@
+{
+  "id": "codex",
+  "label": "Codex",
+  "files": [
+    { "kind": "role", "to": ".codex/agents/{role}.toml", "format": "toml" },
+    { "kind": "command", "to": ".agents/skills/agenticloop/SKILL.md", "format": "skill" },
+    { "kind": "skill", "to": ".agents/skills/agenticloop/references/{skill}.md", "format": "reference" }
+  ]
+}

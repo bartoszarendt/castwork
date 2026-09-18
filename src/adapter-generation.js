@@ -1,173 +1,230 @@
 /**
- * Shared adapter generation orchestrator.
+ * Adapter generation.
  *
- * Routes every generation entry point (init, setup, generate, generate all,
- * update) through the transactional plan/preflight/execute service.
- */
-
-import { validateSharedAgenticLoopPluginCompatibility } from './adapter-plugin-compatibility.js';
-import { executeGenerationPlan, resolveOutputDir, computeOutputRoot, preflightPlan, formatCollisions } from './generation-transaction.js';
-import { planOpencodeArtifacts } from './adapters/opencode.js';
-import { planCodexArtifacts } from './adapters/codex.js';
-import { planClaudeCodeArtifacts } from './adapters/claude-code.js';
-import { planCopilotArtifacts } from './adapters/copilot.js';
-import { planCursorArtifacts } from './adapters/cursor.js';
-
-const IMPLEMENTED_ADAPTERS = ['opencode', 'codex', 'claude-code', 'copilot', 'cursor'];
-
-const PLANNERS = {
-  opencode: planOpencodeArtifacts,
-  codex: planCodexArtifacts,
-  'claude-code': planClaudeCodeArtifacts,
-  copilot: planCopilotArtifacts,
-  cursor: planCursorArtifacts,
-};
-
-/**
- * @typedef {Object} GenerationOptions
- * @property {string} target
- * @property {string} [assetSourceRoot] Repository root used to read canonical
- * adapter source assets when the target's planned assets are not yet on disk.
- * @property {object} alConfig
- * @property {string|string[]} [adapter]
- * @property {string} [outputDirOpt]
- * @property {boolean} [forceGenerated]
- * @property {boolean} [runPluginChecks]
- * @property {Array<{relPath: string, content: string}>} [extraWrites]
- * @property {string} [manifestRelPath]
- * @property {boolean} [avoidUnchangedWrites]
- * @property {boolean} [excludeGitignoreActions]
- * @property {(context: { targetRoot: string, plan: object, manifestRelPath: string }) => string[]|{errors?: string[], warnings?: string[]}} [beforeMutation]
- */
-
-/**
- * @typedef {Object} GenerationOutcome
- * @property {boolean} ok
- * @property {string[]} errors
- * @property {string[]} warnings
- * @property {string[]} files
- * @property {string[]} adapters
- * @property {string} outputDir
- */
-
-/**
- * Compute the canonical adapter generation plan without writing. Composes the
- * per-adapter planners, plugin compatibility checks, and the generation
- * transaction preflight so lifecycle planning can render and preflight the
- * exact actions that `executeGenerationPlan` would apply.
+ * An adapter is a thin projection of the canonical roles, skills, and entry
+ * command into the layout one host expects. A host is a template directory
+ * described by `src/adapters/<host>.json`, not special machinery: adding a host
+ * should not require changing anything else.
  *
- * @param {GenerationOptions} options
- * @returns {{ ok: boolean, errors: string[], plan?: object, preflight?: object, adapters: string[], outputDir: string }}
+ * Generated files contain no absolute paths, no workflow infrastructure, no
+ * capability declarations, and no activation slots.
  */
-export function planAdapterArtifacts(options) {
-  const { target, alConfig, adapter, outputDirOpt, forceGenerated = false, runPluginChecks = true } = options;
-  const assetSourceRoot = options.assetSourceRoot ?? target;
 
-  const outputDir = resolveOutputDir(target, outputDirOpt);
-  const outputRoot = computeOutputRoot(target, outputDir);
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-  const adapterList = Array.isArray(adapter) ? adapter : [adapter];
-  const expanded = adapterList.includes('all') ? [...IMPLEMENTED_ADAPTERS] : /** @type {string[]} */ (adapterList.filter(Boolean));
+import { HOSTS } from './layout.js';
+import { parseRecord } from './record.js';
+import { PublicError } from './public-error.js';
 
-  const preflightErrors = [];
-  if (runPluginChecks && expanded.some(a => a === 'codex' || a === 'cursor' || expanded.includes('all'))) {
-    preflightErrors.push(...validateSharedAgenticLoopPluginCompatibility(alConfig));
-  }
-  if (preflightErrors.length > 0) {
-    return { ok: false, errors: preflightErrors, adapters: expanded, outputDir };
-  }
+const here = path.dirname(fileURLToPath(import.meta.url));
 
-  const allActions = [];
-  const allFiles = [];
-  const adaptersWithPlans = [];
-
-  for (const adapterName of expanded) {
-    const planner = PLANNERS[adapterName];
-    if (!planner) {
-      return { ok: false, errors: [`Unknown adapter: ${adapterName}`], adapters: expanded, outputDir };
-    }
-    try {
-      const plan = planner(alConfig, assetSourceRoot, outputDir);
-      const actions = options.excludeGitignoreActions
-        ? plan.actions.filter(action => action.type !== 'gitignore-append')
-        : plan.actions;
-      allActions.push(...actions);
-      allFiles.push(...plan.files.filter(file => actions.some(action => action.relPath === file)));
-      adaptersWithPlans.push(adapterName);
-    } catch (error) {
-      return {
-        ok: false,
-        errors: [`Failed to plan ${adapterName} artifacts: ${error instanceof Error ? error.message : String(error)}`],
-        adapters: expanded,
-        outputDir,
-      };
-    }
-  }
-
-  const plan = {
-    outputRoot,
-    actions: allActions,
-    files: allFiles,
-    adapters: adaptersWithPlans,
-  };
-
-  const preflight = preflightPlan(target, plan, forceGenerated, { manifestRelPath: options.manifestRelPath });
-  return { ok: true, errors: [], plan, preflight, adapters: adaptersWithPlans, outputDir };
+/** The toolkit's own root, where the canonical sources live. */
+export function toolkitRoot() {
+  return path.resolve(here, '..');
 }
 
-/**
- * Plan and execute adapter generation for one or more adapters transactionally.
- *
- * For 'all', computes the complete plan across all five adapters before
- * performing any writes. If any adapter has a blocked path, performs zero
- * adapter-output writes.
- *
- * @param {GenerationOptions} options
- * @returns {GenerationOutcome}
- */
-export function generateAdapterArtifacts(options) {
-  const { target, forceGenerated = false, extraWrites } = options;
-  const planned = planAdapterArtifacts(options);
-  if (!planned.ok) {
-    return { ok: false, errors: planned.errors, files: [], adapters: planned.adapters, outputDir: planned.outputDir };
+/** @param {string} host */
+export function readAdapter(host) {
+  if (!HOSTS.includes(host)) {
+    throw new PublicError(`unknown host ${host}`, { hint: `Known hosts: ${HOSTS.join(', ')}.` });
   }
+  const file = path.join(here, 'adapters', `${host}.json`);
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
 
-  // Execute transactionally. The transaction boundary validates fully resolved
-  // action, stale-cleanup, and extra-write destinations so .github/workflows/
-  // remains user-owned even when a custom output directory is requested.
-  const result = executeGenerationPlan(target, planned.plan, {
-    forceGenerated,
-    extraWrites,
-    manifestRelPath: options.manifestRelPath,
-    avoidUnchangedWrites: options.avoidUnchangedWrites,
-    beforeMutation: options.beforeMutation,
-  });
+/** Canonical role presets, in a stable order. */
+export function readRoles() {
+  const directory = path.join(toolkitRoot(), 'agents');
+  const roles = [];
+  for (const id of ['orchestrator', 'maintainer', 'engineer', 'auditor']) {
+    const file = path.join(directory, `${id}.md`);
+    if (!fs.existsSync(file)) continue;
+    const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    roles.push({
+      id,
+      description: String(parsed.frontmatter.description ?? ''),
+      body: parsed.body.trim(),
+    });
+  }
+  return roles;
+}
 
+/** Canonical skills, in a stable order. */
+export function readSkills() {
+  const directory = path.join(toolkitRoot(), 'skills');
+  if (!fs.existsSync(directory)) return [];
+  const skills = [];
+  for (const name of fs.readdirSync(directory).sort()) {
+    const file = path.join(directory, name, 'SKILL.md');
+    if (!fs.existsSync(file)) continue;
+    const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    skills.push({
+      id: name,
+      description: String(parsed.frontmatter.description ?? ''),
+      body: parsed.body.trim(),
+    });
+  }
+  return skills;
+}
+
+/** The canonical entry command. */
+export function readCommand() {
+  const file = path.join(toolkitRoot(), 'commands', 'start.md');
+  if (!fs.existsSync(file)) return null;
+  const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
   return {
-    ok: result.ok,
-    errors: result.errors,
-    warnings: result.warnings ?? [],
-    files: result.ok ? planned.plan.files : [],
-    adapters: planned.adapters,
-    outputDir: planned.outputDir,
+    description: String(parsed.frontmatter.description ?? ''),
+    body: parsed.body.trim(),
   };
+}
+
+/** @param {string} value */
+function tomlString(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/** @param {string} value */
+function yamlString(value) {
+  const text = String(value);
+  return /^[\w][\w .,;:'()/-]*$/.test(text) ? text : JSON.stringify(text);
 }
 
 /**
- * Preflight only (no writes). Useful for dry-run or pre-checks.
- *
- * @param {string} target
- * @param {object} plan
- * @param {boolean} forceGenerated
- * @returns {{ blocked: Array, allClear: boolean, lines: string[] }}
+ * @param {{id: string, description: string, body: string}} role
+ * @param {Record<string, unknown>} adapter
+ * @param {Record<string, unknown>} settings
  */
-export function preflightGenerationPlan(target, plan, forceGenerated) {
-  const result = preflightPlan(target, plan, forceGenerated);
-  return {
-    blocked: result.blocked,
-    allClear: result.allClear,
-    lines: formatCollisions(result.collisions),
-  };
+function renderRoleMarkdown(role, adapter, settings) {
+  const mapping = /** @type {Record<string, string>} */ (adapter.role_frontmatter ?? {});
+  const lines = ['---', `name: ${role.id}`, `description: ${yamlString(role.description)}`];
+  for (const [source, target] of Object.entries(mapping)) {
+    const value = settings[source];
+    if (value === undefined || value === null || value === '') continue;
+    lines.push(`${target}: ${yamlString(String(value))}`);
+  }
+  lines.push('---', '', role.body, '');
+  return lines.join('\n');
 }
 
-export { IMPLEMENTED_ADAPTERS };
+/**
+ * @param {{id: string, description: string, body: string}} role
+ * @param {Record<string, unknown>} settings
+ */
+function renderRoleToml(role, settings) {
+  const lines = [`name = ${tomlString(role.id)}`, `description = ${tomlString(role.description)}`];
+  if (settings.model) lines.push(`model = ${tomlString(String(settings.model))}`);
+  lines.push('', 'instructions = """', role.body, '"""', '');
+  return lines.join('\n');
+}
+
+/** @param {{id: string, description: string, body: string}} skill */
+function renderReference(skill) {
+  return `# ${skill.id}\n\n${skill.description}\n\n${skill.body}\n`;
+}
+
+/**
+ * @param {{description: string, body: string}|null} command
+ * @param {{id: string, description: string}[]} skills
+ * @param {{id: string, description: string}[]} roles
+ */
+function renderSkillIndex(command, skills, roles) {
+  const lines = [
+    '---',
+    'name: agenticloop',
+    `description: ${yamlString(command?.description ?? 'Work with Agentic Loop task records in this repository.')}`,
+    '---',
+    '',
+    '# Agentic Loop',
+    '',
+    command ? command.body : '',
+    '',
+    '## Roles',
+    '',
+  ];
+  for (const role of roles) lines.push(`- \`${role.id}\` — ${role.description}`);
+  lines.push('', '## Procedures', '');
+  for (const skill of skills) lines.push(`- [\`${skill.id}\`](references/${skill.id}.md) — ${skill.description}`);
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * @param {{description: string, body: string}|null} command
+ */
+function renderCommand(command) {
+  if (!command) return '';
+  return `---\ndescription: ${yamlString(command.description)}\n---\n\n${command.body}\n`;
+}
+
+/**
+ * Plan every file one host's adapter would generate.
+ * @param {string} host
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>}} [options]
+ * @returns {{path: string, content: string}[]}
+ */
+export function generateHost(host, options = {}) {
+  const adapter = readAdapter(host);
+  const roles = readRoles();
+  const skills = readSkills();
+  const command = readCommand();
+  const roleSettings = options.roleSettings ?? {};
+  /** @type {{path: string, content: string}[]} */
+  const files = [];
+
+  for (const entry of /** @type {{kind: string, to: string, format: string}[]} */ (adapter.files)) {
+    if (entry.kind === 'role') {
+      for (const role of roles) {
+        const settings = roleSettings[role.id] ?? {};
+        files.push({
+          path: entry.to.replace('{role}', role.id),
+          content: entry.format === 'toml' ? renderRoleToml(role, settings) : renderRoleMarkdown(role, adapter, settings),
+        });
+      }
+      continue;
+    }
+    if (entry.kind === 'skill') {
+      for (const skill of skills) {
+        files.push({ path: entry.to.replace('{skill}', skill.id), content: renderReference(skill) });
+      }
+      continue;
+    }
+    if (entry.kind === 'command') {
+      files.push({
+        path: entry.to,
+        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles) : renderCommand(command),
+      });
+      continue;
+    }
+    if (entry.kind === 'index') {
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles) });
+      continue;
+    }
+    throw new PublicError(`adapter ${host} declares an unknown file kind ${entry.kind}`);
+  }
+
+  for (const file of files) assertNoAbsolutePaths(host, file);
+  return files;
+}
+
+/** Generated files must stay portable across machines. @param {string} host @param {{path: string, content: string}} file */
+function assertNoAbsolutePaths(host, file) {
+  if (/(^|[\s"'(])(\/(home|Users|tmp|var)\/|[A-Za-z]:[\\/])/.test(file.content)) {
+    throw new PublicError(`adapter ${host} produced an absolute path in ${file.path}`, {
+      hint: 'Generated files are tracked in the target repository and must be portable.',
+    });
+  }
+}
+
+/**
+ * Every file all selected hosts would generate.
+ * @param {string[]} hosts
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>}} [options]
+ */
+export function generateAll(hosts, options = {}) {
+  /** @type {{path: string, content: string}[]} */
+  const files = [];
+  for (const host of hosts) files.push(...generateHost(host, options));
+  return files;
+}

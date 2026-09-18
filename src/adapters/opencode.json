@@ -1,0 +1,11 @@
+{
+  "id": "opencode",
+  "label": "OpenCode",
+  "role_frontmatter": { "model": "model" },
+  "files": [
+    { "kind": "role", "to": ".opencode/agents/{role}.md", "format": "markdown" },
+    { "kind": "command", "to": ".opencode/commands/agenticloop.md", "format": "command" },
+    { "kind": "skill", "to": ".opencode/skills/agenticloop/references/{skill}.md", "format": "reference" },
+    { "kind": "index", "to": ".opencode/skills/agenticloop/SKILL.md", "format": "skill" }
+  ]
+}

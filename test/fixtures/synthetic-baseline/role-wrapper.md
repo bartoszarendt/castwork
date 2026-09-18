@@ -1,1 +1,0 @@
-Role wrapper fixture: synthetic.!
