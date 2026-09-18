@@ -44,18 +44,32 @@ export const LEGACY_STATE_FILES = Object.freeze([
 ]);
 
 /** Directory names a 0.4.x installation leaves behind. */
+/**
+ * Retired `.agenticloop/` directory names, taken from what 0.4.x actually wrote.
+ *
+ * The list is derived from the Phase 37 checkpoint `2d8cd99`: every
+ * `.agenticloop/<segment>` literal in its `src/`, minus the names 0.5.0 still
+ * uses (`decisions`, `local`, `project.md`, `tasks`). `agents` is deliberately
+ * absent: it appears in that baseline only in prose declaring it an invalid
+ * path, so treating it as a signal would refuse a clean install.
+ */
 export const LEGACY_STATE_DIRECTORIES = Object.freeze([
   'activation',
   'activations',
+  'adoptions',
   'closeout-waivers',
+  'decompositions',
   'audits',
   'checks',
   'handoffs',
+  'host-role-capabilities',
+  'host-trust',
   'improvements',
   'logs',
   'locks',
   'operator-activation',
   'returns',
+  'scope',
   'reviews',
   'summaries',
   'task-contract-history',

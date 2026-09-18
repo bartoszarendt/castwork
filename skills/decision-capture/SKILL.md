@@ -32,8 +32,8 @@ only mattered for one task.
 **Inside the task, under `## Blockers and decisions`**, when it explains this
 task and stops mattering afterwards.
 
-**In `.agenticloop/decisions/`**, when it outlives the task. `decision new`
-writes the template:
+**In `.agenticloop/decisions/`**, when it outlives the task.
+`decision new "<title>"` writes the template, numbering the record for you:
 
 ```markdown
 ---

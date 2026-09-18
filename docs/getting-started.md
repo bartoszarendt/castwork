@@ -158,8 +158,8 @@ edit is unrestricted, and the record stays readable and editable either way.
 ```sh
 npx agenticloop task list          # what is open
 npx agenticloop task show T-001    # one record, --json for the checks
-npx agenticloop doctor             # is the installation healthy
-npx agenticloop decision new       # record a durable decision
+npx agenticloop doctor             # is the installation healthy (see docs/cli.md)
+npx agenticloop decision new "Store money as minor units"   # a durable decision
 ```
 
 ## When a candidate changes

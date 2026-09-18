@@ -82,11 +82,23 @@ export function referenceAvailability(record, observations = {}) {
   return out;
 }
 
-/** A linked file, as opposed to a short inline string. @param {string} value */
-function isRelativePath(value) {
+/**
+ * A linked file, as opposed to a short inline string.
+ *
+ * A link is only ever resolved inside the checkout, so anything absolute or
+ * traversing upward is not treated as a link at all. Reporting availability for
+ * such a path would answer "does this file exist on your machine" for a path
+ * the record chose, which is an external existence oracle, not evidence.
+ *
+ * @param {string} value
+ */
+export function isRelativePath(value) {
   if (value.includes('\n') || value.trim() === '') return false;
   if (value.startsWith('#')) return false;
-  return /^[.\w][\w./-]*\.[A-Za-z0-9]+$/.test(value) && !value.startsWith('/');
+  if (value.startsWith('/') || value.startsWith('\\\\') || /^[A-Za-z]:/.test(value)) return false;
+  const unified = value.replace(/\\/g, '/');
+  if (unified.split('/').includes('..')) return false;
+  return /^[.\w][\w./-]*\.[A-Za-z0-9]+$/.test(unified);
 }
 
 /**
@@ -203,7 +215,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
   if (candidate === null || candidateRef === null) {
     return { requirement: name, status: 'not_satisfied', reason: 'candidate.missing', facts: [] };
   }
-  const producers = Array.isArray(candidate.producers) ? candidate.producers.map(String) : [];
+  const producers = identityList(candidate.producers);
   const accepting = effectiveAssessments(record, candidateRef).filter((entry) => String(entry.verdict) === 'accept');
 
   if (accepting.length === 0) {
@@ -225,7 +237,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
     };
   }
 
-  const withActor = accepting.filter((entry) => entry.actor !== undefined && entry.actor !== null && String(entry.actor) !== '');
+  const withActor = accepting.filter((entry) => isIdentity(entry.actor));
   if (withActor.length === 0) {
     return {
       requirement: name,
@@ -236,7 +248,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
   }
 
   for (const entry of withActor) {
-    const actor = String(entry.actor);
+    const actor = String(entry.actor).trim();
     if (!producers.includes(actor)) {
       return {
         requirement: name,
@@ -251,7 +263,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
     }
   }
 
-  const actors = withActor.map((entry) => String(entry.actor));
+  const actors = withActor.map((entry) => String(entry.actor).trim());
   return {
     requirement: name,
     status: 'not_satisfied',
@@ -262,6 +274,27 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
       { fact: 'every accepting actor is also a producer', trust: CHECKED },
     ],
   };
+}
+
+/**
+ * The usable identities in a recorded list.
+ *
+ * An identity is a non-empty string. A blank entry, a null, or a number is not
+ * somebody, so it cannot be compared against a reviewer, and a list that yields
+ * none is missing rather than empty. `producers: [""]` therefore leaves
+ * independence unknown instead of vacuously satisfying it.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+export function identityList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry) => typeof entry === 'string' && entry.trim() !== '').map((entry) => entry.trim());
+}
+
+/** @param {unknown} value */
+export function isIdentity(value) {
+  return typeof value === 'string' && value.trim() !== '';
 }
 
 /**

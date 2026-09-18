@@ -10,7 +10,17 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { isRelativePath } from './checks.js';
 import { recordEntries } from './record.js';
+
+/** @param {string} target */
+function realpath(target) {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Does this reference resolve in the local repository?
@@ -54,13 +64,18 @@ export function observe(record, root) {
     refs[ref] = isRepository ? refResolves(root, ref) : false;
   }
 
+  const realRoot = realpath(path.resolve(root)) ?? path.resolve(root);
   for (const entry of [...evidence, ...assessments]) {
     const link = entry.output ?? entry.findings;
-    if (typeof link !== 'string') continue;
-    if (link.includes('\n') || link.startsWith('#') || link.startsWith('/')) continue;
-    if (!/^[.\w][\w./-]*\.[A-Za-z0-9]+$/.test(link)) continue;
-    const base = record.path ? path.dirname(record.path) : root;
-    files[link] = fs.existsSync(path.resolve(base, link));
+    if (typeof link !== 'string' || !isRelativePath(link)) continue;
+    // Linked paths are repository-root relative, which is why no `..` is
+    // needed and none is accepted. Resolving against the record's own directory
+    // would have required traversal to reach anything useful, and traversal is
+    // what lets a record ask whether an arbitrary file exists on the machine
+    // running the checks.
+    const resolved = path.resolve(realRoot, link);
+    if (resolved !== realRoot && !resolved.startsWith(realRoot + path.sep)) continue;
+    files[link] = fs.existsSync(resolved);
   }
 
   return { refs, files };

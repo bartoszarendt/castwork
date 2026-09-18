@@ -112,7 +112,8 @@ test('a symlinked parent cannot carry a write outside the repository', (t) => {
   } catch {
     return; // symlinks unavailable on this platform
   }
-  assert.throws(() => containedPath(root, 'escape-link/evil.txt'), /outside the repository/);
+  // Any symlink on a generated path is refused, whether or not it escapes.
+  assert.throws(() => containedPath(root, 'escape-link/evil.txt'), /symbolic link/);
 });
 
 test('an ordinary generated path still resolves after hardening', (t) => {

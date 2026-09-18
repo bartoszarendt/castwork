@@ -71,7 +71,7 @@ follow any other, and no status grants a permission.
 | `command` | no | what was run |
 | `exit_code` | no | its exit code |
 | `actor`, `host`, `model`, `at` | no | optional attributes |
-| `output` | no | a short string, or a relative path to a linked file |
+| `output` | no | a short string, or a repository-root-relative path to a linked file |
 
 ### Assessment entry
 
@@ -81,13 +81,26 @@ follow any other, and no status grants a permission.
 | `role` | yes | one of `orchestrator`, `maintainer`, `engineer`, `auditor` |
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
 | `actor`, `host`, `model`, `at` | no | optional attributes |
-| `findings` | no | a short string, a relative path, or a body heading anchor |
+| `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
 
 ### Actor
 
-A free string the agent writes, for example `engineer@claude-code`. The toolkit
-compares strings and reports them as **asserted**. It has no way to verify that
-the actor named is the actor that wrote the entry, and it never claims to.
+A non-empty string the agent writes, for example `engineer@claude-code`. The
+toolkit compares strings and reports them as **asserted**. It has no way to
+verify that the actor named is the actor that wrote the entry, and it never
+claims to.
+
+A blank identity is not somebody. `producers: [""]` does not make a reviewer
+independent of nobody: it leaves `independent_review` `unknown`, and the blank
+entry is reported as a structural error. The same holds for a blank `actor`.
+
+### Linked paths
+
+A linked path in `output` or `findings` is **relative to the repository root**,
+so `logs/lint.txt` means the same thing wherever the record lives. A path that
+is absolute or climbs out with `..` is not treated as a link and is never
+resolved: doing so would let a record ask whether an arbitrary file exists on
+whatever machine runs the checks, which is not evidence about the work.
 
 ## Body
 
@@ -126,7 +139,7 @@ A new requirement kind needs a real consumer before it is added.
 Independence is evaluated against the recorded `producers` of the current
 candidate, **not against role names**. The same actor string appearing as
 producer and reviewer is not independent regardless of the roles it claimed.
-Missing identity on either side is `unknown`.
+Missing identity on either side is `unknown`, and a blank one counts as missing.
 
 ## Selection rules
 
@@ -184,7 +197,8 @@ its trust.
 The CLI may gather local observations and pass them to the checks: whether a
 candidate reference resolves in the local repository, whether a linked evidence
 or assessment file exists in the current checkout. Gathering is optional and
-local only.
+local only, and never looks outside the checkout: a linked path that resolves
+elsewhere is skipped rather than reported.
 
 **A pure check never performs I/O.** The pure functions take the parsed record
 plus an optional observation map, and are exported from the package so an
@@ -247,4 +261,5 @@ Any extra heading is fine.
 ## Decision record
 
 One Markdown file per durable decision under `.agenticloop/decisions/`. There is
-a template and nothing more; `decision new` writes it.
+a template and nothing more. `decision new <title>` writes it, numbering the
+record for you; the title is required, as it is for `task new`.

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { HOSTS } from './layout.js';
 import { parseRecord } from './record.js';
 import { PublicError } from './public-error.js';
+import { formatScalar } from './yaml.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,10 +86,19 @@ function tomlString(value) {
   return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-/** @param {string} value */
+/**
+ * Emit a value as a YAML scalar for a generated host file.
+ *
+ * Generated frontmatter is read by the hosts' own YAML parsers, not by this
+ * toolkit's, so it has to be valid YAML rather than merely round-trip here.
+ * The previous rule allowed a bare colon, which made every description
+ * containing one — `Read-only: implements nothing` — a mapping value in a
+ * place YAML does not allow one.
+ *
+ * @param {string} value
+ */
 function yamlString(value) {
-  const text = String(value);
-  return /^[\w][\w .,;:'()/-]*$/.test(text) ? text : JSON.stringify(text);
+  return formatScalar(String(value));
 }
 
 /**

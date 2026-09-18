@@ -236,11 +236,35 @@ export function parseRecord(text, options = {}) {
     }
   }
 
-  validateEntries(errors, frontmatter, 'candidates', ['ref'], {});
-  validateEntries(errors, frontmatter, 'evidence', ['check', 'candidate', 'result'], { result: [...RESULTS] });
-  validateEntries(errors, frontmatter, 'assessments', ['candidate', 'role', 'verdict'], {
+  const candidateEntries = validateEntries(errors, frontmatter, 'candidates', ['ref'], {});
+  candidateEntries.forEach((entry, index) => {
+    if (entry.producers === undefined || entry.producers === null) return;
+    if (!Array.isArray(entry.producers)) {
+      push(errors, 'entry.not_a_list', `candidates[${index}].producers must be a list`, { field: 'candidates', index });
+      return;
+    }
+    entry.producers.forEach((producer, position) => {
+      if (typeof producer !== 'string' || producer.trim() === '') {
+        push(errors, 'identity.blank', `candidates[${index}].producers[${position}] is not an identity`, { field: 'candidates', index });
+      }
+    });
+  });
+  const evidenceEntries = validateEntries(errors, frontmatter, 'evidence', ['check', 'candidate', 'result'], { result: [...RESULTS] });
+  for (const [field, entries] of [['evidence', evidenceEntries]]) {
+    /** @type {Record<string, unknown>[]} */ (entries).forEach((entry, index) => {
+      if (entry.actor !== undefined && entry.actor !== null && (typeof entry.actor !== 'string' || entry.actor.trim() === '')) {
+        push(errors, 'identity.blank', `${field}[${index}].actor is not an identity`, { field, index });
+      }
+    });
+  }
+  const assessmentEntries = validateEntries(errors, frontmatter, 'assessments', ['candidate', 'role', 'verdict'], {
     role: [...ROLE_IDS],
     verdict: [...VERDICTS],
+  });
+  assessmentEntries.forEach((entry, index) => {
+    if (entry.actor !== undefined && entry.actor !== null && (typeof entry.actor !== 'string' || entry.actor.trim() === '')) {
+      push(errors, 'identity.blank', `assessments[${index}].actor is not an identity`, { field: 'assessments', index });
+    }
   });
 
   for (const key of Object.keys(frontmatter)) {

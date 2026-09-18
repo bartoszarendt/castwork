@@ -98,7 +98,7 @@ availability, and requirement evaluation. Each supporting fact is reported as
 | `validate` | skills, config, links, generated adapter output |
 | `task new`, `task list`, `task show [--json]`, `task lint [--json]` | records and checks |
 | `task set <id> <field> <value>` | one safe frontmatter write |
-| `decision new` | template |
+| `decision new <title>` | Create a decision record from the template. |
 | `version`, `help` | |
 
 Thirteen command paths. A dedicated command exists only where it does something

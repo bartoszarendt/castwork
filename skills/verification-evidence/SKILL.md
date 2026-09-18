@@ -41,7 +41,9 @@ evidence:
 - `command`, `exit_code`, `output`, `actor`, `host`, `model`, `at` are optional.
   Record them when they help someone reproduce what you did.
 
-`output` may be a short string or a relative path to a file.
+`output` may be a short string, or a path to a file relative to the repository
+root. A path that climbs out of the checkout with `..` is ignored rather than
+reported.
 
 ## Rules that matter
 

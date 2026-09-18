@@ -30,33 +30,74 @@ export function containedPath(root, relative) {
   if (typeof relative !== 'string' || relative.trim() === '') {
     throw new PublicError(`${GENERATED_MANIFEST} contains an empty generated path`);
   }
-  if (path.isAbsolute(relative) || /^[A-Za-z]:/.test(relative)) {
+  // Normalise separators first: a backslash is a path separator on Windows, so
+  // `.agenticloop\\tasks\\T-001.md` and `.agenticloop/tasks/T-001.md` are the
+  // same file and must be judged the same way.
+  const unified = relative.replace(/\\/g, '/');
+  if (path.posix.isAbsolute(unified) || /^[A-Za-z]:/.test(unified) || unified.startsWith('\\\\')) {
     throw new PublicError(`${GENERATED_MANIFEST} contains an absolute generated path: ${relative}`, {
       hint: 'Generated paths are relative to the repository root. Fix the manifest and run setup again.',
     });
   }
-  const base = path.resolve(root);
-  const target = path.resolve(base, relative);
-  const inside = target === base || target.startsWith(base + path.sep);
+
+  const realRoot = safeRealpath(path.resolve(root)) ?? path.resolve(root);
+  const target = path.resolve(realRoot, unified);
+  const inside = target === realRoot || target.startsWith(realRoot + path.sep);
   if (!inside) {
     throw new PublicError(`${GENERATED_MANIFEST} contains a generated path outside the repository: ${relative}`, {
       hint: 'Generated paths may never escape the repository root. Fix the manifest and run setup again.',
     });
   }
-  // A symlinked parent could still point outside; resolve what exists on disk.
-  const realBase = safeRealpath(base);
-  const realTarget = safeRealpath(path.dirname(target));
-  if (realTarget !== null && realBase !== null && realTarget !== realBase && !realTarget.startsWith(realBase + path.sep)) {
-    throw new PublicError(`${GENERATED_MANIFEST} resolves outside the repository through a link: ${relative}`, {
-      hint: 'Generated paths may never escape the repository root.',
-    });
-  }
-  if (USER_OWNED.some((owned) => relative === owned || relative.startsWith(`${owned}/`))) {
+
+  // Compare the *normalised* path against the user-owned roots, so `./x`,
+  // `a/../x` and backslash spellings cannot slip past the check.
+  const normalised = path.relative(realRoot, target).split(path.sep).join('/');
+  if (USER_OWNED.some((owned) => normalised === owned || normalised.startsWith(`${owned}/`))) {
     throw new PublicError(`${GENERATED_MANIFEST} claims a user-owned path as generated: ${relative}`, {
       hint: 'project.md, tasks/ and decisions/ are yours and are never generated. Fix the manifest.',
     });
   }
+
+  assertNoSymlinkComponent(realRoot, target, relative);
   return target;
+}
+
+/**
+ * Refuse any symlink between the repository root and the target, including the
+ * target itself.
+ *
+ * Resolving only the parent was not enough: a link whose descendants do not
+ * exist yet resolved to nothing and was allowed, and a generated path that was
+ * itself a link let a write follow it to an arbitrary file. Agentic Loop never
+ * generates a symlink, so encountering one on a generated path is always either
+ * a mistake or an attack, and it fails closed either way.
+ *
+ * @param {string} realRoot
+ * @param {string} target
+ * @param {string} relative
+ */
+function assertNoSymlinkComponent(realRoot, target, relative) {
+  const segments = path.relative(realRoot, target).split(path.sep).filter((segment) => segment !== '');
+  let current = realRoot;
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    const stats = lstat(current);
+    if (stats === null) return; // nothing exists from here down; nothing to follow
+    if (stats.isSymbolicLink()) {
+      throw new PublicError(`${GENERATED_MANIFEST} resolves through a symbolic link: ${relative}`, {
+        hint: 'Generated files are never symbolic links. Remove the link and run setup again.',
+      });
+    }
+  }
+}
+
+/** @param {string} target */
+function lstat(target) {
+  try {
+    return fs.lstatSync(target);
+  } catch {
+    return null;
+  }
 }
 
 /** @param {string} target */

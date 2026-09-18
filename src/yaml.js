@@ -35,6 +35,12 @@ function stripComment(line) {
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (quote) {
+      // Inside a double-quoted scalar a backslash escapes the next character,
+      // so `"a \" # b"` is one value and the # is not a comment.
+      if (quote === '"' && ch === '\\') {
+        i += 1;
+        continue;
+      }
       if (ch === quote) quote = null;
     } else if (ch === '"' || ch === "'") {
       quote = ch;
@@ -107,7 +113,7 @@ function parseFlow(text, line) {
     if (token === '{') {
       index += 1;
       /** @type {Record<string, unknown>} */
-      const map = {};
+      const map = Object.create(null);
       if (tokens[index] === '}') { index += 1; return map; }
       for (;;) {
         const key = tokens[index];
@@ -115,7 +121,9 @@ function parseFlow(text, line) {
         index += 1;
         if (tokens[index] !== ':') throw new YamlError(`expected : after key ${key}`, line);
         index += 1;
-        map[unquote(key)] = parseValue();
+        const flowKey = unquote(key);
+        assertSafeKey(flowKey, line);
+        map[flowKey] = parseValue();
         if (tokens[index] === ',') { index += 1; continue; }
         if (tokens[index] === '}') { index += 1; return map; }
         throw new YamlError('expected , or } in flow mapping', line);
@@ -212,6 +220,21 @@ function tokenizeFlow(text, line) {
 }
 
 /**
+ * Keys that would reach an object's prototype chain rather than becoming an
+ * ordinary field. Parsed maps have a null prototype so an assignment could not
+ * pollute anything, but a record declaring one of these means something the
+ * format cannot represent, so it is rejected rather than silently swallowed.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** @param {string} key @param {number} line */
+function assertSafeKey(key, line) {
+  if (UNSAFE_KEYS.has(key)) {
+    throw new YamlError(`unsupported key ${key}`, line);
+  }
+}
+
+/**
  * @param {{indent: number, text: string, number: number}[]} lines
  * @param {{i: number}} cursor
  * @param {number} indent
@@ -249,7 +272,7 @@ function parseSequence(lines, cursor, indent) {
       // An inline mapping entry: `- ref: abc` possibly followed by more keys.
       const innerIndent = indent + 2;
       /** @type {Record<string, unknown>} */
-      const map = {};
+      const map = Object.create(null);
       assignKey(map, pair[0], pair[1], lines, cursor, innerIndent, line.number);
       while (cursor.i < lines.length && lines[cursor.i].indent >= innerIndent && !lines[cursor.i].text.startsWith('- ')) {
         const next = lines[cursor.i];
@@ -277,6 +300,7 @@ function parseSequence(lines, cursor, indent) {
  */
 function assignKey(map, key, rest, lines, cursor, childIndent, lineNumber) {
   if (key === '') throw new YamlError('empty key', lineNumber);
+  assertSafeKey(key, lineNumber);
   if (Object.prototype.hasOwnProperty.call(map, key)) {
     throw new YamlError(`duplicate key ${key}`, lineNumber);
   }
@@ -298,7 +322,7 @@ function assignKey(map, key, rest, lines, cursor, childIndent, lineNumber) {
  */
 function parseMapping(lines, cursor, indent) {
   /** @type {Record<string, unknown>} */
-  const map = {};
+  const map = Object.create(null);
   while (cursor.i < lines.length) {
     const line = lines[cursor.i];
     if (line.indent < indent) break;
@@ -334,7 +358,7 @@ export function formatScalar(value) {
     /^(true|false|null|~|yes|no|on|off)$/i.test(text) ||
     /^-?\d+(\.\d+)?$/.test(text);
   if (!needsQuoting) return text;
-  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '').replace(/\t/g, '\\t')}"`;
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`;
 }
 
 /**
@@ -344,7 +368,7 @@ export function formatScalar(value) {
  */
 export function parseYaml(text) {
   const lines = splitLines(text);
-  if (lines.length === 0) return {};
+  if (lines.length === 0) return Object.create(null);
   const cursor = { i: 0 };
   const value = parseNode(lines, cursor, lines[0].indent);
   if (cursor.i !== lines.length) {

@@ -120,7 +120,7 @@ Nothing else is written under `.agenticloop/`.
 
 ## Getting started
 
-`npx agenticloop setup` installs for the hosts you choose. See
+`npx agenticloop setup --host <name>` installs for the hosts you name. See
 [docs/getting-started.md](docs/getting-started.md).
 
 ## What this is not
