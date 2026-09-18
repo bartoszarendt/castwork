@@ -21,6 +21,7 @@ import {
   HOSTS,
   LAYOUT_VERSION,
   LEGACY_STATE_DIRECTORIES,
+  LEGACY_STATE_FILES,
   LOCAL_DIRECTORY,
   PROJECT_FILE,
   STATE_DIRECTORY,
@@ -43,6 +44,11 @@ export function detectLegacyLayout(root) {
   for (const name of LEGACY_STATE_DIRECTORIES) {
     if (fs.existsSync(path.join(root, STATE_DIRECTORY, name))) {
       reasons.push(`${STATE_DIRECTORY}/${name}/ exists`);
+    }
+  }
+  for (const name of LEGACY_STATE_FILES) {
+    if (fs.existsSync(path.join(root, STATE_DIRECTORY, name))) {
+      reasons.push(`${STATE_DIRECTORY}/${name} exists`);
     }
   }
   const oldManifest = path.join(root, 'agenticloop', 'manifest.json');

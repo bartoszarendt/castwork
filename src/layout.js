@@ -30,20 +30,36 @@ export const PROJECT_FILE = `${STATE_DIRECTORY}/project.md`;
 /** Never deleted by `remove`. */
 export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY]);
 
+/**
+ * Files a 0.4.x installation leaves behind under `.agenticloop/`.
+ *
+ * The 0.4.x ownership manifest and the lifecycle receipt are the two signals
+ * that survive a target whose retired state directories were already cleaned
+ * out, so an installation is recognised by either a directory or a file.
+ */
+export const LEGACY_STATE_FILES = Object.freeze([
+  'generated-artifacts.json',
+  'local/generated-artifacts.json',
+  'lifecycle-receipt.json',
+]);
+
 /** Directory names a 0.4.x installation leaves behind. */
 export const LEGACY_STATE_DIRECTORIES = Object.freeze([
   'activation',
   'activations',
+  'closeout-waivers',
   'audits',
   'checks',
   'handoffs',
   'improvements',
   'logs',
+  'locks',
   'operator-activation',
   'returns',
   'reviews',
   'summaries',
   'task-contract-history',
+  'tmp',
   'worktrees',
 ]);
 
