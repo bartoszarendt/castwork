@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { checkRecord, mayBeDone } from './checks.js';
+import { checkRecord, duplicateIdErrors, mayBeDone } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
@@ -38,11 +38,21 @@ export function listRecordFiles(root) {
 
 /** @param {string} root @param {string} id */
 export function findRecord(root, id) {
+  const matches = [];
   for (const file of listRecordFiles(root)) {
     const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
-    if (String(record.frontmatter.id ?? '') === id) return { file, record };
+    if (String(record.frontmatter.id ?? '') === id) matches.push({ file, record });
   }
-  throw new PublicError(`no task record with id ${id}`, { hint: `Looked in ${TASKS_DIRECTORY}/.` });
+  if (matches.length === 0) {
+    throw new PublicError(`no task record with id ${id}`, { hint: `Looked in ${TASKS_DIRECTORY}/.` });
+  }
+  if (matches.length > 1) {
+    const paths = matches.map((match) => path.relative(root, match.file)).join(', ');
+    throw new PublicError(`task id ${id} is declared by more than one record: ${paths}`, {
+      hint: 'Give each record a unique id, then run the command again. Nothing was changed.',
+    });
+  }
+  return matches[0];
 }
 
 /** @param {string} root */
@@ -153,15 +163,30 @@ function printReport(report) {
  * @param {{json?: boolean}} [options]
  */
 export function taskLint(root, id, options = {}) {
-  const targets = id
-    ? [findRecord(root, id)]
-    : listRecordFiles(root).map((file) => ({ file, record: parseRecord(fs.readFileSync(file, 'utf8'), { path: file }) }));
+  const all = listRecordFiles(root).map((file) => ({ file, record: parseRecord(fs.readFileSync(file, 'utf8'), { path: file }) }));
+
+  // Lint diagnoses rather than refuses, so an ambiguous id reports every record
+  // that claims it instead of erroring the way a write would.
+  const targets = id ? all.filter((entry) => String(entry.record.frontmatter.id ?? '') === id) : all;
+  if (id && targets.length === 0) {
+    throw new PublicError(`no task record with id ${id}`, { hint: `Looked in ${TASKS_DIRECTORY}/.` });
+  }
+
+  const duplicates = duplicateIdErrors(all.map((entry) => entry.record));
 
   const reports = [];
   let failed = false;
 
   for (const { file, record } of targets) {
     const report = reportFor(record, root);
+    const duplicate = duplicates.get(file);
+    if (duplicate) {
+      report.structural = {
+        ...report.structural,
+        valid: false,
+        errors: [...report.structural.errors, duplicate],
+      };
+    }
     const status = String(record.frontmatter.status ?? '');
     const unsatisfied = report.requirements.filter((requirement) => requirement.status !== 'satisfied');
     const claimsDone = status === 'done' && unsatisfied.length > 0;

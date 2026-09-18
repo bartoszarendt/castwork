@@ -302,6 +302,47 @@ export function checkRecord(record, observations = {}) {
 }
 
 /**
+ * Duplicate task ids across a corpus of records.
+ *
+ * An id is the handle every other record and every command uses to name a
+ * task, so two records sharing one make both ambiguous. This is a corpus-level
+ * structural error: a single record cannot see it, which is why it is reported
+ * here rather than by the parser.
+ *
+ * Detection is deterministic: records are compared in the order given, and
+ * every record sharing an id is reported with the paths of all its twins.
+ *
+ * @param {import('./record.js').ParsedRecord[]} records
+ * @returns {Map<string, import('./record.js').Diagnostic>} keyed by record path
+ */
+export function duplicateIdErrors(records) {
+  /** @type {Map<string, {path: string|null, index: number}[]>} */
+  const byId = new Map();
+  records.forEach((record, index) => {
+    const id = record.frontmatter.id;
+    if (id === undefined || id === null || String(id).trim() === '') return;
+    const key = String(id);
+    if (!byId.has(key)) byId.set(key, []);
+    (byId.get(key) ?? []).push({ path: record.path, index });
+  });
+
+  /** @type {Map<string, import('./record.js').Diagnostic>} */
+  const errors = new Map();
+  for (const [id, entries] of byId) {
+    if (entries.length < 2) continue;
+    for (const entry of entries) {
+      const others = entries.filter((other) => other.index !== entry.index).map((other) => other.path ?? '<unknown>');
+      errors.set(entry.path ?? String(entry.index), {
+        code: 'id.duplicate',
+        message: `duplicate task id ${id}, also declared by ${others.join(', ')}`,
+        field: 'id',
+      });
+    }
+  }
+  return errors;
+}
+
+/**
  * Whether the record may claim `status: done`: every declared requirement
  * satisfied. This is the single write validation, not an authorization gate.
  * @param {import('./record.js').ParsedRecord} record
