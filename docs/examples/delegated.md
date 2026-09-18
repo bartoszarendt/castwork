@@ -9,7 +9,7 @@ requirements:
   assessment_roles: [maintainer]
 candidates:
   - ref: 8c1d004
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: 8c1d004, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 8c1d004, result: pass, command: "npm run lint", exit_code: 0 }

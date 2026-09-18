@@ -33,7 +33,7 @@
     "markdown",
     "opencode",
     "codex",
-    "claude-code"
+    "claude"
   ],
   "publishConfig": {
     "access": "public"
@@ -53,8 +53,6 @@
     "commands/",
     "memory/",
     "config.json",
-    "agenticloop.template.json",
-    "manifest.json",
     "docs/record-format.md",
     "docs/examples/",
     "docs/cli.md",
@@ -63,7 +61,7 @@
     "docs/host-adapters.md",
     "docs/skill-anatomy.md",
     "docs/codex-setup.md",
-    "docs/claude-code-setup.md",
+    "docs/claude-setup.md",
     "docs/opencode-setup.md",
     "CHANGELOG.md",
     "LICENSE"

@@ -6,7 +6,7 @@ import { HOSTS } from '../src/layout.js';
 import { ROLE_IDS } from '../src/record.js';
 
 test('exactly three hosts are supported', () => {
-  assert.deepEqual([...HOSTS], ['codex', 'claude-code', 'opencode']);
+  assert.deepEqual([...HOSTS], ['codex', 'claude', 'opencode']);
 });
 
 test('no adapter exists for a removed host', () => {
@@ -59,7 +59,7 @@ for (const host of HOSTS) {
 }
 
 test('a model binding reaches the generated role file', () => {
-  const files = generateHost('claude-code', { roleSettings: { engineer: { model: 'claude-opus-5' } } });
+  const files = generateHost('claude', { roleSettings: { engineer: { model: 'claude-opus-5' } } });
   const engineer = files.find((file) => file.path.endsWith('engineer.md'));
   assert.ok(engineer.content.includes('model: claude-opus-5'));
 });

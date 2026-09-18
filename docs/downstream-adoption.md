@@ -28,7 +28,7 @@ product, it is not earning its place. That failure mode is why 0.5.0 exists.
 npx agenticloop setup --host codex
 ```
 
-`--host` is repeatable and takes `codex`, `claude-code`, or `opencode`. The
+`--host` is repeatable and takes `codex`, `claude`, or `opencode`. The
 choice is recorded in `agenticloop.json`, so later runs need no flags.
 
 Commit everything it writes except `.agenticloop/local/`. Generated files carry

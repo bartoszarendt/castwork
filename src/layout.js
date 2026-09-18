@@ -1,15 +1,14 @@
 /**
- * Where things live. Two sibling directories differing only by a leading dot:
- * `agenticloop/` is toolkit-owned and read-only, `.agenticloop/` belongs to the
- * target project.
+ * Where things live.
+ *
+ * `.agenticloop/` belongs to the target project. There is no sibling
+ * `agenticloop/`: 0.5.0 does not copy the toolkit's own sources into a target,
+ * it projects them into each selected host's directories and records what it
+ * wrote in `generated.json`. The old directory survives only as a 0.4.x signal,
+ * read by `detectLegacyLayout`.
  */
 
-import path from 'node:path';
-
 export const LAYOUT_VERSION = 4;
-
-/** Toolkit-owned, installed into the target. */
-export const TOOLKIT_DIRECTORY = 'agenticloop';
 
 /** Target-owned records and state. */
 export const STATE_DIRECTORY = '.agenticloop';
@@ -77,9 +76,10 @@ export const LEGACY_STATE_DIRECTORIES = Object.freeze([
   'worktrees',
 ]);
 
-/** @param {string} root @param {string} relative */
-export function resolve(root, relative) {
-  return path.join(root, relative);
-}
-
-export const HOSTS = Object.freeze(['codex', 'claude-code', 'opencode']);
+/**
+ * Supported host ids.
+ *
+ * Each is the host's own command name — `codex`, `claude`, `opencode` — which
+ * is what a user types and the one spelling per concept the project keeps.
+ */
+export const HOSTS = Object.freeze(['codex', 'claude', 'opencode']);

@@ -9,11 +9,11 @@ declared it needed. It does not tell them how to work.
 From the root of the repository you want to work in:
 
 ```sh
-npx agenticloop setup --host codex --host claude-code --host opencode
+npx agenticloop setup --host codex --host claude --host opencode
 ```
 
 Name the hosts you want. `--host` is repeatable and accepts `codex`,
-`claude-code`, and `opencode`; `setup` does not prompt, and refuses rather than
+`claude`, and `opencode`; `setup` does not prompt, and refuses rather than
 guessing if you name none and none are recorded. It writes:
 
 ```
@@ -98,7 +98,7 @@ The agent implements, then records what it produced and what it observed:
 ```yaml
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 007c7f8, result: pass }
@@ -106,7 +106,7 @@ evidence:
 
 `ref` is normally a commit. Evidence binds to that exact candidate, never to
 whatever HEAD happens to be later. `actor` is a free string the agent writes,
-like `engineer@claude-code`; the toolkit compares such strings and reports them
+like `engineer@claude`; the toolkit compares such strings and reports them
 as asserted.
 
 ## 6. Check it

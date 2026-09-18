@@ -131,8 +131,8 @@ test('doctor notices a locally modified generated file without failing', (t) => 
 
 test('setup is idempotent', (t) => {
   const root = fixture(t);
-  const first = setup(root, { hosts: ['claude-code'] });
-  const second = setup(root, { hosts: ['claude-code'] });
+  const first = setup(root, { hosts: ['claude'] });
+  const second = setup(root, { hosts: ['claude'] });
   assert.deepEqual(second.written.sort(), first.written.sort());
   assert.deepEqual(second.collisions, []);
 });

@@ -55,7 +55,7 @@ test('an unknown host in the config is refused', (t) => {
 });
 
 test('no shipped document shows a bare setup as a first-install command', () => {
-  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-code-setup.md', 'docs/opencode-setup.md'];
+  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md'];
   for (const relative of docs) {
     const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
     for (const block of text.matchAll(/```sh\n([\s\S]*?)```/g)) {
@@ -68,7 +68,7 @@ test('no shipped document shows a bare setup as a first-install command', () => 
 });
 
 test('no shipped document claims setup prompts for a host', () => {
-  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-code-setup.md', 'docs/opencode-setup.md'];
+  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md'];
   for (const relative of docs) {
     const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
     assert.doesNotMatch(text, /when asked|asks which hosts/i, `${relative} still describes a prompt`);
@@ -81,12 +81,6 @@ test('the written config carries no pointer to a path that is not there', (t) =>
   const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
   assert.ok(!('extends' in config), 'agenticloop.json must not declare extends');
   assert.deepEqual(Object.keys(config).sort(), ['hosts', 'models']);
-});
-
-test('the shipped template matches the shape setup writes', () => {
-  const template = JSON.parse(fs.readFileSync(path.join(repoRoot, 'agenticloop.template.json'), 'utf8'));
-  assert.ok(!('extends' in template));
-  assert.deepEqual(Object.keys(template).sort(), ['hosts', 'models']);
 });
 
 test('an existing extends key is dropped rather than carried forward', (t) => {

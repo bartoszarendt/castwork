@@ -29,11 +29,11 @@ whether what a task declared it needed has actually been obtained.
 ## Install
 
 ```sh
-npx agenticloop setup --host codex --host claude-code
+npx agenticloop setup --host codex --host claude
 ```
 
 Name the hosts you want; `--host` is repeatable and takes `codex`,
-`claude-code`, or `opencode`. There is no prompt — `setup` never asks a question
+`claude`, or `opencode`. There is no prompt — `setup` never asks a question
 it could be told, and a run with no hosts and none recorded refuses rather than
 guessing. Later runs reuse the `hosts` recorded in `agenticloop.json`, so
 `npx agenticloop setup` on its own is enough once it is installed.
@@ -65,7 +65,7 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 007c7f8, result: pass }

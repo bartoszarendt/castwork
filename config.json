@@ -1,57 +1,15 @@
 {
-  "documents": {
-    "rules": "AGENTS.md",
-    "overview": "README.md",
-    "process": "agenticloop/AGENTIC_LOOP.md"
-  },
-  "naming": {
-    "task_id_regex": "[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\\d+"
-  },
-  "agents": {
-    "source_directory": "agenticloop/agents"
-  },
-  "skills": {
-    "source_directory": "agenticloop/skills"
-  },
-  "commands": {
-    "source_directory": "agenticloop/commands"
-  },
-  "roles": {
-    "orchestrator": {
-      "source_file": "agenticloop/agents/orchestrator.md",
-      "description": "Coordinates work and keeps the user informed. Does not implement or assess directly.",
-      "skills": ["blocked-state", "decision-capture"]
-    },
-    "maintainer": {
-      "source_file": "agenticloop/agents/maintainer.md",
-      "description": "Shapes work into task records and assesses engineering quality. Does not implement.",
-      "skills": ["task-record-contract", "assessment", "decision-capture", "blocked-state", "ponytail"]
-    },
-    "engineer": {
-      "source_file": "agenticloop/agents/engineer.md",
-      "description": "Implements scoped task records, runs checks, and records candidates and evidence.",
-      "skills": ["task-record-contract", "tdd-implementation", "verification-evidence", "debugging-before-fixes", "ponytail", "blocked-state"]
-    },
-    "auditor": {
-      "source_file": "agenticloop/agents/auditor.md",
-      "description": "Independently assesses a recorded candidate. Read-only: implements nothing and accepts no task.",
-      "skills": ["assessment", "verification-evidence", "blocked-state"]
-    }
-  },
   "adapters": {
     "codex": {
-      "status": "supported",
       "role_settings": {}
     },
-    "claude-code": {
-      "status": "supported",
+    "claude": {
       "role_settings": {
         "maintainer": { "permission_mode": "acceptEdits" },
         "engineer": { "permission_mode": "acceptEdits" }
       }
     },
     "opencode": {
-      "status": "supported",
       "role_settings": {}
     }
   }

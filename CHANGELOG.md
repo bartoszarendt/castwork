@@ -9,8 +9,12 @@ prints the manual steps.
 
 Agentic Loop is now a small, portable vocabulary for agent work: Markdown task
 records carrying work, candidates, evidence, and assessments; four role presets;
-reusable skills; thin adapters for Codex, Claude Code, and OpenCode; and a few
-pure checks. Agents choose the workflow. Hosts execute it.
+five reusable skills; thin adapters for three hosts; and a few pure checks.
+Agents choose the workflow. Hosts execute it.
+
+The host ids are `codex`, `claude`, and `opencode` — each host's own command
+name. The bundled skills are `task-record-contract`, `verification-evidence`,
+`assessment`, `decision-capture`, and `blocked-state`.
 
 **Added**
 
@@ -35,6 +39,9 @@ pure checks. Agents choose the workflow. Hosts execute it.
   delegation sequence. The four ids are unchanged.
 - snake_case for every machine field and enum value; kebab-case for command
   names.
+- `config.json` carries per-host role settings and nothing else. Role ids,
+  descriptions and bodies come from `agents/*.md`, and every bundled skill is
+  projected to every selected host.
 
 **Removed**
 
@@ -47,6 +54,12 @@ closeout, workflow evidence commits, parallel scan and lane state, worktree
 guards, the GitHub backend and its projection, improvement capture, guidance
 blocks, hydrate, setup certificates, layout migration, retry and review budgets,
 and the Copilot and Cursor adapters.
+
+Also removed: the shipped root `manifest.json` and `agenticloop.template.json`,
+neither of which 0.5.0 installs or reads; the unread `config.json` keys,
+including the role-to-skill lists; and four generic skills — `ponytail`,
+`frontend-design-quality`, `tdd-implementation`, and `debugging-before-fixes` —
+whose content is engineering practice rather than how to use these records.
 
 Agentic Loop reports what was recorded and who asserted it. It does not prove
 who wrote a record.

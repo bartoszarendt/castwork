@@ -14,13 +14,9 @@ and never overwrites what is in it.
 
 Nothing else is written here.
 
-Two sibling directories exist at the repository root and differ only by a
-leading dot:
-
-| Directory | Owner | Contents |
-|---|---|---|
-| `agenticloop/` | the toolkit, read-only | `AGENTIC_LOOP.md`, `agents/`, `skills/`, `commands/`, `memory/`, `config.json` |
-| `.agenticloop/` | your project, read/write | the files above |
+The toolkit's own sources (roles, skills, the entry command) are not copied
+into your repository. `setup` projects them into each selected host's own
+directories and lists every generated file in `generated.json`.
 
 Machine configuration — which hosts to generate for, per-role model bindings —
 lives in `agenticloop.json` at the repository root. `project.md` is prose.

@@ -9,7 +9,7 @@ special machinery.
 | Host | Generated into |
 |---|---|
 | `codex` | `.codex/agents/` (TOML) and `.agents/skills/agenticloop/` |
-| `claude-code` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/agenticloop/` |
+| `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/agenticloop/` |
 | `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/agenticloop/` |
 
 Copilot and Cursor adapters were removed in 0.5.0.
@@ -22,11 +22,13 @@ Copilot and Cursor adapters were removed in 0.5.0.
 agents/      the four role presets
 skills/      reusable procedures
 commands/    the start entry command
-config.json  role descriptions, per-host settings
+config.json  per-host role settings: permission mode
 ```
 
 and write the host's own files, substituting only what is host-specific:
-placement, file naming, and the host's frontmatter conventions. Each host is a
+placement, file naming, and the host's frontmatter conventions. A role's id,
+description, and body come from its file under `agents/`; `config.json`
+contributes only the per-host settings. Each host is a
 descriptor in `src/adapters/<host>.json` listing where each kind of file goes
 and in which format; the generator itself knows nothing about any host.
 
@@ -63,7 +65,7 @@ per-role model bindings:
 
 ```json
 {
-  "hosts": ["codex", "claude-code"],
+  "hosts": ["codex", "claude"],
   "models": {
     "engineer": "claude-opus-5",
     "auditor": "claude-sonnet-5"
@@ -83,9 +85,11 @@ prose.
 
 ## Adding a host
 
-Add a descriptor at `src/adapters/<host>.json` listing its files, and add the
-host to `config.json` and to `HOSTS` in `src/layout.js`. Nothing else in the toolkit should need to know the
-host exists. If adding a host requires changing the checks, the record format,
+Add a descriptor at `src/adapters/<host>.json` whose `id` is the host's own
+command name, listing its files; add that id to `HOSTS` in `src/layout.js`, and
+add an `adapters.<id>.role_settings` entry to `config.json` if the host needs
+per-role settings. Nothing else in the toolkit should need to know the host
+exists. If adding a host requires changing the checks, the record format,
 or the CLI, the abstraction has leaked — fix that instead.
 
 ## Verifying output

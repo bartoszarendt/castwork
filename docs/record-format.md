@@ -85,7 +85,7 @@ follow any other, and no status grants a permission.
 
 ### Actor
 
-A non-empty string the agent writes, for example `engineer@claude-code`. The
+A non-empty string the agent writes, for example `engineer@claude`. The
 toolkit compares strings and reports them as **asserted**. It has no way to
 verify that the actor named is the actor that wrote the entry, and it never
 claims to.
@@ -236,7 +236,7 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 007c7f8, result: pass }

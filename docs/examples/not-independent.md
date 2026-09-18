@@ -9,12 +9,12 @@ requirements:
   assessment_roles: [maintainer]
 candidates:
   - ref: b70e55a
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: b70e55a, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: b70e55a, result: pass, command: "npm run lint", exit_code: 0 }
 assessments:
-  - { candidate: b70e55a, role: maintainer, actor: engineer@claude-code, verdict: accept, findings: "Looks right to me." }
+  - { candidate: b70e55a, role: maintainer, actor: engineer@claude, verdict: accept, findings: "Looks right to me." }
 ---
 
 ## Intent
@@ -36,7 +36,7 @@ Both checks pass and the maintainer assessment says `accept`, so `checks` and
 `assessment_roles` are satisfied.
 
 `independent_review` is **not** satisfied: the accepting actor
-`engineer@claude-code` is listed in the candidate's `producers`. The actor
+`engineer@claude` is listed in the candidate's `producers`. The actor
 string is what independence is judged on, not the `role` field — claiming the
 `maintainer` role does not make the same actor independent of its own work.
 

@@ -1,5 +1,5 @@
 {
-  "id": "claude-code",
+  "id": "claude",
   "label": "Claude Code",
   "role_frontmatter": { "model": "model", "permission_mode": "permissionMode" },
   "files": [

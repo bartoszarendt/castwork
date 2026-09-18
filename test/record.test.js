@@ -13,7 +13,7 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude-code]
+    producers: [engineer@claude]
 evidence:
   - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 007c7f8, result: pass }

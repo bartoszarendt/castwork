@@ -13,16 +13,16 @@ With YAML frontmatter and a Markdown body:
 
 ```markdown
 ---
-name: tdd-implementation
-description: Use when implementing a scoped change that has a testable acceptance criterion. Write the failing test first, then the smallest change that passes it.
+name: verification-evidence
+description: Use when recording what a check actually did — after running tests, a linter, a build, or a manual inspection. Covers candidates, evidence entries, and the difference between what was observed and what was claimed.
 metadata:
-  area: engineering-discipline
+  area: evidence
   side_effects: writes-files
   credentials: none
   runs_scripts: optional
 ---
 
-# TDD implementation
+# Verification evidence
 
 ...
 ```
@@ -52,6 +52,18 @@ metadata:
 - **Grant nothing.** A skill cannot confer a role, permission, or authority.
   That boundary is what keeps skills portable across hosts.
 - **Keep it short.** An agent reads this while doing something else.
+
+## What belongs in the bundle
+
+A bundled skill primarily teaches how to use Agentic Loop's records, roles, or
+checks. Mentioning an evidence entry does not qualify generic engineering
+guidance: a procedure that would read the same in a repository that had never
+heard of Agentic Loop belongs to your project or your host, not here. The
+bundle is `task-record-contract`, `verification-evidence`, `assessment`,
+`decision-capture`, and `blocked-state`.
+
+This is a rule for whoever adds a skill, not a check. Nothing enforces it
+mechanically, and `validate` will happily accept a skill that ignores it.
 
 ## Project and host skills
 

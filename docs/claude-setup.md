@@ -5,13 +5,13 @@
 From the root of your repository:
 
 ```sh
-npx agenticloop setup --host claude-code
+npx agenticloop setup --host claude
 ```
 
 `setup` does not prompt; name the host on the command line, or set it in `agenticloop.json`:
 
 ```json
-{ "hosts": ["claude-code"] }
+{ "hosts": ["claude"] }
 ```
 
 then run `npx agenticloop update`.
@@ -58,7 +58,7 @@ Optional, in `agenticloop.json`:
 
 ```json
 {
-  "hosts": ["claude-code"],
+  "hosts": ["claude"],
   "models": { "engineer": "claude-opus-5", "auditor": "claude-sonnet-5" }
 }
 ```
@@ -77,7 +77,7 @@ npx agenticloop task set T-001 status done
 ```
 
 When recording an assessment, write an `actor` string that identifies the
-session, for example `maintainer@claude-code`. Independence is judged by
+session, for example `maintainer@claude`. Independence is judged by
 comparing that string against the candidate's producers.
 
 ## Troubleshooting
@@ -85,4 +85,4 @@ comparing that string against the candidate's producers.
 `npx agenticloop doctor` reports the installation state read-only, and
 `npx agenticloop validate` checks the generated output. If the command does not
 appear, confirm `.claude/commands/agenticloop.md` exists and that
-`agenticloop.json` lists `claude-code` in `hosts`.
+`agenticloop.json` lists `claude` in `hosts`.

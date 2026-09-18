@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { generateHost, readRoles, readSkills, toolkitRoot } from './adapter-generation.js';
+import { generateHost, readRoles, toolkitRoot } from './adapter-generation.js';
 import { readConfig } from './config.js';
 import { containedPath, digest, readManifest } from './generated.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
@@ -82,17 +82,11 @@ function validateConfig(findings) {
     error(findings, 'config.json', `not valid JSON: ${String(parseError)}`);
     return;
   }
-  for (const id of ROLE_IDS) {
-    if (!config.roles?.[id]) error(findings, 'config.json', `roles.${id} is missing`);
-  }
+  // config.json carries per-host role settings and nothing else. Role ids,
+  // descriptions and bodies come from agents/*.md, and every skill is projected
+  // to every host, so there is no role-to-skill list left to check.
   for (const host of Object.keys(config.adapters ?? {})) {
     if (!HOSTS.includes(host)) error(findings, 'config.json', `adapters.${host} is not a supported host`);
-  }
-  const skillIds = new Set(readSkills().map((skill) => skill.id));
-  for (const [role, definition] of Object.entries(config.roles ?? {})) {
-    for (const skill of /** @type {any} */ (definition).skills ?? []) {
-      if (!skillIds.has(skill)) error(findings, 'config.json', `roles.${role} names unknown skill ${skill}`);
-    }
   }
   for (const key of JSON.stringify(config).match(/"[a-z_]*[A-Z][A-Za-z_]*":/g) ?? []) {
     const name = key.slice(1, -2);
