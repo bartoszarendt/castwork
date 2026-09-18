@@ -15,6 +15,7 @@ import { toolkitRoot } from './adapter-generation.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
 import { observe } from './observations.js';
 import { parseRecord, STATUS_VALUES } from './record.js';
+import { formatScalar } from './yaml.js';
 import { PublicError } from './public-error.js';
 
 /** @param {string} root */
@@ -74,8 +75,8 @@ export function taskNew(root, title) {
   const id = nextId(root);
   const template = fs.readFileSync(path.join(toolkitRoot(), 'memory', 'task-record.md'), 'utf8');
   const content = template
-    .replace(/^id: .*$/m, `id: ${id}`)
-    .replace(/^title: .*$/m, `title: ${title.trim()}`);
+    .replace(/^id: .*$/m, `id: ${formatScalar(id)}`)
+    .replace(/^title: .*$/m, `title: ${formatScalar(title.trim())}`);
   const file = path.join(tasksDirectory(root), `${id}.md`);
   if (fs.existsSync(file)) throw new PublicError(`${file} already exists`);
   fs.writeFileSync(file, content, 'utf8');
@@ -263,7 +264,7 @@ export function writeFrontmatterField(text, field, value) {
   if (!match) throw new PublicError('the record has no --- delimited frontmatter');
   const [, open, body, close] = match;
   const pattern = new RegExp(`^${field.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}:.*$`, 'm');
-  const line = `${field}: ${value}`;
+  const line = `${field}: ${formatScalar(value)}`;
   const nextBody = pattern.test(body) ? body.replace(pattern, line) : `${body}\n${line}`;
   return `${open}${nextBody}${close}${text.slice(match[0].length)}`;
 }

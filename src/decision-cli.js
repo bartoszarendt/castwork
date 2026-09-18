@@ -8,6 +8,7 @@ import { out } from './cli-io.js';
 import { DECISIONS_DIRECTORY } from './layout.js';
 import { parseRecord } from './record.js';
 import { PublicError } from './public-error.js';
+import { formatScalar } from './yaml.js';
 
 /** @param {string} root @param {string} title */
 export function decisionNew(root, title) {
@@ -29,8 +30,8 @@ export function decisionNew(root, title) {
 
   const template = fs.readFileSync(path.join(toolkitRoot(), 'memory', 'decision-record.md'), 'utf8');
   const content = template
-    .replace(/^id: .*$/m, `id: ${id}`)
-    .replace(/^title: .*$/m, `title: ${title.trim()}`)
+    .replace(/^id: .*$/m, `id: ${formatScalar(id)}`)
+    .replace(/^title: .*$/m, `title: ${formatScalar(title.trim())}`)
     .replace(/^date: .*$/m, `date: ${new Date().toISOString().slice(0, 10)}`);
 
   const file = path.join(directory, `${id}.md`);

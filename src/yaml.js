@@ -79,7 +79,7 @@ function parseScalar(text, line) {
       throw new YamlError('unterminated quoted string', line);
     }
     const inner = value.slice(1, -1);
-    return quote === '"' ? inner.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\') : inner.replace(/''/g, "'");
+    return quote === '"' ? unescapeDouble(inner) : inner.replace(/''/g, "'");
   }
   if (/^-?\d+$/.test(value)) return Number(value);
   return value;
@@ -131,6 +131,33 @@ function parseFlow(text, line) {
   const value = parseValue();
   if (index !== tokens.length) throw new YamlError('trailing content in flow value', line);
   return value;
+}
+
+/**
+ * Unescape a double-quoted body in one pass.
+ *
+ * Chained replaces get this wrong: `\\n` is an escaped backslash followed by
+ * the letter n, not a newline, and replacing `\\n` first would turn it into one.
+ * @param {string} inner
+ */
+function unescapeDouble(inner) {
+  let out = '';
+  for (let i = 0; i < inner.length; i += 1) {
+    if (inner[i] !== '\\') {
+      out += inner[i];
+      continue;
+    }
+    const next = inner[i + 1];
+    i += 1;
+    if (next === 'n') out += '\n';
+    else if (next === 't') out += '\t';
+    else if (next === 'r') out += '\r';
+    else if (next === '"') out += '"';
+    else if (next === '\\') out += '\\';
+    else if (next === undefined) out += '\\';
+    else out += next;
+  }
+  return out;
 }
 
 /** @param {string} token */
@@ -283,6 +310,31 @@ function parseMapping(lines, cursor, indent) {
     assignKey(map, pair[0], pair[1], lines, cursor, indent + 1, line.number);
   }
   return map;
+}
+
+/**
+ * Serialize a string as a YAML scalar, quoting whenever a bare value would not
+ * round-trip through `parseYaml`.
+ *
+ * A bare `Fix #1 regression` loses everything from the `#`, and a value opening
+ * with `[` or `{` is read as a flow collection. Anything that would change
+ * meaning, or that would come back as a non-string, is double quoted.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+export function formatScalar(value) {
+  const text = String(value);
+  const needsQuoting =
+    text === '' ||
+    text !== text.trim() ||
+    /[#:\[\]{},&*!|>'"%@`]/.test(text) ||
+    /[\n\r\t]/.test(text) ||
+    /^[-?]/.test(text) ||
+    /^(true|false|null|~|yes|no|on|off)$/i.test(text) ||
+    /^-?\d+(\.\d+)?$/.test(text);
+  if (!needsQuoting) return text;
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '').replace(/\t/g, '\\t')}"`;
 }
 
 /**
