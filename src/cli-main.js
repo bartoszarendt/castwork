@@ -143,7 +143,8 @@ export function run(argv, options = {}) {
 
     case 'doctor': {
       const report = doctor(root);
-      if (asJson) { json(report); return 0; }
+      // --json changes the shape of the output, never the verdict.
+      if (asJson) { json(report); return report.ok ? 0 : 1; }
       out(`hosts: ${report.hosts.length > 0 ? report.hosts.join(', ') : 'none configured'}`);
       out(`generated files: ${report.generated_files}`);
       if (report.findings.length === 0) out('no findings');
@@ -153,7 +154,7 @@ export function run(argv, options = {}) {
 
     case 'validate': {
       const report = validate(root);
-      if (asJson) { json(report); return 0; }
+      if (asJson) { json(report); return report.ok ? 0 : 1; }
       if (report.findings.length === 0) out('validate: no findings');
       printFindings(report);
       return report.ok ? 0 : 1;
