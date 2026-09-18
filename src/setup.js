@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { generateAll, toolkitRoot } from './adapter-generation.js';
 import { readConfig, writeConfig } from './config.js';
-import { digest, ownership, readManifest, writeManifest } from './generated.js';
+import { containedPath, digest, ownership, readManifest, writeManifest } from './generated.js';
 import {
   CONFIG_FILE,
   DECISIONS_DIRECTORY,
@@ -130,7 +130,7 @@ function writeGenerated(root, files, options = {}) {
       next[file.path] = manifest?.files?.[file.path] ?? digest(file.content);
       continue;
     }
-    const full = path.join(root, file.path);
+    const full = containedPath(root, file.path);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, file.content, 'utf8');
     next[file.path] = digest(file.content);
@@ -141,7 +141,7 @@ function writeGenerated(root, files, options = {}) {
   const removed = [];
   for (const [relative, recorded] of Object.entries(manifest?.files ?? {})) {
     if (next[relative] !== undefined) continue;
-    const full = path.join(root, relative);
+    const full = containedPath(root, relative);
     if (fs.existsSync(full) && digest(fs.readFileSync(full, 'utf8')) === recorded) {
       fs.rmSync(full);
       removed.push(relative);
@@ -210,7 +210,7 @@ export function remove(root) {
   const removed = [];
   const kept = [];
   for (const [relative, recorded] of Object.entries(manifest.files)) {
-    const full = path.join(root, relative);
+    const full = containedPath(root, relative);
     if (!fs.existsSync(full)) continue;
     if (digest(fs.readFileSync(full, 'utf8')) === recorded) {
       fs.rmSync(full);
@@ -235,7 +235,13 @@ function pruneEmptyDirectories(root, relatives) {
     }
   }
   for (const dir of [...directories].sort((a, b) => b.length - a.length)) {
-    const full = path.join(root, dir);
+    /** @type {string} */
+    let full;
+    try {
+      full = containedPath(root, dir);
+    } catch {
+      continue;
+    }
     try {
       if (fs.existsSync(full) && fs.readdirSync(full).length === 0) fs.rmdirSync(full);
     } catch {

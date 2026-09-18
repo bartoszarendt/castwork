@@ -9,7 +9,7 @@ import path from 'node:path';
 
 import { generateHost, readRoles, readSkills, toolkitRoot } from './adapter-generation.js';
 import { readConfig } from './config.js';
-import { digest, readManifest } from './generated.js';
+import { containedPath, digest, readManifest } from './generated.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
@@ -133,7 +133,7 @@ function validateGeneratedOutput(findings, root) {
         warn(findings, file.path, `would be generated for ${host} but is not in the manifest; run update`);
         continue;
       }
-      const full = path.join(root, file.path);
+      const full = containedPath(root, file.path);
       if (!fs.existsSync(full)) {
         error(findings, file.path, 'is in the manifest but missing on disk; run update');
         continue;
