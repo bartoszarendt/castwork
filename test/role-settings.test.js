@@ -1,0 +1,237 @@
+/**
+ * Per-host role settings.
+ *
+ * A setting is a plain value one host accepts. The toolkit decides which
+ * settings exist by asking that host's adapter, projects them into the
+ * generated role file under the host's own spelling, and never interprets the
+ * value: reasoning effort means whatever the host says it means.
+ */
+
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import { CONFIG_FILE } from '../src/layout.js';
+import { readConfig, settingsFor } from '../src/config.js';
+import { setup, update } from '../src/setup.js';
+import { validate } from '../src/validate.js';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/** A target with `hosts` installed and `extra` merged into its config. */
+function fixture(t, hosts, extra = {}) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-settings-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  setup(root, { hosts });
+  const file = path.join(root, CONFIG_FILE);
+  const config = { ...JSON.parse(fs.readFileSync(file, 'utf8')), ...extra };
+  fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  return root;
+}
+
+/** @param {string} root @param {string} relative */
+function read(root, relative) {
+  return fs.readFileSync(path.join(root, relative), 'utf8');
+}
+
+/* ------------------------------------------------------------------ */
+/* Each host's own spelling                                            */
+/* ------------------------------------------------------------------ */
+
+test('reasoning effort reaches a Claude role as the host key effort', (t) => {
+  const root = fixture(t, ['claude'], {
+    role_settings: { claude: { auditor: { reasoning_effort: 'xhigh' } } },
+  });
+  update(root);
+  assert.match(read(root, '.claude/agents/auditor.md'), /^effort: xhigh$/m);
+});
+
+test('reasoning effort reaches a Codex role as the host key model_reasoning_effort', (t) => {
+  const root = fixture(t, ['codex'], {
+    role_settings: { codex: { auditor: { reasoning_effort: 'xhigh' } } },
+  });
+  update(root);
+  assert.match(read(root, '.codex/agents/auditor.toml'), /^model_reasoning_effort = "xhigh"$/m);
+});
+
+test('reasoning effort reaches an OpenCode role as the host key reasoningEffort', (t) => {
+  const root = fixture(t, ['opencode'], {
+    role_settings: { opencode: { auditor: { reasoning_effort: 'high' } } },
+  });
+  update(root);
+  assert.match(read(root, '.opencode/agents/auditor.md'), /^reasoningEffort: high$/m);
+});
+
+test('an OpenCode variant is its own setting, beside the effort option', (t) => {
+  const root = fixture(t, ['opencode'], {
+    role_settings: { opencode: { auditor: { model: 'openai/gpt-5.6', variant: 'high' } } },
+  });
+  update(root);
+  const auditor = read(root, '.opencode/agents/auditor.md');
+  assert.match(auditor, /^model: openai\/gpt-5.6$/m);
+  assert.match(auditor, /^variant: high$/m);
+});
+
+test('the adapter is the only place a host declares what it accepts', () => {
+  assert.deepEqual(settingsFor('claude'), ['model', 'permission_mode', 'reasoning_effort']);
+  assert.deepEqual(settingsFor('codex'), ['model', 'reasoning_effort']);
+  assert.deepEqual(settingsFor('opencode'), ['model', 'reasoning_effort', 'variant']);
+});
+
+/* ------------------------------------------------------------------ */
+/* Values are the host's vocabulary, not ours                          */
+/* ------------------------------------------------------------------ */
+
+test('a value this toolkit has never heard of reaches the host intact', (t) => {
+  const root = fixture(t, ['codex'], {
+    role_settings: { codex: { engineer: { reasoning_effort: 'ultra' } } },
+  });
+  update(root);
+  assert.match(read(root, '.codex/agents/engineer.toml'), /^model_reasoning_effort = "ultra"$/m);
+});
+
+test('a value that is not a scalar is refused rather than stringified into the file', (t) => {
+  for (const value of [{ level: 'high' }, ['high'], true, 3, '']) {
+    const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { reasoning_effort: value } } } });
+    assert.throws(
+      () => readConfig(root),
+      /role_settings.claude.engineer.reasoning_effort (must be a string|is empty)/,
+      `${JSON.stringify(value)} should be refused`,
+    );
+  }
+});
+
+test('null leaves a setting unset, which is how a shipped default is cleared', (t) => {
+  const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { permission_mode: null } } } });
+  update(root);
+  assert.doesNotMatch(read(root, '.claude/agents/engineer.md'), /permissionMode/);
+});
+
+test('an effort value a YAML reader would take for a number is quoted', (t) => {
+  const root = fixture(t, ['claude'], {
+    role_settings: { claude: { engineer: { reasoning_effort: '1e3' } } },
+  });
+  update(root);
+  assert.match(read(root, '.claude/agents/engineer.md'), /^effort: "1e3"$/m);
+});
+
+/* ------------------------------------------------------------------ */
+/* Per host, because one string rarely suits two hosts                 */
+/* ------------------------------------------------------------------ */
+
+test('each host gets its own model id, which is the point of the per-host map', (t) => {
+  const root = fixture(t, ['claude', 'opencode'], {
+    role_settings: {
+      claude: { engineer: { model: 'claude-opus-5' } },
+      opencode: { engineer: { model: 'anthropic/claude-opus-5' } },
+    },
+  });
+  update(root);
+  assert.match(read(root, '.claude/agents/engineer.md'), /^model: claude-opus-5$/m);
+  assert.match(read(root, '.opencode/agents/engineer.md'), /^model: anthropic\/claude-opus-5$/m);
+});
+
+test('the models shorthand still serves the single-host case', (t) => {
+  const root = fixture(t, ['claude'], { models: { engineer: 'claude-opus-5' } });
+  update(root);
+  assert.match(read(root, '.claude/agents/engineer.md'), /^model: claude-opus-5$/m);
+});
+
+test('the models shorthand is refused when it would reach more than one host', (t) => {
+  const root = fixture(t, ['claude', 'codex'], { models: { engineer: 'claude-opus-5' } });
+  assert.throws(
+    () => readConfig(root),
+    (error) => /models applies to every selected host/.test(error.message) && /role_settings/.test(error.hint),
+  );
+});
+
+test('the models shorthand is checked for unknown roles and unusable values', (t) => {
+  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { thinker: 'x' } })), /models names unknown role thinker/);
+  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { engineer: { id: 'x' } } })), /models.engineer must be a string/);
+  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { engineer: '' } })), /models.engineer is empty/);
+});
+
+test('a shipped default is overridable now that settings are user-writable', (t) => {
+  const root = fixture(t, ['claude'], {
+    role_settings: { claude: { engineer: { permission_mode: 'default' } } },
+  });
+  update(root);
+  assert.match(read(root, '.claude/agents/engineer.md'), /^permissionMode: default$/m);
+});
+
+test('settings for a host that is not selected are checked but not projected', (t) => {
+  const root = fixture(t, ['claude'], {
+    role_settings: { codex: { engineer: { reasoning_effort: 'high' } } },
+  });
+  assert.doesNotThrow(() => readConfig(root));
+  update(root);
+  assert.ok(!fs.existsSync(path.join(root, '.codex')));
+});
+
+/* ------------------------------------------------------------------ */
+/* Refusals, rather than a setting silently ignored                    */
+/* ------------------------------------------------------------------ */
+
+test('an unknown host in role_settings is refused', (t) => {
+  const root = fixture(t, ['claude'], { role_settings: { cursor: { engineer: { model: 'x' } } } });
+  assert.throws(() => readConfig(root), /unknown host cursor/);
+});
+
+test('an unknown role in role_settings is refused', (t) => {
+  const root = fixture(t, ['claude'], { role_settings: { claude: { thinker: { model: 'x' } } } });
+  assert.throws(
+    () => readConfig(root),
+    (error) => /unknown role thinker/.test(error.message) && /engineer/.test(error.hint),
+  );
+});
+
+test('a setting the host cannot express is refused and the hint lists what it can', (t) => {
+  const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { variant: 'high' } } } });
+  assert.throws(
+    () => readConfig(root),
+    (error) => /has no setting variant/.test(error.message) && /accepts: model, permission_mode, reasoning_effort/.test(error.hint),
+  );
+});
+
+test('role_settings shaped as anything but nested maps is refused', (t) => {
+  for (const value of [['claude'], 'claude', { claude: ['engineer'] }, { claude: { engineer: 'opus' } }]) {
+    const root = fixture(t, ['claude'], { role_settings: value });
+    assert.throws(() => readConfig(root), /role_settings/);
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Nothing appears where nothing was configured                        */
+/* ------------------------------------------------------------------ */
+
+test('no effort key appears in a generated role when none is configured', (t) => {
+  const root = fixture(t, ['claude', 'codex', 'opencode']);
+  update(root);
+  assert.doesNotMatch(read(root, '.claude/agents/auditor.md'), /effort/);
+  assert.doesNotMatch(read(root, '.codex/agents/auditor.toml'), /reasoning_effort/);
+  assert.doesNotMatch(read(root, '.opencode/agents/auditor.md'), /effort|variant/);
+});
+
+/* ------------------------------------------------------------------ */
+/* The shipped defaults answer to the same contract                    */
+/* ------------------------------------------------------------------ */
+
+test('validate reports a shipped default that no host could accept', (t) => {
+  const file = path.join(repoRoot, 'config.json');
+  const original = fs.readFileSync(file, 'utf8');
+  t.after(() => fs.writeFileSync(file, original, 'utf8'));
+
+  const shipped = JSON.parse(original);
+  shipped.adapters.claude.role_settings.engineer.reasoning_efort = 'high';
+  shipped.adapters.claude.role_settings.thinker = { model: 'x' };
+  shipped.adapters.codex.role_settings.engineer = { permission_mode: 'acceptEdits' };
+  fs.writeFileSync(file, `${JSON.stringify(shipped, null, 2)}\n`, 'utf8');
+
+  const messages = validate(repoRoot).findings.map((finding) => finding.message);
+  assert.ok(messages.some((m) => /reasoning_efort is not a setting claude accepts/.test(m)), 'a misspelled key');
+  assert.ok(messages.some((m) => /role_settings.thinker is not a role id/.test(m)), 'an unknown role');
+  assert.ok(messages.some((m) => /permission_mode is not a setting codex accepts/.test(m)), 'a key from another host');
+});

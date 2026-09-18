@@ -39,6 +39,19 @@ nothing to stay compatible with.
 - 13 command paths, down from 110.
 - Machine configuration lives only in `agenticloop.json` at the target root.
   `project.md` is prose, including the project's working policy.
+- Per-host `role_settings` in `agenticloop.json`. Each host's adapter declares
+  which settings it accepts and what it calls them: reasoning effort is
+  `effort` for Claude Code, `model_reasoning_effort` for Codex, and
+  `reasoningEffort` for OpenCode, which also takes a `variant`. A setting's
+  value is a string passed to the host as written, or `null` to leave it unset.
+  A setting a host cannot express, and a value it could not carry, are each
+  refused with a hint rather than written into a file the host ignores or
+  stringified into nonsense.
+- `models` stays as the shorthand for one model string per role, and is now
+  refused when more than one host is selected: it applies to every selected
+  host, and one id cannot name a model to two of them. Mixed-host projects use
+  `role_settings.<host>.<role>.model`. Its roles and values are checked the
+  same way.
 - Evidence and assessments bind to an explicit candidate reference an agent
   records, never to the repository's moving HEAD.
 - Roles are concise responsibility and boundary presets with no mandatory

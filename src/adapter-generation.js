@@ -120,11 +120,17 @@ function renderRoleMarkdown(role, adapter, settings) {
 
 /**
  * @param {{id: string, description: string, body: string}} role
+ * @param {Record<string, unknown>} adapter
  * @param {Record<string, unknown>} settings
  */
-function renderRoleToml(role, settings) {
+function renderRoleToml(role, adapter, settings) {
+  const mapping = /** @type {Record<string, string>} */ (adapter.role_frontmatter ?? {});
   const lines = [`name = ${tomlString(role.id)}`, `description = ${tomlString(role.description)}`];
-  if (settings.model) lines.push(`model = ${tomlString(String(settings.model))}`);
+  for (const [source, target] of Object.entries(mapping)) {
+    const value = settings[source];
+    if (value === undefined || value === null || value === '') continue;
+    lines.push(`${target} = ${tomlString(String(value))}`);
+  }
   lines.push('', 'instructions = """', role.body, '"""', '');
   return lines.join('\n');
 }
@@ -189,7 +195,7 @@ export function generateHost(host, options = {}) {
         const settings = roleSettings[role.id] ?? {};
         files.push({
           path: entry.to.replace('{role}', role.id),
-          content: entry.format === 'toml' ? renderRoleToml(role, settings) : renderRoleMarkdown(role, adapter, settings),
+          content: entry.format === 'toml' ? renderRoleToml(role, adapter, settings) : renderRoleMarkdown(role, adapter, settings),
         });
       }
       continue;
@@ -229,12 +235,16 @@ function assertNoAbsolutePaths(host, file) {
 
 /**
  * Every file all selected hosts would generate.
+ *
+ * `roleSettings` is keyed by host here and by role inside `generateHost`,
+ * because a setting is only ever meaningful to the one host that accepts it.
+ *
  * @param {string[]} hosts
- * @param {{roleSettings?: Record<string, Record<string, unknown>>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>}} [options]
  */
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
-  for (const host of hosts) files.push(...generateHost(host, options));
+  for (const host of hosts) files.push(...generateHost(host, { roleSettings: options.roleSettings?.[host] }));
   return files;
 }

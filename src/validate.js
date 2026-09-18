@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { generateHost, readRoles, toolkitRoot } from './adapter-generation.js';
-import { readConfig } from './config.js';
+import { readConfig, settingsFor } from './config.js';
 import { containedPath, digest, readManifest } from './generated.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
@@ -85,8 +85,29 @@ function validateConfig(findings) {
   // config.json carries per-host role settings and nothing else. Role ids,
   // descriptions and bodies come from agents/*.md, and every skill is projected
   // to every host, so there is no role-to-skill list left to check.
-  for (const host of Object.keys(config.adapters ?? {})) {
-    if (!HOSTS.includes(host)) error(findings, 'config.json', `adapters.${host} is not a supported host`);
+  //
+  // These defaults are merged into every install, so a typo here is a setting
+  // that disappears in silence — the same failure a target's own
+  // `role_settings` refuses outright. Hold our own file to that contract too.
+  for (const [host, adapter] of Object.entries(config.adapters ?? {})) {
+    if (!HOSTS.includes(host)) {
+      error(findings, 'config.json', `adapters.${host} is not a supported host`);
+      continue;
+    }
+    const accepted = settingsFor(host);
+    for (const [role, settings] of Object.entries(adapter?.role_settings ?? {})) {
+      if (!ROLE_IDS.includes(role)) {
+        error(findings, 'config.json', `adapters.${host}.role_settings.${role} is not a role id`);
+        continue;
+      }
+      for (const [key, value] of Object.entries(/** @type {Record<string, unknown>} */ (settings ?? {}))) {
+        if (!accepted.includes(key)) {
+          error(findings, 'config.json', `adapters.${host}.role_settings.${role}.${key} is not a setting ${host} accepts`);
+        } else if (typeof value !== 'string' || value === '') {
+          error(findings, 'config.json', `adapters.${host}.role_settings.${role}.${key} is not a non-empty string`);
+        }
+      }
+    }
   }
   for (const key of JSON.stringify(config).match(/"[a-z_]*[A-Z][A-Za-z_]*":/g) ?? []) {
     const name = key.slice(1, -2);
@@ -121,7 +142,7 @@ function validateGeneratedOutput(findings, root) {
     return;
   }
   for (const host of config.hosts) {
-    for (const file of generateHost(host, { roleSettings: config.role_settings })) {
+    for (const file of generateHost(host, { roleSettings: config.role_settings[host] })) {
       const recorded = manifest.files[file.path];
       if (recorded === undefined) {
         warn(findings, file.path, `would be generated for ${host} but is not in the manifest; run update`);

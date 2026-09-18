@@ -83,7 +83,12 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex', 'claude', 'opencode'] });
   const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
-  config.models = { engineer: '1e3' };
+  // Per host: the `models` shorthand is refused for a multi-host install, since
+  // one id cannot name a model to three hosts. The binding under test is the
+  // same `1e3` in all three.
+  config.role_settings = Object.fromEntries(
+    ['codex', 'claude', 'opencode'].map((host) => [host, { engineer: { model: '1e3' } }]),
+  );
   fs.writeFileSync(path.join(root, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   update(root);
   return root;

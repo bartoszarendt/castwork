@@ -39,19 +39,39 @@ off. There is nothing to activate first.
 The four roles are available as agents. Invoking one is a choice, not a required
 sequence.
 
-## Model bindings
+## Model bindings, reasoning effort, and variants
 
 Optional, in `agenticloop.json`:
 
 ```json
 {
   "hosts": ["opencode"],
-  "models": { "engineer": "claude-opus-5" }
+  "models": { "engineer": "openai/gpt-5.6" },
+  "role_settings": {
+    "opencode": {
+      "auditor": { "reasoning_effort": "high" },
+      "maintainer": { "variant": "high" }
+    }
+  }
 }
 ```
 
-A binding is a plain string passed to the host. It is runtime configuration, not
-role identity.
+OpenCode accepts `model`, `reasoning_effort`, and `variant`.
+
+`reasoning_effort` is emitted as OpenCode's own `reasoningEffort` key, a
+provider option passed straight through to the model. `variant` is emitted as
+`variant`: a named bundle of options defined on the model, which often sets
+reasoning effort but may also set verbosity or a reasoning summary. Use
+`reasoning_effort` for the single option and `variant` for a bundle you have
+defined or that ships with the provider. A model selector may also carry a
+variant inline as `provider/model#high`.
+
+These are the spellings OpenCode 1.x reads. Its v2 configuration schema keeps a
+top-level `variant` but routes provider options such as `reasoningEffort`
+through a nested `request` object, which this adapter cannot emit — it writes
+flat scalar keys only. Moving to v2 will need more than a new key name here.
+
+A binding is runtime configuration, not role identity.
 
 ## Recording work
 

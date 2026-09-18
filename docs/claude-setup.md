@@ -52,24 +52,42 @@ enforces.
 
 ## Permissions
 
-`config.json` sets `permission_mode: acceptEdits` for the `maintainer` and
-`engineer` roles by default, since both are expected to write files. It is
-emitted into the generated file as the host's own `permissionMode` key.
-Permissions are the host's mechanism; Agentic Loop only passes them through.
+`permission_mode` is `acceptEdits` for the `maintainer` and `engineer` roles by
+default, since both are expected to write files. It is emitted into the
+generated file as the host's own `permissionMode` key. Override it per role
+under `role_settings` below, or set it to `null` to leave the key out entirely.
 
-## Model bindings
+That configures what is written into the subagent file; what Claude Code then
+does with it is the host's call. A parent session running in `acceptEdits`,
+`bypassPermissions`, or an auto mode may not narrow to a subagent's stricter
+value. Permissions are the host's mechanism; Agentic Loop only passes them
+through.
+
+## Model bindings and reasoning effort
 
 Optional, in `agenticloop.json`:
 
 ```json
 {
   "hosts": ["claude"],
-  "models": { "engineer": "claude-opus-5", "auditor": "claude-sonnet-5" }
+  "models": { "engineer": "claude-opus-5", "auditor": "claude-sonnet-5" },
+  "role_settings": {
+    "claude": { "auditor": { "reasoning_effort": "xhigh" } }
+  }
 }
 ```
 
-A binding is a plain string passed to the host. It is runtime configuration, not
-role identity, and it never changes what an assessment means.
+Claude Code accepts `model`, `permission_mode`, and `reasoning_effort`, which it
+spells `effort` in the generated subagent frontmatter. Claude Code documents
+`low`, `medium`, `high`, `xhigh`, and `max`.
+
+Effort is not extended thinking: Claude Code subagents inherit the main
+conversation's thinking configuration and have no per-subagent setting for it.
+
+Agentic Loop passes the value through without interpreting it, so a vocabulary
+Claude Code adds later works here on the day it adds it. A binding is runtime
+configuration, not role identity, and it never changes what an assessment
+means.
 
 ## Recording work
 

@@ -60,8 +60,8 @@ negotiation, and no repair path.
 
 ## Machine configuration
 
-`agenticloop.json` at the target root holds which hosts to generate for and any
-per-role model bindings:
+`agenticloop.json` at the target root holds which hosts to generate for, any
+per-role model bindings, and any per-host role settings:
 
 ```json
 {
@@ -69,16 +69,53 @@ per-role model bindings:
   "models": {
     "engineer": "claude-opus-5",
     "auditor": "claude-sonnet-5"
+  },
+  "role_settings": {
+    "claude": { "auditor": { "reasoning_effort": "xhigh" } },
+    "codex": { "auditor": { "model": "gpt-5.4", "reasoning_effort": "high" } }
   }
 }
 ```
 
 Defaults come from the installed package, so there is nothing to point at and
-no file to inherit from. What is in this file overrides them.
+no file to inherit from. Least specific first: the package's defaults, then
+`models`, then `role_settings`.
 
-A model binding is a plain string passed to the host. It is optional runtime
-configuration and never role identity: binding a model grants no authority and
-changes no assessment's meaning.
+`models` is the shorthand for the single-host case. It applies one string to
+every selected host, and model namespaces do not overlap — `claude-opus-5`,
+`gpt-5.4` and `openai/gpt-5.6` each name a model to a different host — so it is
+refused when more than one host is selected, with a pointer to `role_settings`.
+That map is per host, which is what a mixed-host project needs: reasoning
+effort is spelled differently in each too.
+
+A setting's value is a string, passed to the host as written, or `null` to
+leave it unset — which is how a shipped default such as `permission_mode` is
+cleared. An object, a list, a number, a boolean, or an empty string is refused
+rather than stringified into a generated file.
+
+Each host declares which settings it accepts, in its adapter's
+`role_frontmatter` map:
+
+| Setting | codex | claude | opencode |
+|---|---|---|---|
+| `model` | `model` | `model` | `model` |
+| `permission_mode` | — | `permissionMode` | — |
+| `reasoning_effort` | `model_reasoning_effort` | `effort` | `reasoningEffort` |
+| `variant` | — | — | `variant` |
+
+A setting a host does not declare is refused with a hint listing what it does
+accept, rather than written into a file the host will ignore.
+
+Values are passed through and never interpreted. Agentic Loop does not know
+which efforts a host accepts, does not translate one host's vocabulary into
+another's, and does not treat two hosts' `high` as the same thing. A value the
+host rejects fails there, not here.
+
+A mapping is only ever right for the host version it was written against:
+these are Claude Code's and Codex's current agent keys and OpenCode 1.x's.
+
+A binding is optional runtime configuration and never role identity: binding a
+model grants no authority and changes no assessment's meaning.
 
 Machine configuration lives here and nowhere else. `.agenticloop/project.md` is
 prose.
@@ -88,8 +125,9 @@ prose.
 Add a descriptor at `src/adapters/<host>.json` whose `id` is the host's own
 command name, listing its files; add that id to `HOSTS` in `src/layout.js`, and
 add an `adapters.<id>.role_settings` entry to `config.json` if the host needs
-per-role settings. Nothing else in the toolkit should need to know the host
-exists. If adding a host requires changing the checks, the record format,
+per-role defaults. Settings the host accepts go in its `role_frontmatter` map,
+which maps the name `agenticloop.json` uses to the key the host reads. Nothing
+else in the toolkit should need to know the host exists. If adding a host requires changing the checks, the record format,
 or the CLI, the abstraction has leaked — fix that instead.
 
 ## Verifying output

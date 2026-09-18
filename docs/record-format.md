@@ -15,7 +15,8 @@ YAML frontmatter; the body is prose.
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
-agenticloop.json    machine configuration: hosts, per-role model bindings
+agenticloop.json    machine configuration: hosts, per-role and per-host
+                    model bindings and role settings
 ```
 
 Nothing else is written under `.agenticloop/`. Machine configuration lives in

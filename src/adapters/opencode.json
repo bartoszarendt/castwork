@@ -1,7 +1,7 @@
 {
   "id": "opencode",
   "label": "OpenCode",
-  "role_frontmatter": { "model": "model" },
+  "role_frontmatter": { "model": "model", "reasoning_effort": "reasoningEffort", "variant": "variant" },
   "files": [
     { "kind": "role", "to": ".opencode/agents/{role}.md", "format": "markdown" },
     { "kind": "command", "to": ".opencode/commands/agenticloop.md", "format": "command" },

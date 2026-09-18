@@ -113,7 +113,8 @@ Checkable requirements are declared per task.
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
-agenticloop.json    machine configuration: hosts, per-role model bindings
+agenticloop.json    machine configuration: hosts, per-role and per-host
+                    model bindings and role settings
 ```
 
 Nothing else is written under `.agenticloop/`.

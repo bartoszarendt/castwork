@@ -39,19 +39,29 @@ To work as a particular role, point Codex at that role's file under
 an optional model, and its instructions. A role is a responsibility and boundary preset; loading it
 grants no authority and starts no sequence.
 
-## Model bindings
+## Model bindings and reasoning effort
 
 Optional, in `agenticloop.json`:
 
 ```json
 {
   "hosts": ["codex"],
-  "models": { "engineer": "claude-opus-5" }
+  "models": { "engineer": "claude-opus-5" },
+  "role_settings": {
+    "codex": { "auditor": { "reasoning_effort": "xhigh" } }
+  }
 }
 ```
 
-A binding is a plain string passed to the host. It is runtime configuration, not
-role identity.
+Codex accepts `model` and `reasoning_effort`, which it spells
+`model_reasoning_effort` in the generated `.codex/agents/<role>.toml`. Codex
+documents `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`, and a value set
+in an agent file takes precedence over the surrounding configuration.
+
+Agentic Loop passes the value through without interpreting it, so a vocabulary
+Codex adds later works here on the day Codex adds it — and a value Codex does
+not accept fails there, not here. A binding is runtime configuration, not role
+identity.
 
 ## Recording work
 
