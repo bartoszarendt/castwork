@@ -5,9 +5,7 @@ vocabulary for agent work: Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.5.0 is a breaking reset, implemented by Phase 38. Until
-that work lands, parts of the documentation describe planned behavior and say
-so.
+**Status:** version 0.5.0, a breaking reset. There is no migration from 0.4.x.
 
 ## Layout
 

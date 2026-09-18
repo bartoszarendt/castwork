@@ -8,8 +8,7 @@ adapters. **Agents choose the workflow. Hosts execute it.**
 
 Agentic Loop interprets what was recorded. It does not prove who recorded it.
 
-**Status:** this describes version 0.5.0, a breaking reset. Where the
-implementation has not yet caught up, the text says so.
+**Status:** version 0.5.0, a breaking reset. There is no migration from 0.4.x.
 
 ## What the toolkit provides, and what it does not
 

@@ -1,7 +1,5 @@
 # Codex setup
 
-> **Status:** 0.5.0. Behavior not yet implemented is marked *planned*.
-
 ## Install
 
 From the root of your repository:
@@ -21,10 +19,9 @@ in `agenticloop.json`, then run `npx agenticloop update`.
 ## What is generated
 
 ```
-.codex/
-  agents/        the four role presets, projected
-  skills/        reusable procedures
-  prompts/       the start entry command
+.codex/agents/<role>.toml               the four role presets
+.agents/skills/agenticloop/SKILL.md     the entry procedure and an index
+.agents/skills/agenticloop/references/  one file per reusable procedure
 ```
 
 All of it is tracked in your repository and contains no absolute paths. The
@@ -33,12 +30,13 @@ report and skip it rather than overwrite your change.
 
 ## Using it
 
-Open Codex in the repository and invoke the start prompt. It reads
+Open Codex in the repository and use the `agenticloop` skill. It reads
 `.agenticloop/project.md`, your working policy, and the open tasks, then hands
 off. There is nothing to activate and no command to run first.
 
 To work as a particular role, point Codex at that role's file under
-`.codex/agents/`. A role is a responsibility and boundary preset; loading it
+`.codex/agents/`. Role files are TOML, carrying the role's name, description,
+an optional model, and its instructions. A role is a responsibility and boundary preset; loading it
 grants no authority and starts no sequence.
 
 ## Model bindings

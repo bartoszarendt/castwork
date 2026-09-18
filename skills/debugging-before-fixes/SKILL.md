@@ -1,100 +1,46 @@
 ---
 name: debugging-before-fixes
-description: Use the moment a required check, test, build, or runtime behavior fails or surprises – before proposing or applying any fix, including on every needs_revision iteration that involves a defect. Defines feedback-loop-first debugging, root-cause phases, calibrated hypotheses, tagged debug instrumentation, confirmed root-cause reporting, and the stop rule after 3 failed fix attempts.
+description: Use when something is broken and the cause is not yet known — a failing test, an error in production, behavior that contradicts the code. Find the cause before changing anything.
 metadata:
   area: engineering-discipline
-  side_effects: writes-tmp
+  side_effects: writes-files
   credentials: none
   runs_scripts: optional
 ---
 
 # Debugging before fixes
 
-No fix without a root cause first. Patching symptoms burns review iterations and often adds a second bug. Guess-and-check thrashing is how tasks end blocked or review-exhausted under [[blocked-state]].
+A fix applied to a cause you have not found is a guess. Guesses that happen to
+work are worse than guesses that fail, because they stay.
 
-## Step 1: build the feedback loop
+## Order
 
-Before investigating or fixing, stand up a fast, deterministic, agent-runnable loop that reproduces the failure on demand. Reach for the highest item on this list that actually reproduces the failure:
+1. **Reproduce it.** Reliably, and preferably as a failing test. If you cannot
+   reproduce it, everything after this is speculation — say so.
+2. **Read the actual error.** The whole message, the whole stack, the line it
+   names. Not the part that looks familiar.
+3. **Form one hypothesis** that explains *all* the symptoms, including the ones
+   that do not fit your first instinct.
+4. **Test the hypothesis** — a log line, a breakpoint, a narrowed input. Confirm
+   or discard it before writing the fix.
+5. **Fix the cause.** Then check whether the same cause has other effects you
+   have not noticed.
 
-1. A failing unit, integration, or browser test.
-2. The targeted command from the task record's Required Checks.
-3. A `curl` or API smoke call against the dev stack.
-4. A small CLI or script run against a checked-in fixture.
-5. Replaying a captured payload, request, or log line through the failing code.
-6. A throwaway harness in `.agenticloop/tmp/` that calls the failing unit directly.
-7. A fuzz or property loop when the triggering input is unknown.
-8. `git bisect` or a differential loop when a previously passing behavior regressed.
+## Signals you are guessing
 
-Prefer the cheapest deterministic loop that still fails for the real reason. Capture the exact command: it becomes RED proof for [[tdd-implementation]] and evidence for [[verification-evidence]].
+- You are changing more than one thing at a time to see what helps.
+- You cannot explain why the change works.
+- The fix is a retry, a delay, a broadened `catch`, or a widened type.
+- You have made the same class of attempt twice.
 
-## Phase 2: investigate
+When you notice any of these, stop. The assumption you have not questioned is
+usually the one about what the code does, not what it should do.
 
-- Read the entire error message and stack trace.
-- Run the Step 1 loop and watch the real failure.
-- Diff what changed.
-- Trace the bad value or state back to where it originates.
+## When you are stuck
 
-## Phase 3: compare
+Two honest attempts that failed for reasons you understand is information. Write
+it down: what you tried, what you observed, what it rules out. Then either take
+a different approach or record `status: blocked` or `needs_context` with that
+history under `## Blockers and decisions`.
 
-Find code in this repo that does the same kind of thing and works. Read the reference fully, then list concrete differences between it and the broken path.
-
-## Phase 4: hypothesize and test
-
-Calibrate effort to the failure:
-
-- If the output fully explains a trivial error, fix it directly.
-- If the failure is non-obvious, not fully explained, or already survived one fix attempt, write 3-5 ranked falsifiable hypotheses before changing code.
-
-Put each hypothesis in this form:
-
-```text
-If X is the cause, then observing or changing Y should produce Z.
-```
-
-Test hypotheses in rank order with the smallest observation or change that discriminates. Wrong hypotheses are reverted and recorded as ruled out.
-
-## Phase 5: fix
-
-Lock the root cause in with a failing test or failing check, apply one fix, then run the full Required Checks fresh.
-
-The implementation summary must state the confirmed root cause. A bugfix summary that cannot name the cause is a symptom patch.
-
-## Tagged debug instrumentation
-
-Temporary logging, prints, dumps, or asserts added while debugging must use a `[DEBUG-<tag>]` prefix:
-
-```text
-log.warning("[DEBUG-fetch] payload=%r", payload)
-```
-
-Before claiming completion, scan the changed runtime files for `[DEBUG-` and show the clean result. Scope the scan to files touched by the task. The marker convention appears in docs and [[review-and-accept]], so a repo-wide scan will find legitimate documentation references.
-
-No debug marker may survive into the implementation artifact.
-
-## Stop rule
-
-After failed fix attempts exhaust the attempt budget (task `attempt_budget`, then project `default_attempt_budget`, then built-in 5; see **Attempt And Review Budgets** in `agenticloop/commands/lifecycle-protocol.md`), stop fixing. The problem is a wrong assumption or contract gap.
-
-- Before a GitHub PR exists on GitHub-backed work, post a `needs_context` request through [[blocked-state]].
-- For files-backed work, record the same `needs_context` state in the task file through [[blocked-state]].
-- During review, raise the issue in the revision summary.
-- If genuinely stuck, record a blocked state.
-
-## Rationalizations
-
-| Excuse | Reality |
-|---|---|
-| "Quick fix now, root cause later" | Later rarely comes; the symptom returns in review. |
-| "Just try changing X and see" | That is a hypothesis. State it, test it minimally, and revert it if wrong. |
-| "It's a small bug, no need for process" | Investigation is minutes; thrashing costs an iteration. |
-| "One more attempt" | After multiple failed attempts, the next guess is usually wrong too. |
-| "These logs are temporary" | Untagged temporary logs are the ones that ship. |
-
-## Red flags
-
-- Fixing before a reproduction loop exists.
-- Editing code before reading the whole error.
-- Two changes in flight for one failure.
-- You cannot state the hypothesis your change is testing.
-- A bugfix summary cannot name the confirmed root cause.
-- A `[DEBUG-...]` marker is still in the diff.
+Delete the debug scaffolding before you record a candidate.

@@ -1,8 +1,5 @@
 # Getting started
 
-> **Status:** 0.5.0. Where behavior below is not yet implemented, it is marked
-> *planned*.
-
 Agentic Loop gives your agents a shared way to record work, candidates,
 evidence, and assessments, and a way to check whether a task got what it
 declared it needed. It does not tell them how to work.

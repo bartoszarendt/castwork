@@ -1,132 +1,58 @@
 ---
-description: "Operate in Agentic Loop mode: create or refine the durable task record, route maintainer, engineer, and auditor roles, verify evidence, certify the finished work unit, and close out according to the project backend."
-argument-hint: "[task-id or task description]"
-disable-model-invocation: true
+description: Read the project's working policy and open task records, report where things stand, and continue with the requested work.
+argument-hint: "[task id or description of the work]"
 ---
 
-<!-- AGENTICLOOP_ADAPTER_SLOT:activation_capability -->
-Activation adapter: `claude-code.plugin.command.v1`.
-Activation capture capability: `unsupported`.
+Work with Agentic Loop task records in this repository.
 
-This file is the live Claude Code plugin command `/agenticloop:start`, registered
-through `.claude-plugin/plugin.json`. The Claude Code plugin surface has no
-host-owned parser capture channel, so model-visible command arguments are
-advisory context only and are never activation proof. Do not serialize the
-substituted argument, the surrounding prompt, or any other model-visible text
-into activation capture JSON.
-<!-- /AGENTICLOOP_ADAPTER_SLOT:activation_capability -->
+## Orient
 
-Each generated host artifact replaces the capability slot above with its own
-adapter's declaration. Every shipped host declares `unsupported`, and that never
-changes from inside a session: prompt-visible input must never be converted into
-capture JSON. A capability declaration is never evidence that activation or a
-return actually happened, and the two adapters are independent.
+1. Read `.agenticloop/project.md` — what this project is, its working policy,
+   and the names of its checks. The policy is prose written by the people who
+   own this repository. Follow it.
+2. Read the open task records under `.agenticloop/tasks/`. `agenticloop task
+   list` is the quick view; read the individual record before acting on it.
+3. Report where things stand in one short paragraph: what is in flight, what is
+   blocked and on what.
 
-`unsupported` only means this host cannot itself prove activation. The universal
-path is one explicit operator command, run in the operator's own terminal and
-confirmed there; it never rewrites a task record:
+## Then continue
 
-```
-npx agenticloop activate T-016 T-017
-npx agenticloop activate --work-unit <work-unit-id>
-```
+If the argument names a task id, read that record and do the work it describes.
 
-When a task is not activated, do not stop the session and do not author
-activation evidence. Report the blocked state, give the operator that command,
-and continue in the same session once they have run it. Assurance is then
-`operator_confirmed` and role returns are `session_reported`: honest grades that
-are not host-authenticated and must never be described as if they were. Hardened
-projects still require a registered protected host adapter, and hardened closeout
-requires an observed authenticated host receipt.
+If it describes work that has no record yet, decide with the user whether it
+needs one. A record is worth writing when the work spans more than one sitting,
+when someone else will review it, or when the decisions made along the way
+should outlive the session. A one-line fix does not need a record.
 
-Before any setup check, orientation, document loading, task selection, or
-delegation, normalize the supplied argument by trimming surrounding whitespace.
-If and only if it equals `stop` (case-insensitive), immediately follow
-`agenticloop/commands/stop.md` and return. Do not continue this start workflow.
-`stop now`, `stop-gap fix`, and other non-exact task or context arguments are
-ordinary inputs, not deactivation requests. Do not treat `exit` as an alias.
+If there is no argument, report the state and ask what to work on. Do not start
+implementing something you inferred.
 
-Path convention: toolkit source (`AGENTIC_LOOP.md`, `agents/`, `skills/`,
-`backends/`) lives under `agenticloop/` (no leading dot). Target project state
-(`project.md`, `tasks/`, `decisions/`, `improvements/`) lives under `.agenticloop/` (leading
-dot). `.agenticloop/agents`, `.agenticloop/skills`, and
-`.agenticloop/backends` are invalid paths – canonical assets are always
-under `agenticloop/` without the dot.
-The active role contract is always under `agenticloop/agents/`.
+## While working
 
-Read `.agenticloop/project.md` first. If `setup_status` is `unconfirmed` or a
-confirmed map lacks a valid human-confirmed `development_stage`, route
-`agenticloop/skills/setup-agenticloop/SKILL.md` or confirm the profile before
-selecting or creating the first task.
+Records are ordinary Markdown — edit them directly. Use the CLI where it does
+something better than an edit:
 
-Then read `agenticloop/AGENTIC_LOOP.md`, the lifecycle-at-a-glance section, and
-only the canonical role contract for the current action. Read the named protocol
-or skill section on demand; do not preload every role, backend, or skill.
-Keep the main session as the coordinator: it reads the selected project config
-and process docs, routes task authoring, review, acceptance, and closeout
-through the maintainer role, routes scoped implementation and revision work
-through the engineer role, and should not directly edit implementation files
-unless the human explicitly asks. Respect the Advance Authorization Boundary,
-blocked-state handling, decision records, event logging rules, and configured
-group approval gates.
+- `agenticloop task lint <id>` — structural validity, reference availability,
+  and requirement evaluation, in three separate outputs
+- `agenticloop task set <id> status <value>` — one safe frontmatter write
 
-Before running Git or `gh` in unattended role work, keep them non-interactive.
-Prefer a host/session environment with `GIT_EDITOR=true`,
-`GIT_SEQUENCE_EDITOR=true`, `GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`,
-`GH_EDITOR=true`, `GH_PAGER=cat`, and `GH_PROMPT_DISABLED=1`; otherwise apply
-equivalent per-command settings such as `git --no-pager ...`, explicit
-`git commit -m/-F`, `gh pr create --title ... --body-file ...`, and
-`git -c core.editor=true -c sequence.editor=true rebase --continue` after
-resolved conflicts. Do not launch editor-backed Git or GitHub CLI commands that
-can block on a human closing a message, todo, pager, or credential prompt.
+Record the candidate you produced and the evidence for it. Record failures as
+failures.
 
-Agentic Loop is serial by default. Do not run parallel maintainer or engineer
-delegations unless the orchestrator records a concurrency plan and join
-condition. Long-running or parallel role work must include a lease:
-observable-step checkpoint cadence, no-progress budget, status-return stop
-condition, and any relevant milestone or duration.
+## Roles
 
-For every authorized multi-task unit, perform a current Parallel Opportunity
-Scan after decomposition. With fewer than two ready tasks, record a truthful
-not-currently-eligible result and rescan trigger. If 2 or more ready tasks are
-independent on both the mutation and knowledge dimensions and collision criteria
-are known and disjoint, prefer a bounded parallel implementation batch up to the
-configured maximum; otherwise record the concrete serial reason or the two-wave
-pattern for coupled work. The maximum is a ceiling only for implementation lanes.
+`engineer` implements. `maintainer` shapes work and assesses quality. `auditor`
+independently assesses a result. `orchestrator` coordinates.
 
-Create or refine the durable task record before any implementation.
+Use them when they help. There is no required order, nothing to obtain before
+starting, and no role you must pass through. If a task declares
+`independent_review`, the accepting actor must not be among the candidate's
+recorded producers — that is the one thing worth checking when deciding who
+reviews.
 
-If no task ID or task description is provided:
-1. Read `.agenticloop/project.md` and configured primary documents (rules,
-   overview, process), plus any selected task-source documents (`plan`, `spec`,
-   `design`, `context`) relevant to the work.
-2. Check `setup_status`; if unconfirmed, route setup or confirmation first.
-3. Inspect the active backend for candidate task records:
-   - if `github`, look for open `agent-ready` issues when GitHub access works;
-   - if `files`, look under the configured task directory.
-4. Summarize current project and task state.
-5. If exactly one open or ready task exists, propose it as the default candidate
-   but do not silently start implementation unless the user clearly authorized
-   that work unit.
-6. If no open tasks exist, identify the likely next work item from the plan. If
-   it is a phase, group, milestone, epic, or multi-deliverable item, report that
-   it needs maintainer decomposition into task records. Do not create records
-   without confirmation.
-7. If GitHub is unreachable during bare orientation, still provide local project
-   orientation from files and report GitHub as unavailable for task operations.
-   Do not treat connector failure alone as proof of missing credentials.
-8. Ask the human to select a task or provide a task description.
-9. Orientation is read-only and bounded. Report a blocked candidate with its
-   refusal code, fact owner, and first safe next action; do not investigate it.
-   Never read toolkit source or run a state-changing command before selection.
-10. Report only facts observed this session. A capability declaration is not
-    evidence of activation, authorization, or readiness; name what you did not
-    check as unchecked.
+## Boundaries
 
-<!-- AGENTICLOOP_ADAPTER_SLOT:requested_input -->
-Requested task or context: `$ARGUMENTS`
+Do the work the user asked for. Ask before going beyond it, before anything
+irreversible, and wherever the project's working policy says to ask.
 
-Claude Code substitutes this argument when `/agenticloop:start` is invoked. Treat
-it as advisory context for orientation and task selection only; it is never
-activation proof.
-<!-- /AGENTICLOOP_ADAPTER_SLOT:requested_input -->
+Report what actually happened, including what failed.

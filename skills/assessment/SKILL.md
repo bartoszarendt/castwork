@@ -1,0 +1,75 @@
+---
+name: assessment
+description: Use when reviewing or auditing an implementation against its task record and recording a verdict, and when responding to a verdict you received. Covers the three lenses, independence, and what accept, reject, and needs_revision mean.
+metadata:
+  area: review
+  side_effects: writes-files
+  credentials: none
+  runs_scripts: optional
+---
+
+# Assessment
+
+An assessment is one actor's verdict about one candidate. It is recorded in the
+task record and nowhere else.
+
+```yaml
+assessments:
+  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, findings: "..." }
+```
+
+`verdict` is `accept`, `reject`, or `needs_revision`. `findings` may be a short
+string, a relative path to a file you wrote, or a heading anchor in the body.
+
+## Three lenses, in order
+
+1. **Does it do what the record asked?** Read `## Intent` and
+   `## Acceptance criteria` first, then the change. Work that is good but not
+   what was asked for is still not what was asked for.
+2. **Is it correct?** Look for the failure the tests do not cover: the empty
+   case, the second call, the error path, the concurrent one.
+3. **Would this project want to maintain it?** Consistency with the surrounding
+   code counts. So does the concept count — a change that adds a new idea
+   should be paying for it.
+
+## Read the candidate
+
+Assess the candidate the record names, not the current branch. If the reference
+does not resolve in your checkout, say so and assess nothing rather than
+assessing something else.
+
+Do not accept on the strength of a summary. If you did not read it, your verdict
+is about the summary.
+
+## Independence
+
+`independent_review` compares your `actor` string against the candidate's
+recorded `producers`. If you are among them, your `accept` does not satisfy it —
+and recording a different `role` does not change that. Roles are presets;
+independence is about who did the work.
+
+Write an actor string that identifies you honestly, for example
+`maintainer@codex`. The toolkit compares strings and reports them as asserted;
+it cannot tell whether the string is true, and it never claims to.
+
+## Verdicts
+
+- **`accept`** — say what you checked and name what you did not, so the next
+  reader knows the shape of your confidence.
+- **`needs_revision`** — the work is close; name precisely what must change.
+- **`reject`** — the approach is wrong; say what would be right.
+
+`reject` and `needs_revision` are ordinary outcomes. Record them plainly. The
+requirement stays unsatisfied until you record a later verdict, which is exactly
+what should happen — and the record stays editable throughout.
+
+## Being assessed
+
+Read the findings before defending anything. Fix what is right, and say clearly
+where you disagree and why rather than silently not doing it. Then record a new
+candidate and fresh evidence — the old evidence belongs to the old candidate.
+
+## Be specific
+
+"The retry loop has no bound" is a finding. "Looks good" is not. One concrete
+defect is worth more than a list of possible concerns.

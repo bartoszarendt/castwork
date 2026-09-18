@@ -10,8 +10,7 @@ Agents choose the workflow. Hosts execute it.
 Agentic Loop reports what was recorded and who asserted it; it does not prove
 who wrote a record.
 
-> **Status:** 0.5.0 is a breaking reset with no migration path from 0.4.x. Parts
-> of this page describe planned behavior and are marked where they do.
+> **Status:** 0.5.0 is a breaking reset. There is no migration path from 0.4.x.
 
 ## Why
 

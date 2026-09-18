@@ -1,7 +1,5 @@
 # Host adapters
 
-> **Status:** 0.5.0. Behavior not yet implemented is marked *planned*.
-
 An adapter is a thin projection of the canonical roles, skills, and entry
 command into the layout one host expects. A host is a template directory, not
 special machinery.
@@ -10,9 +8,9 @@ special machinery.
 
 | Host | Generated into |
 |---|---|
-| `codex` | `.codex/` |
-| `claude-code` | `.claude-plugin/` and `.claude/` |
-| `opencode` | `.opencode/` |
+| `codex` | `.codex/agents/` (TOML) and `.agents/skills/agenticloop/` |
+| `claude-code` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/agenticloop/` |
+| `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/agenticloop/` |
 
 Copilot and Cursor adapters were removed in 0.5.0.
 
@@ -28,7 +26,9 @@ config.json  role descriptions, per-host settings
 ```
 
 and write the host's own files, substituting only what is host-specific:
-placement, file naming, and the host's frontmatter conventions.
+placement, file naming, and the host's frontmatter conventions. Each host is a
+descriptor in `src/adapters/<host>.json` listing where each kind of file goes
+and in which format; the generator itself knows nothing about any host.
 
 Generated files contain:
 
@@ -81,8 +81,8 @@ prose.
 
 ## Adding a host
 
-Add a template directory under `src/adapters/`, describe its placement rules,
-and add it to `config.json`. Nothing else in the toolkit should need to know the
+Add a descriptor at `src/adapters/<host>.json` listing its files, and add the
+host to `config.json` and to `HOSTS` in `src/layout.js`. Nothing else in the toolkit should need to know the
 host exists. If adding a host requires changing the checks, the record format,
 or the CLI, the abstraction has leaked — fix that instead.
 

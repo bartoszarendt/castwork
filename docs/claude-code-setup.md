@@ -1,7 +1,5 @@
 # Claude Code setup
 
-> **Status:** 0.5.0. Behavior not yet implemented is marked *planned*.
-
 ## Install
 
 From the root of your repository:
@@ -21,12 +19,10 @@ then run `npx agenticloop update`.
 ## What is generated
 
 ```
-.claude-plugin/
-  plugin.json        registers the agenticloop plugin
-.claude/
-  agents/            the four role presets, as subagents
-  skills/            reusable procedures
-  commands/          the /agenticloop:start entry command
+.claude/agents/<role>.md                the four role presets, as subagents
+.claude/commands/agenticloop.md         the entry command
+.claude/skills/agenticloop/SKILL.md     an index of the procedures
+.claude/skills/agenticloop/references/  one file per reusable procedure
 ```
 
 All of it is tracked and contains no absolute paths. The files are listed in
@@ -38,7 +34,7 @@ than overwriting your change.
 In the repository, run:
 
 ```
-/agenticloop:start
+/agenticloop
 ```
 
 It reads `.agenticloop/project.md`, your working policy, and the open tasks,
@@ -51,10 +47,10 @@ enforces.
 
 ## Permissions
 
-`config.json` sets `acceptEdits` for the `maintainer` and `engineer` roles by
-default, since both are expected to write files. Change it in `agenticloop.json`
-under `role_settings` if your project wants something tighter. Permissions are
-the host's mechanism; Agentic Loop only passes them through.
+`config.json` sets `permission_mode: acceptEdits` for the `maintainer` and
+`engineer` roles by default, since both are expected to write files. It is
+emitted into the generated file as the host's own `permissionMode` key.
+Permissions are the host's mechanism; Agentic Loop only passes them through.
 
 ## Model bindings
 
@@ -88,5 +84,5 @@ comparing that string against the candidate's producers.
 
 `npx agenticloop doctor` reports the installation state read-only, and
 `npx agenticloop validate` checks the generated output. If the command does not
-appear, confirm `.claude-plugin/plugin.json` exists and that `agenticloop.json`
-lists `claude-code` in `hosts`.
+appear, confirm `.claude/commands/agenticloop.md` exists and that
+`agenticloop.json` lists `claude-code` in `hosts`.
