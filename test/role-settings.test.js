@@ -134,24 +134,12 @@ test('each host gets its own model id, which is the point of the per-host map', 
   assert.match(read(root, '.opencode/agents/engineer.md'), /^model: anthropic\/claude-opus-5$/m);
 });
 
-test('the models shorthand still serves the single-host case', (t) => {
+test('a leftover models map is refused with the setting that replaced it', (t) => {
   const root = fixture(t, ['claude'], { models: { engineer: 'claude-opus-5' } });
-  update(root);
-  assert.match(read(root, '.claude/agents/engineer.md'), /^model: claude-opus-5$/m);
-});
-
-test('the models shorthand is refused when it would reach more than one host', (t) => {
-  const root = fixture(t, ['claude', 'codex'], { models: { engineer: 'claude-opus-5' } });
   assert.throws(
     () => readConfig(root),
-    (error) => /models applies to every selected host/.test(error.message) && /role_settings/.test(error.hint),
+    (error) => /no longer has a models map/.test(error.message) && /role_settings\.<host>\.<role>\.model/.test(error.hint),
   );
-});
-
-test('the models shorthand is checked for unknown roles and unusable values', (t) => {
-  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { thinker: 'x' } })), /models names unknown role thinker/);
-  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { engineer: { id: 'x' } } })), /models.engineer must be a string/);
-  assert.throws(() => readConfig(fixture(t, ['claude'], { models: { engineer: '' } })), /models.engineer is empty/);
 });
 
 test('a shipped default is overridable now that settings are user-writable', (t) => {

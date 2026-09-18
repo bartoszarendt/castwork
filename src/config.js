@@ -111,52 +111,13 @@ function readRoleSettings(raw) {
 }
 
 /**
- * Read the `models` shorthand.
- *
- * One string per role, applied to the selected host. It is a convenience for
- * the single-host case and nothing more: host model namespaces do not overlap
- * — `claude-opus-5`, `gpt-5.4` and `openai/gpt-5.6` name models to three
- * different hosts — so one string cannot be right for two of them at once.
- * Rather than write a Claude id into a Codex agent file, this refuses and
- * sends the user to `role_settings`, which is per host.
- *
- * @param {Record<string, unknown>} raw
- * @param {string[]} hosts
- * @returns {Record<string, string|null>}
- */
-function readModels(raw, hosts) {
-  const declared = raw.models;
-  if (declared === undefined) return {};
-  if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
-    throw new PublicError(`${CONFIG_FILE} models must be a map of role to model`);
-  }
-  const entries = Object.entries(declared);
-  if (entries.length > 0 && hosts.length > 1) {
-    throw new PublicError(`${CONFIG_FILE} models applies to every selected host, and ${hosts.length} are selected`, {
-      hint: `A model id is host-specific, so one string cannot serve ${hosts.join(' and ')}. Move these under role_settings.<host>.<role>.model.`,
-    });
-  }
-  /** @type {Record<string, string|null>} */
-  const models = {};
-  for (const [role, model] of entries) {
-    if (!ROLE_IDS.includes(role)) {
-      throw new PublicError(`${CONFIG_FILE} models names unknown role ${role}`, {
-        hint: `Known roles: ${ROLE_IDS.join(', ')}.`,
-      });
-    }
-    models[role] = settingValue(model, `${CONFIG_FILE} models.${role}`);
-  }
-  return models;
-}
-
-/**
  * @param {string} root
- * @returns {{hosts: string[], models: Record<string, string|null>, role_settings: Record<string, Record<string, Record<string, unknown>>>, raw: Record<string, unknown>|null}}
+ * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, raw: Record<string, unknown>|null}}
  */
 export function readConfig(root) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
-    return { hosts: [], models: {}, role_settings: {}, raw: null };
+    return { hosts: [], role_settings: {}, raw: null };
   }
   /** @type {Record<string, unknown>} */
   let raw;
@@ -175,12 +136,19 @@ export function readConfig(root) {
     }
   }
 
-  const models = readModels(raw, hosts);
+  // 0.5.0 never shipped, so there is nothing to stay compatible with and no
+  // second spelling to keep alive: a model binding is one of the settings a
+  // host declares, written where every other setting is written.
+  if (raw.models !== undefined) {
+    throw new PublicError(`${CONFIG_FILE} no longer has a models map`, {
+      hint: 'A model id is host-specific. Write it as role_settings.<host>.<role>.model.',
+    });
+  }
   const overrides = readRoleSettings(raw);
 
   // Settings are resolved per host, because the same role rarely wants the
   // same string in two hosts: a model id that Claude Code accepts is not the
-  // `provider/model` selector OpenCode expects. Least specific first.
+  // `provider/model` selector OpenCode expects. Shipped defaults first.
   /** @type {Record<string, Record<string, Record<string, unknown>>>} */
   const roleSettings = {};
   const shipped = defaults();
@@ -191,16 +159,13 @@ export function readConfig(root) {
     for (const [role, values] of Object.entries(hostDefaults)) {
       settings[role] = { ...(/** @type {object} */ (values)) };
     }
-    for (const [role, model] of Object.entries(models)) {
-      settings[role] = { ...(settings[role] ?? {}), model };
-    }
     for (const [role, values] of Object.entries(overrides[host] ?? {})) {
       settings[role] = { ...(settings[role] ?? {}), ...values };
     }
     roleSettings[host] = settings;
   }
 
-  return { hosts, models, role_settings: roleSettings, raw };
+  return { hosts, role_settings: roleSettings, raw };
 }
 
 /** @param {string} root @param {string[]} hosts */
@@ -216,7 +181,6 @@ export function writeConfig(root, hosts) {
   const next = {
     ...existing,
     hosts,
-    models: existing.models ?? {},
   };
   delete next.extends;
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');

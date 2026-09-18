@@ -60,33 +60,26 @@ negotiation, and no repair path.
 
 ## Machine configuration
 
-`agenticloop.json` at the target root holds which hosts to generate for, any
-per-role model bindings, and any per-host role settings:
+`agenticloop.json` at the target root holds which hosts to generate for and any
+per-host role settings:
 
 ```json
 {
   "hosts": ["codex", "claude"],
-  "models": {
-    "engineer": "claude-opus-5",
-    "auditor": "claude-sonnet-5"
-  },
   "role_settings": {
-    "claude": { "auditor": { "reasoning_effort": "xhigh" } },
+    "claude": { "engineer": { "model": "claude-opus-5" }, "auditor": { "reasoning_effort": "xhigh" } },
     "codex": { "auditor": { "model": "gpt-5.4", "reasoning_effort": "high" } }
   }
 }
 ```
 
 Defaults come from the installed package, so there is nothing to point at and
-no file to inherit from. Least specific first: the package's defaults, then
-`models`, then `role_settings`.
+no file to inherit from. The package's defaults first, then `role_settings`.
 
-`models` is the shorthand for the single-host case. It applies one string to
-every selected host, and model namespaces do not overlap — `claude-opus-5`,
-`gpt-5.4` and `openai/gpt-5.6` each name a model to a different host — so it is
-refused when more than one host is selected, with a pointer to `role_settings`.
-That map is per host, which is what a mixed-host project needs: reasoning
-effort is spelled differently in each too.
+Settings are per host because model namespaces do not overlap: `claude-opus-5`,
+`gpt-5.4` and `openai/gpt-5.6` each name a model to a different host, and
+reasoning effort is spelled differently in each too. A model binding is one of
+these settings and has no map of its own.
 
 A setting's value is a string, passed to the host as written, or `null` to
 leave it unset — which is how a shipped default such as `permission_mode` is

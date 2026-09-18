@@ -70,9 +70,11 @@ Optional, in `agenticloop.json`:
 ```json
 {
   "hosts": ["claude"],
-  "models": { "engineer": "claude-opus-5", "auditor": "claude-sonnet-5" },
   "role_settings": {
-    "claude": { "auditor": { "reasoning_effort": "xhigh" } }
+    "claude": {
+      "engineer": { "model": "claude-opus-5" },
+      "auditor": { "model": "claude-sonnet-5", "reasoning_effort": "xhigh" }
+    }
   }
 }
 ```

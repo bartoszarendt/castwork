@@ -32,12 +32,10 @@ which is repeatable, or list them under `hosts` in `agenticloop.json`. It
 records what you named, so later `setup` and `update` runs need no flag. With
 no hosts named and none recorded, `setup` refuses rather than guessing.
 
-`agenticloop.json` is the only machine configuration. It holds `hosts`,
-optional per-host `role_settings`, and `models`, a per-role shorthand for the
-single-host case. Nothing inherits from anywhere: defaults come from the
-installed package. A setting a host cannot express, a value it could not carry,
-and a `models` map that would reach more than one host are each refused rather
-than dropped in silence.
+`agenticloop.json` is the only machine configuration. It holds `hosts` and
+optional per-host `role_settings`, and nothing inherits from anywhere: defaults
+come from the installed package. A setting a host cannot express, and a value it
+could not carry, are each refused rather than dropped in silence.
 
 `update` regenerates from the hosts already recorded. It never changes which
 hosts you use — that is what `setup --host` is for — and it never writes over a

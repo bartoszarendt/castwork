@@ -46,9 +46,11 @@ Optional, in `agenticloop.json`:
 ```json
 {
   "hosts": ["codex"],
-  "models": { "engineer": "claude-opus-5" },
   "role_settings": {
-    "codex": { "auditor": { "reasoning_effort": "xhigh" } }
+    "codex": {
+      "engineer": { "model": "gpt-5.4" },
+      "auditor": { "reasoning_effort": "xhigh" }
+    }
   }
 }
 ```

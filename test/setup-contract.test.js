@@ -80,7 +80,7 @@ test('the written config carries no pointer to a path that is not there', (t) =>
   setup(root, { hosts: ['codex'] });
   const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
   assert.ok(!('extends' in config), 'agenticloop.json must not declare extends');
-  assert.deepEqual(Object.keys(config).sort(), ['hosts', 'models']);
+  assert.deepEqual(Object.keys(config).sort(), ['hosts']);
 });
 
 test('an existing extends key is dropped rather than carried forward', (t) => {

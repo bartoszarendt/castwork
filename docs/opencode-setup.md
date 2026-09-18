@@ -46,9 +46,9 @@ Optional, in `agenticloop.json`:
 ```json
 {
   "hosts": ["opencode"],
-  "models": { "engineer": "openai/gpt-5.6" },
   "role_settings": {
     "opencode": {
+      "engineer": { "model": "openai/gpt-5.6" },
       "auditor": { "reasoning_effort": "high" },
       "maintainer": { "variant": "high" }
     }

@@ -19,8 +19,9 @@ name. The bundled skills are `task-record-contract`, `verification-evidence`,
 If a pre-release build wrote `claude-code` into your `agenticloop.json`, change
 that value to `claude` before running `setup` or `update`. Both read the file
 before applying `--host`, so an unknown host id is refused first and the error
-lists the known ids. There is no alias: 0.5.0 is the first release, so there is
-nothing to stay compatible with.
+lists the known ids. Likewise, move any `models` map to
+`role_settings.<host>.<role>.model`. There is no alias: 0.5.0 is the first
+release, so there is nothing to stay compatible with.
 
 **Added**
 
@@ -47,11 +48,11 @@ nothing to stay compatible with.
   A setting a host cannot express, and a value it could not carry, are each
   refused with a hint rather than written into a file the host ignores or
   stringified into nonsense.
-- `models` stays as the shorthand for one model string per role, and is now
-  refused when more than one host is selected: it applies to every selected
-  host, and one id cannot name a model to two of them. Mixed-host projects use
-  `role_settings.<host>.<role>.model`. Its roles and values are checked the
-  same way.
+- A model binding is one of those settings, written at
+  `role_settings.<host>.<role>.model`. There is no separate `models` map: a
+  model id is host-specific, so one string per role could not serve two hosts
+  at once. A leftover `models` key is refused with the setting that replaces
+  it.
 - Evidence and assessments bind to an explicit candidate reference an agent
   records, never to the repository's moving HEAD.
 - Roles are concise responsibility and boundary presets with no mandatory
