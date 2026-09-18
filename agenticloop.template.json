@@ -5,9 +5,6 @@
     "overview": "README.md",
     "process": "agenticloop/AGENTIC_LOOP.md"
   },
-  "adapters": {
-    "opencode": {
-      "roleSettings": {}
-    }
-  }
+  "hosts": [],
+  "models": {}
 }

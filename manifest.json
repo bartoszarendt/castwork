@@ -1,11 +1,10 @@
 {
-  "layoutVersion": 3,
-  "toolkitOwned": {
-    "sourceRoot": "agenticloop",
-    "sourcePaths": [
+  "layout_version": 4,
+  "toolkit_owned": {
+    "source_root": "agenticloop",
+    "source_paths": [
       "agenticloop/AGENTIC_LOOP.md",
       "agenticloop/agents",
-      "agenticloop/backends",
       "agenticloop/skills",
       "agenticloop/commands",
       "agenticloop/memory",
@@ -14,55 +13,26 @@
       "agenticloop/manifest.json"
     ]
   },
-  "targetOwned": {
-    "stateRoot": ".agenticloop",
-    "statePaths": [
+  "target_owned": {
+    "state_root": ".agenticloop",
+    "state_paths": [
       ".agenticloop/project.md",
       ".agenticloop/tasks",
       ".agenticloop/decisions",
-      ".agenticloop/audits",
-      ".agenticloop/improvements",
-      ".agenticloop/logs",
-      ".agenticloop/checks",
-      ".agenticloop/tmp"
-    ],
-    "productPaths": [
-      ".github/workflows"
+      ".agenticloop/generated.json",
+      ".agenticloop/local"
     ]
   },
-  "generatedShims": [
-    ".opencode",
+  "generated_shims": [
     ".codex",
-    ".agents",
     ".claude",
-    ".cursor",
-    "plugins/agenticloop"
-  ],
-  "provisionedSharedPaths": [
-    ".gitattributes"
-  ],
-  "legacyRootPaths": [
-    "AGENTIC_LOOP.md",
-    "agents",
-    "backends",
-    "skills",
-    "commands",
-    "agenticloop.base.json"
-  ],
-  "v2ToolkitOwnedPaths": [
-    "agenticloop/base.json",
-    "agenticloop/templates"
+    ".claude-plugin",
+    ".opencode"
   ],
   "detection": {
-    "activeWhen": "agenticloop/manifest.json exists and layoutVersion equals 3"
+    "active_when": "agenticloop/manifest.json exists and layout_version equals 4"
   },
-  "legacyMigration": {
-    "ownershipSignals": [
-      "exact content match",
-      "generated marker",
-      "manifest ownership",
-      "checksum"
-    ],
-    "preserveOnCollision": true
+  "refuse_layouts": {
+    "0.4.x": "agenticloop/manifest.json with layoutVersion 3, or any of .agenticloop/audits, .agenticloop/logs, .agenticloop/checks, .agenticloop/activations"
   }
 }

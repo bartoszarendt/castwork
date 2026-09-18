@@ -8,8 +8,8 @@
     {
       "name": "agenticloop",
       "source": "./",
-      "description": "Graph engineering overlay for AI coding agents -- guarded transitions, four supervised roles, evidence, audit, and closeout.",
-      "version": "0.4.7"
+      "description": "A small, portable vocabulary for agent work: task records carrying work, candidates, evidence, and assessments, with four role presets, reusable skills, and pure checks.",
+      "version": "0.5.0"
     }
   ]
 }

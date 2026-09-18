@@ -1,218 +1,58 @@
 {
-  "documentRoles": {
-    "rules": {
-      "purpose": "primary",
-      "candidates": [
-        "AGENTS.md",
-        "CLAUDE.md",
-        "GEMINI.md"
-      ]
-    },
-    "plan": {
-      "purpose": "task-source",
-      "candidates": [
-        "IMPLEMENTATION_PLAN.md",
-        "PLAN.md",
-        "ROADMAP.md",
-        "docs/roadmap.md"
-      ]
-    },
-    "overview": {
-      "purpose": "primary",
-      "candidates": [
-        "README.md",
-        "docs/overview.md"
-      ]
-    },
-    "process": {
-      "purpose": "primary",
-      "candidates": [
-        "agenticloop/AGENTIC_LOOP.md"
-      ]
-    },
-    "spec": {
-      "purpose": "task-source",
-      "candidates": [
-        "SPEC.md",
-        "SPECS.md",
-        "PRD.md",
-        "REQUIREMENTS.md",
-        "docs/spec.md",
-        "docs/specs/",
-        "docs/prd/"
-      ]
-    },
-    "design": {
-      "purpose": "task-source",
-      "candidates": [
-        "DESIGN.md",
-        "ARCHITECTURE.md",
-        "ARCHITECTURE_PLAN.md",
-        "ARCHITECTURE_DESIGN.md",
-        "docs/architecture.md",
-        "docs/adr/"
-      ]
-    },
-    "context": {
-      "purpose": "task-source",
-      "candidates": [
-        "CONTEXT.md",
-        "docs/context.md"
-      ]
-    },
-    "history": {
-      "purpose": "reference",
-      "candidates": [
-        "CHANGELOG.md",
-        "RELEASE-NOTES.md",
-        "MIGRATION.md"
-      ]
-    }
-  },
   "documents": {
     "rules": "AGENTS.md",
     "overview": "README.md",
     "process": "agenticloop/AGENTIC_LOOP.md"
   },
   "naming": {
-    "taskIdRegex": "[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\\d+",
-    "taskTableColumns": [
-      "Task",
-      "Description"
-    ]
-  },
-  "groupingProfiles": {
-    "flat": {
-      "groupCloseout": false,
-      "githubLabelTemplate": "group:{groupId}"
-    },
-    "phase": {
-      "groupingTerm": "Phase",
-      "groupCloseout": true,
-      "groupHeadingRegex": "^##\\s+(?:\\S+\\s+)?Phase\\s+(?<groupId>\\d+(?:\\.\\d+)?)\\b",
-      "groupSlugRules": "Decimal-only group identifiers are zero-padded to two digits (for example 1 becomes 01). All other group identifiers have non-alphanumeric characters stripped.",
-      "githubLabelTemplate": "phase:{groupId}"
-    },
-    "milestone": {
-      "groupingTerm": "Milestone",
-      "groupCloseout": true,
-      "githubLabelTemplate": "milestone:{groupId}"
-    },
-    "epic": {
-      "groupingTerm": "Epic",
-      "groupCloseout": true,
-      "githubLabelTemplate": "epic:{groupId}"
-    },
-    "custom": {
-      "githubLabelTemplate": "group:{groupId}"
-    }
+    "task_id_regex": "[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\\d+"
   },
   "agents": {
-    "sourceDirectory": "agenticloop/agents"
+    "source_directory": "agenticloop/agents"
   },
   "skills": {
-    "sourceDirectory": "agenticloop/skills"
+    "source_directory": "agenticloop/skills"
   },
-  "backends": {
-    "sourceDirectory": "agenticloop/backends",
-    "github": {
-      "projection": "agenticloop/backends/github.md",
-      "titlePrefixRegex": "^\\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\\b",
-      "taskLabelTemplate": "task:{taskId}",
-      "labels": {
-        "agentReady": "agent-ready",
-        "blocked": "blocked",
-        "approved": "approved",
-        "typeImpl": "type:impl",
-        "typeChangeRequest": "type:change-request"
-      }
-    },
-    "files": {
-      "projection": "agenticloop/backends/files.md",
-      "taskDirectory": ".agenticloop/tasks"
-    }
+  "commands": {
+    "source_directory": "agenticloop/commands"
   },
   "roles": {
     "orchestrator": {
-      "sourceFile": "agenticloop/agents/orchestrator.md",
-      "description": "Coordinates an interactive supervised implementation loop for a target project. Delegates work and keeps the human informed; does not edit or review directly.",
-      "requiredSkills": [
-        "role-delegation",
-        "blocked-state"
-      ]
+      "source_file": "agenticloop/agents/orchestrator.md",
+      "description": "Coordinates work and keeps the user informed. Does not implement or assess directly.",
+      "skills": ["blocked-state", "decision-capture"]
     },
     "maintainer": {
-      "sourceFile": "agenticloop/agents/maintainer.md",
-      "description": "Performs bounded planning and review as a standalone Maintainer by default, or uses the full Agentic Loop lifecycle only after explicit activation or designation of a durable Agentic Loop contract. Does not implement code changes.",
-      "requiredSkills": [
-        "task-record-contract",
-        "review-and-accept",
-        "task-closeout",
-        "blocked-state",
-        "change-request-gate",
-        "ponytail"
-      ]
+      "source_file": "agenticloop/agents/maintainer.md",
+      "description": "Shapes work into task records and assesses engineering quality. Does not implement.",
+      "skills": ["task-record-contract", "assessment", "decision-capture", "blocked-state", "ponytail"]
     },
     "engineer": {
-      "sourceFile": "agenticloop/agents/engineer.md",
-      "description": "Implements scoped task records, runs checks, records implementation artifacts, and posts completion summaries.",
-      "requiredSkills": [
-        "task-record-contract",
-        "tdd-implementation",
-        "ponytail",
-        "verification-evidence",
-        "debugging-before-fixes",
-        "blocked-state",
-        "github-attribution"
-      ]
+      "source_file": "agenticloop/agents/engineer.md",
+      "description": "Implements scoped task records, runs checks, and records candidates and evidence.",
+      "skills": ["task-record-contract", "tdd-implementation", "verification-evidence", "debugging-before-fixes", "ponytail", "blocked-state"]
     },
     "auditor": {
-      "sourceFile": "agenticloop/agents/auditor.md",
-      "description": "Performs independent, evidence-based, read-only assessment. Runs as a standalone non-certifying auditor by default, or in full Agentic Loop mode when the delegation explicitly activates Agentic Loop or designates an Agentic Loop audit record or packet as the certification contract for a tracked work unit. Read-only: implements nothing, accepts no task, and accepts no risk.",
-      "requiredSkills": [
-        "work-unit-audit",
-        "blocked-state"
-      ]
+      "source_file": "agenticloop/agents/auditor.md",
+      "description": "Independently assesses a recorded candidate. Read-only: implements nothing and accepts no task.",
+      "skills": ["assessment", "verification-evidence", "blocked-state"]
     }
   },
   "adapters": {
-    "opencode": {
-      "status": "supported",
-      "roleSettings": {}
-    },
     "codex": {
       "status": "supported",
-      "roleSettings": {},
-      "plugin": {
-        "enabled": false
-      }
+      "role_settings": {}
     },
     "claude-code": {
       "status": "supported",
-      "roleSettings": {
-        "maintainer": {
-          "permissionMode": "acceptEdits"
-        },
-        "engineer": {
-          "permissionMode": "acceptEdits"
-        }
-      },
-      "permissions": {
-        "profile": "agenticloop",
-        "scope": "local",
-        "deny": []
+      "role_settings": {
+        "maintainer": { "permission_mode": "acceptEdits" },
+        "engineer": { "permission_mode": "acceptEdits" }
       }
     },
-    "copilot": {
+    "opencode": {
       "status": "supported",
-      "roleSettings": {}
-    },
-    "cursor": {
-      "status": "supported",
-      "roleSettings": {},
-      "plugin": {
-        "enabled": false
-      }
+      "role_settings": {}
     }
   }
 }

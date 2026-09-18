@@ -1,142 +1,80 @@
-# AGENTS.md
+# Agentic Loop repository instructions
 
-## Agentic Loop is the subject here, not the process
+This is the Agentic Loop toolkit itself. It provides a small, portable
+vocabulary for agent work: Markdown task records carrying work, candidates,
+evidence, and assessments, four role presets, reusable skills, thin host
+adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-This repository *authors* the Agentic Loop methodology. `AGENTIC_LOOP.md`,
-`agents/`, `skills/`, and `backends/` are the product being maintained – they
-are **artifacts to edit**, not a workflow to adopt for work in this repo.
+**Status:** version 0.5.0 is a breaking reset, implemented by Phase 38. Until
+that work lands, parts of the documentation describe planned behavior and say
+so.
 
-Do not read `AGENTIC_LOOP.md` and then take on its roles, task-record
-contract, worktree/parallel-lane rules, or event logging on your own
-initiative. Ordinary work here – editing docs, fixing skills/backends,
-answering questions, one-off changes – follows the rest of this AGENTS.md
-directly, as normal manual repository work.
+## Layout
 
-Only operate *as* Agentic Loop (adopt roles, create task records, spin up
-worktrees/lanes, log events) when the user explicitly asks to run or dogfood
-the methodology against this tree. Reading `AGENTIC_LOOP.md` to edit it or to
-answer a question about it is fine and expected; adopting it as your process
-is not.
+| Path | Contents |
+|---|---|
+| `src/` | the CLI, the record parser, and the pure checks |
+| `bin/` | the `agenticloop` entry point |
+| `agents/` | the four canonical role presets |
+| `skills/` | reusable procedures, one directory per skill |
+| `commands/` | the canonical `start` entry command |
+| `src/adapters/` | per-host templates for Codex, Claude Code, and OpenCode |
+| `memory/` | record templates |
+| `test/` | unit tests |
+| `docs/` | public documentation |
 
-## Purpose
+Canonical sources live at the repository root. Host directories are generated
+projections; never edit generated output by hand and never add a parallel
+authoritative copy for one host.
 
-This file defines repository-wide rules for Agentic Loop itself.
+## Rules
 
-Agentic Loop is a reusable, Markdown-first workflow toolkit for downstream repositories. It is maintained manually as normal repository work. Do not run Agentic Loop as an autonomous loop against itself.
+- **One spelling per concept.** snake_case for every machine field and enum
+  value. kebab-case for CLI command names.
+- **Records are ordinary Markdown.** Structured data goes in YAML frontmatter;
+  the body is prose. A record stays readable and editable in every state.
+- **Checks are pure.** They take a parsed record plus an optional observation
+  map and perform no I/O. The CLI gathers observations; the checks never do.
+- **No lifecycle.** Do not add a transition graph, state machine, mandatory role
+  sequence, delegation prerequisite, retry budget, or authorization gate.
+- **No substitute subsystem.** Nothing removed may return under "semantic",
+  "history", "policy", "evaluator", or "lane" terminology. If you find yourself
+  adding a registry, store, transition table, signature, freshness rule, or
+  repair path, stop and remove it.
+- **No authentication.** Agentic Loop reports what was recorded and who asserted
+  it. It never claims to prove who recorded it.
+- **Candidate references, not HEAD.** Evidence and assessments bind to the
+  explicit candidate reference an agent recorded.
+- **Generated files carry no absolute paths** and are tracked in the target
+  repository. Machine-specific state belongs in the gitignored
+  `.agenticloop/local/`.
+- **Machine configuration lives only in `agenticloop.json`** at the target root.
+  `project.md` is prose.
 
-## Source of Truth
+## Before changing the product
 
-Use these files as the durable repository contract:
+1. Read `AGENTIC_LOOP.md` for the vocabulary and `docs/record-format.md` for the
+   record contract.
+2. Read the role preset or skill you are changing, and keep it independently
+   usable: no skill may require activation or a prior command.
+3. Add a concept only when a real consumer needs it. A new requirement kind,
+   status value, host, or command must name that consumer.
 
-1. [README.md](README.md)
-2. [AGENTIC_LOOP.md](AGENTIC_LOOP.md)
-3. [agents/](agents/)
-4. [skills/](skills/)
-5. [backends/](backends/)
+## Verification
 
-The `docs/` directory is the user-facing setup and authoring surface. Keep it practical and adoption-oriented.
-Stable Agentic Loop vocabulary belongs in `AGENTIC_LOOP.md`.
+- `npm test` runs the unit suite.
+- `npx agenticloop validate` checks skills, config, links, and generated adapter
+  output.
+- `npm run typecheck` runs the TypeScript checker over the JSDoc types.
 
-## Optional private project context
+Run the suite before reporting a change complete. Prefer removing a concept over
+adding one.
 
-When `PROJECT_CONTEXT_ROOT` is set and a request involves product direction,
-architecture tradeoffs, prioritization, or development recommendations, read
-`PROJECT.md`, `STRATEGY.md`, `STATUS.md`, and relevant `decisions/` entries from
-that directory before recommending a direction.
+## Boundaries
 
-That context supplements but never overrides this public repository's source of
-truth. Surface conflicts explicitly, and never copy private planning or decision
-content into public files unless the user explicitly promotes it.
-
-Repository layout ownership:
-
-- The toolkit repo authors canonical source at the repository root (`AGENTIC_LOOP.md`, `agents/`, `skills/`, `backends/`, `commands/`, `memory/`, `config.json`, `agenticloop.template.json`, `manifest.json`).
-- The installer assembles that source into `agenticloop/` inside target projects.
-- `.agenticloop/` is target-owned workflow state.
-- Host folders are generated shims and must not become tracked canonical source.
-
-## Repository Scope
-
-Agentic Loop contains reusable process assets only:
-
-- host-neutral skills,
-- host-neutral role definitions,
-- task backend projection docs,
-- workflow methodology,
-- host setup documentation,
-- validation and setup helpers.
-
-Do not add downstream product code, application stacks, database migrations, seed data, generated caches, runtime artifacts, or raw agent transcripts.
-
-## Development Stage
-
-Stage: **expansion**. Grow Agentic Loop's capability through shared core
-mechanisms rather than parallel ones: extend or correct the canonical role
-source (`agents/`), skill source (`skills/`), adapter paths (`src/adapters/`),
-and methodology (`AGENTIC_LOOP.md`) instead of adding a second implementation
-beside them.
-
-- Rationale: active capability growth without a frozen compatibility policy.
-- Revisit when: a stable compatibility/support policy is adopted, or the
-  role/skill/adapter surface is treated as feature-complete and work shifts to
-  stabilization or maintenance.
-- Release, compatibility, deprecation, and adoption decisions are owned and
-  recorded in [RELEASING.md](RELEASING.md). They do not change the current
-  expansion stage.
-
-## Core Rules
-
-- Keep the toolkit project-agnostic. Use "target project" language unless a file is explicitly an example.
-- Phase M's "no permanent split / dogfood the same tree" rule is superseded. Keep authored package source at the repository root and keep installed target paths under `agenticloop/`.
-- Keep `agents/` as the single canonical role source in this repo.
-- Keep `skills/` as the single canonical skill source in this repo.
-- Keep `backends/` as task-record storage projection docs in this repo, not duplicated workflows.
-- Do not duplicate skill payloads into adapter-specific directories as tracked source material.
-- Do not duplicate role prompts into adapter-specific directories as tracked source material.
-- Keep downstream setup Markdown-first. Required future automation should be cross-platform and `npx`-based.
-- Treat Python, PowerShell, and Bash scripts as repository-maintenance or host-specific helpers, not the downstream product contract.
-- Keep docs ASCII unless there is a clear reason otherwise.
-
-## Validation Expectations
-
-Normal downstream validation uses the Node CLI:
-
-```text
-npx agenticloop validate
-```
-
-After editing any skill, run the same command. It validates frontmatter, cross-links, OpenCode prompt references, config consistency, and task-record content without requiring a tracked generated docs snapshot.
-
-```text
-npm test
-```
-
-runs the full Node test suite, which covers skill validation, strict JSON config loading, OpenCode markdown adapter validation, init behavior, and bootstrap-labels dry-run.
-
-## Documentation Rules
-
-- Keep the README focused on identity, quick start, and documentation links.
-- Keep setup instructions under `docs/*-setup.md` and `docs/getting-started.md`.
-- Keep role definitions under `agents/` in this repo and under `agenticloop/agents/` in generated targets.
-- Keep backend projection rules under `backends/` in this repo and under `agenticloop/backends/` in generated targets.
-- Keep skill authoring rules in `docs/skill-anatomy.md`.
-- Keep operational workflow rules in `AGENTIC_LOOP.md` and `skills/` in this repo, preserving target-facing `agenticloop/...` references inside installed assets.
-- Do not keep historical cleanup plans in active docs; use git history for that.
-
-## Change Hygiene
-
-- Keep changes scoped to the current task.
-- Do not revert user changes unless explicitly asked.
-- Do not commit secrets, local session stores, temporary outputs, generated caches, or runtime logs.
-- Keep scratch files inside `.agenticloop/tmp/` when a temporary file is genuinely required.
-
-<!-- CODEGRAPH_START -->
-## CodeGraph
-
-In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
-
-- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call – the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
-- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
-
-If there is no `.codegraph/` directory, skip CodeGraph entirely – indexing is the user's decision.
-<!-- CODEGRAPH_END -->
+- Do not merge to `main`, tag, release, or publish without explicit owner
+  authorization.
+- Branch `feat/phase-36-followup` and commit `63cd512` are pinned by downstream
+  projects; never delete them.
+- Never commit secrets, local runtime state, `.agenticloop/local/`, or the
+  `.docs` symlink.

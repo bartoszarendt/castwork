@@ -1,296 +1,92 @@
-# Claude Code Setup
+# Claude Code setup
 
-Status: supported.
+> **Status:** 0.5.0. Behavior not yet implemented is marked *planned*.
 
-Claude Code now has two independent Agentic Loop install modes that share the
-same canonical source:
+## Install
 
-- `agenticloop/commands/start.md`
-- `agenticloop/agents/<role>.md`
-- `agenticloop/skills/<name>/SKILL.md`
-- `agenticloop/backends/<name>.md`
+From the root of your repository:
 
-`agenticloop/commands/`, `agenticloop/agents/`, and `agenticloop/skills/` stay canonical in both modes. The
-difference is how Claude Code sees them.
-
-## Activating Agentic Loop
-
-Claude Code does not boot into Agentic Loop automatically. Activation is
-explicit and human-invoked by slash command. This is intentional pull
-activation, not a hook and not a managed `CLAUDE.md` override.
-
-- Repo-local Mode B: run `/agenticloop [task-id or task description]`
-- Plugin Mode A: run `/agenticloop:start [task-id or task description]`
-- Repo-local Mode B stop: run `/agenticloop stop`
-- Plugin Mode A stop: run `/agenticloop:stop`
-
-Both commands read `.agenticloop/project.md` first, route or confirm setup when
-`setup_status` is `unconfirmed` or `development_stage` is not human-confirmed,
-and then enter the normal Agentic Loop flow.
-Stop instead deactivates the current conversation before setup or task selection,
-checkpoints unfinished work when needed, and does not perform closeout, commits,
-pushes, merges, or worktree cleanup. Resume with the matching normal activation
-command.
-
-## Delegation Topology
-
-Claude Code may expose multiple subagents, but Agentic Loop is serial by
-default. Every authorized multi-task unit receives a current Parallel Opportunity
-Scan after decomposition; fewer than two ready tasks still record a truthful
-not-currently-eligible result and rescan trigger. Bounded eligible implementation
-batches use at most the configured project maximum (default five), which is a
-ceiling rather than a total-agent budget. The
-orchestrator should not start parallel maintainer or engineer
-subagents unless it records the concurrency plan, collision criteria, decision
-scope, shared-design resolution, lease, and
-join condition required by `agenticloop/skills/parallel-delegation/SKILL.md`.
-Long-running parallelism has
-stronger observability requirements than short bounded join-based batches.
-Parallel write lanes that mutate
-repository files require a separate `git worktree` and branch per lane; a branch
-alone is not sufficient in a shared checkout. The lease progress checkpoint is a
-return-to-orchestrator checkpoint cadence, not an async heartbeat, unless the
-host exposes running-subagent status.
-
-Launch Claude Code sessions that run Agentic Loop with non-interactive Git
-environment variables (`GIT_EDITOR=true`, `GIT_SEQUENCE_EDITOR=true`,
-`GIT_PAGER=cat`, `GIT_TERMINAL_PROMPT=0`, `GH_EDITOR=true`, `GH_PAGER=cat`,
-`GH_PROMPT_DISABLED=1`) as described in
-[Host Adapters](host-adapters.md#non-interactive-git-environment). This prevents
-unattended lanes from blocking on `COMMIT_EDITMSG`, interactive rebase todo
-files, pagers, PR prompts, or credential prompts.
-
-## Mode A - Install Agentic Loop as a Claude Code Plugin
-
-Use this when you want one shared Agentic Loop install across many target
-projects.
-
-- The plugin packaging lives only in this toolkit repo under `.claude-plugin/`.
-- Claude Code reads the canonical `agenticloop/commands/start.md` activation command and the
-  canonical `agenticloop/agents/` role agents directly.
-- The plugin does not ship copied skill payloads under `.claude-plugin/`.
-  `.claude-plugin/plugin.json` overrides plugin skill discovery away from the
-  canonical `agenticloop/skills/` directory so the internal Agentic Loop procedures do not
-  appear as separate public plugin skills.
-- The activation command and canonical role agents resolve internal procedures
-  by explicit canonical paths such as `agenticloop/skills/blocked-state/SKILL.md`.
-- Target projects do not get generated `.claude/` copies from this mode.
-- Plugin agents inherit the user's active Claude Code model because the
-  canonical `agenticloop/agents/*.md` files stay model-free.
-
-### Local Development Install
-
-From Claude Code:
-
-```text
-/plugin marketplace add /path/to/agenticloop
-/plugin install agenticloop@agenticloop-dev
-/agents
+```sh
+npx agenticloop setup
 ```
 
-`/agents` should show the three namespaced plugin agents:
-`agenticloop:orchestrator`, `agenticloop:maintainer`, and
-`agenticloop:engineer`. Use `/agenticloop:start` to activate Agentic Loop in the
-current conversation.
+Select `claude-code` when asked, or set it directly in `agenticloop.json`:
 
-### Future Published Marketplace Install
-
-Once the toolkit is published as a GitHub-backed marketplace, the install flow
-becomes:
-
-```text
-/plugin marketplace add bartoszarendt/agenticloop
-/plugin install agenticloop@agenticloop-dev
+```json
+{ "hosts": ["claude-code"] }
 ```
 
-## Mode B - Generate a Repo-Local Claude Code Adapter
+then run `npx agenticloop update`.
 
-Use this when one target project needs checked-in Claude Code agent files and
-repo-specific model settings.
+## What is generated
 
-Generate the repo-local adapter with:
-
-```text
-npx agenticloop init --target <target-project-root> --adapter claude-code
+```
+.claude-plugin/
+  plugin.json        registers the agenticloop plugin
+.claude/
+  agents/            the four role presets, as subagents
+  skills/            reusable procedures
+  commands/          the /agenticloop:start entry command
 ```
 
-This creates:
+All of it is tracked and contains no absolute paths. The files are listed in
+`.agenticloop/generated.json`; edit one and `update` reports and skips it rather
+than overwriting your change.
 
-| Path | Purpose |
-|---|---|
-| `agenticloop.json` | Target-owned adapter config with per-role `adapters.claude-code.roleSettings`. |
-| `agenticloop/config.json` | Toolkit-owned structural defaults. |
-| `.claude/commands/agenticloop.md` | Repo-local explicit activation command for `/agenticloop`. |
-| `.claude/agents/<role>.md` | Generated Claude Code agents rendered from canonical role files. |
-| `.claude/skills/agenticloop/SKILL.md` | One public Agentic Loop activation skill rendered from the canonical start command. |
-| `.claude/skills/agenticloop/references/skills/<name>/reference.md` | Internal procedure copies of each canonical skill, renamed from `SKILL.md` so they are not separate discoverable Claude skills. |
-| `.claude/settings.local.json` | Default local Claude Code permissions file. Set `scope: "project"` to write shared `.claude/settings.json` instead. |
+## Using it
 
-Mode B never generates `.claude-plugin/`.
+In the repository, run:
 
-Mode B exposes exactly one public Claude skill (`agenticloop`). The internal
-Agentic Loop procedures are not separate public Claude skills: each canonical
-`agenticloop/skills/<name>/SKILL.md` is copied under
-`.claude/skills/agenticloop/references/skills/<name>/reference.md` and renamed to
-`reference.md` so the Claude skill picker only shows the single `agenticloop`
-entry. The public skill body links to those reference files by path. The
-`agenticloop` skill directory is fully owned and regenerated by Agentic Loop;
-target-owned skills in sibling `.claude/skills/<other>/` directories are left
-untouched.
-
-The generated `.claude/agents/<role>.md` subagents also point at those reference
-files: each role lists its required procedures by
-`.claude/skills/agenticloop/references/skills/<name>/reference.md` path, and the
-canonical `[[name]]` markers in role bodies are rewritten to the same paths so a
-delegated maintainer or engineer never depends on a skill name that is not a
-discoverable Mode B skill.
-
-Mode B keeps two activation surfaces that share one intent and stay consistent:
-the `/agenticloop` slash command (`.claude/commands/agenticloop.md`) is the
-explicit human entry point, while the `agenticloop` skill is the model-facing
-surface that owns the reference index. The skill is generated with
-`disable-model-invocation: true`, so it does not auto-trigger; activation stays
-human-invoked through the command.
-
-Refresh the repo-local adapter with:
-
-```text
-npx agenticloop generate claude-code --target <target-project-root>
+```
+/agenticloop:start
 ```
 
-In Claude Code, run `/agenticloop` to activate Agentic Loop for that repo-local
-target.
+It reads `.agenticloop/project.md`, your working policy, and the open tasks,
+then hands off. Nothing needs to be activated first, and the command takes an
+optional task id or description as ordinary context.
 
-### Repo-Local Model Settings
+The four roles are available as subagents. Invoking one is a choice, not a
+required sequence — there is no delegation prerequisite and no order the toolkit
+enforces.
 
-Mode B keeps per-repo model settings in `agenticloop.json` under
-`adapters.claude-code.roleSettings.<role>`. The `model` value is rendered into
-the generated `.claude/agents/*.md` frontmatter.
+## Permissions
+
+`config.json` sets `acceptEdits` for the `maintainer` and `engineer` roles by
+default, since both are expected to write files. Change it in `agenticloop.json`
+under `role_settings` if your project wants something tighter. Permissions are
+the host's mechanism; Agentic Loop only passes them through.
+
+## Model bindings
+
+Optional, in `agenticloop.json`:
 
 ```json
 {
-  "adapters": {
-    "claude-code": {
-      "roleSettings": {
-        "orchestrator": { "model": "<claude-orchestrator-model>" },
-        "maintainer":   { "model": "<claude-maintainer-model>" },
-        "engineer":     { "model": "<claude-engineer-model>" },
-        "auditor":      { "model": "<claude-auditor-model>" }
-      }
-    }
-  }
+  "hosts": ["claude-code"],
+  "models": { "engineer": "claude-opus-5", "auditor": "claude-sonnet-5" }
 }
 ```
 
-Use a Claude Code model alias supported by your installed Claude Code version,
-or a full model id. `reasoningEffort` is not used here: Claude Code subagent frontmatter
-can carry `name`/`description`/`tools`/`model`/`permissionMode`, but not
-reasoning effort, so the adapter does not render an `effort:` field.
-(reasoningEffort still applies to the OpenCode and Codex adapters.)
+A binding is a plain string passed to the host. It is runtime configuration, not
+role identity, and it never changes what an assessment means.
 
-Do not add Claude Code model fields to canonical `agenticloop/agents/*.md`.
+## Recording work
 
-### Permissions
+Claude Code edits `.agenticloop/tasks/*.md` directly — they are ordinary
+Markdown. Use the CLI where it does something better than an edit:
 
-Mode B generated `maintainer` and `engineer` subagents use
-`permissionMode: "acceptEdits"` by default. That scopes edit auto-accept to
-Agentic Loop worker subagents, not every Claude Code session in the repo.
-
-The generated `auditor` subagent uses `permissionMode: "plan"` by default.
-`plan` is Claude Code's supported non-editing mode, so the auditor's read-only
-posture is enforced mechanically rather than by prompt text alone. The auditor
-still reads the repository, task records, decisions, and evidence, and returns a
-structured report the orchestrator persists with `npx agenticloop audit report`.
-Capability declarations are derived from the effective final
-`permissionMode`, including target overrides. Changing a non-implementing role
-to `acceptEdits` therefore removes the enforced mutation-denial claim and
-renders that restriction advisory.
-
-The orchestrator or main session is not granted `acceptEdits` by default. Keep
-that main session as the coordinator and delegate writes or Bash-heavy work to
-the maintainer or engineer.
-
-Mode B also writes a Claude Code permissions config. The base config uses the
-built-in `agenticloop` profile:
-
-```json
-{
-  "adapters": {
-    "claude-code": {
-      "permissions": {
-        "profile": "agenticloop",
-        "scope": "local",
-        "deny": []
-      }
-    }
-  }
-}
+```sh
+npx agenticloop task lint T-001
+npx agenticloop task set T-001 status done
 ```
 
-The `agenticloop` profile is intentionally broad enough for normal Agentic Loop
-task implementation. It includes Bash and PowerShell allowlist entries for
-common `git`, `gh`, `npm`, `npx`, `pytest`, `ruff`, and `alembic` commands,
-plus common Agentic Loop verification commands.
+When recording an assessment, write an `actor` string that identifies the
+session, for example `maintainer@claude-code`. Independence is judged by
+comparing that string against the candidate's producers.
 
-`scope: "local"` writes `.claude/settings.local.json`. That is the recommended
-autonomy path because the broader rules stay machine-local, project-local, and
-normally untracked. Agentic Loop also adds `.claude/settings.local.json` to the
-target root `.gitignore` automatically.
+## Troubleshooting
 
-Targets that intentionally want shared team settings may set
-`scope: "project"`, which writes `.claude/settings.json` instead.
-
-Agentic Loop does not set `permissions.defaultMode` by default, because that
-would affect every Claude Code session in the repo, not only Agentic Loop
-subagents.
-
-PowerShell entries are included because Claude Code's PowerShell tool is
-separate from Bash. They matter when PowerShell tool support is enabled.
-
-If a target project accepts project-wide default permission behavior, set
-`adapters.claude-code.permissions.defaultMode` explicitly in
-`agenticloop.json`.
-
-If a target project wants to manage Claude Code settings itself, set
-`adapters.claude-code.permissions = false` to opt out of
-Claude Code settings generation.
-
-Mode A plugin limitation: plugin subagents ignore generated repo-local
-`permissionMode`, so users must configure their own Claude Code settings or
-launch flags if they want relaxed permissions there.
-
-These Claude Code permissions are separate from Agentic Loop workflow gates.
-Task records, delegation boundaries, blocked-state handling, review, and
-acceptance still follow the normal Agentic Loop process.
-
-### GitHub CLI Body Files
-
-When Claude Code uses `gh` to create or update GitHub issues, pull requests, or
-comments, write the Markdown body to a temp file under `.agenticloop/tmp/` and pass it with
-`gh --body-file <path>`. Avoid heredocs and long inline `--body` strings.
-
-## Which Mode To Use
-
-- Use Mode A when you want one reusable Claude Code install across many target
-  projects and you are happy to inherit the active Claude Code model.
-- Use Mode B when a single target project needs checked-in `.claude/` artifacts
-  and per-repo `roleSettings` for the model.
-
-## Validation
-
-For Mode B, `npx agenticloop validate` checks Claude Code output only when
-`.claude/agents/` is present, when the adapter is marked `enabled: true` or
-`required: true`, or when you pass `--adapter claude-code`.
-
-```text
-npx agenticloop validate --adapter claude-code
-```
-
-For Mode A plugin packaging at the toolkit root, validate the plugin directly
-with Claude Code:
-
-```text
-claude plugin validate --strict .claude-plugin/plugin.json
-```
-
-See [docs/host-adapters.md](host-adapters.md) for the adapter status table.
+`npx agenticloop doctor` reports the installation state read-only, and
+`npx agenticloop validate` checks the generated output. If the command does not
+appear, confirm `.claude-plugin/plugin.json` exists and that `agenticloop.json`
+lists `claude-code` in `hosts`.
