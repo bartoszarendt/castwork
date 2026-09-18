@@ -15,7 +15,7 @@ better than editing a record by hand.
 | `task list` | List task records with their ids, titles, and statuses. |
 | `task show <id> [--json]` | Print one record. `--json` adds the three check outputs. |
 | `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. |
-| `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses when a declared requirement is not satisfied; every other value is unrestricted. |
+| `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
 | `version` | Print the version. |
 | `help` | Print the command list. |
@@ -67,9 +67,13 @@ Everything else exits zero unless it could not do what it was asked.
 
 ## The one refusal
 
-`task set <id> status done` declines, and writes nothing, when the record's
-requirement evaluation is not all `satisfied`. That is validation on one value,
-not an authorization or transition gate.
+`task set <id> status done` declines, and writes nothing, when the record has a
+structural error, or when its requirement evaluation is not all `satisfied`.
+The structural gate is the same one `task lint` applies, from the same parse, so
+a record lint rejects cannot be written to `done` instead: a misspelt
+requirement kind is a declared requirement no check can weigh, and dropping it
+to reach `done` is exactly what this refusal is for. That is validation on one
+value, not an authorization or transition gate.
 
 Every other field, and every direct edit of the Markdown, is unrestricted.
 Failed checks, rejecting assessments, and blocked states are always recordable.

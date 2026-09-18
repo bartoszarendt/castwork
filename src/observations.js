@@ -1,9 +1,10 @@
 /**
  * Local observations, gathered by the CLI and handed to the pure checks.
  *
- * Optional and local only. Nothing is fetched from a remote. When gathering is
- * skipped the checks report `not_checked`, which is a different thing from
- * `unavailable`.
+ * Optional and local only. Nothing is fetched from a remote. Whatever is not
+ * gathered is left out of the maps entirely, and the checks report it as
+ * `not_checked`, which is a different thing from `unavailable`: one means
+ * nothing was looked at, the other means it was looked at and was not there.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -85,10 +86,15 @@ export function observe(record, root) {
     isRepository = false;
   }
 
-  for (const candidate of candidates) {
-    const ref = candidate.ref === undefined || candidate.ref === null ? '' : String(candidate.ref);
-    if (ref === '') continue;
-    refs[ref] = isRepository ? refResolves(root, ref) : false;
+  // Outside a repository nothing is recorded, because nothing was checked.
+  // Recording `false` there would have reported every reference absent on the
+  // strength of a lookup that never ran.
+  if (isRepository) {
+    for (const candidate of candidates) {
+      const ref = candidate.ref === undefined || candidate.ref === null ? '' : String(candidate.ref);
+      if (ref === '') continue;
+      refs[ref] = refResolves(root, ref);
+    }
   }
 
   const realRoot = realpath(path.resolve(root)) ?? path.resolve(root);

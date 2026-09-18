@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -103,10 +104,22 @@ test('task lint fails a structurally invalid record', (t) => {
 
 test('an unavailable candidate reference alone does not fail lint', (t) => {
   const root = fixture(t);
+  // A real repository, because a reference is only `unavailable` where it was
+  // actually looked up. Outside one nothing is checked, which the next test
+  // covers; this one is about an absent reference not failing lint.
+  execFileSync('git', ['-C', root, 'init', '--quiet'], { stdio: ['ignore', 'ignore', 'ignore'] });
   writeTask(root, 'T-001', 'candidates:\n  - ref: 0000000\n');
   const result = taskLint(root, 'T-001', { json: true });
   assert.equal(result.ok, true);
   assert.equal(result.reports[0].references[0].available, 'unavailable');
+});
+
+test('an unchecked candidate reference alone does not fail lint either', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-001', 'candidates:\n  - ref: 0000000\n');
+  const result = taskLint(root, 'T-001', { json: true });
+  assert.equal(result.ok, true);
+  assert.equal(result.reports[0].references[0].available, 'not_checked');
 });
 
 test('a hand-edited record and the parsed report agree', (t) => {

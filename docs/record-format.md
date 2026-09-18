@@ -201,8 +201,12 @@ its trust.
 The CLI may gather local observations and pass them to the checks: whether a
 candidate reference resolves in the local repository, whether a linked evidence
 or assessment file exists in the current checkout. Gathering is optional and
-local only, and never looks outside the checkout: a linked path that resolves
-elsewhere is skipped rather than reported.
+local only, and never looks outside the checkout: a linked path whose real
+destination lies elsewhere is not looked at, and is reported `not_checked`
+rather than `unavailable`. The same holds for a candidate reference when the
+root is not a git repository. `unavailable` means the checks looked and the
+reference was not there; about a file the record does not own they say
+nothing.
 
 **A pure check never performs I/O.** The pure functions take the parsed record
 plus an optional observation map, and are exported from the package so an

@@ -343,27 +343,44 @@ function parseMapping(lines, cursor, indent) {
 }
 
 /**
- * Serialize a string as a YAML scalar, quoting whenever a bare value would not
- * round-trip through `parseYaml`.
+ * Values a bare scalar must never spell, whatever its shape.
  *
- * A bare `Fix #1 regression` loses everything from the `#`, and a value opening
- * with `[` or `{` is read as a flow collection. Anything that would change
- * meaning, or that would come back as a non-string, is double quoted.
+ * YAML 1.1 reads all of these as booleans or as null, and the case they are
+ * written in does not matter.
+ */
+const RESERVED_WORDS = new Set(['true', 'false', 'null', 'yes', 'no', 'on', 'off', 'y', 'n']);
+
+/**
+ * A value safe to emit bare. Closed on purpose: a letter first, then only
+ * letters, digits, space, and the four punctuation marks records actually use.
+ */
+const BARE_SCALAR = /^[A-Za-z][A-Za-z0-9 _./-]*$/;
+
+/**
+ * Serialize a string as a YAML scalar, quoting whenever a bare value would not
+ * come back as the same string.
+ *
+ * The rule is a whitelist, not a blacklist. Two consecutive review rounds found
+ * a numeric spelling the blacklist had missed — first `123` and `1.5`, then
+ * `1e3`, `+1`, `0x10`, `0o17`, `.inf` and `.nan` — because the set of things a
+ * YAML parser reads as a number is open-ended and differs between YAML 1.1 and
+ * 1.2. A value that begins with a letter cannot be read as a number, hex,
+ * octal, infinity, NaN, timestamp or sexagesimal time by any of them, so
+ * requiring that closes the whole class by construction rather than one
+ * spelling at a time.
+ *
+ * What stays bare is what records are made of: ids like `T-001`, statuses like
+ * `in_review`, role names, and plain descriptions. `Fix #1 regression`,
+ * `engineer@claude` and everything else is double quoted with the escaping
+ * below.
  *
  * @param {string} value
  * @returns {string}
  */
 export function formatScalar(value) {
   const text = String(value);
-  const needsQuoting =
-    text === '' ||
-    text !== text.trim() ||
-    /[#:\[\]{},&*!|>'"%@`]/.test(text) ||
-    /[\n\r\t]/.test(text) ||
-    /^[-?]/.test(text) ||
-    /^(true|false|null|~|yes|no|on|off)$/i.test(text) ||
-    /^-?\d+(\.\d+)?$/.test(text);
-  if (!needsQuoting) return text;
+  const bare = BARE_SCALAR.test(text) && text === text.trim() && !RESERVED_WORDS.has(text.toLowerCase());
+  if (bare) return text;
   return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')}"`;
 }
 

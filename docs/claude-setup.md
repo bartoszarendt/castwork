@@ -16,6 +16,11 @@ npx agenticloop setup --host claude
 
 then run `npx agenticloop update`.
 
+The host id is `claude`. If a pre-release build left `claude-code` in your
+`agenticloop.json`, edit it to `claude` first: `setup` and `update` both read
+the file before applying `--host`, so an unknown id is refused before anything
+is written, with the known ids listed in the error.
+
 ## What is generated
 
 ```

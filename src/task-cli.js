@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { checkRecord, duplicateIdErrors, mayBeDone } from './checks.js';
+import { checkRecord, duplicateIdErrors, mayBeDone, structuralValidity } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
@@ -234,6 +234,19 @@ export function taskSet(root, id, field, value) {
       throw new PublicError(`unknown status value ${value}`, { hint: `Known values: ${STATUS_VALUES.join(', ')}.` });
     }
     if (value === 'done') {
+      // Structure first, and from the parse this command already performed.
+      // `mayBeDone` evaluates recognised requirement kinds only, so a record
+      // whose `requirements` names a misspelt kind declared a requirement that
+      // no check could ever weigh: lint refused it and this write did not,
+      // which is a declared requirement dropped to obtain `done`.
+      const structural = structuralValidity(record);
+      if (!structural.valid) {
+        const lines = structural.errors.map((error) => `  ${error.code}: ${error.message}`);
+        throw new PublicError(
+          `${id} has a structural error, so status was not changed:\n${lines.join('\n')}`,
+          { hint: 'Run task lint to see all three outputs, then fix the record. Nothing was written.' },
+        );
+      }
       const verdict = mayBeDone(record, observe(record, root));
       if (!verdict.allowed) {
         const lines = verdict.blocking.map((requirement) => `  ${requirement.requirement}: ${requirement.status} (${requirement.reason})`);

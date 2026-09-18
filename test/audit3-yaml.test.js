@@ -23,7 +23,7 @@ import { generateHost, readRoles, readSkills, readCommand } from '../src/adapter
 import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
-import { taskSet } from '../src/task-cli.js';
+import { taskLint, taskSet } from '../src/task-cli.js';
 import { formatScalar, parseYaml } from '../src/yaml.js';
 
 /* ------------------------------------------------------------------ */
@@ -85,8 +85,14 @@ test('3: task set status done refuses a record whose flow mapping repeats a key'
     'utf8',
   );
   const before = fs.readFileSync(file, 'utf8');
-  assert.throws(() => taskSet(root, 'T-001', 'status', 'done'));
+  // Named, because a bare `assert.throws` accepted any error and this one is
+  // not the requirement refusal: a duplicate flow key makes the whole
+  // frontmatter unparseable, so the record has no readable id and the lookup
+  // refuses first. The structural refusal itself is covered by
+  // `audit4-done-gate.test.js`, on records whose YAML parses.
+  assert.throws(() => taskSet(root, 'T-001', 'status', 'done'), /no task record with id T-001/);
   assert.equal(fs.readFileSync(file, 'utf8'), before, 'nothing was written');
+  assert.equal(taskLint(root, null, { json: true }).ok, false, 'lint reports the same record as invalid');
 });
 
 /* ------------------------------------------------------------------ */
@@ -217,21 +223,41 @@ for (const [label, document] of REPORTED_DUPLICATES) {
  *
  * Generated scalars cannot produce a duplicate key, so this is a supplement to
  * the targeted cases above and never a substitute for them.
+ *
+ * Round four: the previous generator multiplied a 31-bit seed by 1103515245,
+ * which leaves the safe integer range, so the sequence degenerated to 271
+ * distinct values over the four lengths 0, 4, 5 and 8, and its alphabet could
+ * not spell `1e3` or `0x10` at all. It is a 32-bit LCG through `Math.imul`
+ * now, and the two assertions below fail loudly if it degenerates again.
  */
+const SCALAR_ALPHABET = [...'abcdefgijklmnprstuvwEXxOo :#[]{},"\'\\|>*&!?%@`-~+_/\t\r\n0123456789.'];
+const SCALAR_MAX_LENGTH = 12;
+
 function* generatedScalars(count) {
-  const alphabet = [...'ab :#[]{},"\'\\|>*&!?%@`-\t\r\n0189.'];
   let seed = 0x2f6e2b1;
+  // The high bits: an LCG's low bits cycle far too short to vary a length.
   const next = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed;
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    return seed >>> 8;
   };
   for (let i = 0; i < count; i += 1) {
-    const length = next() % 12;
+    const length = next() % (SCALAR_MAX_LENGTH + 1);
     let value = '';
-    for (let j = 0; j < length; j += 1) value += alphabet[next() % alphabet.length];
+    for (let j = 0; j < length; j += 1) value += SCALAR_ALPHABET[next() % SCALAR_ALPHABET.length];
     yield value;
   }
 }
+
+test('9: the scalar generator does not degenerate', () => {
+  const values = [...generatedScalars(400)];
+  assert.equal(values.length, 400);
+  const distinct = new Set(values).size;
+  assert.ok(distinct >= 350, `only ${distinct} distinct values of 400`);
+  const lengths = new Set(values.map((value) => value.length));
+  for (let length = 0; length <= SCALAR_MAX_LENGTH; length += 1) {
+    assert.ok(lengths.has(length), `no generated scalar of length ${length}`);
+  }
+});
 
 test('9: generated scalars round-trip through both parsers', () => {
   let checked = 0;

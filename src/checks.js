@@ -65,7 +65,7 @@ export function referenceAvailability(record, observations = {}) {
     out.push({
       ref,
       kind: 'candidate',
-      available: refs === null ? 'not_checked' : observed(refs, ref) ? 'available' : 'unavailable',
+      available: observed(refs, ref),
     });
   }
 
@@ -75,7 +75,7 @@ export function referenceAvailability(record, observations = {}) {
     out.push({
       ref: link,
       kind: 'link',
-      available: files === null ? 'not_checked' : observed(files, link) ? 'available' : 'unavailable',
+      available: observed(files, link),
     });
   }
 
@@ -83,18 +83,25 @@ export function referenceAvailability(record, observations = {}) {
 }
 
 /**
- * Read one observation by a key the record supplied.
+ * Read one observation by a key the record supplied, as one of three states.
+ *
+ * A missing own property is `not_checked`, not `unavailable`: a gatherer that
+ * skipped a path said nothing about it, and reporting it absent would be a
+ * claim about a file the record does not own. `false` is the only thing that
+ * means checked and absent.
  *
  * Every key here is a string a record chose, so `refs['__proto__']` on a plain
  * map answered from Object.prototype and reported an unresolvable reference as
- * available. Only an own property counts as an observation; a consumer passing
- * an ordinary object literal is safe too.
+ * available. Only an own property counts, which also keeps an ordinary object
+ * literal from an external consumer safe.
  *
- * @param {Record<string, boolean>} map
+ * @param {Record<string, boolean>|null} map
  * @param {string} key
+ * @returns {'available'|'unavailable'|'not_checked'}
  */
 function observed(map, key) {
-  return Object.hasOwn(map, key) && map[key] === true;
+  if (map === null || !Object.hasOwn(map, key)) return 'not_checked';
+  return map[key] === true ? 'available' : 'unavailable';
 }
 
 /**

@@ -16,6 +16,12 @@ The host ids are `codex`, `claude`, and `opencode` — each host's own command
 name. The bundled skills are `task-record-contract`, `verification-evidence`,
 `assessment`, `decision-capture`, and `blocked-state`.
 
+If a pre-release build wrote `claude-code` into your `agenticloop.json`, change
+that value to `claude` before running `setup` or `update`. Both read the file
+before applying `--host`, so an unknown host id is refused first and the error
+lists the known ids. There is no alias: 0.5.0 is the first release, so there is
+nothing to stay compatible with.
+
 **Added**
 
 - A documented record format with a `schema` field, a nine-value status
