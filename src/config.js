@@ -65,12 +65,16 @@ export function readConfig(root) {
 export function writeConfig(root, hosts) {
   const file = path.join(root, CONFIG_FILE);
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  // No `extends` key: defaults come from the installed package's config.json
+  // via defaults(), and 0.5.0 does not copy the toolkit source into the target,
+  // so a pointer to ./agenticloop/config.json would name a path that is not
+  // there and that nothing reads.
   const next = {
-    extends: './agenticloop/config.json',
     ...existing,
     hosts,
     models: existing.models ?? {},
   };
+  delete next.extends;
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   return next;
 }

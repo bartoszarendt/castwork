@@ -74,3 +74,39 @@ test('no shipped document claims setup prompts for a host', () => {
     assert.doesNotMatch(text, /when asked|asks which hosts/i, `${relative} still describes a prompt`);
   }
 });
+
+test('the written config carries no pointer to a path that is not there', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
+  assert.ok(!('extends' in config), 'agenticloop.json must not declare extends');
+  assert.deepEqual(Object.keys(config).sort(), ['hosts', 'models']);
+});
+
+test('the shipped template matches the shape setup writes', () => {
+  const template = JSON.parse(fs.readFileSync(path.join(repoRoot, 'agenticloop.template.json'), 'utf8'));
+  assert.ok(!('extends' in template));
+  assert.deepEqual(Object.keys(template).sort(), ['hosts', 'models']);
+});
+
+test('an existing extends key is dropped rather than carried forward', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const file = path.join(root, CONFIG_FILE);
+  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  config.extends = './agenticloop/config.json';
+  fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
+  setup(root, { hosts: ['codex'] });
+  assert.ok(!('extends' in JSON.parse(fs.readFileSync(file, 'utf8'))));
+});
+
+test('a user key in agenticloop.json survives a rerun', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const file = path.join(root, CONFIG_FILE);
+  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  config.note = 'mine';
+  fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
+  setup(root, { hosts: ['codex'] });
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).note, 'mine');
+});

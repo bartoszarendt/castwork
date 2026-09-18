@@ -63,7 +63,6 @@ per-role model bindings:
 
 ```json
 {
-  "extends": "./agenticloop/config.json",
   "hosts": ["codex", "claude-code"],
   "models": {
     "engineer": "claude-opus-5",
@@ -71,6 +70,9 @@ per-role model bindings:
   }
 }
 ```
+
+Defaults come from the installed package, so there is nothing to point at and
+no file to inherit from. What is in this file overrides them.
 
 A model binding is a plain string passed to the host. It is optional runtime
 configuration and never role identity: binding a model grants no authority and

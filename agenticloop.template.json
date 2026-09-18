@@ -1,10 +1,4 @@
 {
-  "extends": "./agenticloop/config.json",
-  "documents": {
-    "rules": "AGENTS.md",
-    "overview": "README.md",
-    "process": "agenticloop/AGENTIC_LOOP.md"
-  },
   "hosts": [],
   "models": {}
 }
