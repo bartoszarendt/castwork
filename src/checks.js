@@ -446,13 +446,15 @@ export function duplicateIdErrors(records) {
 }
 
 /**
- * Whether the record may claim `status: done`: every declared requirement
- * satisfied. This is the single write validation, not an authorization gate.
+ * Whether the record may claim `status: done`: structurally valid, with every
+ * declared requirement satisfied. Structural diagnostics and blocking
+ * requirements stay separate. This is write validation, not an authorization gate.
  * @param {import('./record.js').ParsedRecord} record
  * @param {Observations} [observations]
  */
 export function mayBeDone(record, observations = {}) {
+  const structural = structuralValidity(record);
   const results = requirementEvaluation(record, observations);
   const blocking = results.filter((result) => result.status !== 'satisfied');
-  return { allowed: blocking.length === 0, blocking };
+  return { allowed: structural.valid && blocking.length === 0, structural, blocking };
 }

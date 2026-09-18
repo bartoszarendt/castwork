@@ -69,7 +69,7 @@ of two actor strings is checked; the identities behind them stay asserted.
 ## The one write validation
 
 `task set <id> status done` refuses, without writing, when that record's
-requirement evaluation is not all `satisfied`.
+structure is invalid or its requirement evaluation is not all `satisfied`.
 
 This is validation on one value, not a gate on work. Every other `task set`
 value and every direct edit is unrestricted. Failed checks, rejecting

@@ -220,7 +220,11 @@ independent consumer uses the same interface.
 - **`task show`** loads any record it can parse, in every state, and reports the
   same three outputs under `--json`.
 - **`task set <id> status done`** refuses, without writing, when that record's
-  requirement evaluation is not all `satisfied`.
+  structure is invalid or its requirement evaluation is not all `satisfied`.
+
+The exported `mayBeDone` check makes the same record-level completion decision
+as the CLI. It returns `allowed`, the `structural` result, and `blocking`
+requirements; structural errors are not converted into requirement results.
 
 That refusal is write validation on one value — not an authorization or
 transition gate. Every other `task set` value and every direct edit is

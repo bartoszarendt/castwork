@@ -134,13 +134,32 @@ test('the three outputs are reported separately', () => {
   assert.equal(report.requirements.length, 1);
 });
 
-test('mayBeDone blocks only on unsatisfied requirements', () => {
+test('mayBeDone evaluates requirements on structurally valid records', () => {
   const blocked = record('requirements:\n  checks: [test]\ncandidates:\n  - ref: aaa\n');
   assert.equal(mayBeDone(blocked).allowed, false);
   assert.equal(mayBeDone(blocked).blocking.length, 1);
 
   const clear = record('requirements:\n  checks: [test]\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: test, candidate: aaa, result: pass }\n');
   assert.equal(mayBeDone(clear).allowed, true);
+});
+
+test('mayBeDone refuses an unknown requirement without inventing a requirement result', () => {
+  const parsed = record('requirements:\n  check: [test]\n');
+  const verdict = mayBeDone(parsed);
+  assert.equal(verdict.allowed, false);
+  assert.equal(verdict.structural.valid, false);
+  assert.ok(verdict.structural.errors.some((error) => error.code === 'requirement.unknown_kind'));
+  assert.deepEqual(verdict.blocking, []);
+});
+
+test('mayBeDone keeps structural errors and unmet requirements separate', () => {
+  const parsed = record('depends_on: not-a-list\nrequirements:\n  checks: [test]\ncandidates:\n  - ref: aaa\n');
+  const verdict = mayBeDone(parsed);
+  assert.equal(verdict.allowed, false);
+  assert.equal(verdict.structural.valid, false);
+  assert.ok(verdict.structural.errors.some((error) => error.code === 'field.not_a_list'));
+  assert.equal(verdict.blocking.length, 1);
+  assert.equal(verdict.blocking[0].reason, 'evidence.missing');
 });
 
 test('checks are pure: the same input gives the same result and nothing is mutated', () => {
