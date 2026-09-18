@@ -131,6 +131,10 @@ consumer.
 
 An effective `reject` or `needs_revision` from a relevant actor or role leaves
 the requirement `not_satisfied` until a later effective assessment changes it.
+When several actors are relevant, one blocking verdict is enough: an accept
+from one and a reject from another is `not_satisfied` with reason
+`assessment.rejected`, and only a later effective assessment by the rejecting
+actor can clear it.
 
 A new requirement kind needs a real consumer before it is added.
 

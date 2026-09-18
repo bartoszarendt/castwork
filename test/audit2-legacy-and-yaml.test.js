@@ -29,6 +29,22 @@ function tmp(t) {
  */
 const BASELINE_COMMIT = '2d8cd99';
 
+/**
+ * A shallow clone, a tarball, or a fresh checkout of this branch alone does not
+ * carry the Phase 37 checkpoint. Without it there is no ground truth to compare
+ * against, so the test skips and says why rather than throwing.
+ */
+function baselineIsPresent() {
+  try {
+    execFileSync('git', ['-C', repoRoot, 'cat-file', '-e', `${BASELINE_COMMIT}^{commit}`], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function baselineStateSegments() {
   const files = execFileSync('git', ['-C', repoRoot, 'ls-tree', '-r', '--name-only', BASELINE_COMMIT], { encoding: 'utf8' })
     .split('\n')
@@ -53,7 +69,11 @@ const CURRENT = new Set(['decisions', 'local', 'project.md', 'tasks', 'generated
  */
 const NEVER_WRITTEN = new Set(['agents']);
 
-test('2: every legacy state name 0.4.x wrote is recognised', () => {
+test('2: every legacy state name 0.4.x wrote is recognised', (t) => {
+  if (!baselineIsPresent()) {
+    t.skip(`baseline commit ${BASELINE_COMMIT} is not in this checkout`);
+    return;
+  }
   const baseline = baselineStateSegments();
   assert.ok(baseline.size > 10, 'baseline evidence could not be read from Git');
 

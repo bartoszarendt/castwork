@@ -132,7 +132,9 @@ test('8: a traversing link is never observed', (t) => {
   const file = path.join(root, '.agenticloop', 'tasks', 'T-001.md');
   fs.writeFileSync(file, `---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: test, candidate: aaa, result: pass, output: "${relative}" }\n---\n`, 'utf8');
   const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
-  assert.deepEqual(observe(record, root).files, {}, 'no external existence may be reported');
+  // The observation maps carry a null prototype since the third round, so they
+  // are compared by their own entries rather than by identity with a literal.
+  assert.deepEqual({ ...observe(record, root).files }, {}, 'no external existence may be reported');
 });
 
 test('8: an in-checkout link is observed, resolved from the repository root', (t) => {
@@ -143,5 +145,5 @@ test('8: an in-checkout link is observed, resolved from the repository root', (t
   const file = path.join(root, '.agenticloop', 'tasks', 'T-001.md');
   fs.writeFileSync(file, '---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: lint, candidate: aaa, result: pass, output: "logs/lint.txt" }\n  - { check: test, candidate: aaa, result: pass, output: "logs/absent.txt" }\n---\n', 'utf8');
   const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
-  assert.deepEqual(observe(record, root).files, { 'logs/lint.txt': true, 'logs/absent.txt': false });
+  assert.deepEqual({ ...observe(record, root).files }, { 'logs/lint.txt': true, 'logs/absent.txt': false });
 });

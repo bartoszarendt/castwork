@@ -27,15 +27,43 @@ import { PublicError } from './public-error.js';
  * @returns {string} the absolute path, guaranteed to be inside root
  */
 export function containedPath(root, relative) {
+  return resolveContained(root, relative, GENERATED_MANIFEST, true);
+}
+
+/**
+ * Resolve a path the installer itself writes: the state directories,
+ * `project.md`, `.gitignore`, and `agenticloop.json`.
+ *
+ * These were the writes that used a bare `path.join` and so followed a link
+ * placed at `.agenticloop`. They share every containment rule with a generated
+ * path except one: they are allowed to be user-owned, because seeding them is
+ * exactly their job.
+ *
+ * @param {string} root
+ * @param {string} relative
+ * @returns {string} the absolute path, guaranteed to be inside root
+ */
+export function installPath(root, relative) {
+  return resolveContained(root, relative, 'the installation', false);
+}
+
+/**
+ * @param {string} root
+ * @param {string} relative
+ * @param {string} subject what a refusal names as the source of the path
+ * @param {boolean} refuseUserOwned
+ * @returns {string}
+ */
+function resolveContained(root, relative, subject, refuseUserOwned) {
   if (typeof relative !== 'string' || relative.trim() === '') {
-    throw new PublicError(`${GENERATED_MANIFEST} contains an empty generated path`);
+    throw new PublicError(`${subject} contains an empty generated path`);
   }
   // Normalise separators first: a backslash is a path separator on Windows, so
   // `.agenticloop\\tasks\\T-001.md` and `.agenticloop/tasks/T-001.md` are the
   // same file and must be judged the same way.
   const unified = relative.replace(/\\/g, '/');
   if (path.posix.isAbsolute(unified) || /^[A-Za-z]:/.test(unified) || unified.startsWith('\\\\')) {
-    throw new PublicError(`${GENERATED_MANIFEST} contains an absolute generated path: ${relative}`, {
+    throw new PublicError(`${subject} contains an absolute generated path: ${relative}`, {
       hint: 'Generated paths are relative to the repository root. Fix the manifest and run setup again.',
     });
   }
@@ -44,7 +72,7 @@ export function containedPath(root, relative) {
   const target = path.resolve(realRoot, unified);
   const inside = target === realRoot || target.startsWith(realRoot + path.sep);
   if (!inside) {
-    throw new PublicError(`${GENERATED_MANIFEST} contains a generated path outside the repository: ${relative}`, {
+    throw new PublicError(`${subject} contains a generated path outside the repository: ${relative}`, {
       hint: 'Generated paths may never escape the repository root. Fix the manifest and run setup again.',
     });
   }
@@ -52,14 +80,33 @@ export function containedPath(root, relative) {
   // Compare the *normalised* path against the user-owned roots, so `./x`,
   // `a/../x` and backslash spellings cannot slip past the check.
   const normalised = path.relative(realRoot, target).split(path.sep).join('/');
-  if (USER_OWNED.some((owned) => normalised === owned || normalised.startsWith(`${owned}/`))) {
-    throw new PublicError(`${GENERATED_MANIFEST} claims a user-owned path as generated: ${relative}`, {
+  if (refuseUserOwned && isUserOwned(normalised)) {
+    throw new PublicError(`${subject} claims a user-owned path as generated: ${relative}`, {
       hint: 'project.md, tasks/ and decisions/ are yours and are never generated. Fix the manifest.',
     });
   }
 
-  assertNoSymlinkComponent(realRoot, target, relative);
+  assertNoSymlinkComponent(realRoot, target, relative, subject);
   return target;
+}
+
+/**
+ * Is this normalised path a user-owned one, whatever its case?
+ *
+ * The comparison is case-insensitive on every platform, not only where the
+ * filesystem is. A generated path never legitimately differs from a user-owned
+ * path by case alone, so `.AGENTICLOOP/TASKS/T-001.md` is refused on Linux too:
+ * refusing costs nothing and being case-sensitive cost the real record on
+ * Windows and macOS.
+ *
+ * @param {string} normalised
+ */
+function isUserOwned(normalised) {
+  const lowered = normalised.toLowerCase();
+  return USER_OWNED.some((owned) => {
+    const target = owned.toLowerCase();
+    return lowered === target || lowered.startsWith(`${target}/`);
+  });
 }
 
 /**
@@ -75,8 +122,9 @@ export function containedPath(root, relative) {
  * @param {string} realRoot
  * @param {string} target
  * @param {string} relative
+ * @param {string} subject
  */
-function assertNoSymlinkComponent(realRoot, target, relative) {
+function assertNoSymlinkComponent(realRoot, target, relative, subject) {
   const segments = path.relative(realRoot, target).split(path.sep).filter((segment) => segment !== '');
   let current = realRoot;
   for (const segment of segments) {
@@ -84,7 +132,7 @@ function assertNoSymlinkComponent(realRoot, target, relative) {
     const stats = lstat(current);
     if (stats === null) return; // nothing exists from here down; nothing to follow
     if (stats.isSymbolicLink()) {
-      throw new PublicError(`${GENERATED_MANIFEST} resolves through a symbolic link: ${relative}`, {
+      throw new PublicError(`${subject} resolves through a symbolic link: ${relative}`, {
         hint: 'Generated files are never symbolic links. Remove the link and run setup again.',
       });
     }
@@ -120,7 +168,9 @@ export function digest(content) {
 
 /** @param {string} root @returns {Manifest|null} */
 export function readManifest(root) {
-  const file = path.join(root, GENERATED_MANIFEST);
+  // Contained before it is read, so a linked `.agenticloop` is refused before
+  // any caller has written anything rather than at the closing write.
+  const file = containedPath(root, GENERATED_MANIFEST);
   if (!fs.existsSync(file)) return null;
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -143,7 +193,9 @@ export function readManifest(root) {
 
 /** @param {string} root @param {Manifest} manifest */
 export function writeManifest(root, manifest) {
-  const file = path.join(root, GENERATED_MANIFEST);
+  // containedPath has already walked every component, so the parent it names
+  // carries no link either and creating it follows nothing.
+  const file = containedPath(root, GENERATED_MANIFEST);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const ordered = {
     layout_version: LAYOUT_VERSION,

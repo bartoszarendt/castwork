@@ -14,6 +14,22 @@ function tmp(t, label) {
   return root;
 }
 
+/**
+ * Create a link, or skip the test when this machine will not make one.
+ *
+ * These cases used to swallow the error and return, so on Windows without
+ * Developer Mode they reported success having asserted nothing. A skip says so.
+ */
+function link(t, target, linkPath, type) {
+  try {
+    fs.symlinkSync(target, linkPath, type);
+    return true;
+  } catch (error) {
+    t.skip(`symlink creation unavailable: ${error.code}`);
+    return false;
+  }
+}
+
 function poison(root, relative, content) {
   const file = path.join(root, GENERATED_MANIFEST);
   const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -51,33 +67,44 @@ test('1a: remove refuses a normalised protected path and keeps the record', (t) 
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
 });
 
-/** Finding 1b: a symlinked directory whose descendants do not exist yet. */
-test('1b: a descendant of a symlinked directory is refused even when absent', (t) => {
-  const root = tmp(t, 'link');
-  const outside = tmp(t, 'out');
-  try {
-    fs.symlinkSync(outside, path.join(root, 'link'), 'dir');
-  } catch {
-    return;
-  }
-  assert.throws(() => containedPath(root, 'link/absent/evil.txt'), /symbolic link/);
-  assert.throws(() => containedPath(root, 'link/deeper/still/absent.txt'), /symbolic link/);
-  assert.throws(() => containedPath(root, 'link/child.txt'), /symbolic link/);
-});
+/**
+ * Finding 1b: a linked directory whose descendants do not exist yet.
+ *
+ * A junction is the variant Windows can always create, so the directory cases
+ * run there even when `'dir'` fails with EPERM.
+ */
+for (const type of ['dir', 'junction']) {
+  test(`1b: a descendant of a ${type} link is refused even when absent`, (t) => {
+    const root = tmp(t, `link-${type}`);
+    const outside = tmp(t, `out-${type}`);
+    if (!link(t, outside, path.join(root, 'link'), type)) return;
+    assert.throws(() => containedPath(root, 'link/absent/evil.txt'), /symbolic link/);
+    assert.throws(() => containedPath(root, 'link/deeper/still/absent.txt'), /symbolic link/);
+    assert.throws(() => containedPath(root, 'link/child.txt'), /symbolic link/);
+  });
 
-test('1b: update cannot create a file through a symlinked directory', (t) => {
-  const root = tmp(t, 'linkw');
-  const outside = tmp(t, 'outw');
-  setup(root, { hosts: ['codex'] });
-  try {
-    fs.symlinkSync(outside, path.join(root, 'link'), 'dir');
-  } catch {
-    return;
-  }
-  poison(root, 'link/absent/evil.txt', 'anything');
-  assert.throws(() => update(root), /symbolic link/);
-  assert.ok(!fs.existsSync(path.join(outside, 'absent')), 'nothing was created outside');
-});
+  test(`1b: update cannot create a file through a ${type} link`, (t) => {
+    const root = tmp(t, `linkw-${type}`);
+    const outside = tmp(t, `outw-${type}`);
+    setup(root, { hosts: ['codex'] });
+    if (!link(t, outside, path.join(root, 'link'), type)) return;
+    poison(root, 'link/absent/evil.txt', 'anything');
+    assert.throws(() => update(root), /symbolic link/);
+    assert.ok(!fs.existsSync(path.join(outside, 'absent')), 'nothing was created outside');
+  });
+
+  test(`1b: remove cannot delete through a ${type} link`, (t) => {
+    const root = tmp(t, `linkr-${type}`);
+    const outside = tmp(t, `outr-${type}`);
+    const victim = path.join(outside, 'victim.txt');
+    fs.writeFileSync(victim, 'VICTIM\n', 'utf8');
+    setup(root, { hosts: ['codex'] });
+    if (!link(t, outside, path.join(root, 'link'), type)) return;
+    poison(root, 'link/victim.txt', 'VICTIM\n');
+    assert.throws(() => remove(root), /symbolic link/);
+    assert.equal(fs.readFileSync(victim, 'utf8'), 'VICTIM\n');
+  });
+}
 
 /** Finding 1c: the generated path is itself a symlink. */
 test('1c: a generated path that is a symlink is refused', (t) => {
@@ -86,11 +113,7 @@ test('1c: a generated path that is a symlink is refused', (t) => {
   const victim = path.join(outside, 'victim.txt');
   fs.writeFileSync(victim, 'ORIGINAL\n', 'utf8');
   setup(root, { hosts: ['codex'] });
-  try {
-    fs.symlinkSync(victim, path.join(root, 'final-link.txt'), 'file');
-  } catch {
-    return;
-  }
+  if (!link(t, victim, path.join(root, 'final-link.txt'), 'file')) return;
   assert.throws(() => containedPath(root, 'final-link.txt'), /symbolic link/);
 });
 
@@ -102,11 +125,7 @@ test('1c: a forced update cannot write through a symlinked generated file', (t) 
   const result = setup(root, { hosts: ['codex'] });
   const generated = result.written[0];
   fs.rmSync(path.join(root, generated));
-  try {
-    fs.symlinkSync(victim, path.join(root, generated), 'file');
-  } catch {
-    return;
-  }
+  if (!link(t, victim, path.join(root, generated), 'file')) return;
   assert.throws(() => update(root, { force: [generated] }), /symbolic link/);
   assert.equal(fs.readFileSync(victim, 'utf8'), 'ORIGINAL\n', 'the external file must be untouched');
 });
@@ -117,11 +136,7 @@ test('1c: remove cannot delete through a symlinked generated file', (t) => {
   const victim = path.join(outside, 'victim.txt');
   fs.writeFileSync(victim, 'VICTIM\n', 'utf8');
   setup(root, { hosts: ['codex'] });
-  try {
-    fs.symlinkSync(victim, path.join(root, 'final-link.txt'), 'file');
-  } catch {
-    return;
-  }
+  if (!link(t, victim, path.join(root, 'final-link.txt'), 'file')) return;
   poison(root, 'final-link.txt', 'VICTIM\n');
   assert.throws(() => remove(root), /symbolic link/);
   assert.ok(fs.existsSync(victim));

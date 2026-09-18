@@ -65,7 +65,7 @@ export function referenceAvailability(record, observations = {}) {
     out.push({
       ref,
       kind: 'candidate',
-      available: refs === null ? 'not_checked' : refs[ref] ? 'available' : 'unavailable',
+      available: refs === null ? 'not_checked' : observed(refs, ref) ? 'available' : 'unavailable',
     });
   }
 
@@ -75,11 +75,26 @@ export function referenceAvailability(record, observations = {}) {
     out.push({
       ref: link,
       kind: 'link',
-      available: files === null ? 'not_checked' : files[link] ? 'available' : 'unavailable',
+      available: files === null ? 'not_checked' : observed(files, link) ? 'available' : 'unavailable',
     });
   }
 
   return out;
+}
+
+/**
+ * Read one observation by a key the record supplied.
+ *
+ * Every key here is a string a record chose, so `refs['__proto__']` on a plain
+ * map answered from Object.prototype and reported an unresolvable reference as
+ * available. Only an own property counts as an observation; a consumer passing
+ * an ordinary object literal is safe too.
+ *
+ * @param {Record<string, boolean>} map
+ * @param {string} key
+ */
+function observed(map, key) {
+  return Object.hasOwn(map, key) && map[key] === true;
 }
 
 /**
@@ -216,10 +231,11 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
     return { requirement: name, status: 'not_satisfied', reason: 'candidate.missing', facts: [] };
   }
   const producers = identityList(candidate.producers);
-  const accepting = effectiveAssessments(record, candidateRef).filter((entry) => String(entry.verdict) === 'accept');
+  const effective = effectiveAssessments(record, candidateRef);
+  const accepting = effective.filter((entry) => String(entry.verdict) === 'accept');
 
   if (accepting.length === 0) {
-    const anyAssessment = effectiveAssessments(record, candidateRef).length > 0;
+    const anyAssessment = effective.length > 0;
     return {
       requirement: name,
       status: 'not_satisfied',
@@ -244,6 +260,26 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
       status: 'unknown',
       reason: 'actor.missing',
       facts: [{ fact: 'every accepting assessment lacks an actor', trust: ASSERTED }],
+    };
+  }
+
+  // A relevant actor is one who is not a producer of this candidate: only they
+  // can make the review independent, and only they can block it. A producer
+  // rejecting their own work says nothing about independence.
+  const blocking = effective.filter(
+    (entry) => isBlockingVerdict(entry.verdict) && isIdentity(entry.actor) && !producers.includes(String(entry.actor).trim()),
+  );
+  if (blocking.length > 0) {
+    const actors = blocking.map(assessorName);
+    return {
+      requirement: name,
+      status: 'not_satisfied',
+      reason: 'assessment.rejected',
+      facts: [
+        { fact: `blocking independent actors: ${actors.join(', ')}`, trust: ASSERTED },
+        { fact: `candidate producers ${producers.join(', ')}`, trust: ASSERTED },
+        { fact: 'an effective reject or needs_revision from an independent actor blocks the requirement', trust: CHECKED },
+      ],
     };
   }
 
@@ -298,6 +334,23 @@ export function isIdentity(value) {
 }
 
 /**
+ * A verdict that withholds the favorable outcome a requirement asks for.
+ * @param {unknown} value
+ */
+function isBlockingVerdict(value) {
+  const verdict = String(value);
+  return verdict === 'reject' || verdict === 'needs_revision';
+}
+
+/**
+ * Who to name for an assessment: its actor, or the role when none is recorded.
+ * @param {Record<string, unknown>} entry
+ */
+function assessorName(entry) {
+  return isIdentity(entry.actor) ? String(entry.actor).trim() : `${String(entry.role)} (no actor)`;
+}
+
+/**
  * @param {import('./record.js').ParsedRecord} record
  * @param {string} role
  * @param {string|null} candidateRef
@@ -312,13 +365,23 @@ function evaluateAssessmentRole(record, role, candidateRef) {
   if (forRole.length === 0) {
     return { requirement: name, status: 'not_satisfied', reason: 'assessment.missing', facts: [] };
   }
-  const accepted = forRole.some((entry) => String(entry.verdict) === 'accept');
   const verdicts = forRole.map((entry) => String(entry.verdict));
   /** @type {SupportingFact[]} */
   const facts = [{ fact: `effective ${role} verdicts: ${verdicts.join(', ')}`, trust: ASSERTED }];
-  return accepted
-    ? { requirement: name, status: 'satisfied', reason: 'assessment.accepted', facts }
-    : { requirement: name, status: 'not_satisfied', reason: 'assessment.not_accepted', facts };
+
+  // `some(accept)` let one maintainer overrule another: two effective
+  // assessments, one accepting and one rejecting, reported satisfied. Every
+  // actor holding the role is relevant, so one blocking verdict is enough.
+  if (!forRole.some((entry) => String(entry.verdict) === 'accept')) {
+    return { requirement: name, status: 'not_satisfied', reason: 'assessment.not_accepted', facts };
+  }
+  const blocking = forRole.filter((entry) => isBlockingVerdict(entry.verdict));
+  if (blocking.length > 0) {
+    facts.push({ fact: `blocking ${role} actors: ${blocking.map(assessorName).join(', ')}`, trust: ASSERTED });
+    facts.push({ fact: 'an effective reject or needs_revision blocks the requirement', trust: CHECKED });
+    return { requirement: name, status: 'not_satisfied', reason: 'assessment.rejected', facts };
+  }
+  return { requirement: name, status: 'satisfied', reason: 'assessment.accepted', facts };
 }
 
 /**

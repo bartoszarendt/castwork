@@ -123,6 +123,12 @@ function parseFlow(text, line) {
         index += 1;
         const flowKey = unquote(key);
         assertSafeKey(flowKey, line);
+        // The block form has always refused a repeated key; the flow form kept
+        // the last value in silence, so `{checks: [test], checks: []}` dropped
+        // a declared requirement without a diagnostic. One rule, one message.
+        if (Object.hasOwn(map, flowKey)) {
+          throw new YamlError(`duplicate key ${flowKey}`, line);
+        }
         map[flowKey] = parseValue();
         if (tokens[index] === ',') { index += 1; continue; }
         if (tokens[index] === '}') { index += 1; return map; }

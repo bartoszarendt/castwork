@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { PublicError } from './public-error.js';
+import { installPath } from './generated.js';
 import { toolkitRoot } from './adapter-generation.js';
 
 /** Shipped defaults. */
@@ -63,7 +64,9 @@ export function readConfig(root) {
 
 /** @param {string} root @param {string[]} hosts */
 export function writeConfig(root, hosts) {
-  const file = path.join(root, CONFIG_FILE);
+  // Contained, so a link left where the config belongs is refused rather than
+  // followed to whatever it names.
+  const file = installPath(root, CONFIG_FILE);
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   // No `extends` key: defaults come from the installed package's config.json
   // via defaults(), and 0.5.0 does not copy the toolkit source into the target,

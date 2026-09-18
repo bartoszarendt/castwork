@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { generateAll, toolkitRoot } from './adapter-generation.js';
 import { readConfig, writeConfig } from './config.js';
-import { containedPath, digest, ownership, readManifest, writeManifest } from './generated.js';
+import { containedPath, digest, installPath, ownership, readManifest, writeManifest } from './generated.js';
 import {
   CONFIG_FILE,
   DECISIONS_DIRECTORY,
@@ -81,17 +81,25 @@ function refuseLegacy(reasons) {
   );
 }
 
-/** @param {string} root */
+/**
+ * Seed the target-owned state.
+ *
+ * Every path is resolved through `installPath` first, so a link standing where
+ * one of these belongs is refused before anything is created rather than
+ * followed out of the repository.
+ *
+ * @param {string} root
+ */
 function seedState(root) {
   const created = [];
   for (const directory of [STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, LOCAL_DIRECTORY]) {
-    const full = path.join(root, directory);
+    const full = installPath(root, directory);
     if (!fs.existsSync(full)) {
       fs.mkdirSync(full, { recursive: true });
       created.push(directory);
     }
   }
-  const project = path.join(root, PROJECT_FILE);
+  const project = installPath(root, PROJECT_FILE);
   if (!fs.existsSync(project)) {
     fs.copyFileSync(path.join(toolkitRoot(), 'memory', 'scaffold', 'project.md'), project);
     created.push(PROJECT_FILE);
@@ -101,7 +109,7 @@ function seedState(root) {
 
 /** @param {string} root */
 function ensureGitignore(root) {
-  const file = path.join(root, '.gitignore');
+  const file = installPath(root, '.gitignore');
   const line = `${LOCAL_DIRECTORY}/`;
   const existing = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   if (existing.split(/\r?\n/).some((entry) => entry.trim() === line)) return false;
@@ -226,7 +234,7 @@ export function remove(root) {
     }
   }
   pruneEmptyDirectories(root, removed);
-  fs.rmSync(path.join(root, GENERATED_MANIFEST), { force: true });
+  fs.rmSync(containedPath(root, GENERATED_MANIFEST), { force: true });
   return { removed, kept };
 }
 
