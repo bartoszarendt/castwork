@@ -131,7 +131,10 @@ function renderRoleToml(role, adapter, settings) {
     if (value === undefined || value === null || value === '') continue;
     lines.push(`${target} = ${tomlString(String(value))}`);
   }
-  lines.push('', 'instructions = """', role.body, '"""', '');
+  // Codex reads an agent's prompt from `developer_instructions`. A bare
+  // `instructions` key is also accepted, but it becomes the model's base
+  // instructions and replaces Codex's own system prompt rather than adding to it.
+  lines.push('', 'developer_instructions = """', role.body, '"""', '');
   return lines.join('\n');
 }
 

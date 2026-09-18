@@ -58,6 +58,24 @@ for (const host of HOSTS) {
   });
 }
 
+for (const host of HOSTS) {
+  test(`${host} entry file tells the session it is the orchestrator`, () => {
+    const entry = generateHost(host).find((file) => /agenticloop\.md$|agenticloop\/SKILL\.md$/.test(file.path));
+    assert.ok(entry, `${host} has no entry file`);
+    assert.match(entry.content, /You are the orchestrator for this session/);
+    assert.match(entry.content, /Read the `orchestrator` preset/);
+  });
+}
+
+test('codex role files carry the prompt under the key Codex reads', () => {
+  const roleFiles = generateHost('codex').filter((file) => file.path.endsWith('.toml'));
+  assert.equal(roleFiles.length, readRoles().length);
+  for (const file of roleFiles) {
+    assert.match(file.content, /^developer_instructions = """$/m, `${file.path} has no developer_instructions`);
+    assert.doesNotMatch(file.content, /^instructions = /m, `${file.path} sets base instructions`);
+  }
+});
+
 test('a model binding reaches the generated role file', () => {
   const files = generateHost('claude', { roleSettings: { engineer: { model: 'claude-opus-5' } } });
   const engineer = files.find((file) => file.path.endsWith('engineer.md'));

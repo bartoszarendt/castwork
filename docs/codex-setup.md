@@ -30,9 +30,11 @@ report and skip it rather than overwrite your change.
 
 ## Using it
 
-Open Codex in the repository and use the `agenticloop` skill. It reads
-`.agenticloop/project.md`, your working policy, and the open tasks, then hands
-off. There is nothing to activate and no command to run first.
+Open Codex in the repository and use the `agenticloop` skill. It instructs
+the session to act as the `orchestrator`, read the role presets under
+`.codex/agents/`, read `.agenticloop/project.md`, your working policy, and the
+open tasks, then continue the requested work, delegating when useful. There is
+nothing to activate and no command to run first.
 
 To work as a particular role, point Codex at that role's file under
 `.codex/agents/`. Role files are TOML, carrying the role's name, description,

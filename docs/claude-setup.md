@@ -42,13 +42,15 @@ In the repository, run:
 /agenticloop
 ```
 
-It reads `.agenticloop/project.md`, your working policy, and the open tasks,
-then hands off. Nothing needs to be activated first, and the command takes an
-optional task id or description as ordinary context.
+The command instructs the session to act as the `orchestrator`, read the role
+presets under `.claude/agents/`, read `.agenticloop/project.md`, your working
+policy, and the open tasks, then continue the requested work, delegating when
+useful. Nothing needs to be activated first, and the command takes an optional
+task id or description as ordinary context.
 
-The four roles are available as subagents. Invoking one is a choice, not a
-required sequence — there is no delegation prerequisite and no order the toolkit
-enforces.
+The four roles are available as subagents. Delegating to one is a choice, not a
+required sequence — there is no delegation prerequisite and no order the
+toolkit enforces.
 
 ## Permissions
 

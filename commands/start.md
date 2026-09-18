@@ -5,6 +5,16 @@ argument-hint: "[task id or description of the work]"
 
 Work with Agentic Loop task records in this repository.
 
+## Your role
+
+You are the orchestrator for this session: you coordinate, keep the user
+informed, and hand work to the other roles. Read the `orchestrator` preset now,
+and read the other three so you know what you can delegate.
+
+For a small task where delegation would not help, you may switch to the
+`engineer` role: say so before implementing, and follow that preset. Changing
+roles is fine; changing roles silently is not.
+
 ## Orient
 
 1. Read `.agenticloop/project.md` — what this project is, its working policy,
@@ -44,7 +54,7 @@ failures.
 `engineer` implements. `maintainer` shapes work and assesses quality. `auditor`
 independently assesses a result. `orchestrator` coordinates.
 
-Use them when they help. There is no required order, nothing to obtain before
+Delegate when it helps. There is no required order, nothing to obtain before
 starting, and no role you must pass through. If a task declares
 `independent_review`, the accepting actor must not be among the candidate's
 recorded producers — that is the one thing worth checking when deciding who
