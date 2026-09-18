@@ -5,10 +5,10 @@
 From the root of your repository:
 
 ```sh
-npx agenticloop setup
+npx agenticloop setup --host opencode
 ```
 
-Select `opencode` when asked, or set it directly in `agenticloop.json`:
+`setup` does not prompt; name the host on the command line, or set it in `agenticloop.json`:
 
 ```json
 { "hosts": ["opencode"] }

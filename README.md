@@ -29,10 +29,16 @@ whether what a task declared it needed has actually been obtained.
 ## Install
 
 ```sh
-npx agenticloop setup
+npx agenticloop setup --host codex --host claude-code
 ```
 
-This generates host integrations for the hosts you select and creates
+Name the hosts you want; `--host` is repeatable and takes `codex`,
+`claude-code`, or `opencode`. There is no prompt — `setup` never asks a question
+it could be told, and a run with no hosts and none recorded refuses rather than
+guessing. Later runs reuse the `hosts` recorded in `agenticloop.json`, so
+`npx agenticloop setup` on its own is enough once it is installed.
+
+This generates host integrations for the hosts you named and creates
 `.agenticloop/` in your repository. Generated files are tracked and contain no
 absolute paths.
 

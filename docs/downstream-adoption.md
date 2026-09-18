@@ -25,8 +25,11 @@ product, it is not earning its place. That failure mode is why 0.5.0 exists.
 ## Install
 
 ```sh
-npx agenticloop setup
+npx agenticloop setup --host codex
 ```
+
+`--host` is repeatable and takes `codex`, `claude-code`, or `opencode`. The
+choice is recorded in `agenticloop.json`, so later runs need no flags.
 
 Commit everything it writes except `.agenticloop/local/`. Generated files carry
 no absolute paths, so a colleague who clones the repository gets a working

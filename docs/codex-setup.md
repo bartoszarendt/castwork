@@ -5,10 +5,10 @@
 From the root of your repository:
 
 ```sh
-npx agenticloop setup
+npx agenticloop setup --host codex
 ```
 
-Select `codex` when asked, or set it directly:
+`setup` does not prompt; name the host on the command line, or set it:
 
 ```json
 { "hosts": ["codex"] }

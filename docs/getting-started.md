@@ -9,11 +9,12 @@ declared it needed. It does not tell them how to work.
 From the root of the repository you want to work in:
 
 ```sh
-npx agenticloop setup
+npx agenticloop setup --host codex --host claude-code --host opencode
 ```
 
-`setup` asks which hosts to generate for — Codex, Claude Code, OpenCode — and
-writes:
+Name the hosts you want. `--host` is repeatable and accepts `codex`,
+`claude-code`, and `opencode`; `setup` does not prompt, and refuses rather than
+guessing if you name none and none are recorded. It writes:
 
 ```
 .agenticloop/
@@ -25,7 +26,9 @@ writes:
 agenticloop.json    machine configuration
 ```
 
-plus the host directories for what you selected. Commit all of it except
+plus the host directories for the hosts you named. They are recorded under
+`hosts` in `agenticloop.json`, so later `setup` and `update` runs reuse them and
+need no flags. Commit all of it except
 `.agenticloop/local/`, which `setup` adds to your `.gitignore`. Generated files
 contain no absolute paths, so they work for everyone who clones the repository.
 
