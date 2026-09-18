@@ -89,7 +89,7 @@ test('3: task set status done refuses a record whose flow mapping repeats a key'
   // not the requirement refusal: a duplicate flow key makes the whole
   // frontmatter unparseable, so the record has no readable id and the lookup
   // refuses first. The structural refusal itself is covered by
-  // `audit4-done-gate.test.js`, on records whose YAML parses.
+  // `done-gate.test.js`, on records whose YAML parses.
   assert.throws(() => taskSet(root, 'T-001', 'status', 'done'), /no task record with id T-001/);
   assert.equal(fs.readFileSync(file, 'utf8'), before, 'nothing was written');
   assert.equal(taskLint(root, null, { json: true }).ok, false, 'lint reports the same record as invalid');
