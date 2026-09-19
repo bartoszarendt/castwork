@@ -13,7 +13,7 @@ export const LAYOUT_VERSION = 4;
 /** Target-owned records and state. */
 export const STATE_DIRECTORY = '.agenticloop';
 
-/** Machine configuration, at the target root and nowhere else. */
+/** Project configuration, at the target root and nowhere else. */
 export const CONFIG_FILE = 'agenticloop.json';
 
 /** The tracked ownership manifest. */

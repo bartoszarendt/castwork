@@ -15,10 +15,10 @@ YAML frontmatter; the body is prose.
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
-agenticloop.json    machine configuration: hosts, per-host role settings
+agenticloop.json    project configuration: hosts, per-host role settings
 ```
 
-Nothing else is written under `.agenticloop/`. Machine configuration lives in
+Nothing else is written under `.agenticloop/`. Project configuration lives in
 `agenticloop.json` and nowhere else; `project.md` owns prose only.
 
 ## The four concepts
@@ -78,7 +78,7 @@ follow any other, and no status grants a permission.
 | Field | Required | Meaning |
 |---|---|---|
 | `candidate` | yes | a `ref` from `candidates` |
-| `role` | yes | one of `orchestrator`, `maintainer`, `engineer`, `auditor` |
+| `role` | yes | the canonical responsibility: one of `orchestrator`, `maintainer`, `engineer`, `auditor`. A specialist is an `actor` under one of these, not a fifth role. |
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
 | `actor`, `host`, `model`, `at` | no | optional attributes |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |

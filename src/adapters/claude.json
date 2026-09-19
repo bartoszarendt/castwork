@@ -2,6 +2,7 @@
   "id": "claude",
   "label": "Claude Code",
   "role_frontmatter": { "model": "model", "permission_mode": "permissionMode", "reasoning_effort": "effort" },
+  "skill_frontmatter": { "disable-model-invocation": true },
   "files": [
     { "kind": "role", "to": ".claude/agents/{role}.md", "format": "markdown" },
     { "kind": "command", "to": ".claude/commands/agenticloop.md", "format": "command" },

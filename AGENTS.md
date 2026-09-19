@@ -46,8 +46,16 @@ authoritative copy for one host.
 - **Generated files carry no absolute paths** and are tracked in the target
   repository. Machine-specific state belongs in the gitignored
   `.agenticloop/local/`.
-- **Machine configuration lives only in `agenticloop.json`** at the target root.
-  `project.md` is prose.
+- **Configuration lives only in `agenticloop.json`** at the target root, and it
+  describes the repository rather than the machine: `hosts` are the hosts the
+  project supports, and role settings are its deliberate choices. `project.md`
+  is prose; `.agenticloop/local/` is machine-local state, not an overlay.
+- **Four roles, and they do not vary by project.** A specialist is an `actor`
+  under a canonical role, carrying a skill, chosen by prose policy. Do not add a
+  role registry or derive roles from policy.
+- **Generated skills are invoked, not inferred.** The entry command's
+  `skill_description` says when to use Agentic Loop and when not to, and a host
+  that documents a way to refuse implicit invocation gets it from its adapter.
 
 ## Before changing the product
 

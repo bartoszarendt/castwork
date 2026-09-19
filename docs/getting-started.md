@@ -23,14 +23,16 @@ guessing if you name none and none are recorded. It writes:
   decisions/
   generated.json    tracked ownership manifest
   local/            gitignored
-agenticloop.json    machine configuration
+agenticloop.json    project configuration: hosts, per-host role settings
 ```
 
 plus the host directories for the hosts you named. They are recorded under
 `hosts` in `agenticloop.json`, so later `setup` and `update` runs reuse them and
-need no flags. Commit all of it except
-`.agenticloop/local/`, which `setup` adds to your `.gitignore`. Generated files
-contain no absolute paths, so they work for everyone who clones the repository.
+need no flags, and naming another host later adds it rather than replacing what
+is there. Commit all of it except `.agenticloop/local/`, which `setup` adds to
+your `.gitignore`. Generated files contain no absolute paths, so they work for
+everyone who clones the repository — a contributor does not run `setup` to pick
+a host of their own, because `hosts` says which hosts the project supports.
 
 If `setup` finds a 0.4.x installation it refuses and prints the manual steps. It
 will not migrate or overwrite anything.
@@ -44,7 +46,7 @@ when to ask. Agents read it. The toolkit does not compile it into rules.
 > Work in small commits. Anything touching billing gets an independent review
 > before it is marked done. Ask before adding a dependency.
 
-Machine configuration does not go here; it lives in `agenticloop.json`.
+Project configuration does not go here; it lives in `agenticloop.json`.
 
 ## 3. Create a task
 

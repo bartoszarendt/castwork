@@ -48,6 +48,10 @@ policy, and the open tasks, then continue the requested work, delegating when
 useful. Nothing needs to be activated first, and the command takes an optional
 task id or description as ordinary context.
 
+The generated skill index carries `disable-model-invocation: true`, so Claude
+never loads Agentic Loop on its own initiative: you invoke it, by running
+`/agenticloop` or by asking for it.
+
 The four roles are available as subagents. Delegating to one is a choice, not a
 required sequence — there is no delegation prerequisite and no order the
 toolkit enforces.

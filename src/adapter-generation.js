@@ -70,15 +70,81 @@ export function readSkills() {
   return skills;
 }
 
-/** The canonical entry command. */
+/**
+ * The canonical entry command.
+ *
+ * It carries two descriptions because it is projected two ways. `description`
+ * is read when the user invoked the command by name, so it may be a plain
+ * instruction. `skill_description` is read by a host deciding **whether** to
+ * load Agentic Loop at all, so it has to name its trigger and its boundary.
+ * There is deliberately no fallback between them: an imperative written for an
+ * invoked command becomes, as a skill description, an invitation to start
+ * orchestrating work nobody asked about.
+ */
 export function readCommand() {
   const file = path.join(toolkitRoot(), 'commands', 'start.md');
   if (!fs.existsSync(file)) return null;
   const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
-  return {
-    description: String(parsed.frontmatter.description ?? ''),
-    body: parsed.body.trim(),
-  };
+  return { ...commandDescriptions(parsed.frontmatter), body: parsed.body.trim() };
+}
+
+/**
+ * The two descriptions an entry command must carry, or a refusal.
+ *
+ * Generation and `validate` both come through here, so they cannot disagree
+ * about what a usable command looks like. Each value has to be a string:
+ * stringifying whatever was written would turn a mapping into the literal
+ * `[object Object]` and carry it, non-empty and apparently valid, into a
+ * generated file.
+ *
+ * @param {Record<string, unknown>} frontmatter
+ * @returns {{description: string, skill_description: string}}
+ */
+export function commandDescriptions(frontmatter) {
+  const description = frontmatter.description;
+  const skillDescription = frontmatter.skill_description;
+  if (typeof description !== 'string' || description.trim() === '') {
+    throw new PublicError('the entry command has no description', {
+      hint: 'commands/start.md needs a description string for the generated command file.',
+    });
+  }
+  if (typeof skillDescription !== 'string' || skillDescription.trim() === '') {
+    throw new PublicError('the entry command has no skill_description', {
+      hint: 'A generated skill index needs its own description string, naming when to use Agentic Loop and when not to.',
+    });
+  }
+  if (description.trim() === skillDescription.trim()) {
+    throw new PublicError('the entry command repeats its description as skill_description', {
+      hint: 'A skill index says when to use Agentic Loop; a command the user invoked by name does not have to.',
+    });
+  }
+  return { description: description.trim(), skill_description: skillDescription.trim() };
+}
+
+/**
+ * The extra frontmatter one host's adapter puts on the skill index.
+ *
+ * Scalars only. A list or a mapping has no single-line YAML spelling here, so
+ * it would be stringified into something the host cannot read; a host that
+ * needs nested YAML can have it when one actually does.
+ *
+ * @param {Record<string, unknown>} adapter
+ * @returns {string[]}
+ */
+export function skillFrontmatter(adapter) {
+  const declared = /** @type {Record<string, unknown>} */ (adapter.skill_frontmatter ?? {});
+  const lines = [];
+  for (const [key, value] of Object.entries(declared)) {
+    if (typeof value === 'boolean') {
+      lines.push(`${key}: ${String(value)}`);
+      continue;
+    }
+    if (typeof value !== 'string' || value === '') {
+      throw new PublicError(`adapter ${String(adapter.id)} declares skill_frontmatter.${key} as something other than a string or a boolean`);
+    }
+    lines.push(`${key}: ${yamlString(value)}`);
+  }
+  return lines;
 }
 
 /** @param {string} value */
@@ -144,15 +210,25 @@ function renderReference(skill) {
 }
 
 /**
- * @param {{description: string, body: string}|null} command
+ * Render the skill index a host loads on its own initiative.
+ *
+ * `skill_frontmatter` is where a host says, in its own spelling, that this
+ * skill is invoked and not inferred. Only the hosts that document such a key
+ * declare one; for the rest the description is the only lever there is.
+ *
+ * @param {{description: string, skill_description: string, body: string}|null} command
  * @param {{id: string, description: string}[]} skills
  * @param {{id: string, description: string}[]} roles
+ * @param {Record<string, unknown>} adapter
  */
-function renderSkillIndex(command, skills, roles) {
+function renderSkillIndex(command, skills, roles, adapter) {
   const lines = [
     '---',
     'name: agenticloop',
-    `description: ${yamlString(command?.description ?? 'Work with Agentic Loop task records in this repository.')}`,
+    `description: ${yamlString(command?.skill_description ?? "Use when asked to work with this repository's Agentic Loop task records.")}`,
+    ...skillFrontmatter(adapter),
+  ];
+  lines.push(
     '---',
     '',
     '# Agentic Loop',
@@ -161,7 +237,7 @@ function renderSkillIndex(command, skills, roles) {
     '',
     '## Roles',
     '',
-  ];
+  );
   for (const role of roles) lines.push(`- \`${role.id}\` — ${role.description}`);
   lines.push('', '## Procedures', '');
   for (const skill of skills) lines.push(`- [\`${skill.id}\`](references/${skill.id}.md) — ${skill.description}`);
@@ -192,7 +268,7 @@ export function generateHost(host, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
-  for (const entry of /** @type {{kind: string, to: string, format: string}[]} */ (adapter.files)) {
+  for (const entry of /** @type {{kind: string, to: string, format: string, content?: string}[]} */ (adapter.files)) {
     if (entry.kind === 'role') {
       for (const role of roles) {
         const settings = roleSettings[role.id] ?? {};
@@ -212,12 +288,23 @@ export function generateHost(host, options = {}) {
     if (entry.kind === 'command') {
       files.push({
         path: entry.to,
-        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles) : renderCommand(command),
+        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter) : renderCommand(command),
       });
       continue;
     }
     if (entry.kind === 'index') {
-      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles) });
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter) });
+      continue;
+    }
+    if (entry.kind === 'literal') {
+      // A file whose content is the descriptor's own, for a host key that is
+      // configuration rather than prose — Codex's invocation policy is the
+      // first of them. The generator stays host-agnostic: it writes what the
+      // adapter says and learns nothing about what the key means.
+      if (typeof entry.content !== 'string') {
+        throw new PublicError(`adapter ${host} declares a literal file with no content: ${entry.to}`);
+      }
+      files.push({ path: entry.to, content: entry.content });
       continue;
     }
     throw new PublicError(`adapter ${host} declares an unknown file kind ${entry.kind}`);

@@ -92,6 +92,36 @@ Independence is evaluated against the recorded `producers` of the candidate, not
 against role names. The same actor string appearing as producer and reviewer is
 not independent regardless of the roles it claimed.
 
+These four are responsibilities, not personas, and they do not vary by project:
+a record means the same thing in every repository that uses one. A specialist is
+expressed alongside them, not as a fifth role:
+
+| | |
+|---|---|
+| role | the canonical responsibility a record names |
+| actor | who performed it |
+| skill | the specialist knowledge they brought |
+| policy | the prose saying when that specialist is worth using |
+
+So a security review by a specialist agent is recorded as an `auditor`
+assessment whose `actor` says who it was:
+
+```yaml
+assessments:
+  - candidate: 007c7f8
+    role: auditor
+    actor: security-reviewer@codex
+    verdict: accept
+```
+
+The project's policy may say that authentication changes want a security
+specialist, and the host may create or invoke one. Neither adds a role: the
+toolkit does not compile policy into roles, and the four responsibilities stay
+comparable across repositories.
+
+Only `role` and `actor` in that table are record fields. Skill and policy are
+how the work is done, not something a record carries.
+
 ## Skills
 
 Ordinary reusable procedures. Loading a skill grants no authority and activates
@@ -113,7 +143,7 @@ Checkable requirements are declared per task.
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
-agenticloop.json    machine configuration: hosts, per-host role settings
+agenticloop.json    project configuration: hosts, per-host role settings
 ```
 
 Nothing else is written under `.agenticloop/`.

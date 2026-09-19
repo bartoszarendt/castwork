@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { readManifest } from '../src/generated.js';
-import { GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
+import { CONFIG_FILE, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
 import { detectLegacyLayout, doctor, remove, setup, update } from '../src/setup.js';
 
 /** Each fixture is its own temp tree, removed when the test ends. */
@@ -135,4 +135,46 @@ test('setup is idempotent', (t) => {
   const second = setup(root, { hosts: ['claude'] });
   assert.deepEqual(second.written.sort(), first.written.sort());
   assert.deepEqual(second.collisions, []);
+});
+
+test('naming a host adds it and leaves the other hosts files in place', (t) => {
+  const root = fixture(t);
+  const first = setup(root, { hosts: ['codex'] });
+  const second = setup(root, { hosts: ['claude'] });
+
+  assert.deepEqual(second.hosts, ['codex', 'claude']);
+  assert.deepEqual(second.added, ['claude']);
+  assert.deepEqual(second.removed, []);
+  for (const relative of first.written) {
+    assert.ok(fs.existsSync(path.join(root, relative)), `${relative} was deleted by adding a host`);
+  }
+  assert.ok(second.written.some((relative) => relative.startsWith('.claude/')));
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8')).hosts, ['codex', 'claude']);
+});
+
+test('naming a host that is already recorded adds nothing', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const again = setup(root, { hosts: ['codex'] });
+  assert.deepEqual(again.hosts, ['codex']);
+  assert.deepEqual(again.added, []);
+  assert.deepEqual(again.removed, []);
+});
+
+test('dropping a host from the config and updating removes its files', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex', 'claude'] });
+  const file = path.join(root, CONFIG_FILE);
+  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  config.hosts = ['codex'];
+  fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}
+`, 'utf8');
+
+  const result = update(root);
+  assert.deepEqual(result.hosts, ['codex']);
+  assert.ok(result.removed.length > 0);
+  assert.ok(result.removed.every((relative) => relative.startsWith('.claude/')));
+  assert.ok(!fs.existsSync(path.join(root, '.claude', 'commands', 'agenticloop.md')));
+  assert.ok(!fs.existsSync(path.join(root, '.claude')), 'an emptied host directory was left standing');
+  assert.ok(fs.existsSync(path.join(root, '.codex', 'agents', 'engineer.toml')));
 });

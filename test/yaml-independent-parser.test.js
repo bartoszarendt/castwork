@@ -128,7 +128,7 @@ for (const host of MARKDOWN_HOSTS) {
     assert.ok(index, `${host} generated no skill index`);
     const parsed = independentYaml.parse(frontmatterOf(index.content));
     assert.equal(parsed.name, 'agenticloop');
-    assert.equal(parsed.description, readCommand().description);
+    assert.equal(parsed.description, readCommand().skill_description);
   });
 
   test(`9: the ${host} entry command frontmatter is valid for an independent parser`, () => {

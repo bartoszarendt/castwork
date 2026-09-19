@@ -19,9 +19,10 @@ in `agenticloop.json`, then run `npx agenticloop update`.
 ## What is generated
 
 ```
-.codex/agents/<role>.toml               the four role presets
-.agents/skills/agenticloop/SKILL.md     the entry procedure and an index
-.agents/skills/agenticloop/references/  one file per reusable procedure
+.codex/agents/<role>.toml                     the four role presets
+.agents/skills/agenticloop/SKILL.md           the entry procedure and an index
+.agents/skills/agenticloop/agents/openai.yaml the invocation policy
+.agents/skills/agenticloop/references/        one file per reusable procedure
 ```
 
 All of it is tracked in your repository and contains no absolute paths. The
@@ -30,11 +31,29 @@ report and skip it rather than overwrite your change.
 
 ## Using it
 
-Open Codex in the repository and use the `agenticloop` skill. It instructs
-the session to act as the `orchestrator`, read the role presets under
-`.codex/agents/`, read `.agenticloop/project.md`, your working policy, and the
-open tasks, then continue the requested work, delegating when useful. There is
-nothing to activate and no command to run first.
+Open Codex in the repository and invoke the skill by name:
+
+```
+$agenticloop
+```
+
+It instructs the session to act as the `orchestrator`, read the role presets
+under `.codex/agents/`, read `.agenticloop/project.md`, your working policy, and
+the open tasks, then continue the requested work, delegating when useful. There
+is nothing to activate and no command to run first.
+
+Codex will not start this on its own. The generated
+`.agents/skills/agenticloop/agents/openai.yaml` sets
+
+```yaml
+policy:
+  allow_implicit_invocation: false
+```
+
+so the skill is never matched implicitly against whatever you happened to ask
+for. Explicit invocation — `$agenticloop`, or picking it from `/skills` — keeps
+working. Agentic Loop is a way to record work, not a mode a session should fall
+into.
 
 To work as a particular role, point Codex at that role's file under
 `.codex/agents/`. Role files are TOML, carrying the role's name, description,

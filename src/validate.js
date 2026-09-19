@@ -7,9 +7,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { generateHost, readRoles, toolkitRoot } from './adapter-generation.js';
+import { commandDescriptions, generateHost, readAdapter, readRoles, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
 import { readConfig, settingsFor } from './config.js';
 import { containedPath, digest, readManifest } from './generated.js';
+import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
@@ -71,6 +72,29 @@ function validateRoles(findings) {
   }
 }
 
+/**
+ * The entry command carries two descriptions, and they may not collapse into
+ * one. The command description is read after the user invoked it by name; the
+ * skill index description is what a host reads when deciding whether to load
+ * Agentic Loop unprompted.
+ *
+ * @param {Finding[]} findings
+ */
+function validateCommand(findings) {
+  const file = path.join(toolkitRoot(), 'commands', 'start.md');
+  const where = 'commands/start.md';
+  if (!fs.existsSync(file)) {
+    error(findings, where, 'is missing');
+    return;
+  }
+  const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+  try {
+    commandDescriptions(parsed.frontmatter);
+  } catch (refusal) {
+    error(findings, where, refusal instanceof PublicError ? refusal.message : String(refusal));
+  }
+}
+
 /** @param {Finding[]} findings */
 function validateConfig(findings) {
   const file = path.join(toolkitRoot(), 'config.json');
@@ -93,6 +117,11 @@ function validateConfig(findings) {
     if (!HOSTS.includes(host)) {
       error(findings, 'config.json', `adapters.${host} is not a supported host`);
       continue;
+    }
+    try {
+      skillFrontmatter(readAdapter(host));
+    } catch (refusal) {
+      error(findings, `src/adapters/${host}.json`, refusal instanceof PublicError ? refusal.message : String(refusal));
     }
     const accepted = settingsFor(host);
     for (const [role, settings] of Object.entries(adapter?.role_settings ?? {})) {
@@ -142,7 +171,15 @@ function validateGeneratedOutput(findings, root) {
     return;
   }
   for (const host of config.hosts) {
-    for (const file of generateHost(host, { roleSettings: config.role_settings[host] })) {
+    /** @type {{path: string, content: string}[]} */
+    let planned;
+    try {
+      planned = generateHost(host, { roleSettings: config.role_settings[host] });
+    } catch (generationError) {
+      error(findings, `adapters/${host}`, `generation failed: ${String(generationError)}`);
+      continue;
+    }
+    for (const file of planned) {
       const recorded = manifest.files[file.path];
       if (recorded === undefined) {
         warn(findings, file.path, `would be generated for ${host} but is not in the manifest; run update`);
@@ -169,6 +206,7 @@ export function validate(root) {
   const findings = [];
   validateSkills(findings);
   validateRoles(findings);
+  validateCommand(findings);
   validateConfig(findings);
   validateDocumentLinks(findings);
   validateGeneratedOutput(findings, root);

@@ -165,11 +165,26 @@ function writeGenerated(root, files, options = {}) {
     }
   }
 
+  // Dropping a host from the config and running `update` is the documented way
+  // to stop generating for it, so the directories it owned should not be left
+  // standing empty afterwards, looking installed.
+  pruneEmptyDirectories(root, removed);
+
   writeManifest(root, { layout_version: LAYOUT_VERSION, version: packageVersion(), files: next });
   return { written, skipped, collisions, removed };
 }
 
 /**
+ * Install, or add a host to an installation.
+ *
+ * Naming a host adds it to the recorded set; it never replaces it. Under the
+ * previous rule `setup --host claude` in a repository that already generated
+ * for Codex left `hosts` as `["claude"]`, and the ownership pass then deleted
+ * every Codex file it still owned. That is a tracked deletion nobody asked for,
+ * and it made a contributor's own host choice a change to the whole repository.
+ * Dropping a host is a deliberate edit to `agenticloop.json` followed by
+ * `update`, which removes what it no longer generates.
+ *
  * @param {string} root
  * @param {{hosts?: string[], force?: string[]}} [options]
  */
@@ -178,7 +193,11 @@ export function setup(root, options = {}) {
   if (legacy.length > 0) refuseLegacy(legacy);
 
   const existing = readConfig(root);
-  const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : existing.hosts;
+  const added = [];
+  for (const host of options.hosts ?? []) {
+    if (!existing.hosts.includes(host) && !added.includes(host)) added.push(host);
+  }
+  const hosts = [...existing.hosts, ...added];
   if (hosts.length === 0) {
     throw new PublicError('no hosts selected', {
       hint: `Pass --host <name> (one or more of ${HOSTS.join(', ')}), or list them under "hosts" in ${CONFIG_FILE}.`,
@@ -192,7 +211,7 @@ export function setup(root, options = {}) {
   const files = generateAll(hosts, { roleSettings: config.role_settings });
   const result = writeGenerated(root, files, { force: options.force });
 
-  return { hosts, created, ignored, ...result };
+  return { hosts, added, created, ignored, ...result };
 }
 
 /**

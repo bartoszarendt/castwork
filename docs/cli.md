@@ -6,7 +6,7 @@ better than editing a record by hand.
 
 | Command path | What it does |
 |---|---|
-| `setup` | Install for the selected hosts: create `.agenticloop/`, write `agenticloop.json` and the generated host files, and record them in `generated.json`. Refuses a 0.4.x layout. |
+| `setup` | Install for the selected hosts: create `.agenticloop/`, write `agenticloop.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. Refuses a 0.4.x layout. |
 | `update` | Regenerate owned files whose digest still matches the manifest; report and skip modified ones unless `--force-generated` names them. |
 | `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, or `decisions/`. |
 | `doctor` | Read-only diagnosis of the installation and what to do next. Exits non-zero only on an error-level finding. |
@@ -28,14 +28,26 @@ command — and no aliases or deprecated forms for the ones that are gone.
 ## Installation and configuration
 
 `setup` needs to know which hosts to generate for. Name them with `--host`,
-which is repeatable, or list them under `hosts` in `agenticloop.json`. It
-records what you named, so later `setup` and `update` runs need no flag. With
-no hosts named and none recorded, `setup` refuses rather than guessing.
+which is repeatable, or list them under `hosts` in `agenticloop.json`. It adds
+what you named to what was already recorded, so later `setup` and `update` runs
+need no flag. With no hosts named and none recorded, `setup` refuses rather
+than guessing.
 
-`agenticloop.json` is the only machine configuration. It holds `hosts` and
-optional per-host `role_settings`, and nothing inherits from anywhere: defaults
-come from the installed package. A setting a host cannot express, and a value it
-could not carry, are each refused rather than dropped in silence.
+Naming a host adds it; it never replaces the set. `setup --host claude` in a
+repository that already generates for Codex leaves `hosts` as
+`["codex", "claude"]` and leaves every Codex file where it is. Dropping a host
+is deliberate: remove it from `hosts` in `agenticloop.json` and run `update`,
+which deletes what it no longer generates and still owns.
+
+`agenticloop.json` is the only configuration, and it is a property of the
+repository rather than of your machine. It holds `hosts` — the hosts this
+project supports, not the one you personally run — and optional per-host
+`role_settings`, which are the project's deliberate choices. Nothing inherits
+from anywhere: defaults come from the installed package. A setting a host
+cannot express, and a value it could not carry, are each refused rather than
+dropped in silence. Omit a setting to let the host's own configuration decide
+it; `.agenticloop/local/` is reserved for machine-local state and is not a
+second configuration layer.
 
 `update` regenerates from the hosts already recorded. It never changes which
 hosts you use — that is what `setup --host` is for — and it never writes over a

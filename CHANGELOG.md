@@ -25,6 +25,14 @@ release, so there is nothing to stay compatible with.
 
 **Added**
 
+- Generated skills are invoked, not inferred. The entry command carries a
+  `skill_description` — separate from its command `description`, with no
+  fallback between them — that says when to use Agentic Loop and when not to.
+  Codex additionally gets `.agents/skills/agenticloop/agents/openai.yaml` with
+  `policy.allow_implicit_invocation: false`, and Claude Code gets
+  `disable-model-invocation: true` in its skill index. Explicit invocation
+  (`$agenticloop`, `/agenticloop`) is unaffected. Adapters can now declare a
+  `literal` file and `skill_frontmatter`, so this stayed a descriptor change.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.
@@ -38,8 +46,21 @@ release, so there is nothing to stay compatible with.
 **Changed**
 
 - 13 command paths, down from 110.
-- Machine configuration lives only in `agenticloop.json` at the target root.
-  `project.md` is prose, including the project's working policy.
+- Configuration lives only in `agenticloop.json` at the target root, and it
+  describes the repository rather than the machine: `hosts` are the hosts the
+  project supports, not the one a contributor happens to run, and role settings
+  are the project's deliberate choices. Omit a setting to let the host's own
+  configuration decide it. `project.md` is prose, including the project's
+  working policy, and `.agenticloop/local/` is machine-local state rather than
+  a configuration layer.
+- `setup --host` adds a host to the recorded set instead of replacing it.
+  Previously `setup --host claude` in a repository already generating for Codex
+  left `hosts` as `["claude"]`, and the ownership pass then deleted the Codex
+  projections it still owned. Dropping a host is now a deliberate edit to
+  `agenticloop.json` followed by `update`.
+- The four roles are responsibilities and do not vary by project. A specialist
+  is an `actor` under a canonical role, carrying a skill, chosen by the prose
+  policy — not a fifth role and not something the toolkit derives.
 - Per-host `role_settings` in `agenticloop.json`. Each host's adapter declares
   which settings it accepts and what it calls them: reasoning effort is
   `effort` for Claude Code, `model_reasoning_effort` for Codex, and

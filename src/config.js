@@ -1,8 +1,11 @@
 /**
- * Machine configuration.
+ * Project configuration.
  *
  * It lives in `agenticloop.json` at the target root and nowhere else.
- * `.agenticloop/project.md` owns prose only.
+ * `.agenticloop/project.md` owns prose only, and `.agenticloop/local/` is
+ * machine-local state rather than a second layer read from here: everything
+ * this file holds is generated into tracked output, so it describes the
+ * repository and not the machine the repository is checked out on.
  *
  * A role setting is a plain value passed to one host. This module decides
  * which settings a host accepts by asking that host's adapter, and never

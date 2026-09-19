@@ -73,7 +73,7 @@ function help() {
   for (const entry of COMMAND_PATHS) out(`  ${entry.path.padEnd(width)}  ${entry.summary}`);
   out('\nOptions:');
   out('  --json                    Machine-readable output where supported.');
-  out(`  --host <name>             Select a host (${HOSTS.join(', ')}). Repeatable.`);
+  out(`  --host <name>             Add a project-supported host (${HOSTS.join(', ')}). Repeatable.`);
   out('  --force-generated <path>  Overwrite one generated file you modified. Repeatable.');
   out('  --debug                   Print internal stack details.');
   out('\nRecords are ordinary Markdown. Editing one by hand is a first-class way to use this.');
@@ -114,6 +114,10 @@ export function run(argv, options = {}) {
       const result = setup(root, { hosts, force });
       if (asJson) { json(result); return 0; }
       out(`installed for ${result.hosts.join(', ')}`);
+      // Only worth saying when something was already there to add to.
+      if (result.added.length > 0 && result.added.length !== result.hosts.length) {
+        out(`  added   ${result.added.join(', ')}`);
+      }
       for (const created of result.created) out(`  created ${created}`);
       for (const written of result.written) out(`  wrote   ${written}`);
       for (const skipped of result.skipped) out(`  skipped ${skipped} (modified locally)`);

@@ -8,7 +8,7 @@ special machinery.
 
 | Host | Generated into |
 |---|---|
-| `codex` | `.codex/agents/` (TOML) and `.agents/skills/agenticloop/` |
+| `codex` | `.codex/agents/` (TOML) and `.agents/skills/agenticloop/`, including its `agents/openai.yaml` invocation policy |
 | `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/agenticloop/` |
 | `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/agenticloop/` |
 
@@ -26,11 +26,13 @@ config.json  per-host role settings: permission mode
 ```
 
 and write the host's own files, substituting only what is host-specific:
-placement, file naming, and the host's frontmatter conventions. A role's id,
-description, and body come from its file under `agents/`; `config.json`
-contributes only the per-host settings. Each host is a
-descriptor in `src/adapters/<host>.json` listing where each kind of file goes
-and in which format; the generator itself knows nothing about any host.
+placement, file naming, the host's frontmatter conventions, and any literal
+file the host reads as configuration rather than prose.
+
+A role's id, description, and body come from its file under `agents/`;
+`config.json` contributes only the per-host settings. Each host is a descriptor
+in `src/adapters/<host>.json` listing where each kind of file goes and in which
+format; the generator itself knows nothing about any host.
 
 Generated files contain:
 
@@ -40,6 +42,25 @@ Generated files contain:
 
 If you find generated output asking an agent to prove something about itself,
 that is a bug. The toolkit reports what was recorded; it does not authenticate.
+
+## Invoked, not inferred
+
+The entry command carries two descriptions. `description` is projected into a
+command file, which runs because the user asked for it by name.
+`skill_description` is projected into the skill index, which a host reads when
+deciding whether to load Agentic Loop on its own — so it names when to use
+Agentic Loop and when not to. There is no fallback between them: an imperative
+written for a command the user invoked reads, as a skill description, like an
+invitation to start orchestrating work nobody asked about.
+
+Where a host documents a way to say "this skill is invoked, not inferred", its
+adapter declares it. Codex gets a `literal` file at
+`.agents/skills/agenticloop/agents/openai.yaml` setting
+`policy.allow_implicit_invocation` to `false`. Claude Code gets
+`disable-model-invocation: true` in the skill index frontmatter, through the
+adapter's `skill_frontmatter` map. Explicit invocation — `$agenticloop` in
+Codex, `/agenticloop` in Claude Code — is unaffected. OpenCode 1.x documents no
+such key, so there the description is the only lever there is.
 
 ## Ownership
 
@@ -58,10 +79,14 @@ That manifest is tracked alongside the files it describes.
 This is the whole ownership model. There is no certificate, no layout version
 negotiation, and no repair path.
 
-## Machine configuration
+## Portable project host-generation configuration
 
 `agenticloop.json` at the target root holds which hosts to generate for and any
-per-host role settings:
+per-host role settings. It describes the repository, not the machine it is
+checked out on: `hosts` names the hosts the project supports, and every
+`role_settings` value is a choice the project made on purpose. Everything it
+contains ends up in tracked generated files, which is what makes a clone work
+without running anything.
 
 ```json
 {
@@ -110,18 +135,29 @@ these are Claude Code's and Codex's current agent keys and OpenCode 1.x's.
 A binding is optional runtime configuration and never role identity: binding a
 model grants no authority and changes no assessment's meaning.
 
-Machine configuration lives here and nowhere else. `.agenticloop/project.md` is
-prose.
+Omitting a setting is the way to say "whatever this host is already configured
+to do". A personal preference — the model your account can reach, the effort
+you like — normally belongs in your host's own configuration, not here, because
+a value written here is generated into tracked files for everyone. Pin one only
+when the repository means it.
+
+Configuration lives here and nowhere else. `.agenticloop/project.md` is prose,
+and `.agenticloop/local/` is reserved for machine-local state: it is gitignored
+working space, not a second configuration layer that overrides this file.
 
 ## Adding a host
 
 Add a descriptor at `src/adapters/<host>.json` whose `id` is the host's own
-command name, listing its files; add that id to `HOSTS` in `src/layout.js`, and
-add an `adapters.<id>.role_settings` entry to `config.json` if the host needs
-per-role defaults. Settings the host accepts go in its `role_frontmatter` map,
-which maps the name `agenticloop.json` uses to the key the host reads. Nothing
-else in the toolkit should need to know the host exists. If adding a host requires changing the checks, the record format,
-or the CLI, the abstraction has leaked — fix that instead.
+command name, listing its files — `role`, `skill`, `command`, `index`, or a
+`literal` file whose `content` the descriptor carries; add that id to `HOSTS`
+in `src/layout.js`, and add an `adapters.<id>.role_settings` entry to
+`config.json` if the host needs per-role defaults. Settings the host accepts go
+in its `role_frontmatter` map, which maps the name `agenticloop.json` uses to
+the key the host reads. If the host documents a way to refuse implicit
+invocation, put it in `skill_frontmatter` or a `literal` file. Nothing else in
+the toolkit should need to know the host exists. If adding a host requires
+changing the checks, the record format, or the CLI, the abstraction has leaked
+— fix that instead.
 
 ## Verifying output
 

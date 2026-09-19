@@ -43,6 +43,12 @@ to activate first.
 The four roles are available as agents. Delegating to one is a choice, not a
 required sequence.
 
+The generated `SKILL.md` is described by when to use Agentic Loop rather than
+by what to do, so OpenCode has a reason not to reach for it during unrelated
+work. OpenCode 1.x documents no key for refusing implicit invocation outright —
+Codex and Claude Code do, and their adapters use it — so here the description is
+the only lever.
+
 ## Model bindings, reasoning effort, and variants
 
 Optional, in `agenticloop.json`:

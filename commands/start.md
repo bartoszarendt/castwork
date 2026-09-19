@@ -1,5 +1,6 @@
 ---
 description: Read the project's working policy and open task records, report where things stand, and continue with the requested work.
+skill_description: Use when the user asks to work with this repository's Agentic Loop task records — starting, continuing, reviewing, or recording work under .agenticloop/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly.
 argument-hint: "[task id or description of the work]"
 ---
 
@@ -7,9 +8,11 @@ Work with Agentic Loop task records in this repository.
 
 ## Your role
 
-You are the orchestrator for this session: you coordinate, keep the user
-informed, and hand work to the other roles. Read the `orchestrator` preset now,
-and read the other three so you know what you can delegate.
+Act as the orchestrator when Agentic Loop was invoked — you were asked for it by
+name, or the user asked to work with this repository's task records. Then you
+coordinate, keep the user informed, and hand work to the other roles: read the
+`orchestrator` preset, and read the other three so you know what you can
+delegate. Do not adopt the role for a request that never asked for it.
 
 For a small task where delegation would not help, you may switch to the
 `engineer` role: say so before implementing, and follow that preset. Changing
