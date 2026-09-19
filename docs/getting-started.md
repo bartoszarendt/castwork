@@ -102,14 +102,23 @@ candidates:
   - ref: 007c7f8
     producers: [engineer@claude]
 evidence:
-  - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 007c7f8
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 007c7f8, result: pass }
 ```
 
 `ref` is normally a commit. Evidence binds to that exact candidate, never to
 whatever HEAD happens to be later. `actor` is a free string the agent writes,
 like `engineer@claude`; the toolkit compares such strings and reports them
-as asserted.
+as asserted. `host`, `model` and `at` are optional — record them when anyone
+might compare this work with work done elsewhere, because nothing outside the
+record remembers them.
 
 ## 6. Check it
 

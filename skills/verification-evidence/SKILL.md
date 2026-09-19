@@ -31,7 +31,14 @@ later decide whether a review was independent.
 
 ```yaml
 evidence:
-  - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 007c7f8
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 007c7f8, result: fail, command: "npm run lint", exit_code: 1, output: "logs/lint.txt" }
 ```
 
@@ -41,9 +48,18 @@ evidence:
 - `command`, `exit_code`, `output`, `actor`, `host`, `model`, `at` are optional.
   Record them when they help someone reproduce what you did.
 
+Record `host`, `model` and `at` when anyone might compare this work with work
+done elsewhere. Nothing outside the record remembers which host and model
+produced it, so an entry without them cannot be compared with one from another
+machine.
+
 `output` may be a short string, or a path to a file relative to the repository
 root. A path that climbs out of the checkout with `..` is ignored rather than
 reported.
+
+Put long output in a linked file and name it under `output`. Never paste a
+command transcript, a lint report, or a table of results into the record: the
+entry says what happened, the file holds what was printed.
 
 ## Rules that matter
 

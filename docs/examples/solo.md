@@ -9,7 +9,14 @@ candidates:
   - ref: 3f9ab21
     producers: [engineer@codex]
 evidence:
-  - { check: test, candidate: 3f9ab21, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 3f9ab21
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: codex
+    model: gpt-5.6
+    at: "2026-09-18T09:12:44Z"
 ---
 
 ## Intent

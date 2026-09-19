@@ -39,6 +39,11 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Blockers and decisions** — what got in the way and what was decided, written
   as it happens rather than reconstructed later.
 
+Record durable decisions and material failures. Do not paste command
+transcripts, lint output, or a table of every check you ran — that belongs in a
+linked file named under `output`. A milestone narrative belongs in the
+milestone document, not repeated in every task that contributed to it.
+
 ## Declaring requirements
 
 Requirements are the one thing the toolkit checks. Declare only what you would
@@ -57,6 +62,10 @@ requirements:
 - `independent_review: true` — someone whose actor string is not among the
   candidate's producers must record an `accept`.
 - `assessment_roles: [role, ...]` — each named role must record an `accept`.
+
+`independent_review` asks for an accept from anyone who is not a recorded
+producer; `assessment_roles` asks for an accept from a specific role. Declare
+the second when a specific role's verdict is what you need.
 
 A task with no `requirements` block is completely normal. Most tasks want
 `checks` and nothing else.

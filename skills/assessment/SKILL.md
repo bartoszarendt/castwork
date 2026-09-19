@@ -15,11 +15,25 @@ task record and nowhere else.
 
 ```yaml
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, findings: "..." }
+  - candidate: 007c7f8
+    role: maintainer
+    actor: maintainer@codex
+    verdict: accept
+    host: codex
+    model: gpt-5.6
+    at: "2026-09-18T13:02:10Z"
+    findings: "..."
 ```
 
-`verdict` is `accept`, `reject`, or `needs_revision`. `findings` may be a short
-string, a relative path to a file you wrote, or a heading anchor in the body.
+`verdict` is `accept`, `reject`, or `needs_revision`. Record `host`, `model` and
+`at` when anyone might compare this work with work done elsewhere; nothing
+outside the record remembers them.
+
+`findings` is a short quoted string, a linked file relative to the repository
+root, or an anchor to a heading in the body. Long findings go under a heading,
+where they can be read and revised, not inline in the frontmatter. Do not
+reproduce tool transcripts or a full audit report in the record: say what you
+found and link what you read.
 
 ## Three lenses, in order
 
@@ -47,6 +61,13 @@ is about the summary.
 recorded `producers`. If you are among them, your `accept` does not satisfy it —
 and recording a different `role` does not change that. Roles are presets;
 independence is about who did the work.
+
+`independent_review` asks for an accept from anyone who is not a recorded
+producer; `assessment_roles` asks for an accept from a specific role. When a
+particular role's verdict is what the work needs, the record should declare
+`assessment_roles: [auditor]` rather than leave it to an instruction — and when
+that role is unavailable, say so in the findings rather than quietly standing
+in for it.
 
 Write an actor string that identifies you honestly, for example
 `maintainer@codex`. The toolkit compares strings and reports them as asserted;

@@ -15,7 +15,16 @@ status: draft
 #   - ref: <commit>
 #     producers: [engineer@host]
 # evidence:
-#   - { check: test, candidate: <commit>, result: pass, command: "npm test", exit_code: 0 }
+#   - check: test
+#     candidate: <commit>
+#     result: pass
+#     command: "npm test"
+#     exit_code: 0
+#     # host, model and at are optional; record them when anyone might compare
+#     # this work with work done elsewhere.
+#     host: <host>
+#     model: <model>
+#     at: "<timestamp>"
 # assessments:
 #   - { candidate: <commit>, role: maintainer, actor: maintainer@host, verdict: accept }
 ---

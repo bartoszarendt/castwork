@@ -45,6 +45,29 @@ may recognize them.
 
 Every machine field and multiword enum value is snake_case.
 
+### YAML subset
+
+The frontmatter parser reads a deliberately small part of YAML.
+
+**Accepted:** block mappings and block sequences, flow sequences `[a, b]` and
+flow mappings `{ k: v }`, single and double quoted strings, integers, booleans,
+`null`, `#` comments, and block scalars — `|` literal and `>` folded, with
+chomping `-` (strip), none (clip), or `+` (keep). A block scalar is how a long
+`findings` or `note` is written:
+
+```yaml
+findings: >-
+  The retry loop has no bound. Everything else checked out, including the
+  error path this change adds.
+```
+
+**Refused:** anchors and aliases, tags, multiple documents in one frontmatter,
+and explicit indentation indicators (`|2`, `>1-`). Each refusal names the line.
+
+A record that needs more YAML than this is a record the checks cannot reason
+about, which is why the subset is small rather than growing to meet whatever a
+writer tried.
+
 ### Status
 
 Status describes progress. **There is no transition graph.** Any status may
@@ -61,6 +84,13 @@ follow any other, and no status grants a permission.
 | `producers` | no | list of actor strings that produced it |
 | `note` | no | free text |
 
+`ref` is a commit when the project's policy permits the agent to make one. A
+symbolic reference to an uncommitted tree — `worktree-T005` — is allowed and is
+ordinary: it is reported `unavailable`, which is not malformed. But a symbolic
+ref names a tree that keeps changing, so nobody can reconstruct later what was
+assessed. When the record will be compared with other records, or read by
+someone who was not there, commit first and reference the commit.
+
 ### Evidence entry
 
 | Field | Required | Meaning |
@@ -70,7 +100,7 @@ follow any other, and no status grants a permission.
 | `result` | yes | `pass` or `fail` |
 | `command` | no | what was run |
 | `exit_code` | no | its exit code |
-| `actor`, `host`, `model`, `at` | no | optional attributes |
+| `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `output` | no | a short string, or a repository-root-relative path to a linked file |
 
 ### Assessment entry
@@ -80,7 +110,7 @@ follow any other, and no status grants a permission.
 | `candidate` | yes | a `ref` from `candidates` |
 | `role` | yes | the canonical responsibility: one of `orchestrator`, `maintainer`, `engineer`, `auditor`. A specialist is an `actor` under one of these, not a fifth role. |
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
-| `actor`, `host`, `model`, `at` | no | optional attributes |
+| `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
 
 ### Actor
@@ -128,6 +158,13 @@ consumer.
 | `checks: [name, ...]` | every named check has an effective `pass` evidence entry for the current candidate | never; absent evidence is `not_satisfied` with reason `evidence.missing` |
 | `independent_review: true` | at least one effective assessment of the current candidate has verdict `accept` and an `actor` not listed in the candidate's `producers` | the candidate has no `producers`, or every accepting assessment lacks `actor` |
 | `assessment_roles: [role, ...]` | for each role, the effective assessment of the current candidate by that role has verdict `accept` | never; absent assessment is `not_satisfied` with reason `assessment.missing` |
+
+`independent_review` and `assessment_roles` ask for different things.
+`independent_review` asks for an accept from anyone who is not a recorded
+producer; `assessment_roles` asks for an accept from a specific role. Declare
+the second when a specific role's verdict is what you need — "the auditor, not
+whoever was free" is `assessment_roles: [auditor]`, and saying it in the record
+is better than saying it in an instruction.
 
 An effective `reject` or `needs_revision` from a relevant actor or role leaves
 the requirement `not_satisfied` until a later effective assessment changes it.
@@ -246,10 +283,24 @@ candidates:
   - ref: 007c7f8
     producers: [engineer@claude]
 evidence:
-  - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 007c7f8
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, findings: "none" }
+  - candidate: 007c7f8
+    role: maintainer
+    actor: maintainer@codex
+    verdict: accept
+    host: codex
+    model: gpt-5.6
+    at: "2026-09-18T13:02:10Z"
+    findings: "none"
 ---
 
 ## Intent

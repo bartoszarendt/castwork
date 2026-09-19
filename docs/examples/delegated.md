@@ -11,10 +11,25 @@ candidates:
   - ref: 8c1d004
     producers: [engineer@claude]
 evidence:
-  - { check: test, candidate: 8c1d004, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 8c1d004
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 8c1d004, result: pass, command: "npm run lint", exit_code: 0 }
 assessments:
-  - { candidate: 8c1d004, role: maintainer, actor: maintainer@codex, verdict: accept, findings: "Currency resolved from the subscription, not the request locale. Agreed." }
+  - candidate: 8c1d004
+    role: maintainer
+    actor: maintainer@codex
+    verdict: accept
+    host: codex
+    model: gpt-5.6
+    at: "2026-09-18T13:02:10Z"
+    findings: >-
+      Currency resolved from the subscription, not the request locale. Agreed.
 ---
 
 ## Intent

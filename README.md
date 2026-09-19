@@ -67,10 +67,17 @@ candidates:
   - ref: 007c7f8
     producers: [engineer@claude]
 evidence:
-  - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: 007c7f8
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept }
+  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, host: codex }
 ---
 
 ## Intent

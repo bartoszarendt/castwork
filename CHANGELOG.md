@@ -36,6 +36,9 @@ release, so there is nothing to stay compatible with.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.
+- Block scalars in record frontmatter: `|` and `>` with strip, clip, and keep
+  chomping, so a long `findings` or `note` no longer makes the record
+  unparseable.
 - Pure checks, exported from the package, reporting three separate outputs:
   structural validity, reference availability, and requirement evaluation. Each
   supporting fact is reported as `checked` or `asserted`.
@@ -46,6 +49,12 @@ release, so there is nothing to stay compatible with.
 **Changed**
 
 - 13 command paths, down from 110.
+- The examples now show the optional `host`, `model`, and `at` attributes on an
+  evidence entry and an assessment, and `docs/record-format.md` states the YAML
+  subset the frontmatter parser accepts and refuses.
+- `independent_review` and `assessment_roles` are distinguished where they are
+  declared: the first asks for an accept from anyone who is not a recorded
+  producer, the second for an accept from a specific role.
 - Configuration lives only in `agenticloop.json` at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
   project supports, not the one a contributor happens to run, and role settings

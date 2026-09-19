@@ -21,8 +21,18 @@ candidates:
   - ref: <commit>
     producers: [engineer@<host>]
 evidence:
-  - { check: test, candidate: <commit>, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: <commit>
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: <host>
+    model: <model>
+    at: "<timestamp>"
 ```
+
+`host`, `model` and `at` are optional. Record them when anyone might compare
+this work with work done elsewhere; nothing outside the record remembers them.
 
 - Record a `fail` when a check fails. A failed check is information, not a
   problem to be tidied away, and the record stays editable either way.
