@@ -20,6 +20,10 @@ export const ACCEPTED = [
   ['two empty lines become two newlines', 'a: >-\n  one\n\n\n  two\n', { a: 'one\n\ntwo' }],
   ['a more-indented line keeps its breaks', 'a: >-\n  one\n    deep\n  two\n', { a: 'one\n  deep\ntwo' }],
   ['consecutive more-indented lines keep every break', 'a: >-\n  one\n    d1\n    d2\n  two\n', { a: 'one\n  d1\n  d2\ntwo' }],
+  ['an empty line before a more-indented line keeps both breaks', 'a: >-\n  one\n\n    deep\n  two\n', { a: 'one\n\n  deep\ntwo' }],
+  ['two empty lines before a more-indented line keep three breaks', 'a: >-\n  one\n\n\n    deep\n  two\n', { a: 'one\n\n\n  deep\ntwo' }],
+  ['an empty line after a more-indented line keeps both breaks', 'a: >-\n  one\n    deep\n\n  two\n', { a: 'one\n  deep\n\ntwo' }],
+  ['two empty lines after a more-indented line keep three breaks', 'a: >-\n  one\n    deep\n\n\n  two\n', { a: 'one\n  deep\n\n\ntwo' }],
   ['an empty line in a literal scalar is preserved', 'a: |\n  one\n\n  two\n', { a: 'one\n\ntwo\n' }],
   ['a hash inside content is literal', 'a: |-\n  one # not a comment\n', { a: 'one # not a comment' }],
   ['a content line opening with a hash is literal', 'a: |-\n  one\n  # two\n  three\n', { a: 'one\n# two\nthree' }],
@@ -31,6 +35,7 @@ export const ACCEPTED = [
   ['CRLF is literal like LF', 'a: |\r\n  one\r\n  two\r\n', { a: 'one\ntwo\n' }],
   ['a block scalar is a bare sequence item', 'a:\n  - |-\n    one\n    two\n', { a: ['one\ntwo'] }],
   ['content one column past the dash is enough', 'a:\n  - |-\n   one\n   two\n', { a: ['one\ntwo'] }],
+  ['an inline sequence mapping indents content past its key', 'a:\n  - key: |\n      one\n      two\n', { a: [{ key: 'one\ntwo\n' }] }],
   [
     'the T-005 shape: a folded scalar in an inline sequence-entry mapping',
     'assessments:\n  - candidate: worktree-T005\n    role: maintainer\n    actor: maintainer@opencode\n    verdict: accept\n    findings: >-\n      fallback assessment (auditor provider unavailable): accept.\n      Canonical spec is keyboard-only.\n',
@@ -71,6 +76,7 @@ export const ACCEPTED = [
   ['a flow value follows a block scalar', 'a: |-\n  one\nb: [x, y]\n', { a: 'one', b: ['x', 'y'] }],
   ['trailing empty lines before a lower key are clipped', 'a: |\n  one\n\nb: 2\n', { a: 'one\n', b: 2 }],
   ['trailing empty lines before a lower key are kept', 'a: |+\n  one\n\nb: 2\n', { a: 'one\n\n', b: 2 }],
+  ['an unterminated whitespace-only final line adds no kept break', 'a: |+\n  one\n  ', { a: 'one\n' }],
 ];
 
 /**
@@ -93,4 +99,19 @@ export const REFUSED = [
   ['a block scalar in a flow mapping', 'a: {k: |}\n', /flow collection/, true],
   ['a leading empty line more indented than the content', 'a: |\n     \n  one\n', /more-indented leading empty line/, true],
   ['tab-indented content', 'a: |-\n\tone\n', /tab in block scalar indentation/, true],
+  ['a tab inside the required indentation of a later line', 'a: |-\n  one\n \ttwo\n', /tab in block scalar indentation/, true],
+  ['an inline sequence mapping with content at the key column', 'a:\n  - key: |\n    one\n', /expected key: value/, true],
+];
+
+/**
+ * YAML node-property syntax the subset refuses deliberately. A full parser
+ * gives these documents anchor, alias, or tag semantics; treating them as
+ * ordinary strings would silently change the record.
+ * @type {[string, string][]}
+ */
+export const UNSUPPORTED_NODE_PROPERTIES = [
+  ['an anchor and alias in block values', 'a: &value hello\nb: *value\n'],
+  ['a tag in a block value', 'a: !!str hello\n'],
+  ['an anchor and alias in flow values', 'a: [&value hello, *value]\n'],
+  ['an anchor in a block key', '&key name: value\n'],
 ];

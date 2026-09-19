@@ -40,9 +40,11 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
   as it happens rather than reconstructed later.
 
 Record durable decisions and material failures. Do not paste command
-transcripts, lint output, or a table of every check you ran — that belongs in a
-linked file named under `output`. A milestone narrative belongs in the
-milestone document, not repeated in every task that contributed to it.
+transcripts, lint output, or a table of every check you ran. Routine successful
+output does not need to be retained; link a file under `output` only when its
+contents materially support a failure, reproduction, or review finding. A
+milestone narrative belongs in the milestone document, not repeated in every
+task that contributed to it.
 
 ## Declaring requirements
 

@@ -48,18 +48,19 @@ evidence:
 - `command`, `exit_code`, `output`, `actor`, `host`, `model`, `at` are optional.
   Record them when they help someone reproduce what you did.
 
-Record `host`, `model` and `at` when anyone might compare this work with work
-done elsewhere. Nothing outside the record remembers which host and model
-produced it, so an entry without them cannot be compared with one from another
-machine.
+Record `host`, the exact host-reported `model`, and an RFC 3339 `at` timestamp
+when the record must remain self-contained or comparable without host-local
+telemetry. They are asserted, informational metadata; document order still
+decides which entry is effective.
 
 `output` may be a short string, or a path to a file relative to the repository
 root. A path that climbs out of the checkout with `..` is ignored rather than
 reported.
 
-Put long output in a linked file and name it under `output`. Never paste a
-command transcript, a lint report, or a table of results into the record: the
-entry says what happened, the file holds what was printed.
+Do not retain routine successful output. The entry's command, exit code and a
+short observed result are normally enough. When long output materially supports
+a failure, reproduction, or review finding, put it in a linked file named under
+`output` rather than pasting a transcript into the record.
 
 ## Rules that matter
 

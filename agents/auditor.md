@@ -18,7 +18,14 @@ You assess a specific candidate, independently, and you change nothing.
 
 ```yaml
 assessments:
-  - { candidate: <commit>, role: auditor, actor: auditor@<host>, verdict: accept, findings: "..." }
+  - candidate: <commit>
+    role: auditor
+    actor: auditor@<host>
+    verdict: accept
+    host: <host>
+    model: <model>
+    at: "<timestamp>"
+    findings: "..."
 ```
 
 Findings may be a short string, a relative path to a file you wrote, or a

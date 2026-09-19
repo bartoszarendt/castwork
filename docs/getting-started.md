@@ -116,9 +116,10 @@ evidence:
 `ref` is normally a commit. Evidence binds to that exact candidate, never to
 whatever HEAD happens to be later. `actor` is a free string the agent writes,
 like `engineer@claude`; the toolkit compares such strings and reports them
-as asserted. `host`, `model` and `at` are optional — record them when anyone
-might compare this work with work done elsewhere, because nothing outside the
-record remembers them.
+as asserted. `host`, `model` and `at` are optional — record them when the record
+must stay self-contained or comparable without host-local telemetry. Use the
+exact model id reported by the host and an RFC 3339 timestamp; they remain
+asserted, informational metadata.
 
 ## 6. Check it
 
@@ -144,7 +145,13 @@ Independence is about actor strings, not roles:
 
 ```yaml
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept }
+  - candidate: 007c7f8
+    role: maintainer
+    actor: maintainer@codex
+    verdict: accept
+    host: codex
+    model: openai/gpt-5.6-sol
+    at: "2026-09-18T13:02:10Z"
 ```
 
 `maintainer@codex` is not in `producers`, so `independent_review` is satisfied.

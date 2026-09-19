@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ACCEPTED, REFUSED } from './block-scalar-cases.js';
+import { ACCEPTED, REFUSED, UNSUPPORTED_NODE_PROPERTIES } from './block-scalar-cases.js';
 import { parseYaml, YamlError } from '../src/yaml.js';
 
 /**
@@ -66,6 +66,12 @@ for (const [label, text, message] of REFUSED) {
       assert.match(error.message, /\(line \d+\)/, 'the refusal names the line');
       return true;
     });
+  });
+}
+
+for (const [label, text] of UNSUPPORTED_NODE_PROPERTIES) {
+  test(`F1: ${label} is refused rather than read as a string`, () => {
+    assert.throws(() => parseYaml(text), /anchors, aliases and tags are not supported.*\(line \d+\)/);
   });
 }
 

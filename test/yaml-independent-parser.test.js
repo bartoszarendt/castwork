@@ -24,7 +24,7 @@ import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
 import { taskLint, taskSet } from '../src/task-cli.js';
-import { ACCEPTED, REFUSED } from './block-scalar-cases.js';
+import { ACCEPTED, REFUSED, UNSUPPORTED_NODE_PROPERTIES } from './block-scalar-cases.js';
 import { formatScalar, parseYaml } from '../src/yaml.js';
 
 /* ------------------------------------------------------------------ */
@@ -306,3 +306,37 @@ for (const [label, text, message, independentRefuses] of REFUSED) {
     }
   });
 }
+
+for (const [label, text] of UNSUPPORTED_NODE_PROPERTIES) {
+  test(`F1: ${label} is refused while the independent parser applies YAML semantics`, () => {
+    assert.throws(() => parseYaml(text), /anchors, aliases and tags are not supported/);
+    assert.doesNotThrow(() => independentYaml.parse(text));
+  });
+}
+
+test('F1: deterministic folded-scalar structures agree with the independent parser', () => {
+  let seed = 0x6a09e667;
+  const next = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed;
+  };
+  const chomps = ['', '-', '+'];
+  for (let index = 0; index < 1000; index += 1) {
+    const lines = [`  first-${index}`];
+    const count = 1 + (next() % 6);
+    for (let line = 0; line < count; line += 1) {
+      const kind = next() % 3;
+      if (kind === 0) lines.push('');
+      else if (kind === 1) lines.push(`  ordinary-${next() % 17}`);
+      else lines.push(`    indented-${next() % 17}`);
+    }
+    const document = `a: >${chomps[next() % chomps.length]}\n${lines.join('\n')}\nb: 1\n`;
+    const independent = independentYaml.parse(document);
+    const ours = parseYaml(document);
+    assert.equal(
+      ours.a,
+      independent.a,
+      `folded-scalar disagreement at case ${index}, seed 0x6a09e667, document ${JSON.stringify(document)}`,
+    );
+  }
+});

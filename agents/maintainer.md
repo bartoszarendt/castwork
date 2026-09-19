@@ -22,7 +22,14 @@ You decide what the work is, and whether what came back is good.
 
 ```yaml
 assessments:
-  - { candidate: <commit>, role: maintainer, actor: maintainer@<host>, verdict: accept, findings: "..." }
+  - candidate: <commit>
+    role: maintainer
+    actor: maintainer@<host>
+    verdict: accept
+    host: <host>
+    model: <model>
+    at: "<timestamp>"
+    findings: "..."
 ```
 
 Three lenses, in order: does it do what the record asked; is it correct; is it

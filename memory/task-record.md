@@ -20,13 +20,19 @@ status: draft
 #     result: pass
 #     command: "npm test"
 #     exit_code: 0
-#     # host, model and at are optional; record them when anyone might compare
-#     # this work with work done elsewhere.
+#     # Optional: use the exact host-reported model and an RFC 3339 timestamp
+#     # when the record must stay self-contained without host-local telemetry.
 #     host: <host>
 #     model: <model>
 #     at: "<timestamp>"
 # assessments:
-#   - { candidate: <commit>, role: maintainer, actor: maintainer@host, verdict: accept }
+#   - candidate: <commit>
+#     role: maintainer
+#     actor: maintainer@host
+#     verdict: accept
+#     host: <host>
+#     model: <model>
+#     at: "<timestamp>"
 ---
 
 ## Intent

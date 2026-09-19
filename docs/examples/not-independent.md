@@ -11,10 +11,24 @@ candidates:
   - ref: b70e55a
     producers: [engineer@claude]
 evidence:
-  - { check: test, candidate: b70e55a, result: pass, command: "npm test", exit_code: 0 }
+  - check: test
+    candidate: b70e55a
+    result: pass
+    command: "npm test"
+    exit_code: 0
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T15:20:00Z"
   - { check: lint, candidate: b70e55a, result: pass, command: "npm run lint", exit_code: 0 }
 assessments:
-  - { candidate: b70e55a, role: maintainer, actor: engineer@claude, verdict: accept, findings: "Looks right to me." }
+  - candidate: b70e55a
+    role: maintainer
+    actor: engineer@claude
+    verdict: accept
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T15:32:00Z"
+    findings: "Looks right to me."
 ---
 
 ## Intent

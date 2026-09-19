@@ -38,7 +38,8 @@ release, so there is nothing to stay compatible with.
   `assessment_roles`.
 - Block scalars in record frontmatter: `|` and `>` with strip, clip, and keep
   chomping, so a long `findings` or `note` no longer makes the record
-  unparseable.
+  unparseable. Folding preserves the breaks around more-indented content, and
+  malformed mapping or tab indentation is refused rather than reinterpreted.
 - Pure checks, exported from the package, reporting three separate outputs:
   structural validity, reference availability, and requirement evaluation. Each
   supporting fact is reported as `checked` or `asserted`.
@@ -52,6 +53,8 @@ release, so there is nothing to stay compatible with.
 - The examples now show the optional `host`, `model`, and `at` attributes on an
   evidence entry and an assessment, and `docs/record-format.md` states the YAML
   subset the frontmatter parser accepts and refuses.
+- YAML anchors, aliases and tags are refused explicitly; they are never read as
+  literal strings with a different meaning from a full YAML parser.
 - `independent_review` and `assessment_roles` are distinguished where they are
   declared: the first asks for an accept from anyone who is not a recorded
   producer, the second for an accept from a specific role.

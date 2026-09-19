@@ -88,8 +88,12 @@ follow any other, and no status grants a permission.
 symbolic reference to an uncommitted tree — `worktree-T005` — is allowed and is
 ordinary: it is reported `unavailable`, which is not malformed. But a symbolic
 ref names a tree that keeps changing, so nobody can reconstruct later what was
-assessed. When the record will be compared with other records, or read by
-someone who was not there, commit first and reference the commit.
+assessed. When durable comparison matters, obtain an authorized, resolvable
+candidate before running the final evidence and assessment, then reference it.
+Never commit without project or user authorization, and never relabel evidence
+from a mutable worktree as evidence for a later commit. If no durable reference
+is authorized, keep the symbolic ref and treat the result as ephemeral rather
+than strictly comparable.
 
 ### Evidence entry
 
@@ -112,6 +116,18 @@ someone who was not there, commit first and reference the commit.
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
 | `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
+
+These optional attributes are asserted metadata:
+
+- `host` is the host id that performed the work.
+- `model` is the exact model identifier that host reported; it is not normalized
+  across hosts.
+- `at` is an RFC 3339 timestamp when one is useful. It is informational only:
+  timestamps never decide ordering, freshness, validity, or completion.
+
+Record them when the record needs to remain self-contained or comparable
+without host-local telemetry. A host may retain the same facts elsewhere, but
+that state is not part of the portable record.
 
 ### Actor
 

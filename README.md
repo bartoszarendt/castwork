@@ -77,7 +77,13 @@ evidence:
     at: "2026-09-18T12:34:56Z"
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, host: codex }
+  - candidate: 007c7f8
+    role: maintainer
+    actor: maintainer@codex
+    verdict: accept
+    host: codex
+    model: openai/gpt-5.6-sol
+    at: "2026-09-18T13:02:10Z"
 ---
 
 ## Intent

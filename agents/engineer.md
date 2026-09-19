@@ -31,8 +31,10 @@ evidence:
     at: "<timestamp>"
 ```
 
-`host`, `model` and `at` are optional. Record them when anyone might compare
-this work with work done elsewhere; nothing outside the record remembers them.
+`host`, `model` and `at` are optional. Record them when the record must remain
+self-contained or comparable without host-local telemetry. Use the exact model
+identifier reported by the host and an RFC 3339 timestamp; both are asserted,
+informational metadata.
 
 - Record a `fail` when a check fails. A failed check is information, not a
   problem to be tidied away, and the record stays editable either way.

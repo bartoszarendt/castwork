@@ -37,6 +37,7 @@ function splitLines(text) {
   /** @type {Line[]} */
   const out = [];
   const raw = text.split(/\r?\n/);
+  const endsWithLineBreak = /\r?\n$/.test(text);
   // A document ending in a newline splits to a final empty element that is not
   // a line. Keeping it would add one trailing break to every kept block scalar.
   if (raw.length > 0 && raw[raw.length - 1] === '') raw.pop();
@@ -48,13 +49,25 @@ function splitLines(text) {
     const entry = { indent: stripped.length - stripped.trimStart().length, text: stripped.trim(), number: i + 1 };
     const header = blockHeader(entry.text, entry.number);
     if (header) {
-      const block = readBlockScalar(raw, i, entry.indent, header);
+      const block = readBlockScalar(raw, i, blockHeaderIndent(entry), header, endsWithLineBreak);
       entry.block = block.value;
       i = block.lastIndex;
     }
     out.push(entry);
   }
   return out;
+}
+
+/**
+ * A block scalar used as the value of an inline mapping inside a sequence starts
+ * at the mapping key's column, not at the dash. A bare `- |` scalar still starts
+ * at the dash and may therefore have content one column farther in.
+ * @param {Line} line
+ */
+function blockHeaderIndent(line) {
+  if (!line.text.startsWith('- ')) return line.indent;
+  const body = line.text.slice(2).trim();
+  return splitKey(body) ? line.indent + 2 : line.indent;
 }
 
 /** A header the subset carries: a style indicator and an optional chomping mode. */
@@ -108,9 +121,10 @@ function blockHeader(text, line) {
  * @param {number} headerIndex
  * @param {number} headerIndent
  * @param {{style: string, chomp: string}} header
+ * @param {boolean} endsWithLineBreak
  * @returns {{value: string, lastIndex: number}}
  */
-function readBlockScalar(raw, headerIndex, headerIndent, header) {
+function readBlockScalar(raw, headerIndex, headerIndent, header, endsWithLineBreak) {
   /** @type {string[]} */
   const content = [];
   let contentIndent = -1;
@@ -135,6 +149,8 @@ function readBlockScalar(raw, headerIndex, headerIndent, header) {
         throw new YamlError('more-indented leading empty line in block scalar', i + 1);
       }
       contentIndent = indent;
+    } else if (!empty && line.slice(0, Math.min(contentIndent, line.length)).includes('\t')) {
+      throw new YamlError('tab in block scalar indentation', i + 1);
     } else if (indent < contentIndent) {
       // An empty line never ends a block; a shorter non-empty line always does.
       if (!empty) break;
@@ -150,6 +166,12 @@ function readBlockScalar(raw, headerIndex, headerIndent, header) {
   while (content.length > 0 && content[content.length - 1] === '') {
     content.pop();
     trailing += 1;
+  }
+  // A whitespace-only final line without a line break has no break for `+` to
+  // keep. Frontmatter normally ends with a break before `---`, but parseYaml is
+  // also used directly and should not invent one for a bare document.
+  if (!endsWithLineBreak && lastIndex === raw.length - 1 && raw[lastIndex]?.trim() === '' && trailing > 0) {
+    trailing -= 1;
   }
   if (content.length === 0) {
     return { value: header.chomp === '+' ? '\n'.repeat(trailing) : '', lastIndex };
@@ -181,7 +203,7 @@ function foldLines(lines) {
     }
     const moreIndented = line[0] === ' ' || line[0] === '\t';
     if (!started) out = '\n'.repeat(breaks) + line;
-    else if (breaks > 0) out += '\n'.repeat(breaks) + line;
+    else if (breaks > 0) out += '\n'.repeat(breaks + (moreIndented || previousMoreIndented ? 1 : 0)) + line;
     else out += (moreIndented || previousMoreIndented ? '\n' : ' ') + line;
     started = true;
     breaks = 0;
@@ -248,6 +270,7 @@ function parseScalar(text, line) {
     const inner = value.slice(1, -1);
     return quote === '"' ? unescapeDouble(inner) : inner.replace(/''/g, "'");
   }
+  assertNoNodeProperty(value, line);
   if (/^-?\d+$/.test(value)) return Number(value);
   return value;
 }
@@ -279,6 +302,7 @@ function parseFlow(text, line) {
       for (;;) {
         const key = tokens[index];
         if (typeof key !== 'string' || key === ':' ) throw new YamlError('expected key in flow mapping', line);
+        assertNoNodeProperty(key, line);
         index += 1;
         if (tokens[index] !== ':') throw new YamlError(`expected : after key ${key}`, line);
         index += 1;
@@ -352,6 +376,7 @@ function parseScalarToken(token, line) {
   if (token[0] === '|' || token[0] === '>') {
     throw new YamlError(`block scalar ${token[0]} in a flow collection`, line);
   }
+  assertNoNodeProperty(token, line);
   if (token === 'true') return true;
   if (token === 'false') return false;
   if (token === 'null' || token === '~') return null;
@@ -399,6 +424,19 @@ function tokenizeFlow(text, line) {
  * format cannot represent, so it is rejected rather than silently swallowed.
  */
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Anchors, aliases and tags are outside the supported subset. Accepting their
+ * indicator syntax as an ordinary string would give the same record a different
+ * meaning in a full YAML parser. Quoted strings are handled before this check.
+ * @param {string} value
+ * @param {number} line
+ */
+function assertNoNodeProperty(value, line) {
+  if (/^[&*!]/.test(value)) {
+    throw new YamlError('anchors, aliases and tags are not supported', line);
+  }
+}
 
 /** @param {string} key @param {number} line */
 function assertSafeKey(key, line) {
@@ -478,6 +516,7 @@ function parseSequence(lines, cursor, indent) {
 function assignKey(map, key, rest, lines, cursor, childIndent, line) {
   const lineNumber = line.number;
   if (key === '') throw new YamlError('empty key', lineNumber);
+  if (key[0] !== '"' && key[0] !== "'") assertNoNodeProperty(key, lineNumber);
   assertSafeKey(key, lineNumber);
   if (Object.prototype.hasOwnProperty.call(map, key)) {
     throw new YamlError(`duplicate key ${key}`, lineNumber);

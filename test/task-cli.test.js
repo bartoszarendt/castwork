@@ -230,3 +230,14 @@ test('F1: task show --json returns the folded text with the folding applied', (t
   assert.equal(shown.structural.valid, true);
   assert.deepEqual(shown.structural.errors, []);
 });
+
+test('F1: task set status done preserves a folded findings scalar', (t) => {
+  const root = fixture(t);
+  const file = writeTask(root, 'T-005', FOLDED_FINDINGS);
+  taskSet(root, 'T-005', 'status', 'done');
+  const raw = fs.readFileSync(file, 'utf8');
+  assert.match(raw, /findings: >-\r?\n\s+fallback assessment/);
+  const { record } = findRecord(root, 'T-005');
+  assert.equal(record.frontmatter.status, 'done');
+  assert.equal(record.frontmatter.assessments[0].findings, FOLDED_TEXT);
+});
