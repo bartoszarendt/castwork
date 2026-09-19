@@ -24,6 +24,7 @@ import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
 import { taskLint, taskSet } from '../src/task-cli.js';
+import { ACCEPTED, REFUSED } from './block-scalar-cases.js';
 import { formatScalar, parseYaml } from '../src/yaml.js';
 
 /* ------------------------------------------------------------------ */
@@ -275,3 +276,33 @@ test('9: generated scalars round-trip through both parsers', () => {
   }
   assert.equal(checked, 400);
 });
+
+/* ------------------------------------------------------------------ */
+/* Field round, F1: block scalars, in parity with the `yaml` package   */
+/* ------------------------------------------------------------------ */
+
+/** @param {unknown} value */
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+for (const [label, text, value] of ACCEPTED) {
+  test(`F1: ${label} — both parsers agree`, () => {
+    const independent = independentYaml.parse(text);
+    assert.deepEqual(independent, value, 'the shared expectation no longer matches the independent parser');
+    assert.deepEqual(plain(parseYaml(text)), independent, 'our parser disagrees with the independent one');
+  });
+}
+
+for (const [label, text, message, independentRefuses] of REFUSED) {
+  test(`F1: ${label} is refused, and the independent parser ${independentRefuses ? 'agrees' : 'is more permissive'}`, () => {
+    assert.throws(() => parseYaml(text), message);
+    if (independentRefuses) {
+      assert.throws(() => independentYaml.parse(text), 'the independent parser accepts what we refuse');
+    } else {
+      // We are stricter on purpose. The explicit indentation indicator is legal
+      // YAML the `yaml` package reads; the subset refuses it so that a record's
+      // frontmatter always reads as the data it describes, and the refusal names
+      // the line rather than guessing an indentation the writer did not intend.
+      assert.doesNotThrow(() => independentYaml.parse(text), 'the independent parser was expected to accept this');
+    }
+  });
+}

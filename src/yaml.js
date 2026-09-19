@@ -2,10 +2,16 @@
  * A deliberately small YAML subset, sufficient for task record frontmatter.
  *
  * Supported: block mappings, block sequences, flow sequences `[a, b]`, flow
- * mappings `{ k: v }`, single and double quoted strings, integers, booleans,
- * null, and `#` comments. Anything else throws, because a record that needs
- * more YAML than this is a record the checks cannot reason about.
+ * mappings `{ k: v }`, block scalars `|` and `>` with the three chomping
+ * modes, single and double quoted strings, integers, booleans, null, and `#`
+ * comments. Anything else throws, because a record that needs more YAML than
+ * this is a record the checks cannot reason about.
+ *
+ * Block scalars read only; `formatScalar` still emits double-quoted scalars,
+ * so nothing this file writes is ever a block scalar.
  */
+
+/** @typedef {{indent: number, text: string, number: number, block?: string}} Line */
 
 export class YamlError extends Error {
   /** @param {string} message @param {number} line */
@@ -16,15 +22,170 @@ export class YamlError extends Error {
   }
 }
 
-/** @param {string} text */
+/**
+ * Split a document into the lines the parser walks.
+ *
+ * Block scalar content is read here, straight from the raw text, because it is
+ * the one place the ordinary rules do not apply: a blank line inside a block
+ * scalar is content rather than filler, and a `#` inside it is a literal hash
+ * rather than a comment. Everything the block consumed is skipped, so comment
+ * stripping and blank-line dropping still apply to every other line.
+ * @param {string} text
+ * @returns {Line[]}
+ */
 function splitLines(text) {
+  /** @type {Line[]} */
   const out = [];
   const raw = text.split(/\r?\n/);
+  // A document ending in a newline splits to a final empty element that is not
+  // a line. Keeping it would add one trailing break to every kept block scalar.
+  if (raw.length > 0 && raw[raw.length - 1] === '') raw.pop();
   for (let i = 0; i < raw.length; i += 1) {
     const line = raw[i];
     const stripped = stripComment(line);
     if (stripped.trim() === '') continue;
-    out.push({ indent: stripped.length - stripped.trimStart().length, text: stripped.trim(), number: i + 1 });
+    /** @type {Line} */
+    const entry = { indent: stripped.length - stripped.trimStart().length, text: stripped.trim(), number: i + 1 };
+    const header = blockHeader(entry.text, entry.number);
+    if (header) {
+      const block = readBlockScalar(raw, i, entry.indent, header);
+      entry.block = block.value;
+      i = block.lastIndex;
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
+/** A header the subset carries: a style indicator and an optional chomping mode. */
+const BLOCK_HEADER = /^([|>])([+-]?)$/;
+
+/**
+ * The text standing in a line's value position, where a block scalar header may
+ * legally appear: after `key:`, after `- `, or after both.
+ * @param {string} text
+ */
+function valuePosition(text) {
+  if (text === '-') return '';
+  const body = text.startsWith('- ') ? text.slice(2).trim() : text;
+  const pair = splitKey(body);
+  return pair ? pair[1] : body;
+}
+
+/**
+ * Recognize a block scalar header, and refuse the forms this subset does not
+ * carry. A plain scalar cannot begin with `|` or `>` in any YAML, so anything
+ * else opening with one is a malformed header rather than a string.
+ * @param {string} text
+ * @param {number} line
+ * @returns {{style: string, chomp: string}|null}
+ */
+function blockHeader(text, line) {
+  const value = valuePosition(text);
+  if (value === '' || (value[0] !== '|' && value[0] !== '>')) return null;
+  const match = BLOCK_HEADER.exec(value);
+  if (match) return { style: match[1], chomp: match[2] };
+  // An explicit indentation indicator is legal YAML elsewhere. It is refused
+  // here because it exists to describe content whose own first line is
+  // indented, which is a value the record format has no use for, and guessing
+  // it wrong changes the text silently rather than loudly.
+  if (/^[|>][+-]?\d/.test(value)) {
+    throw new YamlError(`explicit indentation indicator in block scalar header ${value}`, line);
+  }
+  throw new YamlError(`unexpected content after the block scalar header in ${value}`, line);
+}
+
+/**
+ * Read the content of a block scalar that opened on `raw[headerIndex]`.
+ *
+ * Content indentation is that of the first non-empty content line and must be
+ * greater than the indentation of the line carrying the header; the block ends
+ * at the first non-empty line indented less than that, or at the end of the
+ * document. A header with no content line at all is the empty string, which is
+ * what the independent `yaml` package reads too.
+ *
+ * @param {string[]} raw
+ * @param {number} headerIndex
+ * @param {number} headerIndent
+ * @param {{style: string, chomp: string}} header
+ * @returns {{value: string, lastIndex: number}}
+ */
+function readBlockScalar(raw, headerIndex, headerIndent, header) {
+  /** @type {string[]} */
+  const content = [];
+  let contentIndent = -1;
+  let leadingEmptyIndent = 0;
+  let lastIndex = headerIndex;
+  for (let i = headerIndex + 1; i < raw.length; i += 1) {
+    const line = raw[i];
+    const empty = line.trim() === '';
+    const indent = line.length - line.trimStart().length;
+    if (contentIndent === -1) {
+      if (empty) {
+        leadingEmptyIndent = Math.max(leadingEmptyIndent, indent);
+        content.push('');
+        lastIndex = i;
+        continue;
+      }
+      if (indent <= headerIndent) break;
+      if (line.slice(0, indent).includes('\t')) {
+        throw new YamlError('tab in block scalar indentation', i + 1);
+      }
+      if (leadingEmptyIndent > indent) {
+        throw new YamlError('more-indented leading empty line in block scalar', i + 1);
+      }
+      contentIndent = indent;
+    } else if (indent < contentIndent) {
+      // An empty line never ends a block; a shorter non-empty line always does.
+      if (!empty) break;
+      content.push('');
+      lastIndex = i;
+      continue;
+    }
+    content.push(line.slice(contentIndent));
+    lastIndex = i;
+  }
+
+  let trailing = 0;
+  while (content.length > 0 && content[content.length - 1] === '') {
+    content.pop();
+    trailing += 1;
+  }
+  if (content.length === 0) {
+    return { value: header.chomp === '+' ? '\n'.repeat(trailing) : '', lastIndex };
+  }
+  const body = header.style === '|' ? content.join('\n') : foldLines(content);
+  if (header.chomp === '-') return { value: body, lastIndex };
+  if (header.chomp === '+') return { value: `${body}\n${'\n'.repeat(trailing)}`, lastIndex };
+  return { value: `${body}\n`, lastIndex };
+}
+
+/**
+ * Fold the content lines of a `>` scalar.
+ *
+ * A single break between two ordinary lines becomes one space. A run of empty
+ * lines becomes that many newlines. A line indented past the content
+ * indentation keeps the breaks on both sides of it, which is what lets a folded
+ * scalar carry an indented block without reflowing it.
+ * @param {string[]} lines
+ */
+function foldLines(lines) {
+  let out = '';
+  let started = false;
+  let breaks = 0;
+  let previousMoreIndented = false;
+  for (const line of lines) {
+    if (line === '') {
+      breaks += 1;
+      continue;
+    }
+    const moreIndented = line[0] === ' ' || line[0] === '\t';
+    if (!started) out = '\n'.repeat(breaks) + line;
+    else if (breaks > 0) out += '\n'.repeat(breaks) + line;
+    else out += (moreIndented || previousMoreIndented ? '\n' : ' ') + line;
+    started = true;
+    breaks = 0;
+    previousMoreIndented = moreIndented;
   }
   return out;
 }
@@ -185,6 +346,12 @@ function unquote(token) {
 /** @param {string} token @param {number} line */
 function parseScalarToken(token, line) {
   if (token[0] === '"' || token[0] === "'") return parseScalar(token, line);
+  // A block scalar has no end inside `[..]` or `{..}`: the flow collection is
+  // closed by a bracket, and the block by indentation. YAML refuses the
+  // combination and so does this subset.
+  if (token[0] === '|' || token[0] === '>') {
+    throw new YamlError(`block scalar ${token[0]} in a flow collection`, line);
+  }
   if (token === 'true') return true;
   if (token === 'false') return false;
   if (token === 'null' || token === '~') return null;
@@ -241,7 +408,7 @@ function assertSafeKey(key, line) {
 }
 
 /**
- * @param {{indent: number, text: string, number: number}[]} lines
+ * @param {Line[]} lines
  * @param {{i: number}} cursor
  * @param {number} indent
  */
@@ -252,7 +419,7 @@ function parseNode(lines, cursor, indent) {
 }
 
 /**
- * @param {{indent: number, text: string, number: number}[]} lines
+ * @param {Line[]} lines
  * @param {{i: number}} cursor
  * @param {number} indent
  */
@@ -265,6 +432,10 @@ function parseSequence(lines, cursor, indent) {
     if (!line.text.startsWith('- ') && line.text !== '-') break;
     const rest = line.text === '-' ? '' : line.text.slice(2).trim();
     cursor.i += 1;
+    if (line.block !== undefined && BLOCK_HEADER.test(rest)) {
+      items.push(line.block);
+      continue;
+    }
     if (rest === '') {
       if (cursor.i < lines.length && lines[cursor.i].indent > indent) {
         items.push(parseNode(lines, cursor, lines[cursor.i].indent));
@@ -279,13 +450,13 @@ function parseSequence(lines, cursor, indent) {
       const innerIndent = indent + 2;
       /** @type {Record<string, unknown>} */
       const map = Object.create(null);
-      assignKey(map, pair[0], pair[1], lines, cursor, innerIndent, line.number);
+      assignKey(map, pair[0], pair[1], lines, cursor, innerIndent, line);
       while (cursor.i < lines.length && lines[cursor.i].indent >= innerIndent && !lines[cursor.i].text.startsWith('- ')) {
         const next = lines[cursor.i];
         const nextPair = splitKey(next.text);
         if (!nextPair) throw new YamlError(`expected key: value, got ${next.text}`, next.number);
         cursor.i += 1;
-        assignKey(map, nextPair[0], nextPair[1], lines, cursor, next.indent + 1, next.number);
+        assignKey(map, nextPair[0], nextPair[1], lines, cursor, next.indent + 1, next);
       }
       items.push(map);
       continue;
@@ -299,16 +470,21 @@ function parseSequence(lines, cursor, indent) {
  * @param {Record<string, unknown>} map
  * @param {string} key
  * @param {string} rest
- * @param {{indent: number, text: string, number: number}[]} lines
+ * @param {Line[]} lines
  * @param {{i: number}} cursor
  * @param {number} childIndent
- * @param {number} lineNumber
+ * @param {Line} line
  */
-function assignKey(map, key, rest, lines, cursor, childIndent, lineNumber) {
+function assignKey(map, key, rest, lines, cursor, childIndent, line) {
+  const lineNumber = line.number;
   if (key === '') throw new YamlError('empty key', lineNumber);
   assertSafeKey(key, lineNumber);
   if (Object.prototype.hasOwnProperty.call(map, key)) {
     throw new YamlError(`duplicate key ${key}`, lineNumber);
+  }
+  if (line.block !== undefined && BLOCK_HEADER.test(rest)) {
+    map[key] = line.block;
+    return;
   }
   if (rest !== '') {
     map[key] = parseScalar(rest, lineNumber);
@@ -322,7 +498,7 @@ function assignKey(map, key, rest, lines, cursor, childIndent, lineNumber) {
 }
 
 /**
- * @param {{indent: number, text: string, number: number}[]} lines
+ * @param {Line[]} lines
  * @param {{i: number}} cursor
  * @param {number} indent
  */
@@ -337,7 +513,7 @@ function parseMapping(lines, cursor, indent) {
     const pair = splitKey(line.text);
     if (!pair) throw new YamlError(`expected key: value, got ${line.text}`, line.number);
     cursor.i += 1;
-    assignKey(map, pair[0], pair[1], lines, cursor, indent + 1, line.number);
+    assignKey(map, pair[0], pair[1], lines, cursor, indent + 1, line);
   }
   return map;
 }

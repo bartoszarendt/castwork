@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { ACCEPTED, REFUSED } from './block-scalar-cases.js';
 import { parseYaml, YamlError } from '../src/yaml.js';
 
 /**
@@ -45,4 +46,30 @@ test('rejects an unterminated quoted string', () => {
 
 test('an empty document is an empty mapping', () => {
   assert.deepEqual(plain(parseYaml('')), {});
+});
+
+/* ------------------------------------------------------------------ */
+/* Field round, F1: block scalars                                      */
+/* ------------------------------------------------------------------ */
+
+for (const [label, text, value] of ACCEPTED) {
+  test(`F1: ${label}`, () => {
+    assert.deepEqual(plain(parseYaml(text)), value);
+  });
+}
+
+for (const [label, text, message] of REFUSED) {
+  test(`F1: ${label} is refused`, () => {
+    assert.throws(() => parseYaml(text), (error) => {
+      assert.ok(error instanceof YamlError, `expected a YamlError, got ${error}`);
+      assert.match(error.message, message);
+      assert.match(error.message, /\(line \d+\)/, 'the refusal names the line');
+      return true;
+    });
+  });
+}
+
+test('F1: a block scalar is read the same way in a record and in a bare document', () => {
+  const text = 'findings: >-\n  one\n  two\n';
+  assert.equal(plain(parseYaml(text)).findings, 'one two');
 });

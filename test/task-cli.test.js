@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { checkRecord } from '../src/checks.js';
+import { run } from '../src/cli-main.js';
 import { TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
@@ -142,4 +143,90 @@ test('bookkeeping edits change no evaluation', (t) => {
 test('findRecord reports a helpful error for an unknown id', (t) => {
   const root = fixture(t);
   assert.throws(() => findRecord(root, 'T-999'), /no task record with id T-999/);
+});
+
+/* ------------------------------------------------------------------ */
+/* Field round, F1: a record whose findings are a folded scalar        */
+/* ------------------------------------------------------------------ */
+
+/** Run the CLI with stdout captured, so the JSON body can be asserted too. */
+function capture(argv, cwd) {
+  const chunks = [];
+  const original = process.stdout.write;
+  process.stdout.write = (chunk) => { chunks.push(String(chunk)); return true; };
+  try {
+    const code = run(argv, { cwd });
+    return { code, out: chunks.join('') };
+  } finally {
+    process.stdout.write = original;
+  }
+}
+
+/**
+ * The shape an OpenCode maintainer actually wrote in the field. Before this
+ * round the folded header came back as the string `>-`, the next line failed
+ * with `expected key: value`, the whole frontmatter was unparseable, and
+ * `task list` reported the task's status as `unknown`.
+ */
+const FOLDED_FINDINGS =
+  'requirements:\n' +
+  '  checks: [test]\n' +
+  '  independent_review: true\n' +
+  'candidates:\n' +
+  '  - ref: worktree-T005\n' +
+  '    producers: [engineer@opencode]\n' +
+  'evidence:\n' +
+  '  - check: test\n' +
+  '    candidate: worktree-T005\n' +
+  '    result: pass\n' +
+  '    command: "npm test"\n' +
+  '    exit_code: 0\n' +
+  '    host: opencode\n' +
+  '    model: "zai-coding-plan/glm-5.3"\n' +
+  '    at: "2026-09-18T12:34:56Z"\n' +
+  'assessments:\n' +
+  '  - candidate: worktree-T005\n' +
+  '    role: maintainer\n' +
+  '    actor: maintainer@opencode\n' +
+  '    verdict: accept\n' +
+  '    findings: >-\n' +
+  '      fallback assessment (auditor provider unavailable): accept.\n' +
+  '      Canonical spec is keyboard-only.\n';
+
+const FOLDED_TEXT = 'fallback assessment (auditor provider unavailable): accept. Canonical spec is keyboard-only.';
+
+test('F1: a folded findings scalar leaves the record structurally valid', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-005', FOLDED_FINDINGS);
+  const { record } = findRecord(root, 'T-005');
+  assert.deepEqual(record.errors, [], 'the record has structural errors');
+  assert.equal(record.frontmatter.assessments[0].findings, FOLDED_TEXT);
+});
+
+test('F1: task lint exits 0 on a record with a folded findings scalar', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-005', FOLDED_FINDINGS);
+  const { code, out } = capture(['task', 'lint', '--json'], root);
+  assert.equal(code, 0, out);
+  assert.equal(JSON.parse(out).ok, true);
+});
+
+test('F1: task list prints the real status of a record with a folded scalar', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-005', FOLDED_FINDINGS);
+  const { code, out } = capture(['task', 'list'], root);
+  assert.equal(code, 0);
+  assert.match(out, /T-005\s+in_review/);
+  assert.doesNotMatch(out, /unknown/);
+});
+
+test('F1: task show --json returns the folded text with the folding applied', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-005', FOLDED_FINDINGS);
+  const { code, out } = capture(['task', 'show', 'T-005', '--json'], root);
+  assert.equal(code, 0);
+  const shown = JSON.parse(out);
+  assert.equal(shown.frontmatter.assessments[0].findings, FOLDED_TEXT);
+  assert.equal(shown.structural.valid, true);
+  assert.deepEqual(shown.structural.errors, []);
 });
