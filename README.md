@@ -1,9 +1,13 @@
 # Agentic Loop
 
 **A small, portable vocabulary for agent work.** Markdown task records carrying
-work, candidates, evidence, and assessments; four role presets; reusable skills;
-thin adapters for Codex, Claude Code, and OpenCode; and a few pure checks over
-what the records say.
+work, candidates, evidence, and assessments; four role presets based on the
+[TRINITY](https://arxiv.org/abs/2512.04695) role model; reusable skills; thin
+adapters for Codex, Claude Code, and OpenCode; and a few pure checks over what
+the records say.
+
+Code, documents, analyses: any result that lives in a repository and can be
+checked.
 
 Agents choose the workflow. Hosts execute it.
 
@@ -14,8 +18,8 @@ who wrote a record.
 
 ## Why
 
-Coding agents drift scope, conflate implementation with proof, and lose context
-between sessions. A shared record helps.
+Agents drift scope, conflate producing a result with proving it, and lose
+context between sessions. A shared record helps.
 
 The previous version of this toolkit answered that with a full lifecycle:
 activation, dispatch, receipts, gates, closeout. In sustained field use the
@@ -65,7 +69,7 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - check: test
     candidate: 007c7f8
@@ -78,8 +82,8 @@ evidence:
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
   - candidate: 007c7f8
-    role: maintainer
-    actor: maintainer@codex
+    role: verifier
+    actor: verifier@codex
     verdict: accept
     host: codex
     model: openai/gpt-5.6-sol
@@ -128,9 +132,27 @@ rejecting assessments are always recordable.
 
 ## Roles
 
-`engineer` produces implementation and evidence. `maintainer` shapes work and
-assesses engineering quality. `auditor` independently assesses a result.
-`orchestrator` coordinates.
+The role model is based on *TRINITY: An Evolved LLM Coordinator* (Xu et al.,
+[arXiv:2512.04695](https://arxiv.org/abs/2512.04695)). In TRINITY a small
+coordinator picks, turn by turn, a model and one of three roles: a **Thinker**
+that plans, decomposes, and critiques; a **Worker** that makes concrete
+progress; and a **Verifier** that checks whether the result is correct,
+complete, and responsive. The paper evaluates the same three roles on coding,
+math, reasoning, and knowledge benchmarks, and removing the role split lowered
+its average score.
+
+Agentic Loop keeps those responsibilities and adds what the paper leaves open:
+work grounded in a real repository, durable records instead of a transcript,
+verdicts bound to an exact candidate, and declared requirements, not a single
+accept, deciding when a task is done. It is based on TRINITY's role model, not
+an implementation of TRINITY: there is no learned coordinator.
+
+| Role | Responsibility |
+|---|---|
+| `coordinator` | decides which role acts next and keeps the user informed |
+| `thinker` | turns a request into work: intent, scope, acceptance criteria, requirements; critiques and diagnoses |
+| `worker` | produces the candidate and its evidence |
+| `verifier` | assesses the exact candidate: responsive, complete, correct |
 
 Each is a responsibility and boundary preset, independently usable, with no
 mandatory delegation sequence. Loading a role creates no authority.
