@@ -25,7 +25,7 @@ function poison(root, relative, content) {
 
 test('containedPath accepts an ordinary path inside the repository', () => {
   const root = '/repo';
-  assert.equal(containedPath(root, '.codex/agents/engineer.toml'), path.resolve('/repo/.codex/agents/engineer.toml'));
+  assert.equal(containedPath(root, '.codex/agents/worker.toml'), path.resolve('/repo/.codex/agents/worker.toml'));
 });
 
 for (const escape of ['../outside.txt', '../../etc/passwd', 'a/../../outside.txt', './../outside.txt']) {

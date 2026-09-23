@@ -176,5 +176,5 @@ test('dropping a host from the config and updating removes its files', (t) => {
   assert.ok(result.removed.every((relative) => relative.startsWith('.claude/')));
   assert.ok(!fs.existsSync(path.join(root, '.claude', 'commands', 'agenticloop.md')));
   assert.ok(!fs.existsSync(path.join(root, '.claude')), 'an emptied host directory was left standing');
-  assert.ok(fs.existsSync(path.join(root, '.codex', 'agents', 'engineer.toml')));
+  assert.ok(fs.existsSync(path.join(root, '.codex', 'agents', 'worker.toml')));
 });

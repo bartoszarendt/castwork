@@ -5,8 +5,8 @@
     },
     "claude": {
       "role_settings": {
-        "maintainer": { "permission_mode": "acceptEdits" },
-        "engineer": { "permission_mode": "acceptEdits" }
+        "thinker": { "permission_mode": "acceptEdits" },
+        "worker": { "permission_mode": "acceptEdits" }
       }
     },
     "opencode": {

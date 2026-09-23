@@ -130,13 +130,13 @@ for (const host of HOSTS.filter((name) => name !== 'codex')) {
     assert.ok(checked > 0, `${host} produced no frontmatter to check`);
   });
 
-  test(`3: the ${host} auditor description survives generation intact`, () => {
-    const auditor = generateHost(host).find((file) => file.path.endsWith('auditor.md'));
-    const parsed = parseYaml(frontmatterOf(auditor.content));
-    const canonical = readRoles().find((role) => role.id === 'auditor');
-    assert.equal(parsed.name, 'auditor');
+  test(`3: the ${host} verifier description survives generation intact`, () => {
+    const verifier = generateHost(host).find((file) => file.path.endsWith('verifier.md'));
+    const parsed = parseYaml(frontmatterOf(verifier.content));
+    const canonical = readRoles().find((role) => role.id === 'verifier');
+    assert.equal(parsed.name, 'verifier');
     assert.equal(parsed.description, canonical.description);
-    assert.match(parsed.description, /Read-only: implements nothing/, 'the colon-bearing clause must survive');
+    assert.match(parsed.description, /Read-only on the result: changes nothing/, 'the colon-bearing clause must survive');
   });
 
   test(`3: no generated ${host} frontmatter line carries a bare second colon`, () => {

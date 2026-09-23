@@ -153,9 +153,9 @@ for (const host of MARKDOWN_HOSTS) {
   });
 
   test(`9: per-role settings reach ${host} frontmatter as independent YAML`, () => {
-    const files = generateHost(host, { roleSettings: { engineer: { model: 'a:model # with hash', permission_mode: 'acceptEdits' } } });
-    const engineer = files.find((entry) => entry.path.endsWith('/engineer.md'));
-    const parsed = independentYaml.parse(frontmatterOf(engineer.content));
+    const files = generateHost(host, { roleSettings: { worker: { model: 'a:model # with hash', permission_mode: 'acceptEdits' } } });
+    const worker = files.find((entry) => entry.path.endsWith('/worker.md'));
+    const parsed = independentYaml.parse(frontmatterOf(worker.content));
     assert.equal(parsed.model, 'a:model # with hash');
   });
 }

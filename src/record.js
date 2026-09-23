@@ -24,7 +24,7 @@ export const STATUS_VALUES = Object.freeze([
 export const REQUIREMENT_KINDS = Object.freeze(['checks', 'independent_review', 'assessment_roles']);
 
 /** The four canonical role ids. */
-export const ROLE_IDS = Object.freeze(['orchestrator', 'maintainer', 'engineer', 'auditor']);
+export const ROLE_IDS = Object.freeze(['coordinator', 'thinker', 'worker', 'verifier']);
 
 /** Recognized assessment verdicts. */
 export const VERDICTS = Object.freeze(['accept', 'reject', 'needs_revision']);

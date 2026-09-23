@@ -376,7 +376,7 @@ function evaluateAssessmentRole(record, role, candidateRef) {
   /** @type {SupportingFact[]} */
   const facts = [{ fact: `effective ${role} verdicts: ${verdicts.join(', ')}`, trust: ASSERTED }];
 
-  // `some(accept)` let one maintainer overrule another: two effective
+  // `some(accept)` let one verifier overrule another: two effective
   // assessments, one accepting and one rejecting, reported satisfied. Every
   // actor holding the role is relevant, so one blocking verdict is enough.
   if (!forRole.some((entry) => String(entry.verdict) === 'accept')) {

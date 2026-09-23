@@ -34,7 +34,7 @@ test('case B, delegated: independence and role assessment both satisfied', () =>
   const results = checkRecord(record).requirements;
   assert.deepEqual(
     results.map((entry) => [entry.requirement, entry.status]),
-    [['checks:test', 'satisfied'], ['checks:lint', 'satisfied'], ['independent_review', 'satisfied'], ['assessment_roles:maintainer', 'satisfied']],
+    [['checks:test', 'satisfied'], ['checks:lint', 'satisfied'], ['independent_review', 'satisfied'], ['assessment_roles:verifier', 'satisfied']],
   );
   assert.equal(mayBeDone(record).allowed, true);
 });
@@ -47,7 +47,7 @@ test('case C, negative: the reviewer is a producer, so independence fails', () =
   assert.equal(independence.reason, 'actor.is_producer');
 
   // The role assessment still passes: the two requirements are independent.
-  assert.equal(results.find((entry) => entry.requirement === 'assessment_roles:maintainer').status, 'satisfied');
+  assert.equal(results.find((entry) => entry.requirement === 'assessment_roles:verifier').status, 'satisfied');
   assert.equal(mayBeDone(record).allowed, false);
 });
 

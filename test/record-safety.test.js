@@ -19,7 +19,7 @@ const requirement = (record, name) => requirementEvaluation(record).find((entry)
 
 /** @param {string} producers */
 function independence(producers, actor = 'm@x') {
-  return parseRecord(`---\nschema: 1\nid: T-1\ntitle: t\nstatus: in_review\nrequirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: ${producers}\nassessments:\n  - { candidate: aaa, role: maintainer, actor: ${actor}, verdict: accept }\n---\n`);
+  return parseRecord(`---\nschema: 1\nid: T-1\ntitle: t\nstatus: in_review\nrequirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: ${producers}\nassessments:\n  - { candidate: aaa, role: verifier, actor: ${actor}, verdict: accept }\n---\n`);
 }
 
 // ---------------------------------------------------------------- finding 4
@@ -32,22 +32,22 @@ for (const producers of ['[""]', '["  "]', '["\\t"]', '[null]', '[1]', '[]']) {
 }
 
 test('4: a blank producer entry is a structural error', () => {
-  const record = independence('["", "engineer@a"]');
+  const record = independence('["", "worker@a"]');
   assert.ok(record.errors.some((error) => error.code === 'identity.blank'));
 });
 
 test('4: a real producer still satisfies independence', () => {
-  assert.equal(requirement(independence('["engineer@a"]'), 'independent_review').status, 'satisfied');
+  assert.equal(requirement(independence('["worker@a"]'), 'independent_review').status, 'satisfied');
 });
 
 test('4: a blank producer mixed with a real one still compares against the real one', () => {
-  const result = requirement(independence('["", "engineer@a"]'), 'independent_review');
+  const result = requirement(independence('["", "worker@a"]'), 'independent_review');
   assert.equal(result.status, 'satisfied');
   assert.equal(requirement(independence('["", "m@x"]'), 'independent_review').status, 'not_satisfied');
 });
 
 test('4: a blank actor does not count as an accepting identity', () => {
-  const record = parseRecord('---\nschema: 1\nid: T-1\ntitle: t\nstatus: in_review\nrequirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: ["engineer@a"]\nassessments:\n  - { candidate: aaa, role: maintainer, actor: "  ", verdict: accept }\n---\n');
+  const record = parseRecord('---\nschema: 1\nid: T-1\ntitle: t\nstatus: in_review\nrequirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: ["worker@a"]\nassessments:\n  - { candidate: aaa, role: verifier, actor: "  ", verdict: accept }\n---\n');
   const result = requirement(record, 'independent_review');
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, 'actor.missing');

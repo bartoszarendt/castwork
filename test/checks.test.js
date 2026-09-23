@@ -40,35 +40,35 @@ test('a later pass after a fail restores satisfaction', () => {
 });
 
 test('independent_review is satisfied when the accepting actor is not a producer', () => {
-  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [engineer@a]\nassessments:\n  - { candidate: aaa, role: maintainer, actor: maintainer@b, verdict: accept }\n');
+  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [worker@a]\nassessments:\n  - { candidate: aaa, role: verifier, actor: verifier@b, verdict: accept }\n');
   const result = requirement(requirementEvaluation(parsed), 'independent_review');
   assert.equal(result.status, 'satisfied');
   assert.equal(result.reason, 'actor.independent');
 });
 
 test('independent_review fails when the accepting actor is a producer, whatever role it claims', () => {
-  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [engineer@a]\nassessments:\n  - { candidate: aaa, role: auditor, actor: engineer@a, verdict: accept }\n');
+  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [worker@a]\nassessments:\n  - { candidate: aaa, role: verifier, actor: worker@a, verdict: accept }\n');
   const result = requirement(requirementEvaluation(parsed), 'independent_review');
   assert.equal(result.status, 'not_satisfied');
   assert.equal(result.reason, 'actor.is_producer');
 });
 
 test('independent_review is unknown when the candidate records no producers', () => {
-  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: maintainer, actor: m@b, verdict: accept }\n');
+  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: verifier, actor: m@b, verdict: accept }\n');
   const result = requirement(requirementEvaluation(parsed), 'independent_review');
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, 'producers.missing');
 });
 
 test('independent_review is unknown when every accepting assessment lacks an actor', () => {
-  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [engineer@a]\nassessments:\n  - { candidate: aaa, role: maintainer, verdict: accept }\n');
+  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [worker@a]\nassessments:\n  - { candidate: aaa, role: verifier, verdict: accept }\n');
   const result = requirement(requirementEvaluation(parsed), 'independent_review');
   assert.equal(result.status, 'unknown');
   assert.equal(result.reason, 'actor.missing');
 });
 
 test('comparing two actor strings is checked while the identities stay asserted', () => {
-  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [engineer@a]\nassessments:\n  - { candidate: aaa, role: maintainer, actor: maintainer@b, verdict: accept }\n');
+  const parsed = record('requirements:\n  independent_review: true\ncandidates:\n  - ref: aaa\n    producers: [worker@a]\nassessments:\n  - { candidate: aaa, role: verifier, actor: verifier@b, verdict: accept }\n');
   const result = requirement(requirementEvaluation(parsed), 'independent_review');
   const trusts = Object.fromEntries(result.facts.map((fact) => [fact.fact.slice(0, 16), fact.trust]));
   assert.equal(result.facts.filter((fact) => fact.trust === 'checked').length, 1);
@@ -77,23 +77,23 @@ test('comparing two actor strings is checked while the identities stay asserted'
 });
 
 test('assessment_roles is satisfied only by an accept from that role', () => {
-  const accepted = record('requirements:\n  assessment_roles: [maintainer]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: maintainer, actor: m, verdict: accept }\n');
-  assert.equal(requirement(requirementEvaluation(accepted), 'assessment_roles:maintainer').status, 'satisfied');
+  const accepted = record('requirements:\n  assessment_roles: [verifier]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: verifier, actor: m, verdict: accept }\n');
+  assert.equal(requirement(requirementEvaluation(accepted), 'assessment_roles:verifier').status, 'satisfied');
 
-  const rejected = record('requirements:\n  assessment_roles: [maintainer]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: maintainer, actor: m, verdict: reject }\n');
-  const result = requirement(requirementEvaluation(rejected), 'assessment_roles:maintainer');
+  const rejected = record('requirements:\n  assessment_roles: [verifier]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: verifier, actor: m, verdict: reject }\n');
+  const result = requirement(requirementEvaluation(rejected), 'assessment_roles:verifier');
   assert.equal(result.status, 'not_satisfied');
   assert.equal(result.reason, 'assessment.not_accepted');
 });
 
 test('a rejecting assessment stays effective until the same actor records a later one', () => {
-  const parsed = record('requirements:\n  assessment_roles: [maintainer]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: maintainer, actor: m, verdict: accept }\n  - { candidate: aaa, role: maintainer, actor: m, verdict: reject }\n');
-  assert.equal(requirement(requirementEvaluation(parsed), 'assessment_roles:maintainer').status, 'not_satisfied');
+  const parsed = record('requirements:\n  assessment_roles: [verifier]\ncandidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: verifier, actor: m, verdict: accept }\n  - { candidate: aaa, role: verifier, actor: m, verdict: reject }\n');
+  assert.equal(requirement(requirementEvaluation(parsed), 'assessment_roles:verifier').status, 'not_satisfied');
   assert.equal(effectiveAssessments(parsed, 'aaa').length, 1);
 });
 
 test('two actors each keep their own effective assessment', () => {
-  const parsed = record('candidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: maintainer, actor: m, verdict: reject }\n  - { candidate: aaa, role: auditor, actor: a, verdict: accept }\n');
+  const parsed = record('candidates:\n  - ref: aaa\nassessments:\n  - { candidate: aaa, role: verifier, actor: m, verdict: reject }\n  - { candidate: aaa, role: verifier, actor: a, verdict: accept }\n');
   assert.equal(effectiveAssessments(parsed, 'aaa').length, 2);
 });
 
@@ -106,7 +106,7 @@ test('adding a candidate makes prior evidence inapplicable without any diagnosti
 });
 
 test('an undeclared requirement is never introduced', () => {
-  const parsed = record('candidates:\n  - ref: aaa\n    producers: [e]\nassessments:\n  - { candidate: aaa, role: maintainer, actor: e, verdict: accept }\n');
+  const parsed = record('candidates:\n  - ref: aaa\n    producers: [e]\nassessments:\n  - { candidate: aaa, role: verifier, actor: e, verdict: accept }\n');
   assert.deepEqual(requirementEvaluation(parsed), []);
   assert.equal(mayBeDone(parsed).allowed, true);
 });

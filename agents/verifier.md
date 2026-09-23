@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Assesses the exact recorded candidate against its task record for responsiveness, completeness, and correctness, and records a verdict with findings. Read-only on the result.
+description: Assesses the exact recorded candidate against its task record for responsiveness, completeness, and correctness, and records a verdict with findings. Read-only on the result: changes nothing and fixes nothing.
 ---
 
 # Verifier

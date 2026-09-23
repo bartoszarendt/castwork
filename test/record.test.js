@@ -13,12 +13,12 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - { check: test, candidate: 007c7f8, result: pass, command: "npm test", exit_code: 0 }
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
-  - { candidate: 007c7f8, role: maintainer, actor: maintainer@codex, verdict: accept, findings: "none" }
+  - { candidate: 007c7f8, role: verifier, actor: verifier@codex, verdict: accept, findings: "none" }
 ---
 
 ## Intent

@@ -163,10 +163,11 @@ function capture(argv, cwd) {
 }
 
 /**
- * The shape an OpenCode maintainer actually wrote in the field. Before this
- * round the folded header came back as the string `>-`, the next line failed
- * with `expected key: value`, the whole frontmatter was unparseable, and
- * `task list` reported the task's status as `unknown`.
+ * The shape an OpenCode agent assessing a task actually wrote in the field,
+ * with the role ids of today. Before this round the folded header came back as
+ * the string `>-`, the next line failed with `expected key: value`, the whole
+ * frontmatter was unparseable, and `task list` reported the task's status as
+ * `unknown`.
  */
 const FOLDED_FINDINGS =
   'requirements:\n' +
@@ -174,7 +175,7 @@ const FOLDED_FINDINGS =
   '  independent_review: true\n' +
   'candidates:\n' +
   '  - ref: worktree-T005\n' +
-  '    producers: [engineer@opencode]\n' +
+  '    producers: [worker@opencode]\n' +
   'evidence:\n' +
   '  - check: test\n' +
   '    candidate: worktree-T005\n' +
@@ -186,14 +187,14 @@ const FOLDED_FINDINGS =
   '    at: "2026-09-18T12:34:56Z"\n' +
   'assessments:\n' +
   '  - candidate: worktree-T005\n' +
-  '    role: maintainer\n' +
-  '    actor: maintainer@opencode\n' +
+  '    role: verifier\n' +
+  '    actor: verifier@opencode\n' +
   '    verdict: accept\n' +
   '    findings: >-\n' +
-  '      fallback assessment (auditor provider unavailable): accept.\n' +
+  '      fallback assessment (verifier provider unavailable): accept.\n' +
   '      Canonical spec is keyboard-only.\n';
 
-const FOLDED_TEXT = 'fallback assessment (auditor provider unavailable): accept. Canonical spec is keyboard-only.';
+const FOLDED_TEXT = 'fallback assessment (verifier provider unavailable): accept. Canonical spec is keyboard-only.';
 
 test('F1: a folded findings scalar leaves the record structurally valid', (t) => {
   const root = fixture(t);

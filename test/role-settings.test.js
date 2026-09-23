@@ -43,36 +43,36 @@ function read(root, relative) {
 
 test('reasoning effort reaches a Claude role as the host key effort', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { claude: { auditor: { reasoning_effort: 'xhigh' } } },
+    role_settings: { claude: { verifier: { reasoning_effort: 'xhigh' } } },
   });
   update(root);
-  assert.match(read(root, '.claude/agents/auditor.md'), /^effort: xhigh$/m);
+  assert.match(read(root, '.claude/agents/verifier.md'), /^effort: xhigh$/m);
 });
 
 test('reasoning effort reaches a Codex role as the host key model_reasoning_effort', (t) => {
   const root = fixture(t, ['codex'], {
-    role_settings: { codex: { auditor: { reasoning_effort: 'xhigh' } } },
+    role_settings: { codex: { verifier: { reasoning_effort: 'xhigh' } } },
   });
   update(root);
-  assert.match(read(root, '.codex/agents/auditor.toml'), /^model_reasoning_effort = "xhigh"$/m);
+  assert.match(read(root, '.codex/agents/verifier.toml'), /^model_reasoning_effort = "xhigh"$/m);
 });
 
 test('reasoning effort reaches an OpenCode role as the host key reasoningEffort', (t) => {
   const root = fixture(t, ['opencode'], {
-    role_settings: { opencode: { auditor: { reasoning_effort: 'high' } } },
+    role_settings: { opencode: { verifier: { reasoning_effort: 'high' } } },
   });
   update(root);
-  assert.match(read(root, '.opencode/agents/auditor.md'), /^reasoningEffort: high$/m);
+  assert.match(read(root, '.opencode/agents/verifier.md'), /^reasoningEffort: high$/m);
 });
 
 test('an OpenCode variant is its own setting, beside the effort option', (t) => {
   const root = fixture(t, ['opencode'], {
-    role_settings: { opencode: { auditor: { model: 'openai/gpt-5.6', variant: 'high' } } },
+    role_settings: { opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } } },
   });
   update(root);
-  const auditor = read(root, '.opencode/agents/auditor.md');
-  assert.match(auditor, /^model: openai\/gpt-5.6$/m);
-  assert.match(auditor, /^variant: high$/m);
+  const verifier = read(root, '.opencode/agents/verifier.md');
+  assert.match(verifier, /^model: openai\/gpt-5.6$/m);
+  assert.match(verifier, /^variant: high$/m);
 });
 
 test('the adapter is the only place a host declares what it accepts', () => {
@@ -87,35 +87,35 @@ test('the adapter is the only place a host declares what it accepts', () => {
 
 test('a value this toolkit has never heard of reaches the host intact', (t) => {
   const root = fixture(t, ['codex'], {
-    role_settings: { codex: { engineer: { reasoning_effort: 'ultra' } } },
+    role_settings: { codex: { worker: { reasoning_effort: 'ultra' } } },
   });
   update(root);
-  assert.match(read(root, '.codex/agents/engineer.toml'), /^model_reasoning_effort = "ultra"$/m);
+  assert.match(read(root, '.codex/agents/worker.toml'), /^model_reasoning_effort = "ultra"$/m);
 });
 
 test('a value that is not a scalar is refused rather than stringified into the file', (t) => {
   for (const value of [{ level: 'high' }, ['high'], true, 3, '']) {
-    const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { reasoning_effort: value } } } });
+    const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { reasoning_effort: value } } } });
     assert.throws(
       () => readConfig(root),
-      /role_settings.claude.engineer.reasoning_effort (must be a string|is empty)/,
+      /role_settings.claude.worker.reasoning_effort (must be a string|is empty)/,
       `${JSON.stringify(value)} should be refused`,
     );
   }
 });
 
 test('null leaves a setting unset, which is how a shipped default is cleared', (t) => {
-  const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { permission_mode: null } } } });
+  const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { permission_mode: null } } } });
   update(root);
-  assert.doesNotMatch(read(root, '.claude/agents/engineer.md'), /permissionMode/);
+  assert.doesNotMatch(read(root, '.claude/agents/worker.md'), /permissionMode/);
 });
 
 test('an effort value a YAML reader would take for a number is quoted', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { claude: { engineer: { reasoning_effort: '1e3' } } },
+    role_settings: { claude: { worker: { reasoning_effort: '1e3' } } },
   });
   update(root);
-  assert.match(read(root, '.claude/agents/engineer.md'), /^effort: "1e3"$/m);
+  assert.match(read(root, '.claude/agents/worker.md'), /^effort: "1e3"$/m);
 });
 
 /* ------------------------------------------------------------------ */
@@ -125,17 +125,17 @@ test('an effort value a YAML reader would take for a number is quoted', (t) => {
 test('each host gets its own model id, which is the point of the per-host map', (t) => {
   const root = fixture(t, ['claude', 'opencode'], {
     role_settings: {
-      claude: { engineer: { model: 'claude-opus-5' } },
-      opencode: { engineer: { model: 'anthropic/claude-opus-5' } },
+      claude: { worker: { model: 'claude-opus-5' } },
+      opencode: { worker: { model: 'anthropic/claude-opus-5' } },
     },
   });
   update(root);
-  assert.match(read(root, '.claude/agents/engineer.md'), /^model: claude-opus-5$/m);
-  assert.match(read(root, '.opencode/agents/engineer.md'), /^model: anthropic\/claude-opus-5$/m);
+  assert.match(read(root, '.claude/agents/worker.md'), /^model: claude-opus-5$/m);
+  assert.match(read(root, '.opencode/agents/worker.md'), /^model: anthropic\/claude-opus-5$/m);
 });
 
 test('a leftover models map is refused with the setting that replaced it', (t) => {
-  const root = fixture(t, ['claude'], { models: { engineer: 'claude-opus-5' } });
+  const root = fixture(t, ['claude'], { models: { worker: 'claude-opus-5' } });
   assert.throws(
     () => readConfig(root),
     (error) => /no longer has a models map/.test(error.message) && /role_settings\.<host>\.<role>\.model/.test(error.hint),
@@ -144,15 +144,15 @@ test('a leftover models map is refused with the setting that replaced it', (t) =
 
 test('a shipped default is overridable now that settings are user-writable', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { claude: { engineer: { permission_mode: 'default' } } },
+    role_settings: { claude: { worker: { permission_mode: 'default' } } },
   });
   update(root);
-  assert.match(read(root, '.claude/agents/engineer.md'), /^permissionMode: default$/m);
+  assert.match(read(root, '.claude/agents/worker.md'), /^permissionMode: default$/m);
 });
 
 test('settings for a host that is not selected are checked but not projected', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { codex: { engineer: { reasoning_effort: 'high' } } },
+    role_settings: { codex: { worker: { reasoning_effort: 'high' } } },
   });
   assert.doesNotThrow(() => readConfig(root));
   update(root);
@@ -164,20 +164,22 @@ test('settings for a host that is not selected are checked but not projected', (
 /* ------------------------------------------------------------------ */
 
 test('an unknown host in role_settings is refused', (t) => {
-  const root = fixture(t, ['claude'], { role_settings: { cursor: { engineer: { model: 'x' } } } });
+  const root = fixture(t, ['claude'], { role_settings: { cursor: { worker: { model: 'x' } } } });
   assert.throws(() => readConfig(root), /unknown host cursor/);
 });
 
-test('an unknown role in role_settings is refused', (t) => {
-  const root = fixture(t, ['claude'], { role_settings: { claude: { thinker: { model: 'x' } } } });
-  assert.throws(
-    () => readConfig(root),
-    (error) => /unknown role thinker/.test(error.message) && /engineer/.test(error.hint),
-  );
+test('an unknown role in role_settings is refused, and a previous role id is unknown', (t) => {
+  for (const role of ['engineer', 'maintainer', 'auditor', 'orchestrator', 'reviewer']) {
+    const root = fixture(t, ['claude'], { role_settings: { claude: { [role]: { model: 'x' } } } });
+    assert.throws(
+      () => readConfig(root),
+      (error) => new RegExp(`unknown role ${role}`).test(error.message) && /coordinator, thinker, worker, verifier/.test(error.hint),
+    );
+  }
 });
 
 test('a setting the host cannot express is refused and the hint lists what it can', (t) => {
-  const root = fixture(t, ['claude'], { role_settings: { claude: { engineer: { variant: 'high' } } } });
+  const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { variant: 'high' } } } });
   assert.throws(
     () => readConfig(root),
     (error) => /has no setting variant/.test(error.message) && /accepts: model, permission_mode, reasoning_effort/.test(error.hint),
@@ -185,7 +187,7 @@ test('a setting the host cannot express is refused and the hint lists what it ca
 });
 
 test('role_settings shaped as anything but nested maps is refused', (t) => {
-  for (const value of [['claude'], 'claude', { claude: ['engineer'] }, { claude: { engineer: 'opus' } }]) {
+  for (const value of [['claude'], 'claude', { claude: ['worker'] }, { claude: { worker: 'opus' } }]) {
     const root = fixture(t, ['claude'], { role_settings: value });
     assert.throws(() => readConfig(root), /role_settings/);
   }
@@ -198,9 +200,9 @@ test('role_settings shaped as anything but nested maps is refused', (t) => {
 test('no effort key appears in a generated role when none is configured', (t) => {
   const root = fixture(t, ['claude', 'codex', 'opencode']);
   update(root);
-  assert.doesNotMatch(read(root, '.claude/agents/auditor.md'), /effort/);
-  assert.doesNotMatch(read(root, '.codex/agents/auditor.toml'), /reasoning_effort/);
-  assert.doesNotMatch(read(root, '.opencode/agents/auditor.md'), /effort|variant/);
+  assert.doesNotMatch(read(root, '.claude/agents/verifier.md'), /effort/);
+  assert.doesNotMatch(read(root, '.codex/agents/verifier.toml'), /reasoning_effort/);
+  assert.doesNotMatch(read(root, '.opencode/agents/verifier.md'), /effort|variant/);
 });
 
 /* ------------------------------------------------------------------ */
@@ -213,13 +215,13 @@ test('validate reports a shipped default that no host could accept', (t) => {
   t.after(() => fs.writeFileSync(file, original, 'utf8'));
 
   const shipped = JSON.parse(original);
-  shipped.adapters.claude.role_settings.engineer.reasoning_efort = 'high';
-  shipped.adapters.claude.role_settings.thinker = { model: 'x' };
-  shipped.adapters.codex.role_settings.engineer = { permission_mode: 'acceptEdits' };
+  shipped.adapters.claude.role_settings.worker.reasoning_efort = 'high';
+  shipped.adapters.claude.role_settings.engineer = { model: 'x' };
+  shipped.adapters.codex.role_settings.worker = { permission_mode: 'acceptEdits' };
   fs.writeFileSync(file, `${JSON.stringify(shipped, null, 2)}\n`, 'utf8');
 
   const messages = validate(repoRoot).findings.map((finding) => finding.message);
   assert.ok(messages.some((m) => /reasoning_efort is not a setting claude accepts/.test(m)), 'a misspelled key');
-  assert.ok(messages.some((m) => /role_settings.thinker is not a role id/.test(m)), 'an unknown role');
+  assert.ok(messages.some((m) => /role_settings.engineer is not a role id/.test(m)), 'an unknown role');
   assert.ok(messages.some((m) => /permission_mode is not a setting codex accepts/.test(m)), 'a key from another host');
 });

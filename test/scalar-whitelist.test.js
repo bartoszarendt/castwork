@@ -49,7 +49,7 @@ const CLOSED_LIST = [
   '',
   'T-001',
   'in_review',
-  'engineer@claude',
+  'worker@claude',
 ];
 
 for (const value of CLOSED_LIST) {
@@ -63,13 +63,13 @@ for (const value of CLOSED_LIST) {
 }
 
 test('r4-2: the values a record uses every day stay bare', () => {
-  for (const value of ['T-001', 'in_review', 'done', 'engineer', 'blocked', 'ordinary title', 'a-b_c.d/e']) {
+  for (const value of ['T-001', 'in_review', 'done', 'worker', 'blocked', 'ordinary title', 'a-b_c.d/e']) {
     assert.equal(formatScalar(value), value, `${value} should not be quoted`);
   }
 });
 
 test('r4-2: boolean-like words and everything outside the whitelist are quoted', () => {
-  for (const value of ['true', 'True', 'no', 'OFF', 'y', 'N', 'null', '1e3', '0x10', '.inf', '5.', '+1', 'engineer@claude', 'trailing ']) {
+  for (const value of ['true', 'True', 'no', 'OFF', 'y', 'N', 'null', '1e3', '0x10', '.inf', '5.', '+1', 'worker@claude', 'trailing ']) {
     assert.ok(formatScalar(value).startsWith('"'), `${value} should be quoted`);
   }
 });
@@ -87,7 +87,7 @@ function fixture(t) {
   // one id cannot name a model to three hosts. The binding under test is the
   // same `1e3` in all three.
   config.role_settings = Object.fromEntries(
-    ['codex', 'claude', 'opencode'].map((host) => [host, { engineer: { model: '1e3' } }]),
+    ['codex', 'claude', 'opencode'].map((host) => [host, { worker: { model: '1e3' } }]),
   );
   fs.writeFileSync(path.join(root, CONFIG_FILE), `${JSON.stringify(config, null, 2)}\n`, 'utf8');
   update(root);
@@ -101,8 +101,8 @@ function frontmatterOf(content) {
 }
 
 for (const [host, file] of [
-  ['claude', '.claude/agents/engineer.md'],
-  ['opencode', '.opencode/agents/engineer.md'],
+  ['claude', '.claude/agents/worker.md'],
+  ['opencode', '.opencode/agents/worker.md'],
 ]) {
   test(`r4-2: a model binding of 1e3 reaches ${host} frontmatter as the string "1e3"`, (t) => {
     const root = fixture(t);
@@ -116,6 +116,6 @@ for (const [host, file] of [
 
 test('r4-2: a model binding of 1e3 reaches codex TOML as a quoted string', (t) => {
   const root = fixture(t);
-  const content = fs.readFileSync(path.join(root, '.codex', 'agents', 'engineer.toml'), 'utf8');
+  const content = fs.readFileSync(path.join(root, '.codex', 'agents', 'worker.toml'), 'utf8');
   assert.match(content, /^model = "1e3"$/m);
 });

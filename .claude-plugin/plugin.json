@@ -17,10 +17,10 @@
   ],
   "skills": "./.claude-plugin/",
   "agents": [
-    "./agents/orchestrator.md",
-    "./agents/maintainer.md",
-    "./agents/engineer.md",
-    "./agents/auditor.md"
+    "./agents/coordinator.md",
+    "./agents/thinker.md",
+    "./agents/worker.md",
+    "./agents/verifier.md"
   ],
   "commands": [
     "./commands/start.md"

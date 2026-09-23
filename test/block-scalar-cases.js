@@ -1,11 +1,11 @@
 /**
  * The block scalar table, shared by the unit tests and the parity tests.
  *
- * Field round, F1: an OpenCode maintainer wrote `findings: >-` in a record and
- * the whole frontmatter became unparseable, so the task reported no status at
- * all. Every expectation below was taken from the independent `yaml` package
- * first and is asserted against both parsers, so a mistake our parser and our
- * expectations share cannot pass.
+ * Field round, F1: an OpenCode agent assessing a task wrote `findings: >-` in a
+ * record and the whole frontmatter became unparseable, so the task reported no
+ * status at all. Every expectation below was taken from the independent `yaml`
+ * package first and is asserted against both parsers, so a mistake our parser
+ * and our expectations share cannot pass.
  */
 
 /** @type {[string, string, unknown][]} label, document, value */
@@ -38,15 +38,15 @@ export const ACCEPTED = [
   ['an inline sequence mapping indents content past its key', 'a:\n  - key: |\n      one\n      two\n', { a: [{ key: 'one\ntwo\n' }] }],
   [
     'the T-005 shape: a folded scalar in an inline sequence-entry mapping',
-    'assessments:\n  - candidate: worktree-T005\n    role: maintainer\n    actor: maintainer@opencode\n    verdict: accept\n    findings: >-\n      fallback assessment (auditor provider unavailable): accept.\n      Canonical spec is keyboard-only.\n',
+    'assessments:\n  - candidate: worktree-T005\n    role: verifier\n    actor: verifier@opencode\n    verdict: accept\n    findings: >-\n      fallback assessment (verifier provider unavailable): accept.\n      Canonical spec is keyboard-only.\n',
     {
       assessments: [
         {
           candidate: 'worktree-T005',
-          role: 'maintainer',
-          actor: 'maintainer@opencode',
+          role: 'verifier',
+          actor: 'verifier@opencode',
           verdict: 'accept',
-          findings: 'fallback assessment (auditor provider unavailable): accept. Canonical spec is keyboard-only.',
+          findings: 'fallback assessment (verifier provider unavailable): accept. Canonical spec is keyboard-only.',
         },
       ],
     },

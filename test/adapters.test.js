@@ -60,12 +60,12 @@ for (const host of HOSTS) {
 }
 
 for (const host of HOSTS) {
-  test(`${host} entry file claims the orchestrator role only when invoked`, () => {
+  test(`${host} entry file claims the coordinator role only when invoked`, () => {
     const entry = generateHost(host).find((file) => /agenticloop\.md$|agenticloop\/SKILL\.md$/.test(file.path));
     assert.ok(entry, `${host} has no entry file`);
-    assert.match(entry.content, /Act as the orchestrator when Agentic Loop was invoked/);
+    assert.match(entry.content, /Act as the coordinator when Agentic Loop was invoked/);
     assert.match(entry.content, /Do not adopt the role for a request that never asked for it/);
-    assert.doesNotMatch(entry.content, /You are the orchestrator for this session/);
+    assert.doesNotMatch(entry.content, /You are the coordinator for this session/);
   });
 
   test(`${host} skill index says when to use Agentic Loop, not what to do`, () => {
@@ -123,9 +123,9 @@ test('codex role files carry the prompt under the key Codex reads', () => {
 });
 
 test('a model binding reaches the generated role file', () => {
-  const files = generateHost('claude', { roleSettings: { engineer: { model: 'claude-opus-5' } } });
-  const engineer = files.find((file) => file.path.endsWith('engineer.md'));
-  assert.ok(engineer.content.includes('model: claude-opus-5'));
+  const files = generateHost('claude', { roleSettings: { worker: { model: 'claude-opus-5' } } });
+  const worker = files.find((file) => file.path.endsWith('worker.md'));
+  assert.ok(worker.content.includes('model: claude-opus-5'));
 });
 
 test('an entry command without two usable descriptions is refused', () => {

@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { HOSTS } from './layout.js';
-import { parseRecord } from './record.js';
+import { parseRecord, ROLE_IDS } from './record.js';
 import { PublicError } from './public-error.js';
 import { formatScalar } from './yaml.js';
 
@@ -39,7 +39,7 @@ export function readAdapter(host) {
 export function readRoles() {
   const directory = path.join(toolkitRoot(), 'agents');
   const roles = [];
-  for (const id of ['orchestrator', 'maintainer', 'engineer', 'auditor']) {
+  for (const id of ROLE_IDS) {
     const file = path.join(directory, `${id}.md`);
     if (!fs.existsSync(file)) continue;
     const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });

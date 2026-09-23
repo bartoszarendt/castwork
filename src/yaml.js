@@ -586,7 +586,7 @@ const BARE_SCALAR = /^[A-Za-z][A-Za-z0-9 _./-]*$/;
  *
  * What stays bare is what records are made of: ids like `T-001`, statuses like
  * `in_review`, role names, and plain descriptions. `Fix #1 regression`,
- * `engineer@claude` and everything else is double quoted with the escaping
+ * `worker@claude` and everything else is double quoted with the escaping
  * below.
  *
  * @param {string} value
