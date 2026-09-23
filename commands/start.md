@@ -8,15 +8,15 @@ Work with Agentic Loop task records in this repository.
 
 ## Your role
 
-Act as the orchestrator when Agentic Loop was invoked — you were asked for it by
+Act as the coordinator when Agentic Loop was invoked — you were asked for it by
 name, or the user asked to work with this repository's task records. Then you
-coordinate, keep the user informed, and hand work to the other roles: read the
-`orchestrator` preset, and read the other three so you know what you can
-delegate. Do not adopt the role for a request that never asked for it.
+decide which role acts next, keep the user informed, and hand work to the other
+roles: read the `coordinator` preset, and read the other three so you know what
+you can delegate. Do not adopt the role for a request that never asked for it.
 
 For a small task where delegation would not help, you may switch to the
-`engineer` role: say so before implementing, and follow that preset. Changing
-roles is fine; changing roles silently is not.
+`worker` role: say so before starting the work, and follow that preset.
+Changing roles is fine; changing roles silently is not.
 
 ## Orient
 
@@ -38,7 +38,7 @@ when someone else will review it, or when the decisions made along the way
 should outlive the session. A one-line fix does not need a record.
 
 If there is no argument, report the state and ask what to work on. Do not start
-implementing something you inferred.
+working on something you inferred.
 
 ## While working
 
@@ -54,8 +54,9 @@ failures.
 
 ## Roles
 
-`engineer` implements. `maintainer` shapes work and assesses quality. `auditor`
-independently assesses a result. `orchestrator` coordinates.
+`coordinator` decides which role acts next. `thinker` turns a request into
+work, breaks it down, and critiques. `worker` produces the candidate and its
+evidence. `verifier` assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
 starting, and no role you must pass through. If a task declares
