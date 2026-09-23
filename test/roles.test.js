@@ -159,3 +159,13 @@ for (const host of HOSTS) {
     }
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} entry treats a described task or plan as the request`, () => {
+    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    assert.ok(entry, 'the entry procedure is generated');
+    assert.match(entry.content, /the user has asked for that work: proceed without asking\s+again/);
+    assert.match(entry.content, /A plan or a list of tasks\.\*\* Have the `thinker` turn it into task records/);
+    assert.doesNotMatch(entry.content, /decide with the user whether it\s+needs one/);
+  });
+}

@@ -41,6 +41,13 @@ modified one as skipped, for you to merge and delete.
   `disable-model-invocation: true` in its skill index. Explicit invocation
   (`$agenticloop`, `/agenticloop`) is unaffected. Adapters can now declare a
   `literal` file and `skill_frontmatter`, so this stayed a descriptor change.
+- Work described after the entry command is the request. `/agenticloop <text>`
+  (`$agenticloop <text>` on Codex) no longer asks whether the work needs a
+  record: a single task is done, with a record when it spans sittings or needs
+  review; a plan or task list is turned into records with `depends_on` by the
+  `thinker` and worked through in dependency order. The agent asks only when
+  the description is ambiguous, would be exceeded, or touches something
+  irreversible.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.

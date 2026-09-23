@@ -32,10 +32,20 @@ Changing roles is fine; changing roles silently is not.
 
 If the argument names a task id, read that record and do the work it describes.
 
-If it describes work that has no record yet, decide with the user whether it
-needs one. A record is worth writing when the work spans more than one sitting,
-when someone else will review it, or when the decisions made along the way
-should outlive the session. A one-line fix does not need a record.
+If it describes work, the user has asked for that work: proceed without asking
+again.
+
+- **A single task.** Do it. Write a record first when the work spans more than
+  one sitting, when someone else will review it, or when the decisions made
+  along the way should outlive the session. A one-line fix does not need a
+  record.
+- **A plan or a list of tasks.** Have the `thinker` turn it into task records,
+  with `depends_on` where one task needs another and the plan kept in the
+  record bodies. Then work through the records in dependency order,
+  delegating as usual.
+
+Ask only where the description is ambiguous, where doing it would go beyond
+what it states, or where it touches something irreversible.
 
 If there is no argument, report the state and ask what to work on. Do not start
 working on something you inferred.
@@ -55,7 +65,7 @@ failures.
 ## Roles
 
 `coordinator` decides which role acts next. `thinker` turns a request into
-work, breaks it down, and critiques. `worker` produces the candidate and its
+work, plans it, breaks it down, and critiques. `worker` produces the candidate and its
 evidence. `verifier` assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
