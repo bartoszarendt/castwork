@@ -85,6 +85,12 @@ modified one as skipped, for you to merge and delete.
 - The examples now show the optional `host`, `model`, and `at` attributes on an
   evidence entry and an assessment, and `docs/record-format.md` states the YAML
   subset the frontmatter parser accepts and refuses.
+- A colon inside a flow collection is part of the word unless a space, a flow
+  indicator, or the end follows it, as in YAML. `checks: [test:api, lint:api]`
+  used to make the whole frontmatter unparseable, and `{k:v}` read as `k: v`
+  where YAML reads a key `k:v`; the first now parses and the second is refused.
+  Unparseable frontmatter now reports its parse error alone instead of also
+  listing every required field as missing.
 - YAML anchors, aliases and tags are refused explicitly; they are never read as
   literal strings with a different meaning from a full YAML parser.
 - `independent_review` and `assessment_roles` are distinguished where they are

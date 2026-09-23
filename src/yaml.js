@@ -384,6 +384,18 @@ function parseScalarToken(token, line) {
   return token;
 }
 
+/**
+ * Whether the colon at `index` separates a key from its value inside a flow
+ * collection. As in YAML, it does only when a space, a flow indicator, or the
+ * end follows it; a colon after a quoted key is handled by the caller.
+ *
+ * @param {string} text @param {number} index
+ */
+function isFlowIndicatorColon(text, index) {
+  const next = text[index + 1];
+  return next === undefined || /\s/.test(next) || '[]{},'.includes(next);
+}
+
 /** @param {string} text @param {number} line */
 function tokenizeFlow(text, line) {
   const tokens = [];
@@ -391,7 +403,13 @@ function tokenizeFlow(text, line) {
   while (i < text.length) {
     const ch = text[i];
     if (/\s/.test(ch)) { i += 1; continue; }
-    if (ch === '[' || ch === ']' || ch === '{' || ch === '}' || ch === ',' || ch === ':') {
+    if (ch === '[' || ch === ']' || ch === '{' || ch === '}' || ch === ',') {
+      tokens.push(ch);
+      i += 1;
+      continue;
+    }
+    const previous = tokens[tokens.length - 1];
+    if (ch === ':' && (isFlowIndicatorColon(text, i) || (previous !== undefined && (previous[0] === '"' || previous[0] === "'")))) {
       tokens.push(ch);
       i += 1;
       continue;
@@ -407,8 +425,10 @@ function tokenizeFlow(text, line) {
       i = j + 1;
       continue;
     }
+    // A plain word keeps a colon that is not an indicator: `[test:api]` is one
+    // string, as it is in YAML, not a key `test` with the value `api`.
     let j = i;
-    while (j < text.length && !'[]{},:'.includes(text[j])) j += 1;
+    while (j < text.length && !'[]{},'.includes(text[j]) && !(text[j] === ':' && isFlowIndicatorColon(text, j))) j += 1;
     const word = text.slice(i, j).trim();
     if (word === '') throw new YamlError('empty flow token', line);
     tokens.push(word);

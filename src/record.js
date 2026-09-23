@@ -170,6 +170,7 @@ export function parseRecord(text, options = {}) {
 
   /** @type {Record<string, unknown>} */
   let frontmatter = {};
+  let readable = false;
   if (yaml === null) {
     push(errors, 'frontmatter.missing', 'the record has no --- delimited frontmatter');
   } else {
@@ -179,6 +180,7 @@ export function parseRecord(text, options = {}) {
         push(errors, 'frontmatter.not_a_mapping', 'frontmatter must be a mapping');
       } else {
         frontmatter = parsed;
+        readable = true;
       }
     } catch (error) {
       const message = error instanceof YamlError ? error.message : String(error);
@@ -186,7 +188,9 @@ export function parseRecord(text, options = {}) {
     }
   }
 
-  for (const field of REQUIRED_FIELDS) {
+  // Frontmatter that could not be read has no fields to be missing. Reporting
+  // every required field as absent buried the one error that mattered.
+  for (const field of readable ? REQUIRED_FIELDS : []) {
     if (frontmatter[field] === undefined || frontmatter[field] === null || frontmatter[field] === '') {
       push(errors, 'field.missing', `required field ${field} is missing`, { field });
     }

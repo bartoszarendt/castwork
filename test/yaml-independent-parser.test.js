@@ -340,3 +340,46 @@ test('F1: deterministic folded-scalar structures agree with the independent pars
     );
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* A colon inside a flow collection, in parity with the `yaml` package */
+/* ------------------------------------------------------------------ */
+
+// A colon separates a flow key from its value only when a space, a flow
+// indicator, or the end follows it, or when it follows a quoted key. Anywhere
+// else it is part of the word: npm-style check names are the common case.
+const FLOW_COLONS = [
+  'checks: [test:api, lint:api]',
+  'checks: [ test:api ]',
+  'links: [http://example.com/a, "quoted:colon"]',
+  'entry: {url: http://example.com, check: test:unit}',
+  'entry: {"k":v}',
+  'entry: {"k": [a:b]}',
+  'checks: [":leading", trailing:colon:twice]',
+];
+
+for (const text of FLOW_COLONS) {
+  test(`flow colon: ${JSON.stringify(text)} reads as the independent parser reads it`, () => {
+    assert.deepEqual(plain(parseYaml(text)), independentYaml.parse(text));
+  });
+}
+
+// `{k:v}` is a key `k:v` with a null value in YAML. The subset used to read it
+// as `k: v`; a different answer with no error is worse than a refusal.
+test('flow colon: {k:v} is refused rather than read as k: v', () => {
+  assert.deepEqual(independentYaml.parse('entry: {k:v}'), { entry: { 'k:v': null } });
+  assert.throws(() => parseYaml('entry: {k:v}'), /expected : after key k:v/);
+});
+
+test('flow colon: a record whose checks carry colons parses with no error', () => {
+  const record = parseRecord(
+    '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\nrequirements:\n  checks: [test:api, lint:api]\n  independent_review: true\n  assessment_roles: [verifier]\n---\n',
+  );
+  assert.deepEqual(record.errors, []);
+  assert.deepEqual(record.frontmatter.requirements.checks, ['test:api', 'lint:api']);
+});
+
+test('unparseable frontmatter reports the parse error alone, not every required field as missing', () => {
+  const record = parseRecord('---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\nchecks: [a: b]\n---\n');
+  assert.deepEqual(record.errors.map((error) => error.code), ['frontmatter.unparseable']);
+});

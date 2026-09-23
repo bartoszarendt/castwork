@@ -61,6 +61,10 @@ findings: >-
   error path this change adds.
 ```
 
+Inside a flow collection a colon separates a key from its value only when a
+space follows it, as in YAML: `checks: [test:api, lint:api]` is two check
+names.
+
 **Refused:** anchors and aliases, tags, multiple documents in one frontmatter,
 and explicit indentation indicators (`|2`, `>1-`). Each refusal names the line.
 
