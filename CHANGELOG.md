@@ -48,6 +48,18 @@ modified one as skipped, for you to merge and delete.
   `thinker` and worked through in dependency order. The agent asks only when
   the description is ambiguous, would be exceeded, or touches something
   irreversible.
+- Delegation reaches the role. The entry command names where this host's role
+  files live and tells the coordinator to start the subagent named after the
+  role (`agenticloop:thinker` under a plugin install), not a general-purpose
+  subagent told which role it plays, which never sees the role's instructions.
+  Where a host cannot start a subagent by name, the subagent is told to read its
+  role file first. The `coordinator` preset says the same.
+- Agents run the CLI as `npx --no agenticloop`. The entry command and the
+  `decision-capture` skill spelled it as a bare `agenticloop`, which is not on
+  the PATH in a project that installs the package locally, so agents got
+  `command not found`. `--no` keeps npx to the installed copy rather than
+  downloading a package of that name, and where the CLI is unavailable the
+  agent says so and edits the record by hand.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.

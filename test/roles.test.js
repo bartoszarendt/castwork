@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { generateHost } from '../src/adapter-generation.js';
+import { generateHost, readAdapter } from '../src/adapter-generation.js';
 import { requirementEvaluation } from '../src/checks.js';
 import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord, ROLE_IDS } from '../src/record.js';
@@ -167,5 +167,31 @@ for (const host of HOSTS) {
     assert.match(entry.content, /the user has asked for that work: proceed without asking\s+again/);
     assert.match(entry.content, /A plan or a list of tasks\.\*\* Have the `thinker` turn it into task records/);
     assert.doesNotMatch(entry.content, /decide with the user whether it\s+needs one/);
+  });
+}
+
+for (const host of HOSTS) {
+  test(`${host} entry delegates to the named role subagent and says where roles live`, () => {
+    const adapter = readAdapter(host);
+    const roleDir = adapter.files.find((/** @type {{kind: string}} */ entry) => entry.kind === 'role').to.split('{role}')[0];
+    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    assert.ok(entry, 'the entry procedure is generated');
+    assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
+    assert.match(entry.content, /start the host's subagent for that role/);
+    assert.match(entry.content, /A\s+general-purpose subagent told it is the thinker has only the word/);
+  });
+}
+
+for (const host of HOSTS) {
+  test(`${host} generated files run the CLI through npx --no, never bare`, () => {
+    const files = generateHost(host);
+    const entry = files.find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    assert.ok(entry, 'the entry procedure is generated');
+    assert.match(entry.content, /`npx --no agenticloop task lint <id>`/);
+    const decisions = files.find((file) => file.path.endsWith('references/decision-capture.md'));
+    assert.match(decisions.content, /`npx --no agenticloop decision new "<title>"`/);
+    for (const file of files) {
+      assert.doesNotMatch(file.content, /`agenticloop (task|decision)\b/, file.path);
+    }
   });
 }

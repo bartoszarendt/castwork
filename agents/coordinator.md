@@ -41,9 +41,14 @@ protocol demands it.
 - The **worker** produces the candidate and its evidence.
 - The **verifier** assesses the exact recorded candidate and records a verdict.
 
-When you do delegate, give the role the task id and let it read the record. Do
-not paraphrase the record into the prompt: the record is the shared artifact,
-and a paraphrase is one more thing that can drift.
+When you do delegate, start the host's subagent named after the role, not a
+general-purpose one told which role it plays: the named subagent carries the
+role's instructions, and a general-purpose one has only the name. Where the host
+cannot start a subagent by name, tell it to read its role file first.
+
+Give the role the task id and let it read the record. Do not paraphrase the
+record into the prompt: the record is the shared artifact, and a paraphrase is
+one more thing that can drift.
 
 ## Independence
 
