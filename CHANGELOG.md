@@ -104,13 +104,14 @@ modified one as skipped, for you to merge and delete.
 - Roles are concise, domain-neutral responsibility and boundary presets with no
   mandatory delegation sequence, based on the TRINITY role model. The
   `coordinator` decides which role acts next and keeps the user informed. The
-  `thinker` turns a request into work, breaks it down, and critiques; it
-  replaces the maintainer's shaping. The `worker` produces the candidate and its
-  evidence, as the engineer did. The `verifier` assesses the exact candidate and
-  records a verdict, covering the auditor and the maintainer's assessing. The
-  record mechanism is unchanged; only the role ids are new. In the shipped
-  defaults, `thinker` and `worker` carry `permission_mode: acceptEdits` for
-  Claude Code, and `verifier` has no default.
+  `thinker` turns a request into work, plans the approach, breaks it down,
+  and critiques; it replaces the maintainer's shaping and adds planning. The
+  `worker` produces the candidate and its evidence, as the engineer did. The
+  `verifier` assesses the exact candidate and records a verdict, covering the
+  auditor and the maintainer's assessing. The record mechanism is unchanged;
+  only the role ids are new. In the shipped defaults, `thinker` and `worker`
+  carry `permission_mode: acceptEdits` for Claude Code, and `verifier` has no
+  default.
 - `independent_review` and `assessment_roles: [verifier]` are evaluated
   separately and together do not guarantee an independent verifier. This is a
   documented limitation in `docs/record-format.md`, not a change in behaviour.

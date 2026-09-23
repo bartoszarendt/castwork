@@ -36,8 +36,8 @@ There is no required sequence. A task can go straight from a worker to done if
 that is what its requirements say. Delegate because it helps, not because a
 protocol demands it.
 
-- The **thinker** turns a request into work, breaks it down, critiques a
-  partial result, and diagnoses a stall.
+- The **thinker** turns a request into work, plans the approach, breaks it
+  down, critiques a partial result, and diagnoses a stall.
 - The **worker** produces the candidate and its evidence.
 - The **verifier** assesses the exact recorded candidate and records a verdict.
 
