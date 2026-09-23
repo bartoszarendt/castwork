@@ -79,14 +79,22 @@ readable and editable in every state.
 ## Roles
 
 Four responsibility and boundary presets. Each is independently usable; none
-requires a delegation sequence.
+requires a delegation sequence. They are based on the role model of *TRINITY:
+An Evolved LLM Coordinator* (Xu et al., arXiv:2512.04695); see
+[docs/background.md](docs/background.md) for what the project takes from the
+paper and what it does not.
 
 | Role | Responsibility |
 |---|---|
-| `engineer` | produces implementation and evidence |
-| `maintainer` | shapes work and assesses engineering quality |
-| `auditor` | independently assesses a result |
-| `orchestrator` | coordinates |
+| `coordinator` | decides which role acts next and keeps the user informed |
+| `thinker` | turns a request into work, breaks it down, critiques partial results, diagnoses a stall |
+| `worker` | produces the candidate and its evidence |
+| `verifier` | assesses the exact candidate for responsiveness, completeness, and correctness, and records a verdict |
+
+The thinker is responsible for the work, the worker for the candidate and its
+evidence, and the verifier for the assessment. That is guidance in the
+presets, not a checked boundary: any role may write any entry, and the checks
+read only what was recorded.
 
 Independence is evaluated against the recorded `producers` of the candidate, not
 against role names. The same actor string appearing as producer and reviewer is
@@ -103,13 +111,13 @@ expressed alongside them, not as a fifth role:
 | skill | the specialist knowledge they brought |
 | policy | the prose saying when that specialist is worth using |
 
-So a security review by a specialist agent is recorded as an `auditor`
+So a security review by a specialist agent is recorded as a `verifier`
 assessment whose `actor` says who it was:
 
 ```yaml
 assessments:
   - candidate: 007c7f8
-    role: auditor
+    role: verifier
     actor: security-reviewer@codex
     verdict: accept
 ```
@@ -157,5 +165,5 @@ Nothing else is written under `.agenticloop/`.
 
 Not an agent host, graph runtime, autonomous controller, rigid universal
 workflow, transcript archive, skill marketplace, policy engine, semantic
-database, action registry, or coordinator. Structure is added only when a named
+database, action registry, or automated coordinator. Structure is added only when a named
 consumer requires it.

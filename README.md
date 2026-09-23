@@ -146,6 +146,8 @@ work grounded in a real repository, durable records instead of a transcript,
 verdicts bound to an exact candidate, and declared requirements, not a single
 accept, deciding when a task is done. It is based on TRINITY's role model, not
 an implementation of TRINITY: there is no learned coordinator.
+[docs/background.md](docs/background.md) sets out the paper's findings, how the
+project applies them, and what it does not adopt.
 
 | Role | Responsibility |
 |---|---|

@@ -6,10 +6,10 @@ status: in_review
 requirements:
   checks: [test, lint]
   independent_review: true
-  assessment_roles: [maintainer]
+  assessment_roles: [verifier]
 candidates:
   - ref: b70e55a
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - check: test
     candidate: b70e55a
@@ -22,8 +22,8 @@ evidence:
   - { check: lint, candidate: b70e55a, result: pass, command: "npm run lint", exit_code: 0 }
 assessments:
   - candidate: b70e55a
-    role: maintainer
-    actor: engineer@claude
+    role: verifier
+    actor: worker@claude
     verdict: accept
     host: claude
     model: claude-opus-5
@@ -46,13 +46,13 @@ A failed webhook delivery should be retried three times with backoff.
 
 ## Design notes
 
-Both checks pass and the maintainer assessment says `accept`, so `checks` and
+Both checks pass and the verifier assessment says `accept`, so `checks` and
 `assessment_roles` are satisfied.
 
 `independent_review` is **not** satisfied: the accepting actor
-`engineer@claude` is listed in the candidate's `producers`. The actor
+`worker@claude` is listed in the candidate's `producers`. The actor
 string is what independence is judged on, not the `role` field — claiming the
-`maintainer` role does not make the same actor independent of its own work.
+`verifier` role does not make the same actor independent of its own work.
 
 `task set T-012 status done` therefore refuses and writes nothing. The record
 stays readable and editable, and the honest assessment stays recorded.

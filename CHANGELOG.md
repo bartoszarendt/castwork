@@ -23,6 +23,14 @@ lists the known ids. Likewise, move any `models` map to
 `role_settings.<host>.<role>.model`. There is no alias: 0.5.0 is the first
 release, so there is nothing to stay compatible with.
 
+The role ids are `coordinator`, `thinker`, `worker`, and `verifier`. The
+pre-release ids `orchestrator`, `maintainer`, `engineer`, and `auditor` are
+unknown roles, with no alias: an assessment `role` or an `assessment_roles`
+entry naming one is a structural error, and `role_settings` naming one is
+refused. A pre-release record or `agenticloop.json` that uses them is edited by
+hand. `update` removes an unmodified old role file it generated and reports a
+modified one as skipped, for you to merge and delete.
+
 **Added**
 
 - Generated skills are invoked, not inferred. The entry command carries a
@@ -36,6 +44,11 @@ release, so there is nothing to stay compatible with.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.
+- `docs/background.md`: the role model's basis in *TRINITY: An Evolved LLM
+  Coordinator* (arXiv:2512.04695), what the paper found and what those figures
+  do not show, how the project applies it, and what it does not adopt. The
+  roles are based on the TRINITY role model; this is not an implementation of
+  TRINITY and there is no learned coordinator.
 - Block scalars in record frontmatter: `|` and `>` with strip, clip, and keep
   chomping, so a long `findings` or `note` no longer makes the record
   unparseable. Folding preserves the breaks around more-indented content, and
@@ -88,8 +101,19 @@ release, so there is nothing to stay compatible with.
   it.
 - Evidence and assessments bind to an explicit candidate reference an agent
   records, never to the repository's moving HEAD.
-- Roles are concise responsibility and boundary presets with no mandatory
-  delegation sequence. The four ids are unchanged.
+- Roles are concise, domain-neutral responsibility and boundary presets with no
+  mandatory delegation sequence, based on the TRINITY role model. The
+  `coordinator` decides which role acts next and keeps the user informed. The
+  `thinker` turns a request into work, breaks it down, and critiques; it
+  replaces the maintainer's shaping. The `worker` produces the candidate and its
+  evidence, as the engineer did. The `verifier` assesses the exact candidate and
+  records a verdict, covering the auditor and the maintainer's assessing. The
+  record mechanism is unchanged; only the role ids are new. In the shipped
+  defaults, `thinker` and `worker` carry `permission_mode: acceptEdits` for
+  Claude Code, and `verifier` has no default.
+- `independent_review` and `assessment_roles: [verifier]` are evaluated
+  separately and together do not guarantee an independent verifier. This is a
+  documented limitation in `docs/record-format.md`, not a change in behaviour.
 - snake_case for every machine field and enum value; kebab-case for command
   names.
 - `config.json` carries per-host role settings and nothing else. Role ids,

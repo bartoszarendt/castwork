@@ -7,7 +7,7 @@ requirements:
   checks: [test]
 candidates:
   - ref: 3f9ab21
-    producers: [engineer@codex]
+    producers: [worker@codex]
 evidence:
   - check: test
     candidate: 3f9ab21

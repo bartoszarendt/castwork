@@ -56,7 +56,7 @@ metadata:
 ## What belongs in the bundle
 
 A bundled skill primarily teaches how to use Agentic Loop's records, roles, or
-checks. Mentioning an evidence entry does not qualify generic engineering
+checks. Mentioning an evidence entry does not qualify generic domain
 guidance: a procedure that would read the same in a repository that had never
 heard of Agentic Loop belongs to your project or your host, not here. The
 bundle is `task-record-contract`, `verification-evidence`, `assessment`,

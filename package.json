@@ -53,6 +53,7 @@
     "commands/",
     "memory/",
     "config.json",
+    "docs/background.md",
     "docs/record-format.md",
     "docs/examples/",
     "docs/cli.md",

@@ -92,8 +92,8 @@ without running anything.
 {
   "hosts": ["codex", "claude"],
   "role_settings": {
-    "claude": { "engineer": { "model": "claude-opus-5" }, "auditor": { "reasoning_effort": "xhigh" } },
-    "codex": { "auditor": { "model": "gpt-5.4", "reasoning_effort": "high" } }
+    "claude": { "worker": { "model": "claude-opus-5" }, "verifier": { "reasoning_effort": "xhigh" } },
+    "codex": { "verifier": { "model": "gpt-5.4", "reasoning_effort": "high" } }
   }
 }
 ```
@@ -105,6 +105,11 @@ Settings are per host because model namespaces do not overlap: `claude-opus-5`,
 `gpt-5.4` and `openai/gpt-5.6` each name a model to a different host, and
 reasoning effort is spelled differently in each too. A model binding is one of
 these settings and has no map of its own.
+
+A binding is fixed configuration: it changes only when someone edits
+`agenticloop.json`. It is the project's alternative to the per-turn model
+selection in the TRINITY paper, not an equivalent of it; see
+[background.md](background.md).
 
 A setting's value is a string, passed to the host as written, or `null` to
 leave it unset — which is how a shipped default such as `permission_mode` is

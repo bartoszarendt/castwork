@@ -56,7 +56,7 @@ the task can be set to `done`.
 requirements:
   checks: [test, lint]
   independent_review: true
-  assessment_roles: [maintainer]
+  assessment_roles: [verifier]
 ```
 
 - `checks: [name, ...]` — each name needs a passing evidence entry for the

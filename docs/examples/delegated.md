@@ -6,10 +6,10 @@ status: done
 requirements:
   checks: [test, lint]
   independent_review: true
-  assessment_roles: [maintainer]
+  assessment_roles: [verifier]
 candidates:
   - ref: 8c1d004
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - check: test
     candidate: 8c1d004
@@ -22,8 +22,8 @@ evidence:
   - { check: lint, candidate: 8c1d004, result: pass, command: "npm run lint", exit_code: 0 }
 assessments:
   - candidate: 8c1d004
-    role: maintainer
-    actor: maintainer@codex
+    role: verifier
+    actor: verifier@codex
     verdict: accept
     host: codex
     model: gpt-5.6

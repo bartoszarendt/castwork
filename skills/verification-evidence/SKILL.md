@@ -21,7 +21,7 @@ since:
 ```yaml
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude]
+    producers: [worker@claude]
 ```
 
 `ref` is normally a commit. `producers` is who made it — the actor strings that

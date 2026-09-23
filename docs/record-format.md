@@ -112,7 +112,7 @@ than strictly comparable.
 | Field | Required | Meaning |
 |---|---|---|
 | `candidate` | yes | a `ref` from `candidates` |
-| `role` | yes | the canonical responsibility: one of `orchestrator`, `maintainer`, `engineer`, `auditor`. A specialist is an `actor` under one of these, not a fifth role. |
+| `role` | yes | the canonical responsibility: one of `coordinator`, `thinker`, `worker`, `verifier`. A specialist is an `actor` under one of these, not a fifth role. |
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
 | `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
@@ -131,7 +131,7 @@ that state is not part of the portable record.
 
 ### Actor
 
-A non-empty string the agent writes, for example `engineer@claude`. The
+A non-empty string the agent writes, for example `worker@claude`. The
 toolkit compares strings and reports them as **asserted**. It has no way to
 verify that the actor named is the actor that wrote the entry, and it never
 claims to.
@@ -178,8 +178,8 @@ consumer.
 `independent_review` and `assessment_roles` ask for different things.
 `independent_review` asks for an accept from anyone who is not a recorded
 producer; `assessment_roles` asks for an accept from a specific role. Declare
-the second when a specific role's verdict is what you need — "the auditor, not
-whoever was free" is `assessment_roles: [auditor]`, and saying it in the record
+the second when a specific role's verdict is what you need — "the verifier, not
+whoever was free" is `assessment_roles: [verifier]`, and saying it in the record
 is better than saying it in an instruction.
 
 An effective `reject` or `needs_revision` from a relevant actor or role leaves
@@ -197,6 +197,18 @@ Independence is evaluated against the recorded `producers` of the current
 candidate, **not against role names**. The same actor string appearing as
 producer and reviewer is not independent regardless of the roles it claimed.
 Missing identity on either side is `unknown`, and a blank one counts as missing.
+
+**Together, `independent_review` and `assessment_roles` do not guarantee an
+independent verifier.** The two are evaluated separately. A producer that
+records `role: verifier` with `accept` satisfies `assessment_roles: [verifier]`,
+and a different actor that records `role: thinker` with `accept` satisfies
+`independent_review`: both report `satisfied`, and `done` is allowed. Roles are
+claims, and independence is compared by actor. The role presets direct verdicts
+to the verifier and tell a producer that its own acceptance is never
+independent, but that is guidance, not a check. When it matters that the
+verifier itself was independent, read who recorded the accepting assessments.
+This is a known limitation, kept deliberately: changing it would change what
+the requirements mean.
 
 ## Selection rules
 
@@ -297,7 +309,7 @@ requirements:
   independent_review: true
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - check: test
     candidate: 007c7f8
@@ -310,8 +322,8 @@ evidence:
   - { check: lint, candidate: 007c7f8, result: pass }
 assessments:
   - candidate: 007c7f8
-    role: maintainer
-    actor: maintainer@codex
+    role: verifier
+    actor: verifier@codex
     verdict: accept
     host: codex
     model: gpt-5.6

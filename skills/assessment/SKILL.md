@@ -16,8 +16,8 @@ task record and nowhere else.
 ```yaml
 assessments:
   - candidate: 007c7f8
-    role: maintainer
-    actor: maintainer@codex
+    role: verifier
+    actor: verifier@codex
     verdict: accept
     host: codex
     model: gpt-5.6
@@ -66,12 +66,17 @@ independence is about who did the work.
 `independent_review` asks for an accept from anyone who is not a recorded
 producer; `assessment_roles` asks for an accept from a specific role. When a
 particular role's verdict is what the work needs, the record should declare
-`assessment_roles: [auditor]` rather than leave it to an instruction — and when
+`assessment_roles: [verifier]` rather than leave it to an instruction — and when
 that role is unavailable, say so in the findings rather than quietly standing
 in for it.
 
+The two requirements are evaluated separately, so together they do not prove
+that the verifier was independent: a producer's own `verifier` accept satisfies
+`assessment_roles`, and anyone else's accept satisfies `independent_review`. If
+you produced the candidate, do not record the verifier's verdict on it.
+
 Write an actor string that identifies you honestly, for example
-`maintainer@codex`. The toolkit compares strings and reports them as asserted;
+`verifier@codex`. The toolkit compares strings and reports them as asserted;
 it cannot tell whether the string is true, and it never claims to.
 
 ## Verdicts

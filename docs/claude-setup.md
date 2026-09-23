@@ -42,7 +42,7 @@ In the repository, run:
 /agenticloop
 ```
 
-The command instructs the session to act as the `orchestrator`, read the role
+The command instructs the session to act as the `coordinator`, read the role
 presets under `.claude/agents/`, read `.agenticloop/project.md`, your working
 policy, and the open tasks, then continue the requested work, delegating when
 useful. Nothing needs to be activated first, and the command takes an optional
@@ -58,8 +58,9 @@ toolkit enforces.
 
 ## Permissions
 
-`permission_mode` is `acceptEdits` for the `maintainer` and `engineer` roles by
-default, since both are expected to write files. It is emitted into the
+`permission_mode` is `acceptEdits` for the `thinker` and `worker` roles by
+default, since both are expected to write files: the thinker writes task
+records, the worker the result. It is emitted into the
 generated file as the host's own `permissionMode` key. Override it per role
 under `role_settings` below, or set it to `null` to leave the key out entirely.
 
@@ -78,8 +79,8 @@ Optional, in `agenticloop.json`:
   "hosts": ["claude"],
   "role_settings": {
     "claude": {
-      "engineer": { "model": "claude-opus-5" },
-      "auditor": { "model": "claude-sonnet-5", "reasoning_effort": "xhigh" }
+      "worker": { "model": "claude-opus-5" },
+      "verifier": { "model": "claude-sonnet-5", "reasoning_effort": "xhigh" }
     }
   }
 }
@@ -108,7 +109,7 @@ npx agenticloop task set T-001 status done
 ```
 
 When recording an assessment, write an `actor` string that identifies the
-session, for example `maintainer@claude`. Independence is judged by
+session, for example `verifier@claude`. Independence is judged by
 comparing that string against the candidate's producers.
 
 ## Troubleshooting

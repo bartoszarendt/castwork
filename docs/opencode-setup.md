@@ -33,11 +33,11 @@ written over: a collision with a file you own is reported and your file kept.
 ## Using it
 
 Open OpenCode in the repository and run the start command. It instructs the
-session to act as the `orchestrator`, read the role presets under
+session to act as the `coordinator`, read the role presets under
 `.opencode/agents/`, read `.agenticloop/project.md`, your working policy, and
 the open tasks, then continue the requested work, delegating when useful. That
 is prompt-level instruction; OpenCode's own agent selection stays on whatever
-agent is active, unless you switch to `orchestrator` with Tab. There is nothing
+agent is active, unless you switch to `coordinator` with Tab. There is nothing
 to activate first.
 
 The four roles are available as agents. Delegating to one is a choice, not a
@@ -58,9 +58,9 @@ Optional, in `agenticloop.json`:
   "hosts": ["opencode"],
   "role_settings": {
     "opencode": {
-      "engineer": { "model": "openai/gpt-5.6" },
-      "auditor": { "reasoning_effort": "high" },
-      "maintainer": { "variant": "high" }
+      "worker": { "model": "openai/gpt-5.6" },
+      "verifier": { "reasoning_effort": "high" },
+      "thinker": { "variant": "high" }
     }
   }
 }

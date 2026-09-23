@@ -37,7 +37,7 @@ Open Codex in the repository and invoke the skill by name:
 $agenticloop
 ```
 
-It instructs the session to act as the `orchestrator`, read the role presets
+It instructs the session to act as the `coordinator`, read the role presets
 under `.codex/agents/`, read `.agenticloop/project.md`, your working policy, and
 the open tasks, then continue the requested work, delegating when useful. There
 is nothing to activate and no command to run first.
@@ -69,8 +69,8 @@ Optional, in `agenticloop.json`:
   "hosts": ["codex"],
   "role_settings": {
     "codex": {
-      "engineer": { "model": "gpt-5.4" },
-      "auditor": { "reasoning_effort": "xhigh" }
+      "worker": { "model": "gpt-5.4" },
+      "verifier": { "reasoning_effort": "xhigh" }
     }
   }
 }

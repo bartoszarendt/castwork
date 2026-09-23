@@ -8,12 +8,12 @@ status: draft
 # requirements:
 #   checks: [test]
 #   independent_review: true
-#   assessment_roles: [maintainer]
+#   assessment_roles: [verifier]
 # depends_on: [T-000]
 # allowed_paths: ["src/**", "test/**"]
 # candidates:
-#   - ref: <commit>
-#     producers: [engineer@host]
+#   - ref: <commit or other reference>
+#     producers: [worker@host]
 # evidence:
 #   - check: test
 #     candidate: <commit>
@@ -27,8 +27,8 @@ status: draft
 #     at: "<timestamp>"
 # assessments:
 #   - candidate: <commit>
-#     role: maintainer
-#     actor: maintainer@host
+#     role: verifier
+#     actor: verifier@host
 #     verdict: accept
 #     host: <host>
 #     model: <model>

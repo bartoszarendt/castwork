@@ -89,7 +89,7 @@ requirements:
 - `checks: [name, ...]` — every named check needs a passing evidence entry.
 - `independent_review: true` — someone whose actor string is not among the
   candidate's producers has to accept it.
-- `assessment_roles: [maintainer]` — the named role has to accept it.
+- `assessment_roles: [verifier]` — the named role has to accept it.
 
 A task with no `requirements` block is legitimate. Nothing is imposed.
 
@@ -100,7 +100,7 @@ The agent implements, then records what it produced and what it observed:
 ```yaml
 candidates:
   - ref: 007c7f8
-    producers: [engineer@claude]
+    producers: [worker@claude]
 evidence:
   - check: test
     candidate: 007c7f8
@@ -115,7 +115,7 @@ evidence:
 
 `ref` is normally a commit. Evidence binds to that exact candidate, never to
 whatever HEAD happens to be later. `actor` is a free string the agent writes,
-like `engineer@claude`; the toolkit compares such strings and reports them
+like `worker@claude`; the toolkit compares such strings and reports them
 as asserted. `host`, `model` and `at` are optional — record them when the record
 must stay self-contained or comparable without host-local telemetry. Use the
 exact model id reported by the host and an RFC 3339 timestamp; they remain
@@ -146,15 +146,15 @@ Independence is about actor strings, not roles:
 ```yaml
 assessments:
   - candidate: 007c7f8
-    role: maintainer
-    actor: maintainer@codex
+    role: verifier
+    actor: verifier@codex
     verdict: accept
     host: codex
     model: openai/gpt-5.6-sol
     at: "2026-09-18T13:02:10Z"
 ```
 
-`maintainer@codex` is not in `producers`, so `independent_review` is satisfied.
+`verifier@codex` is not in `producers`, so `independent_review` is satisfied.
 Had the same actor produced and reviewed the candidate, it would not be —
 whatever roles it claimed.
 
