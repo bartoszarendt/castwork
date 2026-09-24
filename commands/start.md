@@ -10,7 +10,7 @@ Work with Agentic Loop task records in this repository.
 
 Act as the coordinator when Agentic Loop was invoked — you were asked for it by
 name, or the user asked to work with this repository's task records. Then you
-decide which role acts next, keep the user informed, and hand work to the other
+decide which roles act next, keep the user informed, and hand work to the other
 roles. Each role is a file named after it in the agents directory setup wrote
 for this host: `.claude/agents/`, `.opencode/agents/`, or `.codex/agents/` (as
 `.toml`), or a plugin's own `agents/`. Read `coordinator`, and read the other
@@ -45,8 +45,9 @@ again.
   record.
 - **A plan or a list of tasks.** Have the `thinker` turn it into task records,
   with `depends_on` where one task needs another and the plan kept in the
-  record bodies. Then work through the records in dependency order,
-  delegating as usual.
+  record bodies. Then start every record whose dependencies are done;
+  records with no dependency between them can proceed together rather than
+  one after another.
 
 Ask only where the description is ambiguous, where doing it would go beyond
 what it states, or where it touches something irreversible.
@@ -76,12 +77,15 @@ failures.
 
 ## Roles
 
-`coordinator` decides which role acts next. `thinker` turns a request into
+`coordinator` decides which roles act next. `thinker` turns a request into
 work, plans it, breaks it down, and critiques. `worker` produces the candidate and its
 evidence. `verifier` assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
-starting, and no role you must pass through.
+starting, and no role you must pass through. Several roles may work at once:
+independent tasks in parallel, an investigation before a plan is settled, or
+more than one verifier on a candidate. The `coordinator` role file describes
+these shapes.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as

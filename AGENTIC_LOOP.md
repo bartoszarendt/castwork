@@ -86,7 +86,7 @@ paper and what it does not.
 
 | Role | Responsibility |
 |---|---|
-| `coordinator` | decides which role acts next and keeps the user informed |
+| `coordinator` | decides which roles act next and keeps the user informed |
 | `thinker` | turns a request into work, plans the approach, breaks it down, critiques partial results, diagnoses a stall |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate for responsiveness, completeness, and correctness, and records a verdict |

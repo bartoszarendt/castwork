@@ -45,9 +45,17 @@ modified one as skipped, for you to merge and delete.
   (`$agenticloop <text>` on Codex) no longer asks whether the work needs a
   record: a single task is done, with a record when it spans sittings or needs
   review; a plan or task list is turned into records with `depends_on` by the
-  `thinker` and worked through in dependency order. The agent asks only when
-  the description is ambiguous, would be exceeded, or touches something
-  irreversible.
+  `thinker`, and each record starts once its dependencies are done. The agent
+  asks only when the description is ambiguous, would be exceeded, or touches
+  something irreversible.
+- The presets name shapes of work besides one worker followed by one verifier.
+  The `coordinator` preset describes independent tasks running in parallel,
+  with a separate working copy per worker where the host offers one; discovery
+  before a plan is settled; and several verifiers on one candidate. The
+  `thinker` plans which steps can run in parallel, investigates what the plan
+  turns on before planning on a guess, and declares `depends_on` only where a
+  task truly needs another. Sessions had delegated one role at a time almost
+  without exception, and nothing in the presets said otherwise was an option.
 - Delegation reaches the role. The entry command names where this host's role
   files live and tells the coordinator to start the subagent named after the
   role (`agenticloop:thinker` under a plugin install), not a general-purpose
@@ -128,7 +136,7 @@ modified one as skipped, for you to merge and delete.
   records, never to the repository's moving HEAD.
 - Roles are concise, domain-neutral responsibility and boundary presets with no
   mandatory delegation sequence, based on the TRINITY role model. The
-  `coordinator` decides which role acts next and keeps the user informed. The
+  `coordinator` decides which roles act next and keeps the user informed. The
   `thinker` turns a request into work, plans the approach, breaks it down,
   and critiques; it replaces the maintainer's shaping and adds planning. The
   `worker` produces the candidate and its evidence, as the engineer did. The

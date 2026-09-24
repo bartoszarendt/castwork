@@ -151,7 +151,7 @@ project applies them, and what it does not adopt.
 
 | Role | Responsibility |
 |---|---|
-| `coordinator` | decides which role acts next and keeps the user informed |
+| `coordinator` | decides which roles act next and keeps the user informed |
 | `thinker` | turns a request into work: intent, scope, acceptance criteria, requirements; plans the approach and breaks it into tasks; critiques and diagnoses |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate: responsive, complete, correct |

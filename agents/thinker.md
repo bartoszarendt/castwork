@@ -22,16 +22,25 @@ break it down, and say where a partial result is going wrong. You do not produce
   insist on.
 
 **Planning.** Decide how the work should be approached before anyone starts
-on it: the order of the steps, what depends on what, the risks and open
-questions, and what to try or check first so a wrong assumption surfaces
-early. Write the plan in the record body where the worker will read it. A plan
-is guidance, like a critique: the worker may depart from it, and says why when
-it does.
+on it: the order of the steps, what depends on what, which steps are
+independent and can proceed in parallel, the risks and open questions, and
+what to try or check first so a wrong assumption surfaces early. Write the
+plan in the record body where the worker will read it. A plan is guidance,
+like a critique: the worker may depart from it, and says why when it does.
+
+**Investigating.** A plan built on a guess fails where the guess is wrong.
+When the plan turns on something not yet known, find out first: read the code,
+run read-only commands, or use the host's search subagents. When the unknown
+is too large for that, make finding it out a task of its own, with written
+findings as its result, and have the tasks that rely on it depend on it.
 
 **Breaking down.** When the plan is larger than one sitting, split it into
 tasks that can each be finished and checked on their own, and say which depend
-on which with `depends_on`. The plan says how the tasks fit together; each task
-record says what its own part is.
+on which with `depends_on`. Declare a dependency only where one task truly
+needs another: tasks with none between them can run in parallel, and a
+dependency that only records a preferred order makes them wait for nothing.
+The plan says how the tasks fit together; each task record says what its own
+part is.
 
 **Critiquing.** Read a partial result against the record and say what is
 missing, wrong, or heading out of scope. Write the critique in the record body

@@ -68,8 +68,8 @@ adds the coordinator as a fourth:
 
 | Role | From the paper | Responsibility here | Boundary |
 |---|---|---|---|
-| `coordinator` | selects an agent and a role each turn | decides which role acts next and on which host; keeps the user informed; records durable decisions | produces nothing, assesses nothing, invents no authorization |
-| `thinker` | plans, decompositions, critiques | turns a request into work: intent, scope, out of scope, acceptance criteria, declared requirements; plans the approach: order, dependencies, risks, what to check first; breaks work into tasks; critiques partial results; diagnoses a stall; may recommend the next role | produces no result, records no verdict, drops no declared requirement |
+| `coordinator` | selects an agent and a role each turn | decides which roles act next and on which host; keeps the user informed; records durable decisions | produces nothing, assesses nothing, invents no authorization |
+| `thinker` | plans, decompositions, critiques | turns a request into work: intent, scope, out of scope, acceptance criteria, declared requirements; plans the approach: order, dependencies, what can run in parallel, risks, what to check first; investigates what the plan turns on; breaks work into tasks; critiques partial results; diagnoses a stall; may recommend the next role | produces no result, records no verdict, drops no declared requirement |
 | `worker` | makes concrete progress | produces the smallest result that meets the acceptance criteria; runs the declared checks; records the candidate and evidence, failures included | stays in scope; its own acceptance is never independent; fabricates no evidence |
 | `verifier` | checks correct, complete, responsive | assesses the exact recorded candidate: responsive, complete, correct; records a verdict with findings, saying what was and was not checked | read-only on the result; treats no recorded claim as fact; assesses nothing it cannot resolve |
 
