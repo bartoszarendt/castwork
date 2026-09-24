@@ -10,7 +10,9 @@ you are committing to.
 A record format, four role presets, reusable skills, host adapters, and a few
 pure checks. Agentic Loop does not decide how your agents work, what order they
 do things in, or when to ask you. It gives them a shared way to write down what
-happened and a way to check whether a task got what it declared it needed.
+happened and a way to check whether a task got what it declared it needed. The
+one exception is the entry command run without a request: it proposes a next
+step from your records and plan and asks before starting it.
 
 ## What it costs
 
@@ -41,6 +43,12 @@ Pin the version in your `package.json` if you want reproducible generation.
 
 **Your working policy is prose.** Put it in `.agenticloop/project.md` in plain
 language. The toolkit does not parse it.
+
+**Point to your plan.** If the project has a plan, spec, or roadmap, list it
+under `## Documents` in `project.md` and say which one says what comes next.
+The coordinator reads it to report where the work is and to propose the next
+step. `setup` and `update` never rewrite `project.md`, so a project set up
+before this section existed has to add it by hand.
 
 **Declare requirements only where you mean them.** A task with no `requirements`
 block is normal. Start with `checks: [test]` on work that has tests, and add

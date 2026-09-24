@@ -44,8 +44,9 @@ In the repository, run:
 
 The command instructs the session to act as the `coordinator`, read the role
 presets under `.claude/agents/`, read `.agenticloop/project.md`, your working
-policy, and the open tasks, then continue the requested work, delegating when
-useful. Nothing needs to be activated first, and the command takes an optional
+policy, the documents it points to, and the open tasks, then continue the
+requested work, delegating when useful. Without a request, it proposes the next
+step from the open tasks and those documents and asks before starting it. Nothing needs to be activated first, and the command takes an optional
 task id or description as ordinary context.
 
 The generated skill index carries `disable-model-invocation: true`, so Claude

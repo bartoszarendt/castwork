@@ -32,3 +32,5 @@ the interesting code is, what is generated, what is off-limits.
 ## Documents
 
 Pointers to the project's own plan, spec, design, or architecture documents.
+The coordinator reads them to report where the project is and to propose what
+comes next, so say which one says what comes next.

@@ -15,7 +15,7 @@ import test from 'node:test';
 
 import { generateHost, readAdapter } from '../src/adapter-generation.js';
 import { requirementEvaluation } from '../src/checks.js';
-import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
+import { HOSTS, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord, ROLE_IDS } from '../src/record.js';
 import { setup } from '../src/setup.js';
 import { taskSet } from '../src/task-cli.js';
@@ -169,6 +169,30 @@ for (const host of HOSTS) {
     assert.doesNotMatch(entry.content, /decide with the user whether it\s+needs one/);
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} entry orients from the project's documents and proposes the next step`, () => {
+    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    assert.ok(entry, 'the entry procedure is generated');
+    assert.match(entry.content, /Read the documents it points to/);
+    assert.match(entry.content, /If they do not say what comes\s+next, look for such pointers/);
+    assert.match(entry.content, /Do not search the\s+repository for files that might be plans/);
+    assert.match(entry.content, /Every record being done does not mean the project is/);
+    assert.match(entry.content, /If there is no argument, report the state, propose the next step, and ask\s+before starting it/);
+    assert.match(entry.content, /first a record that can move\s+now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and\s+whose `depends_on` are done/);
+    assert.match(entry.content, /Ask an open\s+question only when neither the records nor the documents name anything/);
+    assert.match(entry.content, /also name the document and the part it comes from/);
+    assert.doesNotMatch(entry.content, /report the state and ask what to work on/);
+  });
+}
+
+test('the scaffolded project.md says what the Documents pointers are for', (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-roles-')));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  setup(root, { hosts: ['codex'] });
+  const project = fs.readFileSync(path.join(root, PROJECT_FILE), 'utf8');
+  assert.match(project, /## Documents\n[\s\S]*The coordinator reads them to report where the project is and to propose what\s+comes next/);
+});
 
 for (const host of HOSTS) {
   test(`${host} entry delegates to the named role subagent and says where roles live`, () => {

@@ -46,6 +46,13 @@ when to ask. Agents read it. The toolkit does not compile it into rules.
 > Work in small commits. Anything touching billing gets an independent review
 > before it is marked done. Ask before adding a dependency.
 
+If the project has a plan, spec, or roadmap, list it under `## Documents` and
+say which one says what comes next. That is where the coordinator looks to
+report where the work is and to propose the next step:
+
+> - `docs/PLAN.md`: the current phase and what comes next.
+> - `docs/architecture.md`: how the system fits together.
+
 Project configuration does not go here; it lives in `agenticloop.json`.
 
 ## 3. Create a task

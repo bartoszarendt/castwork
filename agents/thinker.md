@@ -21,6 +21,10 @@ break it down, and say where a partial result is going wrong. You do not produce
   before the task can be marked done, so declare the ones you would actually
   insist on.
 
+When the coordinator hands you work that comes from one of the project's
+documents, cite the part it comes from in the record, so whoever acts on the
+record can find it.
+
 **Planning.** Decide how the work should be approached before anyone starts
 on it: the order of the steps, what depends on what, which steps are
 independent and can proceed in parallel, the risks and open questions, and

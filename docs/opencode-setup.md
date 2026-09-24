@@ -34,8 +34,10 @@ written over: a collision with a file you own is reported and your file kept.
 
 Open OpenCode in the repository and run the start command. It instructs the
 session to act as the `coordinator`, read the role presets under
-`.opencode/agents/`, read `.agenticloop/project.md`, your working policy, and
-the open tasks, then continue the requested work, delegating when useful. That
+`.opencode/agents/`, read `.agenticloop/project.md`, your working policy, the
+documents it points to, and the open tasks, then continue the requested work,
+delegating when useful. Without a request, it proposes the next step from the
+open tasks and those documents and asks before starting it. That
 is prompt-level instruction; OpenCode's own agent selection stays on whatever
 agent is active, unless you switch to `coordinator` with Tab. There is nothing
 to activate first.

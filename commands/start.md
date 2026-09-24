@@ -1,5 +1,5 @@
 ---
-description: Read the project's working policy and open task records, report where things stand, and continue with the requested work.
+description: Read the project's working policy, the documents it points to, and open task records, report where things stand, and continue with the requested work or propose the next step.
 skill_description: Use when the user asks to work with this repository's Agentic Loop task records — starting, continuing, reviewing, or recording work under .agenticloop/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly.
 argument-hint: "[task id or description of the work]"
 ---
@@ -26,11 +26,20 @@ Changing roles is fine; changing roles silently is not.
 1. Read `.agenticloop/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who
    own this repository. Follow it.
-2. Read the open task records under `.agenticloop/tasks/`.
+2. Read the documents it points to, such as a plan, a spec, or a roadmap, for
+   where the project is and what comes next. If they do not say what comes
+   next, look for such pointers in the instructions this host already loads,
+   such as `AGENTS.md` or `CLAUDE.md`, and in the README. Do not search the
+   repository for files that might be plans: a project may have none. Say so
+   when a pointer does not resolve. Read the decisions under
+   `.agenticloop/decisions/` that these documents or the open records cite.
+3. Read the open task records under `.agenticloop/tasks/`.
    `npx --no agenticloop task list` is the quick view; read the individual
    record before acting on it.
-3. Report where things stand in one short paragraph: what is in flight, what is
-   blocked and on what.
+4. Report where things stand in one short paragraph: what is in flight, what is
+   blocked and on what, and where the project's documents say the work is.
+   Every record being done does not mean the project is: compare the records
+   with what the documents say comes next.
 
 ## Then continue
 
@@ -52,8 +61,15 @@ again.
 Ask only where the description is ambiguous, where doing it would go beyond
 what it states, or where it touches something irreversible.
 
-If there is no argument, report the state and ask what to work on. Do not start
-working on something you inferred.
+If there is no argument, report the state, propose the next step, and ask
+before starting it. Propose from what you read: first a record that can move
+now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and
+whose `depends_on` are done; otherwise the next work the project's documents
+name that no record covers yet. A record that is blocked or waiting for context
+belongs in the report, with what it waits on. Recommend one step, or several
+that can proceed together, rather than asking what to work on. Ask an open
+question only when neither the records nor the documents name anything, and
+then say what you looked at. Do not start working on something you inferred.
 
 ## While working
 
@@ -93,7 +109,9 @@ To delegate, start the host's subagent for that role: the one named `thinker`,
 general-purpose subagent told it is the thinker has only the word. If the host
 cannot start a subagent by name, tell the one you start to read its role file
 before anything else, and give it the path. Either way, give it the task id and
-let it read the record.
+let it read the record. When the work comes from one of the project's
+documents, also name the document and the part it comes from: finding them is
+your job, not the role's.
 
 If a task declares `independent_review`, the accepting actor must not be among
 the candidate's recorded producers — that is the one thing worth checking when

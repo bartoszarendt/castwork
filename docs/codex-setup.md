@@ -38,9 +38,11 @@ $agenticloop
 ```
 
 It instructs the session to act as the `coordinator`, read the role presets
-under `.codex/agents/`, read `.agenticloop/project.md`, your working policy, and
-the open tasks, then continue the requested work, delegating when useful. There
-is nothing to activate and no command to run first.
+under `.codex/agents/`, read `.agenticloop/project.md`, your working policy, the
+documents it points to, and the open tasks, then continue the requested work,
+delegating when useful. Without a request, it proposes the next step from the
+open tasks and those documents and asks before starting it. There is nothing to
+activate and no command to run first.
 
 Codex will not start this on its own. The generated
 `.agents/skills/agenticloop/agents/openai.yaml` sets

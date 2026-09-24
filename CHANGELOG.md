@@ -48,6 +48,22 @@ modified one as skipped, for you to merge and delete.
   `thinker`, and each record starts once its dependencies are done. The agent
   asks only when the description is ambiguous, would be exceeded, or touches
   something irreversible.
+- Orientation reaches the project's own plan. The entry command reads the
+  documents `project.md` points to (a plan, a spec, a roadmap). When they do
+  not say what comes next, it looks for pointers in `AGENTS.md`, `CLAUDE.md`,
+  or the README, without searching the repository for plans. It also reads the
+  decisions those documents or the open records cite. The report says where
+  the documents put the work, and records that are all done no longer read as
+  a finished project. With no argument, the coordinator proposes the next step
+  and asks before starting it, instead of asking what to work on: first a
+  record that can move now (not `done`, `cancelled`, `blocked`, or
+  `needs_context`, with its `depends_on` done), otherwise the next work the
+  documents name. Orienting is the coordinator's job: it names the document
+  and the part the work comes from when it delegates, and the `thinker` cites
+  that part in the record. Sessions had reported every record done and asked
+  what to do next while the project's plan named the next items. `setup`
+  never rewrites an existing `project.md`, so a project set up earlier adds
+  its pointers under `## Documents` by hand.
 - The presets name shapes of work besides one worker followed by one verifier.
   The `coordinator` preset describes independent tasks running in parallel,
   with a separate working copy per worker where the host offers one; discovery
