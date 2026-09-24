@@ -12,6 +12,9 @@ One or two sentences: what it does and who uses it.
 Your project's working policy, in plain language. Agents read it. The toolkit
 does not compile it into rules.
 
+Keep it short. Evolve it from what recurs here and from constraints you already
+know; replacing or removing a stale sentence is better than adding another.
+
 > For example: work in small commits; anything touching billing or auth gets an
 > independent review before it is marked done; ask before adding a dependency;
 > prefer removing a concept over adding one.

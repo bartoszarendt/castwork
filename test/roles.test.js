@@ -192,7 +192,18 @@ test('the scaffolded project.md says what the Documents pointers are for', (t) =
   setup(root, { hosts: ['codex'] });
   const project = fs.readFileSync(path.join(root, PROJECT_FILE), 'utf8');
   assert.match(project, /## Documents\n[\s\S]*The coordinator reads them to report where the project is and to propose what\s+comes next/);
+  assert.match(project, /## Working policy\n[\s\S]*replacing or removing a stale sentence is better than adding another[\s\S]*## Checks/);
 });
+
+for (const host of HOSTS) {
+  test(`${host} thinker proposes a recurring cause as a project.md edit in the record, without making it`, () => {
+    const thinker = generateHost(host).find((file) => /\/agents\/thinker\.(md|toml)$/.test(file.path));
+    assert.ok(thinker, 'the thinker role is generated');
+    assert.match(thinker.content, /in\s+the\s+task\s+record,\s+under\s+`## Blockers and decisions`/);
+    assert.match(thinker.content, /\(`## Working policy`,\s+`## Checks`,\s+or\s+`## Setup facts`\)/);
+    assert.match(thinker.content, /Do\s+not\s+edit\s+`project\.md`\s+unless\s+the\s+user\s+asks/);
+  });
+}
 
 for (const host of HOSTS) {
   test(`${host} entry delegates to the named role subagent and says where roles live`, () => {

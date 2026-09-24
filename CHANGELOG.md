@@ -84,6 +84,13 @@ modified one as skipped, for you to merge and delete.
   `command not found`. `--no` keeps npx to the installed copy rather than
   downloading a package of that name, and where the CLI is unavailable the
   agent says so and edits the record by hand.
+- A recurring stall becomes a policy proposal, not a policy change. The
+  `thinker` names the cause, not only the symptom, and when the cause is likely
+  to affect other tasks it writes a proposed edit to the matching `project.md`
+  section (`## Working policy`, `## Checks`, or `## Setup facts`) in the task
+  record. It does not edit `project.md` unless asked. The scaffold asks for a
+  short policy that evolves from what recurs, preferring to replace or remove a
+  stale sentence over adding another.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.

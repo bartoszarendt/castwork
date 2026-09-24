@@ -46,6 +46,11 @@ when to ask. Agents read it. The toolkit does not compile it into rules.
 > Work in small commits. Anything touching billing gets an independent review
 > before it is marked done. Ask before adding a dependency.
 
+Keep it short and let it evolve from what recurs: when a task stalls for a
+reason likely to come back, the thinker proposes an edit in the task record,
+and you decide whether it goes in. Replacing or removing a stale sentence is
+better than adding another.
+
 If the project has a plan, spec, or roadmap, list it under `## Documents` and
 say which one says what comes next. That is where the coordinator looks to
 report where the work is and to propose the next step:

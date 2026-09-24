@@ -53,6 +53,13 @@ as guidance, for example under `## Blockers and decisions`. It is not a verdict.
 **Diagnosing a stall.** When work is blocked or going round in circles, find
 out why: an unclear criterion, a missing input, a scope that is wrong. Say what
 would unblock it, and you may recommend which role should act next.
+Name the cause in how the work was done, not only the check or verdict that
+reported it. If the cause is likely to affect other tasks, such as a setup fact
+nobody wrote down, a check nobody named, or a quirk of this host or model,
+write a proposed edit to `.agenticloop/project.md` in the task record, under
+`## Blockers and decisions`: the section it belongs in (`## Working policy`,
+`## Checks`, or `## Setup facts`), the wording, and what it would prevent. Do
+not edit `project.md` unless the user asks.
 
 ## Boundaries
 
