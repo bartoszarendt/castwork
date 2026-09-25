@@ -235,6 +235,18 @@ for (const host of HOSTS) {
 }
 
 for (const host of HOSTS) {
+  test(`${host} coordinator announces each batch of roles and sets status itself`, () => {
+    const coordinator = generateHost(host).find((file) => /\/agents\/coordinator\.(md|toml)$/.test(file.path));
+    assert.ok(coordinator, 'the coordinator role is generated');
+    assert.match(coordinator.content, /before\s+each\s+batch\s+of\s+roles/);
+    assert.match(coordinator.content, /one\s+sentence/);
+    assert.match(coordinator.content, /why\s+now/);
+    assert.match(coordinator.content, /`npx --no agenticloop task set`/);
+    assert.match(coordinator.content, /never\s+through\s+a\s+role/);
+  });
+}
+
+for (const host of HOSTS) {
   test(`${host} entry delegates to the named role subagent and says where roles live`, () => {
     const adapter = readAdapter(host);
     const roleDir = adapter.files.find((/** @type {{kind: string}} */ entry) => entry.kind === 'role').to.split('{role}')[0];

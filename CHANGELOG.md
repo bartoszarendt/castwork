@@ -87,6 +87,16 @@ modified one as skipped, for you to merge and delete.
   change to the work for anything else, and a challenge that finds nothing is
   not an `accept`. `AGENTIC_LOOP.md` places requirement, actor, dependency,
   decision, and execution context around the four concepts.
+- The coordinator says what it is doing. Before each batch of roles it starts,
+  it gives one sentence on what moves next, which role or shape, and why now,
+  with parallel work grouped in it; at the end, what is done and what is
+  blocked. Sessions had chained subagents with no word to the user between
+  them. The coordinator also sets a status with
+  `npx --no agenticloop task set` itself instead of starting a role for it,
+  spelled in full because a preset may be read without the entry command.
+  Sessions had spent a whole worker subagent on
+  marking a task `done`, which the CLI refuses unless its requirements are
+  satisfied anyway.
 - Delegation reaches the role. The entry command names where this host's role
   files live and tells the coordinator to start the subagent named after the
   role (`agenticloop:thinker` under a plugin install), not a general-purpose
