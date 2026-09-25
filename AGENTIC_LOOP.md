@@ -32,6 +32,17 @@ One task record carries all four. They are concepts, not files or subsystems.
 | **Evidence** | a check result or observation, with its source and the candidate it concerns |
 | **Assessment** | an actor's findings and verdict about the work and a candidate |
 
+## Around the four concepts
+
+The four concepts are what a record carries. The rest of the vocabulary sits
+around them in layers, and none of it is a fifth concept:
+
+| Layer | Terms | What they are |
+|---|---|---|
+| Relations and constraints | requirement, actor, dependency | a requirement is part of the work, satisfied by effective evidence and assessments of the current candidate; an actor is who produced a candidate or recorded an entry, and independence compares actors, not roles; a dependency (`depends_on`) says one task needs another |
+| Adjacent durable artifact | decision | one file under `.agenticloop/decisions/`, for a choice that outlives a task |
+| Execution context | role, skill, policy, host, model | how the work was done; an assessment names its `role`, evidence and assessments may name their `host` and `model`, and skill and policy are not record fields |
+
 ## Requirements, not workflow
 
 A task record declares explicit, mechanically checkable requirements. The checks

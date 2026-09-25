@@ -72,6 +72,21 @@ modified one as skipped, for you to merge and delete.
   turns on before planning on a guess, and declares `depends_on` only where a
   task truly needs another. Sessions had delegated one role at a time almost
   without exception, and nothing in the presets said otherwise was an option.
+- Three more shapes are named, chosen because agents rarely take them
+  unprompted: fan-out then synthesize, competing alternatives, and adversarial
+  challenge. Critique and revise is not named, since the roles already produce
+  it. The `thinker` says how the shapes are written with existing records:
+  one task per alternative plus a comparison task that depends on them and
+  records the choice, never several alternatives as candidates of one task,
+  because the checks read only the last candidate. An alternative that
+  delivered is `done` whether or not it was chosen; an abandoned one is
+  `cancelled` and leaves the comparison's `depends_on`. The thinker combines a
+  fan-out's findings into the plan; a synthesis that is itself a deliverable
+  is a worker's task. The `verifier` records a blocking verdict from a
+  challenge only for a concrete failure against the recorded work, proposes a
+  change to the work for anything else, and a challenge that finds nothing is
+  not an `accept`. `AGENTIC_LOOP.md` places requirement, actor, dependency,
+  decision, and execution context around the four concepts.
 - Delegation reaches the role. The entry command names where this host's role
   files live and tells the coordinator to start the subagent named after the
   role (`agenticloop:thinker` under a plugin install), not a general-purpose

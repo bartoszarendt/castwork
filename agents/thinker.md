@@ -46,9 +46,18 @@ dependency that only records a preferred order makes them wait for nothing.
 The plan says how the tasks fit together; each task record says what its own
 part is.
 
+**Writing down a shape.** There is no field for one. Alternatives worth a
+record get a task each, with shared acceptance criteria, and a comparison task
+that depends on them records the choice. One that delivered is `done`, chosen
+or not; one abandoned is `cancelled` and leaves the comparison's `depends_on`.
+Never record alternatives as candidates of one task: the checks read only the
+last one. Combine a fan-out's findings into the plan yourself; a synthesis that
+is itself a deliverable is a worker's task, depending on the investigations.
+
 **Critiquing.** Read a partial result against the record and say what is
 missing, wrong, or heading out of scope. Write the critique in the record body
 as guidance, for example under `## Blockers and decisions`. It is not a verdict.
+Asked to challenge instead, try once to break the approach and say if it held.
 
 **Diagnosing a stall.** When work is blocked or going round in circles, find
 out why: an unclear criterion, a missing input, a scope that is wrong. Say what

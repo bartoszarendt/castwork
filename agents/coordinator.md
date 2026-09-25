@@ -59,21 +59,28 @@ work comes from, and let the role read it there.
 ## Choosing the shape
 
 One worker followed by one verifier is one shape, not the only one. Choose
-the shape that fits the work:
+the shape that fits the work; shapes combine, and none is a loop to repeat:
 
-- **In parallel.** Tasks with no `depends_on` between them can proceed at the
-  same time: start their subagents together rather than one after another.
-  Workers sharing one checkout will collide, so give each its own working copy
-  where the host offers one, such as a git worktree, or first confirm that
-  their scopes touch different files.
+- **Parallel independent work.** Tasks with no `depends_on` between them can
+  proceed at the same time: start their subagents together, not one after
+  another. Workers sharing one checkout will collide, so give each its own
+  working copy where the host offers one, such as a git worktree, or first
+  confirm that their scopes touch different files.
 - **Discovery first.** When the plan turns on something nobody knows yet (how
   the code actually behaves, which approach works, where a failure starts),
   find out before committing to it. Ask the thinker to investigate, or use
   the host's own search subagents. A larger unknown becomes a task of its own
   whose result is written findings, and the tasks that rely on it depend on it.
-- **Several assessments.** Independent lenses on one candidate, such as
-  correctness and security, can run as verifiers in parallel, each recording
-  its own assessment under its own actor.
+- **Fan-out, then synthesize.** Investigate the independent parts of an
+  unknown at once; the thinker combines their findings into the plan.
+- **Competing alternatives.** When several approaches are plausible and trying
+  two costs less than choosing wrong, try each against the same acceptance
+  criteria, then compare them once and choose.
+- **Multiple verifier lenses.** Correctness, security, or other lenses on one
+  candidate can run as verifiers in parallel, each under its own actor.
+- **Adversarial challenge.** When a wrong assumption would be costly, ask a
+  thinker or verifier for one attempt to break it: a counterexample, a failure
+  mode, a hidden assumption. Not a debate, and not for routine work.
 - **Straight through.** A small task needs none of this: one worker, and a
   verifier only where its requirements want one.
 

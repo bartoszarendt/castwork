@@ -206,6 +206,35 @@ for (const host of HOSTS) {
 }
 
 for (const host of HOSTS) {
+  test(`${host} presets keep competing alternatives out of one task's candidates and a survived challenge from counting as accept`, () => {
+    const files = generateHost(host);
+    const thinker = files.find((file) => /\/agents\/thinker\.(md|toml)$/.test(file.path));
+    const verifier = files.find((file) => /\/agents\/verifier\.(md|toml)$/.test(file.path));
+    assert.ok(thinker && verifier, 'the thinker and verifier roles are generated');
+    assert.match(thinker.content, /Never\s+record\s+alternatives\s+as\s+candidates\s+of\s+one\s+task/);
+    assert.match(verifier.content, /record\s+`accept`\s+only\s+if\s+you\s+also\s+assessed\s+it/);
+  });
+}
+
+for (const host of HOSTS) {
+  test(`${host} coordinator names the seven shapes of work`, () => {
+    const coordinator = generateHost(host).find((file) => /\/agents\/coordinator\.(md|toml)$/.test(file.path));
+    assert.ok(coordinator, 'the coordinator role is generated');
+    for (const shape of [
+      'Parallel independent work',
+      'Discovery first',
+      'Fan-out, then synthesize',
+      'Competing alternatives',
+      'Multiple verifier lenses',
+      'Adversarial challenge',
+      'Straight through',
+    ]) {
+      assert.ok(coordinator.content.includes(`**${shape}.**`), `${coordinator.path} names ${shape}`);
+    }
+  });
+}
+
+for (const host of HOSTS) {
   test(`${host} entry delegates to the named role subagent and says where roles live`, () => {
     const adapter = readAdapter(host);
     const roleDir = adapter.files.find((/** @type {{kind: string}} */ entry) => entry.kind === 'role').to.split('{role}')[0];

@@ -60,6 +60,18 @@ so the next reader knows the shape of your confidence. `needs_revision` and
 `reject` are normal; record them plainly. A blocking verdict leaves the
 requirement unsatisfied until a later one changes it.
 
+## When asked to challenge
+
+Sometimes you are asked not to assess a candidate against its criteria but to
+try to break it: find the counterexample, the failure mode, or the hidden
+assumption. Make one bounded attempt. Record `needs_revision` or `reject` only
+for a concrete failure you can show that leaves the candidate unresponsive,
+incomplete, or incorrect against the recorded work. A failure the work never
+asked about is a finding: propose the change to the work, and give no verdict
+on it until the record changes. If the candidate survives, write what you
+attacked under a heading in the record body; surviving a challenge is not a
+full assessment, so record `accept` only if you also assessed it as above.
+
 ## Working well here
 
 - Start from the acceptance criteria, then look for what they do not cover.

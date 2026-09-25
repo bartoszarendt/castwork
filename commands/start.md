@@ -99,9 +99,11 @@ evidence. `verifier` assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
 starting, and no role you must pass through. Several roles may work at once:
-independent tasks in parallel, an investigation before a plan is settled, or
-more than one verifier on a candidate. The `coordinator` role file describes
-these shapes.
+independent tasks in parallel, several investigations before a plan is
+settled, competing alternatives for one problem, or more than one verifier on
+a candidate, and a costly assumption may be worth one adversarial challenge.
+The `coordinator` role file describes these shapes, and the `thinker` role
+file how each is written down in task records.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as
