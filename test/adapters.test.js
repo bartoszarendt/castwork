@@ -65,6 +65,7 @@ for (const host of HOSTS) {
     assert.ok(entry, `${host} has no entry file`);
     assert.match(entry.content, /Act as the coordinator when Agentic Loop was invoked/);
     assert.match(entry.content, /Do not adopt the role for a request that never asked for it/);
+    assert.match(entry.content, /name\s+it\s+once\s+at\s+the\s+start\s+of\s+your\s+first\s+message,\s+as\s+\*\*Coordinator —\*\*/);
     assert.doesNotMatch(entry.content, /You are the coordinator for this session/);
   });
 

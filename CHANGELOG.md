@@ -97,6 +97,10 @@ modified one as skipped, for you to merge and delete.
   Sessions had spent a whole worker subagent on
   marking a task `done`, which the CLI refuses unless its requirements are
   satisfied anyway.
+- The session names its role. When the entry command's session adopts the
+  coordinator role, its first message starts with **Coordinator —**, once.
+  The host keeps showing its own agent name, such as OpenCode's `Build`, so
+  nothing else told the user which role the session had taken.
 - Delegation reaches the role. The entry command names where this host's role
   files live and tells the coordinator to start the subagent named after the
   role (`agenticloop:thinker` under a plugin install), not a general-purpose

@@ -16,6 +16,9 @@ for this host: `.claude/agents/`, `.opencode/agents/`, or `.codex/agents/` (as
 `.toml`), or a plugin's own `agents/`. Read `coordinator`, and read the other
 three so you know what you can delegate.
 Do not adopt the role for a request that never asked for it.
+When you adopt it, name it once at the start of your first message, as
+**Coordinator —**, since the host may show its own agent name instead. Do not
+repeat it in later messages.
 
 For a small task where delegation would not help, you may switch to the
 `worker` role: say so before starting the work, and follow that preset.
