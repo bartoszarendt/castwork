@@ -119,6 +119,6 @@ test('a symlinked parent cannot carry a write outside the repository', (t) => {
 test('an ordinary generated path still resolves after hardening', (t) => {
   const root = fixture(t);
   const result = setup(root, { hosts: ['codex'] });
-  assert.ok(result.written.length > 0);
-  assert.equal(readManifest(root).files[result.written[0]], digest(fs.readFileSync(path.join(root, result.written[0]), 'utf8')));
+  assert.ok(result.added.length > 0);
+  assert.equal(readManifest(root).files[result.added[0]], digest(fs.readFileSync(path.join(root, result.added[0]), 'utf8')));
 });

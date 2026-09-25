@@ -28,8 +28,9 @@ pre-release ids `orchestrator`, `maintainer`, `engineer`, and `auditor` are
 unknown roles, with no alias: an assessment `role` or an `assessment_roles`
 entry naming one is a structural error, and `role_settings` naming one is
 refused. A pre-release record or `agenticloop.json` that uses them is edited by
-hand. `update` removes an unmodified old role file it generated and reports a
-modified one as skipped, for you to merge and delete.
+hand. `update` removes an unmodified old role file it generated; a modified
+one makes it write nothing until you merge and delete the file, or name it with
+`--force-generated` to have it deleted.
 
 **Added**
 
@@ -135,9 +136,39 @@ modified one as skipped, for you to merge and delete.
 - Pure checks, exported from the package, reporting three separate outputs:
   structural validity, reference availability, and requirement evaluation. Each
   supporting fact is reported as `checked` or `asserted`.
-- `.agenticloop/generated.json`, a tracked ownership manifest. `update` skips a
-  modified generated file unless `--force-generated` names it, and `remove`
-  deletes only entries whose digest still matches.
+- `.agenticloop/generated.json`, a tracked ownership manifest. `remove` deletes
+  only entries whose digest still matches.
+- `update` checks for conflicts before writing, and says what it wrote. It
+  plans every generated file first and writes nothing while a generated file is
+  modified locally or a file of yours stands where one is generated, naming
+  each one, unless `--force-generated` names it; `setup` refuses the same way.
+  It used to skip such a file, write the rest, and exit 0, leaving a
+  half-updated installation that an agent could not tell apart from a current
+  one. It now names every path it writes, as `changed`, `added`, or `removed`,
+  `.agenticloop/generated.json` included, since committing the files without
+  it leaves digests that make the next update refuse them; `--json` carries
+  the manifest as `manifest`. It leaves the manifest alone when nothing
+  changed, and adopts a file that already holds exactly what would be
+  generated, so a write that fails partway is finished by running `update`
+  again. After a change it says to commit the listed files together with what
+  caused them and to start a new host session, since a running one keeps the
+  instructions it started with. `--force-generated` accepts `./` and backslash
+  spellings and refuses a path that names nothing generated or recorded, which
+  it used to ignore. `setup --json` reports the hosts it added as
+  `added_hosts`.
+- `update --check` runs the same plan and writes nothing. It lists what would
+  change, prints the toolkit version and location it ran from, and exits 1
+  unless the installation is current — which the package version could not
+  say, since unreleased builds share it. `doctor` uses the same plan and
+  reports the generated files as `current`, `behind`, or `blocked`, including
+  a manifest that no longer matches files that do; for a lost manifest it now
+  says to run `update`, which rebuilds it, rather than `setup`. When asked to
+  update Agentic Loop, the entry command first runs `update --check`, reports
+  which copy it ran, uses the copy the user names, commits the listed files
+  only where the user or the working policy says to, and does not force a
+  refusal.
+  `docs/downstream-adoption.md` gives the recipes: a clean upgrade, an upgrade
+  in the middle of work, and personal versus project-pinned models.
 
 **Changed**
 

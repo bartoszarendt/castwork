@@ -79,3 +79,19 @@ test('a JSON body is still valid JSON when the command fails', (t) => {
   const { out } = capture(['doctor', '--json'], root);
   assert.doesNotThrow(() => JSON.parse(out));
 });
+
+test('update --check exits zero only when the installation is current, in both output modes', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex'] });
+  assert.equal(capture(['update', '--check'], root).code, 0);
+  assert.equal(capture(['update', '--check', '--json'], root).code, 0);
+
+  const stale = path.join(root, result.added[0]);
+  fs.writeFileSync(stale, 'edited\n', 'utf8');
+  const plain = capture(['update', '--check'], root);
+  const json = capture(['update', '--check', '--json'], root);
+  assert.equal(plain.code, 1);
+  assert.equal(json.code, 1);
+  assert.equal(JSON.parse(json.out).blocked, true);
+  assert.equal(fs.readFileSync(stale, 'utf8'), 'edited\n', '--check writes nothing');
+});

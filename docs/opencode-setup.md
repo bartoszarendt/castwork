@@ -26,9 +26,12 @@ then run `npx agenticloop update`.
 ```
 
 All of it is tracked and contains no absolute paths. The files are listed in
-`.agenticloop/generated.json`; edit one and `update` reports and skips it rather
-than overwriting your change. A file that is not in the manifest is never
-written over: a collision with a file you own is reported and your file kept.
+`.agenticloop/generated.json`; edit one and `update` writes nothing until you
+restore it or name it with `--force-generated`, so your change is never
+overwritten, and a conflict never leaves some files updated and others not. A
+file of yours
+standing where one would be generated refuses `setup` and `update` the same
+way.
 
 ## Using it
 

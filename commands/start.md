@@ -91,6 +91,17 @@ downloads and runs whatever package of that name the registry holds. If the
 command is not available, say so and edit the record by hand. Do not install
 anything to get it.
 
+If the user asks you to update Agentic Loop in this repository, first run
+`npx --no agenticloop update --check` and tell the user the version and
+location it reports. If they meant another copy, such as a local checkout, run
+the path they give instead, for both the check and the update. Then run
+`update` with that same copy. It lists every file it wrote, including
+`.agenticloop/generated.json`; keep those out of task commits, and commit them
+together, with whatever caused them, only where the user or the working policy
+says to commit. If it refuses, report the files it names; do not force them.
+Then tell the user that this session keeps the instructions it started with,
+and that a new session picks up the update.
+
 Record the candidate you produced and the evidence for it. Record failures as
 failures.
 

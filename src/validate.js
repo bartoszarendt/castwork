@@ -192,7 +192,7 @@ function validateGeneratedOutput(findings, root) {
       }
       const actual = digest(fs.readFileSync(full, 'utf8'));
       if (actual !== recorded) {
-        warn(findings, file.path, 'differs from the manifest digest; update will skip it unless forced');
+        warn(findings, file.path, 'differs from the manifest digest; update writes nothing until it is restored or forced');
       } else if (actual !== digest(file.content)) {
         warn(findings, file.path, 'is out of date with the canonical sources; run update');
       }

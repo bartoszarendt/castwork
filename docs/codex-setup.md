@@ -26,8 +26,10 @@ in `agenticloop.json`, then run `npx agenticloop update`.
 ```
 
 All of it is tracked in your repository and contains no absolute paths. The
-files are listed in `.agenticloop/generated.json`; edit one and `update` will
-report and skip it rather than overwrite your change.
+files are listed in `.agenticloop/generated.json`; edit one and `update` writes
+nothing until you restore it or name it with `--force-generated`, so your change
+is never overwritten, and a conflict never leaves some files updated and others
+not.
 
 ## Using it
 

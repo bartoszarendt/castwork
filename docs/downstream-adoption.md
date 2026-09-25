@@ -68,13 +68,49 @@ through their host's normal tools; the toolkit simply has no opinion about it.
 
 ## Upgrading the toolkit
 
+Generated files are tracked, so adopting a new version of Agentic Loop is a
+small change to your repository, like a lockfile bump. There is no way to adopt
+it without one, and no command that reloads a host session that is already
+running.
+
+`update` regenerates from the copy of Agentic Loop you run and never installs
+or upgrades the package itself. Upgrade the package first — or, to adopt a
+local checkout, run `node <checkout>/bin/agenticloop.js` in place of
+`npx agenticloop`.
+
+**A clean upgrade.**
+
 ```sh
-npx agenticloop update
+npx agenticloop update --check   # what would change; writes nothing
+npx agenticloop update           # apply it; refuses before writing on a conflict
 ```
 
-Regenerates files whose digest still matches `.agenticloop/generated.json`.
-Anything you edited is reported and skipped; pass `--force-generated <path>` to
-overwrite it deliberately. Your records are never touched.
+`update` lists every path it wrote, `.agenticloop/generated.json` included.
+Review them and commit them together, with the package or lockfile upgrade that
+caused them, apart from task work. If `update`
+refuses, it names each generated file you edited, or file of yours standing
+where one is generated: restore or move it, or pass `--force-generated <path>`
+to replace it. Your records are never touched. Neither is `project.md`: when a
+release adds a section to the scaffold, the changelog says so and you add it by
+hand.
+
+**Upgrading in the middle of work.** `update` writes only generated files and
+`.agenticloop/generated.json`, so it can run in a working tree that holds
+unfinished work. Commit exactly the paths it listed, then close the host
+session and start
+a new one with the entry command and the task id (`/agenticloop T-012`, or
+`$agenticloop T-012` in Codex). The session you close keeps the old
+instructions for as long as it runs; the task record carries the work across,
+which is what it is for. A resumed session still has the old instructions in
+its history, so run the entry command again at once if you resume instead.
+
+**Changing models.** A model you prefer, or the one your account can reach, is
+a personal choice: leave `model` and `reasoning_effort` unset in
+`agenticloop.json` and set them in the host's own configuration. New sessions
+pick it up, and the repository never changes. A model the project means to pin
+for a role goes under `role_settings.<host>.<role>` in `agenticloop.json`: run
+`update`, commit both, and start a new session. See
+[host-adapters.md](host-adapters.md) for the settings each host accepts.
 
 ## Removing it
 

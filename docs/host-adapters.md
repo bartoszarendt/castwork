@@ -68,11 +68,13 @@ Every generated file is listed in `.agenticloop/generated.json` with its digest.
 That manifest is tracked alongside the files it describes.
 
 - `update` regenerates a file only when its current digest matches the manifest.
-  A file you edited is reported and skipped, unless you name it with
-  `--force-generated`.
-- A file that is not in the manifest is never written over. If generation would
-  collide with a file you own, the collision is reported and your file is
-  preserved.
+  A file you edited makes the whole update write nothing, unless you name it
+  with `--force-generated`, so a conflict never leaves some files updated and
+  others not.
+- A file that is not in the manifest is never written over unless you name it.
+  If generation would collide with a file you own, the collision is reported,
+  nothing is written, and your file is preserved. A file that already holds
+  exactly what would be generated is adopted instead.
 - `remove` deletes only manifest entries whose digest still matches, and never
   touches `project.md`, `tasks/`, or `decisions/`.
 

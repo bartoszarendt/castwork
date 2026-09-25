@@ -31,8 +31,9 @@ is written, with the known ids listed in the error.
 ```
 
 All of it is tracked and contains no absolute paths. The files are listed in
-`.agenticloop/generated.json`; edit one and `update` reports and skips it rather
-than overwriting your change.
+`.agenticloop/generated.json`; edit one and `update` writes nothing until you
+restore it or name it with `--force-generated`. Your change is never
+overwritten, and a conflict never leaves some files updated and others not.
 
 ## Using it
 

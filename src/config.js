@@ -114,13 +114,18 @@ function readRoleSettings(raw) {
 }
 
 /**
+ * `hosts` resolves settings for a host set other than the recorded one, so
+ * `setup` can plan for a host it is about to add before it writes anything.
+ *
  * @param {string} root
+ * @param {{hosts?: string[]}} [options]
  * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, raw: Record<string, unknown>|null}}
  */
-export function readConfig(root) {
+export function readConfig(root, options = {}) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
-    return { hosts: [], role_settings: {}, raw: null };
+    const hosts = options.hosts ?? [];
+    return { hosts, role_settings: shippedSettings(hosts, {}), raw: null };
   }
   /** @type {Record<string, unknown>} */
   let raw;
@@ -130,8 +135,8 @@ export function readConfig(root) {
     throw new PublicError(`${CONFIG_FILE} is not valid JSON: ${String(error)}`);
   }
 
-  const hosts = Array.isArray(raw.hosts) ? raw.hosts.map(String) : [];
-  for (const host of hosts) {
+  const recorded = Array.isArray(raw.hosts) ? raw.hosts.map(String) : [];
+  for (const host of recorded) {
     if (!HOSTS.includes(host)) {
       throw new PublicError(`${CONFIG_FILE} lists unknown host ${host}`, {
         hint: `Known hosts: ${HOSTS.join(', ')}.`,
@@ -148,10 +153,19 @@ export function readConfig(root) {
     });
   }
   const overrides = readRoleSettings(raw);
+  const hosts = options.hosts ?? recorded;
+  return { hosts, role_settings: shippedSettings(hosts, overrides), raw };
+}
 
-  // Settings are resolved per host, because the same role rarely wants the
-  // same string in two hosts: a model id that Claude Code accepts is not the
-  // `provider/model` selector OpenCode expects. Shipped defaults first.
+/**
+ * Settings are resolved per host, because the same role rarely wants the same
+ * string in two hosts: a model id that Claude Code accepts is not the
+ * `provider/model` selector OpenCode expects. Shipped defaults first.
+ *
+ * @param {string[]} hosts
+ * @param {Record<string, Record<string, Record<string, unknown>>>} overrides
+ */
+function shippedSettings(hosts, overrides) {
   /** @type {Record<string, Record<string, Record<string, unknown>>>} */
   const roleSettings = {};
   const shipped = defaults();
@@ -167,8 +181,7 @@ export function readConfig(root) {
     }
     roleSettings[host] = settings;
   }
-
-  return { hosts, role_settings: roleSettings, raw };
+  return roleSettings;
 }
 
 /** @param {string} root @param {string[]} hosts */

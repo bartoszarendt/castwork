@@ -123,7 +123,7 @@ test('1c: a forced update cannot write through a symlinked generated file', (t) 
   const victim = path.join(outside, 'victim.txt');
   fs.writeFileSync(victim, 'ORIGINAL\n', 'utf8');
   const result = setup(root, { hosts: ['codex'] });
-  const generated = result.written[0];
+  const generated = result.added[0];
   fs.rmSync(path.join(root, generated));
   if (!link(t, victim, path.join(root, generated), 'file')) return;
   assert.throws(() => update(root, { force: [generated] }), /symbolic link/);
@@ -146,7 +146,7 @@ test('containment failures happen before any mutation', (t) => {
   const root = tmp(t, 'atomic');
   const outside = tmp(t, 'atomicout');
   const result = setup(root, { hosts: ['codex'] });
-  const before = Object.fromEntries(result.written.map((relative) => [relative, fs.readFileSync(path.join(root, relative), 'utf8')]));
+  const before = Object.fromEntries(result.added.map((relative) => [relative, fs.readFileSync(path.join(root, relative), 'utf8')]));
   poison(root, path.relative(root, path.join(outside, 'x.txt')), 'x');
   assert.throws(() => update(root));
   for (const [relative, content] of Object.entries(before)) {
@@ -157,8 +157,8 @@ test('containment failures happen before any mutation', (t) => {
 test('an ordinary installation is unaffected by the hardening', (t) => {
   const root = tmp(t, 'ok');
   const result = setup(root, { hosts: ['codex', 'claude', 'opencode'] });
-  assert.ok(result.written.length > 0);
-  assert.equal(readManifest(root).files[result.written[0]] !== undefined, true);
+  assert.ok(result.added.length > 0);
+  assert.equal(readManifest(root).files[result.added[0]] !== undefined, true);
   assert.doesNotThrow(() => update(root));
   assert.doesNotThrow(() => remove(root));
 });

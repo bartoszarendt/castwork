@@ -3,7 +3,9 @@
  *
  * Ownership is the whole model. `.agenticloop/generated.json` lists every
  * generated file with its digest. A file whose digest still matches is ours to
- * regenerate or delete; anything else is yours and is left alone.
+ * regenerate or delete; anything else is yours. An update that would have to
+ * leave a file of yours in place refuses before writing anything, unless
+ * `--force-generated` names that file.
  *
  * There is no migration. A 0.4.x layout is refused with manual steps.
  */
@@ -119,59 +121,180 @@ function ensureGitignore(root) {
 }
 
 /**
- * Write the planned files, respecting ownership.
+ * @typedef {{
+ *   version: string,
+ *   toolkit: string,
+ *   unchanged: string[],
+ *   changed: string[],
+ *   added: string[],
+ *   removed: string[],
+ *   modified: string[],
+ *   collisions: string[],
+ *   manifest: 'added'|'changed'|null,
+ *   files: Record<string, string>,
+ *   contents: Record<string, string>,
+ * }} GenerationPlan
+ */
+
+/**
+ * Compare what this toolkit would generate with what is on disk. Reads only.
+ *
+ * Every generated path lands in exactly one list. `modified` (a generated file
+ * you edited, or one no longer generated that you edited) and `collisions` (a
+ * file of yours standing where one would be generated) block an update unless
+ * `--force-generated` names them; a forced path is planned as a change, or as
+ * a removal when it is no longer generated. A file that already holds exactly
+ * what would be generated is `unchanged` whoever wrote it, so a lost manifest
+ * or a hand-synced file is adopted instead of refused. `manifest` says whether
+ * `.agenticloop/generated.json` itself would be written, since it is tracked
+ * like the files it lists and has to be committed with them.
+ *
  * @param {string} root
  * @param {{path: string, content: string}[]} files
  * @param {{force?: string[]}} [options]
+ * @returns {GenerationPlan}
  */
-function writeGenerated(root, files, options = {}) {
+export function planGenerated(root, files, options = {}) {
   const manifest = readManifest(root);
-  const force = new Set(options.force ?? []);
-  /** @type {Record<string, string>} */
-  const next = {};
-  const written = [];
-  const skipped = [];
-  const collisions = [];
+  // One spelling per path, so `./x` and `x`, or `a\\b` and `a/b`, name the same file.
+  const force = new Set((options.force ?? []).map((relative) => path.posix.normalize(relative.replace(/\\/g, '/'))));
+  /** @type {GenerationPlan} */
+  const plan = {
+    version: packageVersion(),
+    toolkit: toolkitRoot(),
+    unchanged: [],
+    changed: [],
+    added: [],
+    removed: [],
+    modified: [],
+    collisions: [],
+    manifest: null,
+    files: {},
+    contents: {},
+  };
 
   for (const file of files) {
+    const wanted = digest(file.content);
+    plan.files[file.path] = wanted;
+    plan.contents[file.path] = file.content;
     const state = ownership(root, file.path, manifest);
-    if (state === 'user_owned') {
-      collisions.push(file.path);
+    if (state === 'absent') {
+      plan.added.push(file.path);
       continue;
     }
-    if (state === 'owned_modified' && !force.has(file.path)) {
-      skipped.push(file.path);
-      next[file.path] = manifest?.files?.[file.path] ?? digest(file.content);
-      continue;
-    }
-    const full = containedPath(root, file.path);
-    fs.mkdirSync(path.dirname(full), { recursive: true });
-    fs.writeFileSync(full, file.content, 'utf8');
-    next[file.path] = digest(file.content);
-    written.push(file.path);
+    const actual = digest(fs.readFileSync(containedPath(root, file.path), 'utf8'));
+    if (actual === wanted) plan.unchanged.push(file.path);
+    else if (state === 'owned_unchanged' || force.has(file.path)) plan.changed.push(file.path);
+    else if (state === 'owned_modified') plan.modified.push(file.path);
+    else plan.collisions.push(file.path);
   }
 
-  // Files we used to own and no longer generate are removed when unchanged.
-  const removed = [];
+  // Files we used to own and no longer generate.
   for (const [relative, recorded] of Object.entries(manifest?.files ?? {})) {
-    if (next[relative] !== undefined) continue;
+    if (plan.files[relative] !== undefined) continue;
     const full = containedPath(root, relative);
-    if (fs.existsSync(full) && digest(fs.readFileSync(full, 'utf8')) === recorded) {
-      fs.rmSync(full);
-      removed.push(relative);
-    } else if (fs.existsSync(full)) {
-      skipped.push(relative);
-      next[relative] = recorded;
-    }
+    if (!fs.existsSync(full)) continue;
+    if (digest(fs.readFileSync(full, 'utf8')) === recorded || force.has(relative)) plan.removed.push(relative);
+    else plan.modified.push(relative);
   }
+
+  // A force naming nothing this installation generates or recorded would
+  // otherwise be dropped in silence, and the refusal it was meant to lift would
+  // read as if the flag had not worked.
+  const unknown = [...force].filter((relative) => plan.files[relative] === undefined && manifest?.files?.[relative] === undefined);
+  if (unknown.length > 0) {
+    throw new PublicError(`--force-generated names a path this installation neither generates nor recorded: ${unknown.join(', ')}`, {
+      hint: 'Name the path exactly as update or doctor printed it. Nothing was written.',
+    });
+  }
+
+  if (manifest === null) plan.manifest = 'added';
+  else if (manifest.layout_version !== LAYOUT_VERSION
+    || JSON.stringify(sortedEntries(manifest.files)) !== JSON.stringify(sortedEntries(plan.files))) plan.manifest = 'changed';
+  return plan;
+}
+
+/** @param {Record<string, string>} files */
+function sortedEntries(files) {
+  return Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1));
+}
+
+/** @param {GenerationPlan} plan */
+function planIsBlocked(plan) {
+  return plan.modified.length > 0 || plan.collisions.length > 0;
+}
+
+/** @param {GenerationPlan} plan */
+function planIsCurrent(plan) {
+  return !planIsBlocked(plan)
+    && plan.changed.length === 0
+    && plan.added.length === 0
+    && plan.removed.length === 0
+    && plan.manifest === null;
+}
+
+/**
+ * A plan without file contents, for printing, `--json`, and `doctor`.
+ * @param {GenerationPlan} plan
+ */
+export function publicPlan(plan) {
+  const { files: _files, contents: _contents, ...rest } = plan;
+  return { ...rest, current: planIsCurrent(plan), blocked: planIsBlocked(plan) };
+}
+
+/**
+ * Refuse, before anything is written, a plan that would leave some generated
+ * files old and others new: an agent reading a half-updated installation cannot
+ * tell which half it has.
+ *
+ * @param {GenerationPlan} plan
+ */
+function refuseBlocked(plan) {
+  if (!planIsBlocked(plan)) return;
+  const lines = [
+    ...plan.modified.map((relative) => `  ${relative} (generated, then modified locally)`),
+    ...plan.collisions.map((relative) => `  ${relative} (yours; not generated by this installation)`),
+  ];
+  throw new PublicError(`nothing was written: ${lines.length} generated path(s) would be left as they are\n${lines.join('\n')}`, {
+    hint: [
+      'Restore or move each file and run the command again, or name each one with',
+      '--force-generated <path> to replace it with the generated version, or to',
+      'delete it when it is no longer generated.',
+    ].join('\n'),
+  });
+}
+
+/**
+ * Apply a plan that is not blocked. Writes only what differs, and rewrites the
+ * manifest only when its contents change, so an update with nothing to do
+ * leaves the working tree untouched.
+ *
+ * Writes are not transactional: a write that fails partway, such as on a full
+ * disk, leaves some files new and the manifest old. Running update again
+ * finishes the job, because a file that already holds what would be generated
+ * is adopted. There is deliberately no rollback.
+ *
+ * @param {string} root
+ * @param {GenerationPlan} plan
+ */
+function applyPlan(root, plan) {
+  refuseBlocked(plan);
+  for (const relative of [...plan.added, ...plan.changed]) {
+    const full = containedPath(root, relative);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, plan.contents[relative], 'utf8');
+  }
+  for (const relative of plan.removed) fs.rmSync(containedPath(root, relative));
 
   // Dropping a host from the config and running `update` is the documented way
   // to stop generating for it, so the directories it owned should not be left
   // standing empty afterwards, looking installed.
-  pruneEmptyDirectories(root, removed);
+  pruneEmptyDirectories(root, plan.removed);
 
-  writeManifest(root, { layout_version: LAYOUT_VERSION, version: packageVersion(), files: next });
-  return { written, skipped, collisions, removed };
+  if (plan.manifest !== null) {
+    writeManifest(root, { layout_version: LAYOUT_VERSION, version: plan.version, files: plan.files });
+  }
+  return { added: plan.added, changed: plan.changed, removed: plan.removed, unchanged: plan.unchanged, manifest: plan.manifest };
 }
 
 /**
@@ -204,19 +327,26 @@ export function setup(root, options = {}) {
     });
   }
 
+  // Planned before anything is seeded, so a refusal leaves the tree as it was.
+  const config = readConfig(root, { hosts });
+  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings }), { force: options.force });
+  refuseBlocked(plan);
+
   const created = seedState(root);
   writeConfig(root, hosts);
   const ignored = ensureGitignore(root);
-  const config = readConfig(root);
-  const files = generateAll(hosts, { roleSettings: config.role_settings });
-  const result = writeGenerated(root, files, { force: options.force });
-
-  return { hosts, added, created, ignored, ...result };
+  return { hosts, added_hosts: added, created, ignored, version: plan.version, ...applyPlan(root, plan) };
 }
 
 /**
+ * Regenerate for the recorded hosts, refusing before any write when a file
+ * would have to be left as it is. `check` plans and writes
+ * nothing: it is how an agent or CI learns whether this repository is behind
+ * the toolkit it just ran, which the package version alone cannot say, since
+ * it does not change between unreleased builds.
+ *
  * @param {string} root
- * @param {{force?: string[]}} [options]
+ * @param {{force?: string[], check?: boolean}} [options]
  */
 export function update(root, options = {}) {
   const legacy = detectLegacyLayout(root);
@@ -226,8 +356,9 @@ export function update(root, options = {}) {
   if (config.hosts.length === 0) {
     throw new PublicError(`${CONFIG_FILE} lists no hosts`, { hint: 'Run setup first.' });
   }
-  const files = generateAll(config.hosts, { roleSettings: config.role_settings });
-  return { hosts: config.hosts, ...writeGenerated(root, files, { force: options.force }) };
+  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings }), { force: options.force });
+  if (options.check) return { hosts: config.hosts, plan: publicPlan(plan) };
+  return { hosts: config.hosts, version: plan.version, ...applyPlan(root, plan) };
 }
 
 /**
@@ -303,27 +434,52 @@ export function doctor(root) {
     findings.push({ level: 'warn', message: `${CONFIG_FILE} lists no hosts`, next: 'Run setup and select a host.' });
   }
   if (!manifest) {
-    findings.push({ level: 'warn', message: `${GENERATED_MANIFEST} is missing`, next: 'Run setup.' });
-  } else {
-    if (manifest.layout_version !== LAYOUT_VERSION) {
+    // update rebuilds a lost manifest, adopting files that already match, so
+    // it is the command to run once hosts are recorded.
+    findings.push({ level: 'warn', message: `${GENERATED_MANIFEST} is missing`, next: config.hosts.length > 0 ? 'Run update.' : 'Run setup.' });
+  } else if (manifest.layout_version !== LAYOUT_VERSION) {
+    findings.push({
+      level: 'error',
+      message: `${GENERATED_MANIFEST} declares layout_version ${manifest.layout_version}, expected ${LAYOUT_VERSION}`,
+    });
+  }
+
+  // The same plan `update --check` prints, so the two never disagree about
+  // whether this repository is current.
+  /** @type {'current'|'behind'|'blocked'|null} */
+  let generated = null;
+  const layoutSpoken = manifest === null || manifest.layout_version === LAYOUT_VERSION;
+  if (layoutSpoken && config.hosts.length > 0 && legacy.length === 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
+    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings }));
+    for (const relative of plan.modified) {
+      findings.push({ level: 'warn', message: `generated file modified locally: ${relative}`, next: `update writes nothing until you restore it or pass --force-generated ${relative}` });
+    }
+    for (const relative of plan.collisions) {
+      findings.push({ level: 'warn', message: `a file of yours stands where one is generated: ${relative}`, next: `update writes nothing until you move it or pass --force-generated ${relative}` });
+    }
+    const differing = plan.changed.length + plan.added.length + plan.removed.length;
+    if (differing > 0) {
       findings.push({
-        level: 'error',
-        message: `${GENERATED_MANIFEST} declares layout_version ${manifest.layout_version}, expected ${LAYOUT_VERSION}`,
+        level: 'warn',
+        message: `${differing} generated file(s) differ from what agenticloop ${plan.version} generates`,
+        next: 'Run update --check to list them, then update. Commit the result on its own and start a new host session.',
+      });
+    } else if (plan.manifest === 'changed') {
+      findings.push({
+        level: 'warn',
+        message: `${GENERATED_MANIFEST} does not match the generated files`,
+        next: 'Run update to rewrite it, then commit it.',
       });
     }
-    for (const relative of Object.keys(manifest.files)) {
-      const state = ownership(root, relative, manifest);
-      if (state === 'absent') findings.push({ level: 'warn', message: `generated file missing: ${relative}`, next: 'Run update.' });
-      if (state === 'owned_modified') {
-        findings.push({ level: 'info', message: `generated file modified locally: ${relative}`, next: `update skips it unless you pass --force-generated ${relative}` });
-      }
-    }
+    generated = planIsBlocked(plan) ? 'blocked' : planIsCurrent(plan) ? 'current' : 'behind';
   }
 
   return {
     ok: findings.every((finding) => finding.level !== 'error'),
     hosts: config.hosts,
     version: manifest?.version ?? null,
+    toolkit_version: packageVersion(),
+    generated,
     generated_files: manifest ? Object.keys(manifest.files).length : 0,
     findings,
   };

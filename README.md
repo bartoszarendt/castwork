@@ -47,8 +47,9 @@ This generates host integrations for the hosts you named and creates
 absolute paths.
 
 ```sh
-npx agenticloop doctor     # read-only diagnosis
-npx agenticloop update     # refresh generated files
+npx agenticloop doctor          # read-only diagnosis, including whether generated files are current
+npx agenticloop update --check  # list what update would change; write nothing
+npx agenticloop update          # refresh generated files; refuses before writing on a conflict
 npx agenticloop remove     # remove generated files, keep your records
 ```
 

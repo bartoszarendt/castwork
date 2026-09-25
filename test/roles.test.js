@@ -186,6 +186,19 @@ for (const host of HOSTS) {
   });
 }
 
+for (const host of HOSTS) {
+  test(`${host} entry checks which copy an update runs from and keeps its files out of task commits`, () => {
+    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    assert.ok(entry, 'the entry procedure is generated');
+    assert.match(entry.content, /first run\s+`npx --no agenticloop update --check` and tell the user the version and\s+location it reports/);
+    assert.match(entry.content, /run\s+the path they give instead, for both the check and the update/);
+    assert.match(entry.content, /including\s+`\.agenticloop\/generated\.json`; keep those out of task commits/);
+    assert.match(entry.content, /only where the user or the working policy\s+says to commit/);
+    assert.match(entry.content, /If it refuses, report the files it names; do not force them/);
+    assert.match(entry.content, /a new session picks up the update/);
+  });
+}
+
 test('the scaffolded project.md says what the Documents pointers are for', (t) => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-roles-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
