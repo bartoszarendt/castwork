@@ -30,7 +30,9 @@ placement, file naming, the host's frontmatter conventions, and any literal
 file the host reads as configuration rather than prose.
 
 A role's id, description, and body come from its file under `agents/`;
-`config.json` contributes only the per-host settings. Each host is a descriptor
+`config.json` contributes only the per-host settings. The one substitution in a
+role's body is `<host>`, which becomes the adapter's `id`, so a generated role
+records `worker@claude` rather than leaving an agent to guess what a host is. Each host is a descriptor
 in `src/adapters/<host>.json` listing where each kind of file goes and in which
 format; the generator itself knows nothing about any host.
 

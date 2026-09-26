@@ -98,6 +98,14 @@ one makes it write nothing until you merge and delete the file, or name it with
   Sessions had spent a whole worker subagent on
   marking a task `done`, which the CLI refuses unless its requirements are
   satisfied anyway.
+- Records name the agent host, not the computer. The `worker` and `verifier`
+  presets showed `worker@<host>` and `host: <host>` without saying what a host
+  is, and subagents filled in the machine's name, the way `user@hostname`
+  reads. Records then carried computer names, and the same host looked like a
+  different one on each device. Generated roles now have the host's own id
+  written in (`worker@claude`), and the presets, the task record template, and
+  the record format say the host is `claude`, `codex`, or `opencode`, never
+  the machine's name.
 - The session names its role. When the entry command's session adopts the
   coordinator role, its first message starts with **Coordinator —**, once.
   The host keeps showing its own agent name, such as OpenCode's `Build`, so

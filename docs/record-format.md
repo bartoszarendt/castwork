@@ -123,7 +123,11 @@ than strictly comparable.
 
 These optional attributes are asserted metadata:
 
-- `host` is the host id that performed the work.
+- `host` is the host id that performed the work: `claude`, `codex`, or
+  `opencode`, never the machine's name. The role presets use the same id after
+  the `@` in an actor string, such as `worker@claude`. The three ids are how to
+  record it, not an enum: any non-empty value is accepted, so a record written
+  with a machine's name stays valid.
 - `model` is the exact model identifier that host reported; it is not normalized
   across hosts.
 - `at` is an RFC 3339 timestamp when one is useful. It is informational only:

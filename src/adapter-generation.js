@@ -270,7 +270,11 @@ export function generateHost(host, options = {}) {
 
   for (const entry of /** @type {{kind: string, to: string, format: string, content?: string}[]} */ (adapter.files)) {
     if (entry.kind === 'role') {
-      for (const role of roles) {
+      for (const canonical of roles) {
+        // A bare `<host>` placeholder was read as the machine's name, the way
+        // `user@hostname` is, so records carried computer names instead of
+        // the host id. Each host's roles get their own id written in.
+        const role = { ...canonical, body: canonical.body.replaceAll('<host>', String(adapter.id)) };
         const settings = roleSettings[role.id] ?? {};
         files.push({
           path: entry.to.replace('{role}', role.id),

@@ -22,6 +22,8 @@ status: draft
 #     exit_code: 0
 #     # Optional: use the exact host-reported model and an RFC 3339 timestamp
 #     # when the record must stay self-contained without host-local telemetry.
+#     # The host, here and after the @ in an actor string, is the agent host
+#     # id (claude, codex or opencode), never the machine's name.
 #     host: <host>
 #     model: <model>
 #     at: "<timestamp>"

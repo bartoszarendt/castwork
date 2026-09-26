@@ -42,6 +42,19 @@ for (const host of HOSTS) {
     }
   });
 
+  test(`${host} writes its own id where a role names the host`, () => {
+    for (const file of generateHost(host)) {
+      assert.ok(!file.content.includes('<host>'), `${file.path} leaves <host> for the agent to fill`);
+    }
+    const byRole = (id) => generateHost(host).find((file) => file.path.includes(`agents/${id}.`));
+    assert.ok(byRole('worker').content.includes(`producers: [worker@${host}]`));
+    assert.ok(byRole('worker').content.includes(`host: ${host}\n`));
+    assert.ok(byRole('verifier').content.includes(`actor: verifier@${host}\n`));
+    for (const id of ['worker', 'verifier']) {
+      assert.match(byRole(id).content, /never the machine's\s+name/);
+    }
+  });
+
   test(`${host} generates no removed vocabulary`, () => {
     for (const file of generateHost(host)) {
       const body = file.content.toLowerCase();

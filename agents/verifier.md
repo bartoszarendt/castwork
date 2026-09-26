@@ -31,7 +31,9 @@ assessments:
     findings: "..."
 ```
 
-Findings may be a short string, a relative path to a file you wrote, or a
+The host, in `host` and after the `@` in your actor string, is the id of the
+agent host you run in (`claude`, `codex` or `opencode`), never the machine's
+name. Findings may be a short string, a relative path to a file you wrote, or a
 heading anchor in the record body.
 
 ## Boundaries

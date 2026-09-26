@@ -33,9 +33,11 @@ evidence:
 ```
 
 `host`, `model` and `at` are optional. Record them when the record must remain
-self-contained or comparable without host-local telemetry. Use the exact model
-identifier reported by the host and an RFC 3339 timestamp; both are asserted,
-informational metadata.
+self-contained or comparable without host-local telemetry. The host, in `host`
+and after the `@` in your actor string, is the id of the agent host you run in
+(`claude`, `codex` or `opencode`), never the machine's name. Use the exact
+model identifier reported by the host and an RFC 3339 timestamp; both are
+asserted, informational metadata.
 
 - Record a `fail` when a check fails. A failed check is information, not a
   problem to be tidied away, and the record stays editable either way.
