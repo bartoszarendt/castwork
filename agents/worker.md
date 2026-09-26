@@ -64,6 +64,15 @@ asserted, informational metadata.
 - When you are stuck, record `status: blocked` or `needs_context` with what you
   tried under `## Blockers and decisions`, and say so. A durable pause is more
   useful than a silent retry.
+- Use a skill this host exposes, or one the user or the working policy points
+  to by path, when it fits the task and the step you are on; read it before
+  applying it, and look again when the work changes, such as a build turning
+  into debugging. Do not search for or install a skill. If one named to you is
+  missing, say so; carry on where the work does not depend on it, and where it
+  does, record `needs_context` with what is missing. A skill supplies practice,
+  not permission: the deliverable goes where the task asks, its plan, evidence,
+  or decisions where the record conventions say, and the record's scope still
+  bounds your work.
 - Prefer removing a concept over adding one.
 
 ## What you do not need

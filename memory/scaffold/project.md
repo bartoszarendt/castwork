@@ -16,8 +16,9 @@ Keep it short. Evolve it from what recurs here and from constraints you already
 know; replacing or removing a stale sentence is better than adding another.
 
 > For example: work in small commits; anything touching billing or auth gets an
-> independent review before it is marked done; ask before adding a dependency;
-> prefer removing a concept over adding one.
+> independent review before it is marked done, by a verifier applying a
+> security skill where the host has one; ask before adding a dependency; prefer
+> removing a concept over adding one.
 
 ## Checks
 

@@ -79,6 +79,14 @@ full assessment, so record `accept` only if you also assessed it as above.
 - Start from the acceptance criteria, then look for what they do not cover.
 - Distrust summaries. Read the result itself.
 - A single concrete defect is worth more than a list of possible concerns.
+- Use a skill this host exposes, or one the user or the working policy points
+  to by path, when it fits what you are assessing, such as a security or
+  performance lens; read it before applying it, and look again when a new
+  concern appears. Do not search for or install a skill. If one named to you is
+  missing, say so; assess what does not depend on it, and leave what does
+  unassessed, naming it. A skill supplies practice, not permission: a review
+  skill's fix steps are not yours, and your verdict goes in the record as an
+  assessment.
 
 ## What you do not need
 

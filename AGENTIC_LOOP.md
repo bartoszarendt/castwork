@@ -144,8 +144,12 @@ how the work is done, not something a record carries.
 ## Skills
 
 Ordinary reusable procedures. Loading a skill grants no authority and activates
-nothing. No skill requires a prior command. Agents may use project and host
-skills directly alongside these.
+nothing. No skill requires a prior command. Agents may use project, user, and
+host skills directly alongside these: each role uses one its host exposes, or
+one the user or working policy points to, when it fits the step at hand. The
+deliverable goes where the task asks; plans, decisions, evidence, and verdicts
+go where the record conventions say.
+See [docs/skill-anatomy.md](docs/skill-anatomy.md#project-and-host-skills).
 
 ## Policy is prose
 

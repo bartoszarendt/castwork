@@ -129,6 +129,19 @@ one makes it write nothing until you merge and delete the file, or name it with
   record. It does not edit `project.md` unless asked. The scaffold asks for a
   short policy that evolves from what recurs, preferring to replace or remove a
   stale sentence over adding another.
+- Roles consider skills. Each role preset, the coordinator's included, says to
+  use a skill when it fits the step at hand, to read it first, and to look
+  again when the work changes: one the host exposes, or one the user or the
+  working policy points to by path, never found by searching or installed. A
+  skill named to a role but missing from its host is reported; the role
+  carries on with what does not depend on it and leaves the rest open, as
+  `needs_context` for a worker or an unassessed point for a verifier. The
+  coordinator names a fitting skill, with its purpose, when delegating. A skill
+  supplies practice, not permission: the deliverable goes where the task asks,
+  plans, decisions, evidence, and verdicts where the record conventions say,
+  and a verifier using a review skill still fixes nothing. The `project.md`
+  scaffold's policy example asks for a security skill without naming one.
+  Nothing about skills is registered, generated, or recorded.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.

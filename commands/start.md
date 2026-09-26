@@ -127,7 +127,9 @@ cannot start a subagent by name, tell the one you start to read its role file
 before anything else, and give it the path. Either way, give it the task id and
 let it read the record. When the work comes from one of the project's
 documents, also name the document and the part it comes from: finding them is
-your job, not the role's.
+your job, not the role's. When a skill fits the work, or the working policy
+names one, name it and say what it is for; the role checks whether its host has
+it, since hosts may expose different skills.
 
 If a task declares `independent_review`, the accepting actor must not be among
 the candidate's recorded producers — that is the one thing worth checking when

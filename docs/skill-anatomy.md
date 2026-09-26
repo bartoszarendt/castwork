@@ -67,6 +67,32 @@ mechanically, and `validate` will happily accept a skill that ignores it.
 
 ## Project and host skills
 
-Agents may use your project's own skills and the host's built-in skills
-directly, alongside these. Agentic Loop does not wrap, register, or arbitrate
-them, and there is no skill graph or marketplace.
+Agents may use your project's own skills, skills installed for the user, and
+the host's built-in skills directly, alongside these. Agentic Loop does not
+wrap, register, or arbitrate them, and there is no skill graph or marketplace.
+
+The host decides which skills an agent can see, and hosts differ: in one
+repository a Codex worker may have a skill a Claude Code verifier does not. The
+role presets ask each role, the coordinator included, to use a skill when it
+fits the step it is on, and to look again when the work changes. That is a
+skill its host exposes, or one the user or the working policy points to by
+path; an agent does not search other hosts' directories for skills or install
+one. When delegating, the coordinator names a skill that fits, with what it is
+for, the same way it names a source document. To make a choice deliberate for
+this repository, say it in the working policy in `.agenticloop/project.md`, for
+example that authentication changes get a verifier applying a security skill.
+
+A skill named to a role but missing from its host is reported. The role carries
+on with what does not depend on it and leaves the rest open: a worker records
+`needs_context` with what is missing, and a verifier leaves the affected point
+unassessed. A missing skill neither blocks everything nor excuses skipping what
+the work needs.
+
+A skill supplies practice, not permission. The deliverable goes where the task
+asks for it, and the record names it as the candidate. What a skill produces
+about the work goes where the record conventions say, not where the skill would
+otherwise put it: a plan in the task record body, a durable decision under
+`.agenticloop/decisions/`, evidence and a verdict in the record. It does not
+widen a role's boundaries: a verifier using a review skill still fixes nothing.
+Skills are not record fields; the `actor` string says who did the work, and the
+findings can say what they brought to it.
