@@ -41,8 +41,10 @@ which deletes what it no longer generates and still owns.
 
 `agenticloop.json` is the only configuration, and it is a property of the
 repository rather than of your machine. It holds `hosts` — the hosts this
-project supports, not the one you personally run — and optional per-host
-`role_settings`, which are the project's deliberate choices. Nothing inherits
+project supports, not the one you personally run — optional per-host
+`role_settings`, and optional `role_routes`, which name another host a role
+runs in and what to do when it cannot. Both are the project's deliberate
+choices; see [host-adapters.md](host-adapters.md#role-routes). Nothing inherits
 from anywhere: defaults come from the installed package. A setting a host
 cannot express, and a value it could not carry, are each refused rather than
 dropped in silence. Omit a setting to let the host's own configuration decide

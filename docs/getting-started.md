@@ -23,7 +23,8 @@ guessing if you name none and none are recorded. It writes:
   decisions/
   generated.json    tracked ownership manifest
   local/            gitignored
-agenticloop.json    project configuration: hosts, per-host role settings
+agenticloop.json    project configuration: hosts, per-host role settings,
+                    role routes
 ```
 
 plus the host directories for the hosts you named. They are recorded under

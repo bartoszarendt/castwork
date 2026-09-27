@@ -90,7 +90,10 @@ selection, not an equivalent.** `role_settings.<host>.<role>` in
 `agenticloop.json` is fixed configuration: it binds a model, reasoning effort,
 and similar settings to each generated role, and it changes only when someone
 edits it. Nothing chooses a model per turn. Separating the thinker from the
-verifier does let planning and judgement bind different models.
+verifier does let planning and judgement bind different models, and
+`role_routes` lets a role run in another host altogether. That too is fixed
+configuration: where a route exists, the coordinator follows it, or its
+fallback when that host is unavailable, rather than choosing a host each time.
 
 ## Where the project goes beyond the paper
 

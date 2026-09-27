@@ -220,8 +220,9 @@ function renderReference(skill) {
  * @param {{id: string, description: string}[]} skills
  * @param {{id: string, description: string}[]} roles
  * @param {Record<string, unknown>} adapter
+ * @param {ResolvedRoute[]} routes
  */
-function renderSkillIndex(command, skills, roles, adapter) {
+function renderSkillIndex(command, skills, roles, adapter, routes) {
   const lines = [
     '---',
     'name: agenticloop',
@@ -234,6 +235,7 @@ function renderSkillIndex(command, skills, roles, adapter) {
     '# Agentic Loop',
     '',
     command ? command.body : '',
+    ...(command ? ['', renderRoutes(routes)] : []),
     '',
     '## Roles',
     '',
@@ -247,16 +249,137 @@ function renderSkillIndex(command, skills, roles, adapter) {
 
 /**
  * @param {{description: string, body: string}|null} command
+ * @param {ResolvedRoute[]} routes
  */
-function renderCommand(command) {
+function renderCommand(command, routes) {
   if (!command) return '';
-  return `---\ndescription: ${yamlString(command.description)}\n---\n\n${command.body}\n`;
+  return `---\ndescription: ${yamlString(command.description)}\n---\n\n${command.body}\n\n${renderRoutes(routes)}\n`;
+}
+
+/**
+ * @typedef {{role: string, host: string, label: string, fallback: string, role_file: string, settings: Record<string, unknown>}} ResolvedRoute
+ */
+
+/**
+ * The routes that send a role from `host` to another host, each with what the
+ * coordinator there needs to start it: the role file the delegate reads first,
+ * and the settings the route's host resolves for that role, which a delegate
+ * started as a separate process does not pick up on its own.
+ *
+ * A route to the host doing the routing is no route: that role runs here as
+ * usual. A route to a host that is not generated is refused, because the
+ * delegate would have no role file to read.
+ *
+ * @param {string} host
+ * @param {Record<string, {host: string, fallback: string}>} roleRoutes
+ * @param {Record<string, Record<string, Record<string, unknown>>>} roleSettings keyed by host
+ * @param {string[]} hosts
+ * @returns {ResolvedRoute[]}
+ */
+export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = [host]) {
+  /** @type {ResolvedRoute[]} */
+  const resolved = [];
+  for (const role of ROLE_IDS) {
+    const route = roleRoutes[role];
+    if (!route) continue;
+    if (!hosts.includes(route.host)) {
+      throw new PublicError(`role_routes.${role}.host ${route.host} is not a host this repository generates for`, {
+        hint: `A routed role reads the role file generated for its host. Add the host with setup --host ${route.host}.`,
+      });
+    }
+    if (route.host === host) continue;
+    const target = readAdapter(route.host);
+    const roleEntry = /** @type {{kind: string, to: string}[]} */ (target.files).find((entry) => entry.kind === 'role');
+    if (!roleEntry) throw new PublicError(`adapter ${route.host} generates no role files`);
+    resolved.push({
+      role,
+      host: route.host,
+      label: String(target.label ?? route.host),
+      fallback: route.fallback,
+      role_file: roleEntry.to.replace('{role}', role),
+      settings: roleSettings[route.host]?.[role] ?? {},
+    });
+  }
+  return resolved;
+}
+
+/**
+ * The settings a route lists: the ones the coordinator passes through the
+ * target CLI's model and reasoning options. Permission settings stay in the
+ * route host's own role file, because the delegation capability chooses the
+ * permissions for the run from what the role has to write.
+ */
+const ROUTE_SETTINGS = Object.freeze(['model', 'reasoning_effort', 'variant']);
+
+/**
+ * The route list closing the entry command's `## Role routes` section.
+ *
+ * It is written for every host, `None` included, so the coordinator reads what
+ * this repository routes rather than inferring it from a missing section.
+ * Settings keep the names `agenticloop.json` uses; the coordinator passes them
+ * to the target CLI's own options.
+ *
+ * @param {ResolvedRoute[]} routes
+ */
+function renderRoutes(routes) {
+  const lines = ['### Routes from this host', ''];
+  if (routes.length === 0) {
+    lines.push('None: every role runs in this host.');
+    return lines.join('\n');
+  }
+  for (const route of routes) {
+    const settings = ROUTE_SETTINGS
+      .map((key) => [key, route.settings[key]])
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key} \`${String(value)}\``);
+    lines.push(
+      `- \`${route.role}\` runs in ${route.label} (\`${route.host}\`). Role file: \`${route.role_file}\`. ` +
+        `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}. Fallback: \`${route.fallback}\`.`,
+    );
+  }
+  return lines.join('\n');
+}
+
+/**
+ * The generated file that carries the entry command's full text for a host:
+ * the skill index where the host has one, otherwise the command file.
+ *
+ * @param {Record<string, unknown>} adapter
+ */
+function entryPath(adapter) {
+  const entries = /** @type {{kind: string, to: string, format: string}[]} */ (adapter.files);
+  const entry = entries.find((file) => file.kind === 'index')
+    ?? entries.find((file) => file.kind === 'command' && file.format === 'skill')
+    ?? entries.find((file) => file.kind === 'command');
+  if (!entry) throw new PublicError(`adapter ${String(adapter.id)} generates no entry command`);
+  return entry.to;
+}
+
+/**
+ * The routes appended to a generated coordinator, so a coordinator started
+ * directly as the host's agent, without the entry command, still sees them. It
+ * names the one generated file whose `## Role routes` section says how to
+ * follow a route, rather than repeating that procedure in the role.
+ *
+ * @param {ResolvedRoute[]} routes
+ * @param {Record<string, unknown>} adapter
+ */
+function renderCoordinatorRoutes(routes, adapter) {
+  return [
+    '## Role routes',
+    '',
+    'This repository routes these roles from this host to another. Before',
+    `starting one, read the \`## Role routes\` section of \`${entryPath(adapter)}\`:`,
+    'how to start it there, and when to use its fallback.',
+    '',
+    renderRoutes(routes).split('\n').slice(2).join('\n'),
+  ].join('\n');
 }
 
 /**
  * Plan every file one host's adapter would generate.
  * @param {string} host
- * @param {{roleSettings?: Record<string, Record<string, unknown>>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[]}} [options]
  * @returns {{path: string, content: string}[]}
  */
 export function generateHost(host, options = {}) {
@@ -265,6 +388,7 @@ export function generateHost(host, options = {}) {
   const skills = readSkills();
   const command = readCommand();
   const roleSettings = options.roleSettings ?? {};
+  const routes = options.routes ?? [];
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
@@ -275,6 +399,9 @@ export function generateHost(host, options = {}) {
         // `user@hostname` is, so records carried computer names instead of
         // the host id. Each host's roles get their own id written in.
         const role = { ...canonical, body: canonical.body.replaceAll('<host>', String(adapter.id)) };
+        if (role.id === 'coordinator' && routes.length > 0) {
+          role.body = `${role.body}\n\n${renderCoordinatorRoutes(routes, adapter)}`;
+        }
         const settings = roleSettings[role.id] ?? {};
         files.push({
           path: entry.to.replace('{role}', role.id),
@@ -292,12 +419,12 @@ export function generateHost(host, options = {}) {
     if (entry.kind === 'command') {
       files.push({
         path: entry.to,
-        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter) : renderCommand(command),
+        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter, routes) : renderCommand(command, routes),
       });
       continue;
     }
     if (entry.kind === 'index') {
-      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter) });
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes) });
       continue;
     }
     if (entry.kind === 'literal') {
@@ -332,13 +459,20 @@ function assertNoAbsolutePaths(host, file) {
  *
  * `roleSettings` is keyed by host here and by role inside `generateHost`,
  * because a setting is only ever meaningful to the one host that accepts it.
+ * Routes are resolved per host too: the same route is a delegation from one
+ * host and the role's own home in another.
  *
  * @param {string[]} hosts
- * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, {host: string, fallback: string}>}} [options]
  */
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
-  for (const host of hosts) files.push(...generateHost(host, { roleSettings: options.roleSettings?.[host] }));
+  for (const host of hosts) {
+    files.push(...generateHost(host, {
+      roleSettings: options.roleSettings?.[host],
+      routes: resolveRoutes(host, options.roleRoutes, options.roleSettings, hosts),
+    }));
+  }
   return files;
 }

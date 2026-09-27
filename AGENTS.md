@@ -48,8 +48,8 @@ authoritative copy for one host.
   `.agenticloop/local/`.
 - **Configuration lives only in `agenticloop.json`** at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
-  project supports, and role settings are its deliberate choices. `project.md`
-  is prose; `.agenticloop/local/` is machine-local state, not an overlay.
+  project supports, and role settings and role routes are its deliberate
+  choices. `project.md` is prose; `.agenticloop/local/` is machine-local state, not an overlay.
 - **Four roles, and they do not vary by project.** A specialist is an `actor`
   under a canonical role, carrying a skill, chosen by prose policy. Do not add a
   role registry or derive roles from policy.

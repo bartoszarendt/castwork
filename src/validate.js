@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { commandDescriptions, generateHost, readAdapter, readRoles, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
+import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
 import { readConfig, settingsFor } from './config.js';
 import { containedPath, digest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
@@ -106,6 +106,22 @@ function validateConfig(findings) {
     error(findings, 'config.json', `not valid JSON: ${String(parseError)}`);
     return;
   }
+  findings.push(...shippedConfigFindings(config));
+}
+
+/**
+ * Findings for a parsed shipped `config.json`.
+ *
+ * Separate from reading the file so a test can check a broken configuration
+ * without rewriting the toolkit's own file, which other tests running at the
+ * same time read.
+ *
+ * @param {Record<string, any>} config
+ * @returns {Finding[]}
+ */
+export function shippedConfigFindings(config) {
+  /** @type {Finding[]} */
+  const findings = [];
   // config.json carries per-host role settings and nothing else. Role ids,
   // descriptions and bodies come from agents/*.md, and every skill is projected
   // to every host, so there is no role-to-skill list left to check.
@@ -142,6 +158,7 @@ function validateConfig(findings) {
     const name = key.slice(1, -2);
     if (name !== 'permissionMode') warn(findings, 'config.json', `field ${name} is not snake_case`);
   }
+  return findings;
 }
 
 /** @param {Finding[]} findings */
@@ -174,7 +191,10 @@ function validateGeneratedOutput(findings, root) {
     /** @type {{path: string, content: string}[]} */
     let planned;
     try {
-      planned = generateHost(host, { roleSettings: config.role_settings[host] });
+      planned = generateHost(host, {
+        roleSettings: config.role_settings[host],
+        routes: resolveRoutes(host, config.role_routes, config.role_settings, config.hosts),
+      });
     } catch (generationError) {
       error(findings, `adapters/${host}`, `generation failed: ${String(generationError)}`);
       continue;

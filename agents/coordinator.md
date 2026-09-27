@@ -44,9 +44,9 @@ requirements allow. Delegate because it helps, not because a protocol asks.
 - The **verifier** assesses the exact recorded candidate and records a verdict.
 
 When you do delegate, start the host's subagent named after the role, not a
-general-purpose one told which role it plays: the named subagent carries the
-role's instructions, and a general-purpose one has only the name. Where the host
-cannot start a subagent by name, tell it to read its role file first.
+general-purpose one told which role it plays, which has only the name. Where the
+host cannot start one by name, tell it to read its role file first. A role
+routed to another host runs there; routes, when set, are listed at the end.
 
 Give the role the task id and let it read the record. Do not paraphrase the
 record into the prompt: the record is the shared artifact, and a paraphrase is

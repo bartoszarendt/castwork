@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { CONFIG_FILE } from '../src/layout.js';
 import { readConfig, settingsFor } from '../src/config.js';
 import { setup, update } from '../src/setup.js';
-import { validate } from '../src/validate.js';
+import { shippedConfigFindings } from '../src/validate.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -209,18 +209,15 @@ test('no effort key appears in a generated role when none is configured', (t) =>
 /* The shipped defaults answer to the same contract                    */
 /* ------------------------------------------------------------------ */
 
-test('validate reports a shipped default that no host could accept', (t) => {
-  const file = path.join(repoRoot, 'config.json');
-  const original = fs.readFileSync(file, 'utf8');
-  t.after(() => fs.writeFileSync(file, original, 'utf8'));
-
-  const shipped = JSON.parse(original);
+test('validate reports a shipped default that no host could accept', () => {
+  // Checked as an object: rewriting the toolkit's own config.json raced with
+  // every other test file that installs from it while this one ran.
+  const shipped = JSON.parse(fs.readFileSync(path.join(repoRoot, 'config.json'), 'utf8'));
   shipped.adapters.claude.role_settings.worker.reasoning_efort = 'high';
   shipped.adapters.claude.role_settings.engineer = { model: 'x' };
   shipped.adapters.codex.role_settings.worker = { permission_mode: 'acceptEdits' };
-  fs.writeFileSync(file, `${JSON.stringify(shipped, null, 2)}\n`, 'utf8');
 
-  const messages = validate(repoRoot).findings.map((finding) => finding.message);
+  const messages = shippedConfigFindings(shipped).map((finding) => finding.message);
   assert.ok(messages.some((m) => /reasoning_efort is not a setting claude accepts/.test(m)), 'a misspelled key');
   assert.ok(messages.some((m) => /role_settings.engineer is not a role id/.test(m)), 'an unknown role');
   assert.ok(messages.some((m) => /permission_mode is not a setting codex accepts/.test(m)), 'a key from another host');

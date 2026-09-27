@@ -30,7 +30,9 @@ placement, file naming, the host's frontmatter conventions, and any literal
 file the host reads as configuration rather than prose.
 
 A role's id, description, and body come from its file under `agents/`;
-`config.json` contributes only the per-host settings. The one substitution in a
+`config.json` contributes only the per-host settings, and the entry command
+and the coordinator close with the routes `role_routes` sets from that host
+(see [Role routes](#role-routes)). The one substitution in a
 role's body is `<host>`, which becomes the adapter's `id`, so a generated role
 records `worker@claude` rather than leaving an agent to guess what a host is. Each host is a descriptor
 in `src/adapters/<host>.json` listing where each kind of file goes and in which
@@ -85,10 +87,11 @@ negotiation, and no repair path.
 
 ## Portable project host-generation configuration
 
-`agenticloop.json` at the target root holds which hosts to generate for and any
-per-host role settings. It describes the repository, not the machine it is
-checked out on: `hosts` names the hosts the project supports, and every
-`role_settings` value is a choice the project made on purpose. Everything it
+`agenticloop.json` at the target root holds which hosts to generate for, any
+per-host role settings, and any [role routes](#role-routes). It describes the
+repository, not the machine it is checked out on: `hosts` names the hosts the
+project supports, and every `role_settings` value and `role_routes` entry is a
+choice the project made on purpose. Everything it
 contains ends up in tracked generated files, which is what makes a clone work
 without running anything.
 
@@ -153,6 +156,78 @@ when the repository means it.
 Configuration lives here and nowhere else. `.agenticloop/project.md` is prose,
 and `.agenticloop/local/` is reserved for machine-local state: it is gitignored
 working space, not a second configuration layer that overrides this file.
+
+## Role routes
+
+A role normally runs as a subagent of the host the coordinator works in.
+`role_routes` says the project prefers another host for a role: the
+coordinator, working in Claude Code, can have the worker run in the Codex CLI as
+a separate process, and have that result verified back in Claude Code.
+
+```json
+{
+  "hosts": ["claude", "codex"],
+  "role_routes": {
+    "worker": { "host": "codex", "fallback": "current_host" },
+    "verifier": { "host": "claude", "fallback": "leave_open" }
+  },
+  "role_settings": {
+    "codex": { "worker": { "model": "gpt-5.4", "reasoning_effort": "high" } }
+  }
+}
+```
+
+- The routable roles are `thinker`, `worker`, and `verifier`. The coordinator is
+  the session that routes, and it runs wherever Agentic Loop was invoked.
+- `host` must be one of the hosts this repository generates for, because the
+  delegate reads the role file generated for that host. A route to a host that
+  is not generated is refused before anything is written; `setup --host` adds
+  it.
+- `fallback` is required. `current_host` runs the role in the host that routes
+  it. `leave_open` leaves that role's part undone: the task waits in
+  `needs_context`, or the point stays unassessed, and the coordinator says so.
+  Use `leave_open` when running in the other host is the point, such as a review
+  by a different model family.
+- A routed role's model and reasoning are its settings under the route's host:
+  `role_settings.codex.worker` above. They are optional; without them the
+  delegate runs with its CLI's own configuration. A `model` on the route itself
+  is refused, because a model id belongs to one host and the route names which.
+- A route to the host doing the routing is no route: the Codex coordinator in
+  the example starts its own `worker` subagent as usual.
+
+Generation writes the routes into each host's entry command, under
+`### Routes from this host`, with the role file the delegate reads first and the
+settings to pass: `model`, `reasoning_effort`, and `variant`. Permission
+settings are not listed, because the delegation capability chooses the run's
+permissions from what the role has to write. The same routes close the
+generated coordinator role, with the path of the entry file that holds the
+procedure, so a coordinator started directly as the host's agent sees them too.
+The other role files are unchanged. The entry command's `## Role routes`
+section tells the coordinator the rest:
+
+- **Detection by description.** The coordinator starts a routed role through a
+  delegation capability its host exposes, or one the working policy points to
+  by path: a skill, command, subagent, or tool whose description says it runs a
+  bounded task in a separate agent CLI process. It is matched by what it does,
+  never by its name, provider, or where it is installed, and never searched for
+  or installed. One with a vague description cannot be recognized; that is the
+  limit of matching by description, and a shared metadata key would make it a
+  registry.
+- **Fallback only when nothing can have changed.** The fallback applies when no
+  capability fits, the target CLI is missing or not ready, or a run failed
+  without being able to change a file. A writing run that failed partway is
+  reconciled or taken to the user first, never covered by a second writer. A
+  delegate that finished with a wrong result is rework, not a failed route.
+- **The user decides over the route.** A host the user names overrides it, and
+  if that host is unavailable the coordinator asks rather than falling back.
+  Work that itself requires the other host is left open whatever the fallback.
+
+A route is the project's standing request for that separate process, like a
+model binding is its standing choice of model. It authorizes nothing else:
+commits, other providers, and wider permissions stay where they were.
+Availability is never configured or recorded; it is found out each time.
+The actor string records where the role actually ran — `worker@codex`, or
+`worker@claude` after a fallback — so records need no field for routing.
 
 ## Adding a host
 

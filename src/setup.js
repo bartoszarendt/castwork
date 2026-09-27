@@ -329,7 +329,7 @@ export function setup(root, options = {}) {
 
   // Planned before anything is seeded, so a refusal leaves the tree as it was.
   const config = readConfig(root, { hosts });
-  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings }), { force: options.force });
+  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }), { force: options.force });
   refuseBlocked(plan);
 
   const created = seedState(root);
@@ -356,7 +356,7 @@ export function update(root, options = {}) {
   if (config.hosts.length === 0) {
     throw new PublicError(`${CONFIG_FILE} lists no hosts`, { hint: 'Run setup first.' });
   }
-  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings }), { force: options.force });
+  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }), { force: options.force });
   if (options.check) return { hosts: config.hosts, plan: publicPlan(plan) };
   return { hosts: config.hosts, version: plan.version, ...applyPlan(root, plan) };
 }
@@ -450,7 +450,7 @@ export function doctor(root) {
   let generated = null;
   const layoutSpoken = manifest === null || manifest.layout_version === LAYOUT_VERSION;
   if (layoutSpoken && config.hosts.length > 0 && legacy.length === 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
-    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings }));
+    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }));
     for (const relative of plan.modified) {
       findings.push({ level: 'warn', message: `generated file modified locally: ${relative}`, next: `update writes nothing until you restore it or pass --force-generated ${relative}` });
     }

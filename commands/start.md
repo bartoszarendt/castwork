@@ -129,7 +129,8 @@ let it read the record. When the work comes from one of the project's
 documents, also name the document and the part it comes from: finding them is
 your job, not the role's. When a skill fits the work, or the working policy
 names one, name it and say what it is for; the role checks whether its host has
-it, since hosts may expose different skills.
+it, since hosts may expose different skills. A role this repository routes to
+another host runs there instead, as `## Role routes` below describes.
 
 If a task declares `independent_review`, the accepting actor must not be among
 the candidate's recorded producers — that is the one thing worth checking when
@@ -141,3 +142,42 @@ Do the work the user asked for. Ask before going beyond it, before anything
 irreversible, and wherever the project's working policy says to ask.
 
 Report what actually happened, including what failed.
+
+## Role routes
+
+`role_routes` in `agenticloop.json` can prefer another host for the `thinker`,
+`worker`, or `verifier`; the coordinator is never routed. The routes from this
+host are listed at the end of this section.
+
+A routed role runs in its host's CLI as a separate process, started through a
+delegation capability: a skill, command, subagent, or tool this host exposes, or
+one the working policy points to by path, whose description says it runs a
+bounded task in a separate agent CLI process and returns the result. Match it by
+what it does, never by its name or where it is installed; do not search for one
+or install one. Follow its procedure for checking the CLI is ready, running,
+monitoring, and reviewing the result. Give the delegate the task id and the
+listed role file to read first, start the role by name where that CLI can, pass
+the listed settings through the CLI's own model and reasoning options, and allow
+writes only where the role writes: the worker within the task's scope and in its
+task record; the thinker in task records and the decisions it is asked to
+record; the verifier in its task record and any findings file its assessment
+references. The route is the project's standing request for that separate
+process; it authorizes nothing else.
+
+Apply the route's fallback when no capability fits, when the host's CLI is
+missing or not ready, or when a run fails that cannot have changed any file, and
+tell the user which applied and why:
+
+- `current_host`: run the role in this host, as `## Roles` describes.
+- `leave_open`: leave that role's part undone here. Set a worker's or thinker's
+  task to `needs_context`, naming the route under `## Blockers and decisions`;
+  for a verifier, record no assessment and report the point as open.
+
+A run that may have written files and then failed is not a fallback case:
+inspect what it changed and reconcile it, or ask, before anyone else writes to
+those files. A delegate that finished with a wrong result is rework in that
+host, not a failed route. A host or CLI the user names for the work overrides
+the route; if that one is unavailable, ask rather than fall back. When the user
+says not to delegate, run the role here. When the work itself requires the other
+host, as a record or the working policy may say, treat the route as
+`leave_open` whatever its fallback.
