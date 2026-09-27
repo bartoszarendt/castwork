@@ -116,17 +116,12 @@ function readRoleSettings(raw) {
 /** The roles a route can send to another host. The coordinator is the session that routes. */
 export const ROUTABLE_ROLES = Object.freeze(ROLE_IDS.filter((role) => role !== 'coordinator'));
 
-/** What a route falls back to when its host cannot run the role. */
-export const ROUTE_FALLBACKS = Object.freeze(['current_host', 'leave_open']);
-
-/**
- * @typedef {{host: string, fallback: string}} RoleRoute
- */
-
 /**
  * Read `role_routes`: which host the project prefers each role to run in when
- * the coordinator works from another one, and what to do when that host
- * cannot run it.
+ * the coordinator works from another one. A route is only a host id. When that
+ * host cannot run the role, the role runs in the host doing the routing, and
+ * the entry command names the cases where it is left open instead; there is no
+ * per-route fallback to configure.
  *
  * A route is a separate map rather than a role setting because it is not a
  * setting the target host reads: it is a choice the coordinator acts on. Model
@@ -136,16 +131,18 @@ export const ROUTE_FALLBACKS = Object.freeze(['current_host', 'leave_open']);
  * add the host a route already names.
  *
  * @param {Record<string, unknown>} raw
- * @returns {Record<string, RoleRoute>}
+ * @returns {Record<string, string>} role to host id
  */
 function readRoleRoutes(raw) {
   const declared = raw.role_routes;
   if (declared === undefined) return {};
   if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
-    throw new PublicError(`${CONFIG_FILE} role_routes must be a map of role to route`);
+    throw new PublicError(`${CONFIG_FILE} role_routes must be a map of role to host`, {
+      hint: 'For example: "role_routes": { "worker": "codex" }.',
+    });
   }
 
-  /** @type {Record<string, RoleRoute>} */
+  /** @type {Record<string, string>} */
   const routes = {};
   for (const [role, route] of Object.entries(declared)) {
     if (role === 'coordinator') {
@@ -158,32 +155,17 @@ function readRoleRoutes(raw) {
         hint: `Routable roles: ${ROUTABLE_ROLES.join(', ')}.`,
       });
     }
-    if (typeof route !== 'object' || route === null || Array.isArray(route)) {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role} must be a map with host and fallback`);
+    if (typeof route !== 'string') {
+      throw new PublicError(`${CONFIG_FILE} role_routes.${role} must be a host id`, {
+        hint: `Write "${role}": "<host>". A route has no fallback: a role its host cannot run runs in the host that routes it. Model and reasoning go in role_settings.<host>.${role}.`,
+      });
     }
-    const entry = /** @type {Record<string, unknown>} */ (route);
-    for (const key of Object.keys(entry)) {
-      if (key !== 'host' && key !== 'fallback') {
-        throw new PublicError(`${CONFIG_FILE} role_routes.${role} has no key ${key}`, {
-          hint: `A route takes host and fallback. Model and reasoning for the routed role go in role_settings.<host>.${role}.`,
-        });
-      }
-    }
-    if (typeof entry.host !== 'string' || !HOSTS.includes(entry.host)) {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role}.host must name a known host`, {
+    if (!HOSTS.includes(route)) {
+      throw new PublicError(`${CONFIG_FILE} role_routes.${role} names unknown host ${route}`, {
         hint: `Known hosts: ${HOSTS.join(', ')}.`,
       });
     }
-    const fallbackHint = 'Set fallback to current_host (run the role in the host that routes it) or leave_open (leave its part undone).';
-    if (entry.fallback === undefined) {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role} has no fallback`, { hint: fallbackHint });
-    }
-    if (typeof entry.fallback !== 'string' || !ROUTE_FALLBACKS.includes(entry.fallback)) {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role}.fallback must be one of ${ROUTE_FALLBACKS.join(', ')}`, {
-        hint: fallbackHint,
-      });
-    }
-    routes[role] = { host: entry.host, fallback: entry.fallback };
+    routes[role] = route;
   }
   return routes;
 }
@@ -194,7 +176,7 @@ function readRoleRoutes(raw) {
  *
  * @param {string} root
  * @param {{hosts?: string[]}} [options]
- * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, role_routes: Record<string, RoleRoute>, raw: Record<string, unknown>|null}}
+ * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, role_routes: Record<string, string>, raw: Record<string, unknown>|null}}
  */
 export function readConfig(root, options = {}) {
   const file = path.join(root, CONFIG_FILE);

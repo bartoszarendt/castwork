@@ -164,20 +164,18 @@ record; the verifier in its task record and any findings file its assessment
 references. The route is the project's standing request for that separate
 process; it authorizes nothing else.
 
-Apply the route's fallback when no capability fits, when the host's CLI is
-missing or not ready, or when a run fails that cannot have changed any file, and
-tell the user which applied and why:
+When no capability fits, the host's CLI is missing or not ready, or a run fails
+that cannot have changed any file, run the role in this host, as `## Roles`
+describes, and tell the user why. Three cases are different:
 
-- `current_host`: run the role in this host, as `## Roles` describes.
-- `leave_open`: leave that role's part undone here. Set a worker's or thinker's
-  task to `needs_context`, naming the route under `## Blockers and decisions`;
-  for a verifier, record no assessment and report the point as open.
+- **A run that may have written files and then failed.** Inspect what it
+  changed and reconcile it, or ask, before anyone else writes to those files.
+- **A host or CLI the user named for the work.** It overrides the route; if it
+  is unavailable, ask rather than run the role here.
+- **Work that itself requires the other host,** as a record or the working
+  policy may say. Leave that part undone here: set a worker's or thinker's task
+  to `needs_context`, naming the route under `## Blockers and decisions`; for a
+  verifier, record no assessment and report the point as open.
 
-A run that may have written files and then failed is not a fallback case:
-inspect what it changed and reconcile it, or ask, before anyone else writes to
-those files. A delegate that finished with a wrong result is rework in that
-host, not a failed route. A host or CLI the user names for the work overrides
-the route; if that one is unavailable, ask rather than fall back. When the user
-says not to delegate, run the role here. When the work itself requires the other
-host, as a record or the working policy may say, treat the route as
-`leave_open` whatever its fallback.
+A delegate that finished with a wrong result is rework in that host, not a
+failed route. When the user says not to delegate, run the role here.

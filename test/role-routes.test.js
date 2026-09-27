@@ -2,8 +2,8 @@
  * Role routes.
  *
  * A route says which host the project prefers a role to run in when the
- * coordinator works from another one, and what to do when that host cannot run
- * it. It is not a host setting: the coordinator acts on it, so it reaches the
+ * coordinator works from another one; when that host cannot run it, the role
+ * runs where the coordinator is. It is not a host setting: the coordinator acts on it, so it reaches the
  * entry command of every other host, with the role file the delegate reads
  * first and the settings the route's host resolves for that role.
  */
@@ -55,7 +55,7 @@ function routesSection(content) {
 
 test('a route reaches the routing host with the role file and the target settings', (t) => {
   const root = fixture(t, ['claude', 'codex'], {
-    role_routes: { worker: { host: 'codex', fallback: 'current_host' } },
+    role_routes: { worker: 'codex' },
     role_settings: { codex: { worker: { model: 'gpt-5.4', reasoning_effort: 'high' } } },
   });
   update(root);
@@ -64,13 +64,13 @@ test('a route reaches the routing host with the role file and the target setting
     assert.match(section, /`worker` runs in Codex \(`codex`\)/, file);
     assert.match(section, /Role file: `\.codex\/agents\/worker\.toml`/, file);
     assert.match(section, /model `gpt-5\.4`, reasoning_effort `high`/, file);
-    assert.match(section, /Fallback: `current_host`/, file);
+    assert.doesNotMatch(section, /Fallback/, file);
   }
 });
 
 test('the route host itself runs the role as usual and lists no route', (t) => {
   const root = fixture(t, ['claude', 'codex'], {
-    role_routes: { worker: { host: 'codex', fallback: 'current_host' } },
+    role_routes: { worker: 'codex' },
   });
   update(root);
   assert.match(routesSection(read(root, '.agents/skills/agenticloop/SKILL.md')), /None: every role runs in this host\./);
@@ -82,7 +82,7 @@ test('a route reaches the routing coordinator, with the file that says how to fo
   const before = Object.fromEntries(['thinker', 'worker', 'verifier'].map((role) => [role, read(root, `.claude/agents/${role}.md`)]));
   assert.doesNotMatch(read(root, '.claude/agents/coordinator.md'), /## Role routes/);
 
-  writeExtra(root, { role_routes: { worker: { host: 'codex', fallback: 'leave_open' }, verifier: { host: 'claude', fallback: 'leave_open' } } });
+  writeExtra(root, { role_routes: { worker: 'codex', verifier: 'claude' } });
   update(root);
   for (const role of ['thinker', 'worker', 'verifier']) {
     assert.equal(read(root, `.claude/agents/${role}.md`), before[role], `${role} is unchanged`);
@@ -106,13 +106,13 @@ test('a route reaches the routing coordinator, with the file that says how to fo
 test('a route lists model and reasoning only, never a permission setting', (t) => {
   const root = fixture(t, ['claude', 'opencode'], {
     role_routes: {
-      verifier: { host: 'opencode', fallback: 'leave_open' },
-      thinker: { host: 'claude', fallback: 'current_host' },
+      verifier: 'opencode',
+      thinker: 'claude',
     },
     role_settings: { opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } } },
   });
   update(root);
-  assert.match(routesSection(read(root, '.claude/commands/agenticloop.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\. Fallback: `leave_open`\./);
+  assert.match(routesSection(read(root, '.claude/commands/agenticloop.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
 
   // Claude's shipped thinker default is a permission mode, which the
   // delegation capability chooses for the run; the route leaves it out.
@@ -133,7 +133,7 @@ test('with no routes every entry file says so', () => {
 
 test('validate accepts a routed repository as current', (t) => {
   const root = fixture(t, ['claude', 'codex'], {
-    role_routes: { verifier: { host: 'claude', fallback: 'leave_open' } },
+    role_routes: { verifier: 'claude' },
   });
   update(root);
   const findings = validate(root).findings;
@@ -151,17 +151,17 @@ test('validate accepts a routed repository as current', (t) => {
 /* ------------------------------------------------------------------ */
 
 test('a route to a host that is not generated is refused before anything is written', (t) => {
-  const root = fixture(t, ['claude'], { role_routes: { worker: { host: 'codex', fallback: 'current_host' } } });
+  const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
   const before = read(root, '.claude/commands/agenticloop.md');
   assert.throws(
     () => update(root),
-    (error) => /role_routes\.worker\.host codex is not a host this repository generates for/.test(error.message) && /setup --host codex/.test(error.hint),
+    (error) => /role_routes\.worker names codex, which is not a host this repository generates for/.test(error.message) && /setup --host codex/.test(error.hint),
   );
   assert.equal(read(root, '.claude/commands/agenticloop.md'), before);
 });
 
 test('setup --host adds the host a route already names', (t) => {
-  const root = fixture(t, ['claude'], { role_routes: { worker: { host: 'codex', fallback: 'current_host' } } });
+  const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
   setup(root, { hosts: ['codex'] });
   assert.match(routesSection(read(root, '.claude/commands/agenticloop.md')), /`worker` runs in Codex/);
 });
@@ -171,7 +171,7 @@ test('setup --host adds the host a route already names', (t) => {
 /* ------------------------------------------------------------------ */
 
 test('the coordinator cannot be routed', (t) => {
-  const root = fixture(t, ['claude'], { role_routes: { coordinator: { host: 'claude', fallback: 'current_host' } } });
+  const root = fixture(t, ['claude'], { role_routes: { coordinator: 'claude' } });
   assert.throws(
     () => readConfig(root),
     (error) => /cannot route the coordinator/.test(error.message) && /thinker, worker, verifier/.test(error.hint),
@@ -180,47 +180,38 @@ test('the coordinator cannot be routed', (t) => {
 
 test('an unknown or previous role id is refused', (t) => {
   for (const role of ['engineer', 'auditor', 'reviewer']) {
-    const root = fixture(t, ['claude'], { role_routes: { [role]: { host: 'claude', fallback: 'current_host' } } });
+    const root = fixture(t, ['claude'], { role_routes: { [role]: 'claude' } });
     assert.throws(() => readConfig(root), new RegExp(`unknown role ${role}`));
   }
 });
 
-test('a route without a fallback is refused and the hint names both values', (t) => {
-  const root = fixture(t, ['claude'], { role_routes: { worker: { host: 'claude' } } });
-  assert.throws(
-    () => readConfig(root),
-    (error) => /role_routes\.worker has no fallback/.test(error.message) && /current_host/.test(error.hint) && /leave_open/.test(error.hint),
-  );
-});
-
-test('a fallback outside the two values is refused, a host id included', (t) => {
-  for (const fallback of ['claude', 'ask', '', null, ['current_host']]) {
-    const root = fixture(t, ['claude'], { role_routes: { worker: { host: 'claude', fallback } } });
+test('a route written as a map, with or without a fallback, is refused with the host-id form', (t) => {
+  for (const route of [{ host: 'claude' }, { host: 'claude', fallback: 'current_host' }, { host: 'claude', model: 'x' }]) {
+    const root = fixture(t, ['claude'], { role_routes: { worker: route } });
     assert.throws(
       () => readConfig(root),
-      (error) => /role_routes\.worker\.fallback must be one of current_host, leave_open/.test(error.message) && /leave_open \(leave its part undone\)/.test(error.hint),
-      JSON.stringify(fallback),
+      (error) => /role_routes\.worker must be a host id/.test(error.message)
+        && /"worker": "<host>"/.test(error.hint)
+        && /no fallback/.test(error.hint)
+        && /role_settings\.<host>\.worker/.test(error.hint),
+      JSON.stringify(route),
     );
   }
 });
 
 test('an unknown host is refused', (t) => {
-  for (const host of ['cursor', 'claude-code', '', ['codex']]) {
-    const root = fixture(t, ['claude'], { role_routes: { worker: { host, fallback: 'current_host' } } });
-    assert.throws(() => readConfig(root), /role_routes\.worker\.host must name a known host/, JSON.stringify(host));
+  for (const host of ['cursor', 'claude-code', '']) {
+    const root = fixture(t, ['claude'], { role_routes: { worker: host } });
+    assert.throws(
+      () => readConfig(root),
+      (error) => new RegExp(`role_routes\.worker names unknown host ${host}`).test(error.message) && /codex, claude, opencode/.test(error.hint),
+      JSON.stringify(host),
+    );
   }
 });
 
-test('a model on a route is refused with where it belongs', (t) => {
-  const root = fixture(t, ['claude'], { role_routes: { worker: { host: 'claude', fallback: 'current_host', model: 'x' } } });
-  assert.throws(
-    () => readConfig(root),
-    (error) => /role_routes\.worker has no key model/.test(error.message) && /role_settings\.<host>\.worker/.test(error.hint),
-  );
-});
-
-test('role_routes shaped as anything but a map of maps is refused', (t) => {
-  for (const value of [['worker'], 'worker', { worker: 'codex' }, { worker: ['codex'] }]) {
+test('role_routes shaped as anything but a map of role to host is refused', (t) => {
+  for (const value of [['worker'], 'worker', { worker: ['codex'] }, { worker: null }, { worker: 3 }]) {
     const root = fixture(t, ['claude'], { role_routes: value });
     assert.throws(() => readConfig(root), /role_routes/, JSON.stringify(value));
   }

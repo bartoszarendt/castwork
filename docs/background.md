@@ -92,8 +92,9 @@ and similar settings to each generated role, and it changes only when someone
 edits it. Nothing chooses a model per turn. Separating the thinker from the
 verifier does let planning and judgement bind different models, and
 `role_routes` lets a role run in another host altogether. That too is fixed
-configuration: where a route exists, the coordinator follows it, or its
-fallback when that host is unavailable, rather than choosing a host each time.
+configuration: where a route exists, the coordinator follows it, running the
+role in its own host only when the route's host is unavailable, rather than
+choosing a host each time.
 
 ## Where the project goes beyond the paper
 

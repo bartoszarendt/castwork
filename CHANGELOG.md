@@ -142,28 +142,28 @@ one makes it write nothing until you merge and delete the file, or name it with
   and a verifier using a review skill still fixes nothing. The `project.md`
   scaffold's policy example asks for a security skill without naming one.
   Nothing about skills is registered, generated, or recorded.
-- Roles can run in another host. `role_routes` in `agenticloop.json` names, for
-  the `thinker`, `worker`, or `verifier`, a preferred host and a required
-  `fallback`: `current_host` runs the role where the coordinator works, and
-  `leave_open` leaves its part undone, as `needs_context` or an unassessed
-  point. The coordinator is never routed. The route's host must be generated,
-  so the delegate has its role file; a route to another host is refused until
-  `setup --host` adds it. Model and reasoning for a routed role are its
-  `role_settings` under the route's host; a `model` on the route is refused.
-  Each host's entry command lists the routes from it, with the role file to
-  read first and the model and reasoning settings to pass; the generated
-  coordinator lists them too, with the path of that entry file, so a
-  coordinator started directly still sees them. The new `## Role routes` section
-  says how to use them: start the role in that host's CLI through a
-  delegation capability the host exposes or the policy points to, recognized
-  by its description rather than its name; fall back only when nothing can
-  have changed, reconciling a writing run that failed partway instead; let a
-  host the user names override the route; and leave work that requires the
-  other host open. A routed role writes only where it writes anyway: the
-  worker its scope and task record, the thinker task records and decisions,
-  the verifier its task record and any findings file. Other role files,
-  records, and checks are unchanged: the actor string records where the role
-  actually ran.
+- Roles can run in another host. `role_routes` in `agenticloop.json` names,
+  for the `thinker`, `worker`, or `verifier`, a preferred host:
+  `"worker": "codex"`. When that host cannot run the role, it runs where the
+  coordinator works, and the coordinator says so; there is no fallback to
+  configure. The coordinator is never routed. The route's host must be
+  generated, so the delegate has its role file; a route to another host is
+  refused until `setup --host` adds it. Model and reasoning for a routed role
+  are its `role_settings` under the route's host, and a route written as a map
+  is refused with that hint. Each host's entry command lists the routes from
+  it, with the role file to read first and the model and reasoning settings to
+  pass; the generated coordinator lists them too, with the path of that entry
+  file, so a coordinator started directly still sees them. The new
+  `## Role routes` section says how to use them: start the role in that host's
+  CLI through a delegation capability the host exposes or the policy points
+  to, recognized by its description rather than its name; run the role here
+  only when nothing can have changed, reconciling a writing run that failed
+  partway instead; let a host the user names override the route; and leave
+  open work that a record or the policy says requires the other host. A routed
+  role writes only where it writes anyway: the worker its scope and task
+  record, the thinker task records and decisions, the verifier its task record
+  and any findings file. Other role files, records, and checks are unchanged:
+  the actor string records where the role actually ran.
 - A documented record format with a `schema` field, a nine-value status
   vocabulary, and three requirement kinds: `checks`, `independent_review`, and
   `assessment_roles`.

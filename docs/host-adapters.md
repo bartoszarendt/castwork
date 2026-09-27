@@ -168,8 +168,8 @@ a separate process, and have that result verified back in Claude Code.
 {
   "hosts": ["claude", "codex"],
   "role_routes": {
-    "worker": { "host": "codex", "fallback": "current_host" },
-    "verifier": { "host": "claude", "fallback": "leave_open" }
+    "worker": "codex",
+    "verifier": "claude"
   },
   "role_settings": {
     "codex": { "worker": { "model": "gpt-5.4", "reasoning_effort": "high" } }
@@ -179,15 +179,15 @@ a separate process, and have that result verified back in Claude Code.
 
 - The routable roles are `thinker`, `worker`, and `verifier`. The coordinator is
   the session that routes, and it runs wherever Agentic Loop was invoked.
-- `host` must be one of the hosts this repository generates for, because the
-  delegate reads the role file generated for that host. A route to a host that
-  is not generated is refused before anything is written; `setup --host` adds
-  it.
-- `fallback` is required. `current_host` runs the role in the host that routes
-  it. `leave_open` leaves that role's part undone: the task waits in
-  `needs_context`, or the point stays unassessed, and the coordinator says so.
-  Use `leave_open` when running in the other host is the point, such as a review
-  by a different model family.
+- A route is a host id, and it must be one of the hosts this repository
+  generates for, because the delegate reads the role file generated for that
+  host. A route to a host that is not generated is refused before anything is
+  written; `setup --host` adds it.
+- A route has no fallback to configure. When its host cannot run the role, the
+  role runs in the host doing the routing, and the coordinator says so. When
+  running in the other host is the point, such as a review by a different model
+  family, say so in the task record or the working policy: that work is then
+  left open instead, as `needs_context` or an unassessed point.
 - A routed role's model and reasoning are its settings under the route's host:
   `role_settings.codex.worker` above. They are optional; without them the
   delegate runs with its CLI's own configuration. A `model` on the route itself
@@ -213,21 +213,24 @@ section tells the coordinator the rest:
   or installed. One with a vague description cannot be recognized; that is the
   limit of matching by description, and a shared metadata key would make it a
   registry.
-- **Fallback only when nothing can have changed.** The fallback applies when no
-  capability fits, the target CLI is missing or not ready, or a run failed
-  without being able to change a file. A writing run that failed partway is
-  reconciled or taken to the user first, never covered by a second writer. A
-  delegate that finished with a wrong result is rework, not a failed route.
-- **The user decides over the route.** A host the user names overrides it, and
-  if that host is unavailable the coordinator asks rather than falling back.
-  Work that itself requires the other host is left open whatever the fallback.
+- **Back to this host only when nothing can have changed.** The role runs in
+  the routing host when no capability fits, the target CLI is missing or not
+  ready, or a run failed without being able to change a file. A writing run
+  that failed partway is reconciled or taken to the user first, never covered
+  by a second writer. A delegate that finished with a wrong result is rework,
+  not a failed route.
+- **The user and the work decide over the route.** A host the user names
+  overrides it, and if that host is unavailable the coordinator asks rather
+  than running the role here. Work that itself requires the other host is left
+  open.
 
 A route is the project's standing request for that separate process, like a
 model binding is its standing choice of model. It authorizes nothing else:
 commits, other providers, and wider permissions stay where they were.
 Availability is never configured or recorded; it is found out each time.
 The actor string records where the role actually ran — `worker@codex`, or
-`worker@claude` after a fallback — so records need no field for routing.
+`worker@claude` when it ran in the routing host instead — so records need no
+field for routing.
 
 ## Adding a host
 

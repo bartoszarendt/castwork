@@ -257,7 +257,7 @@ function renderCommand(command, routes) {
 }
 
 /**
- * @typedef {{role: string, host: string, label: string, fallback: string, role_file: string, settings: Record<string, unknown>}} ResolvedRoute
+ * @typedef {{role: string, host: string, label: string, role_file: string, settings: Record<string, unknown>}} ResolvedRoute
  */
 
 /**
@@ -271,7 +271,7 @@ function renderCommand(command, routes) {
  * delegate would have no role file to read.
  *
  * @param {string} host
- * @param {Record<string, {host: string, fallback: string}>} roleRoutes
+ * @param {Record<string, string>} roleRoutes role to host id
  * @param {Record<string, Record<string, Record<string, unknown>>>} roleSettings keyed by host
  * @param {string[]} hosts
  * @returns {ResolvedRoute[]}
@@ -280,24 +280,23 @@ export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = 
   /** @type {ResolvedRoute[]} */
   const resolved = [];
   for (const role of ROLE_IDS) {
-    const route = roleRoutes[role];
-    if (!route) continue;
-    if (!hosts.includes(route.host)) {
-      throw new PublicError(`role_routes.${role}.host ${route.host} is not a host this repository generates for`, {
-        hint: `A routed role reads the role file generated for its host. Add the host with setup --host ${route.host}.`,
+    const target = roleRoutes[role];
+    if (!target) continue;
+    if (!hosts.includes(target)) {
+      throw new PublicError(`role_routes.${role} names ${target}, which is not a host this repository generates for`, {
+        hint: `A routed role reads the role file generated for its host. Add the host with setup --host ${target}.`,
       });
     }
-    if (route.host === host) continue;
-    const target = readAdapter(route.host);
-    const roleEntry = /** @type {{kind: string, to: string}[]} */ (target.files).find((entry) => entry.kind === 'role');
-    if (!roleEntry) throw new PublicError(`adapter ${route.host} generates no role files`);
+    if (target === host) continue;
+    const adapter = readAdapter(target);
+    const roleEntry = /** @type {{kind: string, to: string}[]} */ (adapter.files).find((entry) => entry.kind === 'role');
+    if (!roleEntry) throw new PublicError(`adapter ${target} generates no role files`);
     resolved.push({
       role,
-      host: route.host,
-      label: String(target.label ?? route.host),
-      fallback: route.fallback,
+      host: target,
+      label: String(adapter.label ?? target),
       role_file: roleEntry.to.replace('{role}', role),
-      settings: roleSettings[route.host]?.[role] ?? {},
+      settings: roleSettings[target]?.[role] ?? {},
     });
   }
   return resolved;
@@ -334,7 +333,7 @@ function renderRoutes(routes) {
       .map(([key, value]) => `${key} \`${String(value)}\``);
     lines.push(
       `- \`${route.role}\` runs in ${route.label} (\`${route.host}\`). Role file: \`${route.role_file}\`. ` +
-        `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}. Fallback: \`${route.fallback}\`.`,
+        `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}.`,
     );
   }
   return lines.join('\n');
@@ -370,7 +369,7 @@ function renderCoordinatorRoutes(routes, adapter) {
     '',
     'This repository routes these roles from this host to another. Before',
     `starting one, read the \`## Role routes\` section of \`${entryPath(adapter)}\`:`,
-    'how to start it there, and when to use its fallback.',
+    'how to start it there, and what to do when that host cannot run it.',
     '',
     renderRoutes(routes).split('\n').slice(2).join('\n'),
   ].join('\n');
@@ -463,7 +462,7 @@ function assertNoAbsolutePaths(host, file) {
  * host and the role's own home in another.
  *
  * @param {string[]} hosts
- * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, {host: string, fallback: string}>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, string>}} [options]
  */
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
