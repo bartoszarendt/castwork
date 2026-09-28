@@ -155,6 +155,169 @@ function validateEntries(errors, frontmatter, field, required, enums) {
   return entries;
 }
 
+/** Above this, a record is reported as large: logs belong in linked files. */
+export const LARGE_RECORD_BYTES = 100 * 1024;
+
+/**
+ * A reference that names one object and cannot move: a hex object id of 7 to
+ * 64 digits, or a snapshot, `tree:` followed by one. `HEAD`, a branch, or a
+ * label such as `worktree-T005` names whatever it points at today.
+ * @param {string} ref
+ */
+export function isObjectId(ref) {
+  return /^(tree:)?[0-9a-f]{7,64}$/i.test(ref);
+}
+
+/** The entry lists the checks read, which a body block cannot stand in for. */
+const ENTRY_LISTS = Object.freeze(['candidates', 'evidence', 'assessments']);
+
+/**
+ * The fenced code blocks in a body, as CommonMark reads them: a fence opens
+ * with three or more backticks or tildes, at any indentation so a block inside
+ * a list item counts, and closes only with the same character, at least as
+ * many of them, and nothing after them.
+ *
+ * @param {string} body
+ * @returns {{language: string, lines: string[]}[]}
+ */
+function fencedBlocks(body) {
+  const blocks = [];
+  /** @type {{marker: string, language: string, lines: string[]}|null} */
+  let open = null;
+  for (const line of body.split(/\r?\n/)) {
+    if (open === null) {
+      const start = /^\s*(`{3,}|~{3,})\s*(.*)$/.exec(line);
+      // A backtick fence's info string may not contain a backtick.
+      if (start && !(start[1][0] === '`' && start[2].includes('`'))) {
+        open = { marker: start[1], language: start[2].trim().split(/\s+/)[0].toLowerCase(), lines: [] };
+      }
+      continue;
+    }
+    const end = /^\s*(`{3,}|~{3,})\s*$/.exec(line);
+    if (end && end[1][0] === open.marker[0] && end[1].length >= open.marker.length) {
+      blocks.push({ language: open.language, lines: open.lines });
+      open = null;
+      continue;
+    }
+    open.lines.push(line);
+  }
+  return blocks;
+}
+
+/**
+ * Entry-list keys at the top level of an unlabeled or YAML fenced block in the
+ * body. Such a block reads like a record's entries and is never evaluated, so
+ * a record kept that way lints as "no requirements declared" and reaches
+ * `done` trivially.
+ *
+ * @param {string} body
+ * @returns {string[]}
+ */
+function bodyEntryKeys(body) {
+  const found = new Set();
+  for (const block of fencedBlocks(body)) {
+    if (!['', 'yaml', 'yml'].includes(block.language)) continue;
+    const content = block.lines.filter((line) => line.trim() !== '' && !line.trim().startsWith('#'));
+    // The block's own left margin is its top level, wherever it is indented.
+    const margin = Math.min(...content.map((line) => line.length - line.trimStart().length));
+    for (const line of content) {
+      const key = /^([a-z_]+):/.exec(line.slice(margin));
+      if (key && line.length - line.trimStart().length === margin && ENTRY_LISTS.includes(key[1])) found.add(key[1]);
+    }
+  }
+  return ENTRY_LISTS.filter((key) => found.has(key));
+}
+
+/** Words that make a variable name a secret's, as whole segments of it. */
+const SECRET_WORDS = Object.freeze([['TOKEN'], ['SECRET'], ['PASSWORD'], ['PASSWD'], ['API', 'KEY'], ['APIKEY']]);
+
+/** @param {string} name */
+function isSecretName(name) {
+  const segments = name.toUpperCase().split(/[_-]+/).filter((segment) => segment !== '');
+  return SECRET_WORDS.some((word) => segments.some((_, start) => word.every((part, offset) => segments[start + offset] === part)));
+}
+
+/**
+ * A value worth flagging: a literal, not a reference to one (`$NAME`,
+ * `%NAME%`, `${NAME}`), a number, a boolean, or something already redacted.
+ * @param {string} raw
+ */
+function isLiteralSecret(raw) {
+  const value = /^(["'])(.*)\1$/.exec(raw)?.[2] ?? raw;
+  if (value === '' || /^[$%<]/.test(value)) return false;
+  if (/^-?\d+(\.\d+)?$/.test(value) || /^(on|off|true|false)$/i.test(value)) return false;
+  return !value.includes('***');
+}
+
+/**
+ * Whether a command carries a credential: a URL with a password in it, or a
+ * secret-named variable or option assigned a literal. Deliberately narrow: a
+ * false alarm costs a reader's attention, and a reference such as
+ * `$DATABASE_URL` or `%TOKEN%` is exactly what to write.
+ * @param {string} command
+ */
+export function carriesCredential(command) {
+  for (const match of command.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:([^\s/@]+)@/gi)) {
+    if (isLiteralSecret(match[1])) return true;
+  }
+  const assignment = /(?:^|[\s;&|(])(?:\$env:([A-Za-z_][\w-]*)\s*=\s*|(-{0,2}[A-Za-z_][\w-]*)=)("[^"]*"|'[^']*'|[^\s;&|)]+)/g;
+  for (const match of command.matchAll(assignment)) {
+    if (isSecretName(match[1] ?? match[2]) && isLiteralSecret(match[3])) return true;
+  }
+  return false;
+}
+
+/**
+ * Notes on evidence entries that are well formed but unlikely to say what the
+ * writer meant. Informational: none changes an outcome.
+ *
+ * @param {Record<string, unknown>} frontmatter
+ * @param {Record<string, unknown>[]} evidence
+ * @returns {Diagnostic[]}
+ */
+function entryNotes(frontmatter, evidence) {
+  /** @type {Diagnostic[]} */
+  const notes = [];
+  const requirements = frontmatter.requirements;
+  const declared = isPlainObject(requirements) && Array.isArray(requirements.checks) ? requirements.checks.map(String) : null;
+  /** @type {Map<string, number[]>} */
+  const undeclared = new Map();
+  evidence.forEach((entry, index) => {
+    const where = { field: 'evidence', index };
+    const check = entry.check === undefined || entry.check === null ? '' : String(entry.check);
+    if (declared !== null && check !== '' && !declared.includes(check)) {
+      undeclared.set(check, [...(undeclared.get(check) ?? []), index]);
+    }
+    const command = typeof entry.command === 'string' ? entry.command : '';
+    if (/\bagenticloop(?:\.js)?\s+task\s+lint\b/.test(command)) {
+      notes.push({
+        code: 'evidence.lint_as_evidence',
+        message: `evidence[${index}] records task lint, which reports on the record, not on the candidate`,
+        ...where,
+      });
+    }
+    if (carriesCredential(command)) {
+      notes.push({
+        code: 'evidence.credential_like',
+        message: `evidence[${index}].command looks like it carries a credential; record the variable's name, never its value`,
+        ...where,
+      });
+    }
+  });
+  // One note per name: a record with hundreds of such entries printed one
+  // line for each.
+  for (const [check, indexes] of undeclared) {
+    const count = indexes.length === 1 ? `evidence[${indexes[0]}]` : `${indexes.length} evidence entries, from evidence[${indexes[0]}]`;
+    notes.push({
+      code: 'evidence.undeclared_check',
+      message: `check ${check} (${count}) is not among requirements.checks (${/** @type {string[]} */ (declared).join(', ')}); a subset of a declared check goes under its own name, and only a declared name counts`,
+      field: 'evidence',
+      index: indexes[0],
+    });
+  }
+  return notes;
+}
+
 /**
  * Parse one task record.
  * @param {string} text
@@ -272,9 +435,39 @@ export function parseRecord(text, options = {}) {
   });
 
   for (const key of Object.keys(frontmatter)) {
+    // A requirement kind at the top level would be an unrecognized field,
+    // permitted, and would silently stop counting, so a record could reach
+    // `done` without it. It is an error, so lint and `done` refuse it.
+    if (REQUIREMENT_KINDS.includes(key)) {
+      push(errors, 'requirement.misplaced', `${key} is at the top level; move it under requirements:`, { field: key });
+      continue;
+    }
     if (!RECOGNIZED_FIELDS.includes(key)) {
       info.push({ code: 'field.unrecognized', message: `unrecognized frontmatter field ${key} (permitted)`, field: key });
     }
+  }
+
+  info.push(...entryNotes(frontmatter, evidenceEntries));
+  const current = candidateEntries[candidateEntries.length - 1];
+  const currentRef = current === undefined || current.ref === undefined || current.ref === null ? '' : String(current.ref);
+  if (currentRef !== '' && !isObjectId(currentRef)) {
+    info.push({
+      code: 'candidate.moving_ref',
+      message: `the current candidate ${currentRef} is a name, not an object id, and names can move; record the commit id or a snapshot (tree:<sha>)`,
+      field: 'candidates',
+      index: /** @type {unknown[]} */ (frontmatter.candidates).lastIndexOf(current),
+    });
+  }
+  const inBody = bodyEntryKeys(body);
+  if (inBody.length > 0) {
+    info.push({
+      code: 'entries.in_body',
+      message: `a fenced block in the body holds ${inBody.join(', ')}; these are not read by checks; move them into the frontmatter lists`,
+    });
+  }
+  const size = new TextEncoder().encode(text).length;
+  if (size > LARGE_RECORD_BYTES) {
+    info.push({ code: 'record.large', message: `the record is ${Math.round(size / 1024)} KB; move run logs to linked files` });
   }
 
   const headings = collectHeadings(body);

@@ -9,11 +9,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { checkRecord, duplicateIdErrors, mayBeDone } from './checks.js';
+import { checkRecord, duplicateIdErrors, mayBeDone, requirementEvaluation, structuralValidity } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
-import { observe } from './observations.js';
+import { observationContext, observe, prefetchObjects } from './observations.js';
 import { parseRecord, STATUS_VALUES } from './record.js';
 import { formatScalar } from './yaml.js';
 import { PublicError } from './public-error.js';
@@ -87,6 +87,12 @@ export function taskNew(root, title) {
 /** @param {string} root @param {{json?: boolean}} [options] */
 export function taskList(root, options = {}) {
   const rows = [];
+  /**
+   * Structural validity per row: it decides "ready to close", and is reported
+   * by lint, not listed.
+   * @type {Map<object, boolean>}
+   */
+  const valid = new Map();
   for (const file of listRecordFiles(root)) {
     const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
     rows.push({
@@ -94,7 +100,9 @@ export function taskList(root, options = {}) {
       status: String(record.frontmatter.status ?? 'unknown'),
       title: String(record.frontmatter.title ?? ''),
       path: path.relative(root, file),
+      requirements_satisfied: requirementsSatisfied(record),
     });
+    valid.set(rows[rows.length - 1], structuralValidity(record).valid);
   }
   if (options.json) {
     json(rows);
@@ -104,16 +112,46 @@ export function taskList(root, options = {}) {
     out(`no task records in ${TASKS_DIRECTORY}/`);
     return rows;
   }
-  table([['ID', 'STATUS', 'TITLE'], ...rows.map((row) => [row.id, row.status, row.title])]);
+  table([['ID', 'STATUS', 'TITLE'], ...rows.map((row) => [row.id, readyToClose(row, valid.get(row) === true) ? `${row.status} (ready to close)` : row.status, row.title])]);
   return rows;
+}
+
+/**
+ * Whether every requirement a record declares is satisfied, from requirement
+ * evaluation alone; `null` when it declares none, since nothing then says the
+ * work is finished. Structural validity is a separate output, and
+ * `task set <id> status done` needs both. Requirement evaluation reads only
+ * the record, so listing costs no git call.
+ *
+ * @param {import('./record.js').ParsedRecord} record
+ * @returns {boolean|null}
+ */
+function requirementsSatisfied(record) {
+  const results = requirementEvaluation(record);
+  if (results.length === 0) return null;
+  return results.every((result) => result.status === 'satisfied');
+}
+
+/**
+ * Work whose declared requirements are met but whose status was never closed:
+ * records `task set <id> status done` would accept. A record that declares no
+ * requirement is accepted too, but is never marked: nothing it declares says
+ * the work is finished.
+ *
+ * @param {{status: string, requirements_satisfied: boolean|null}} row
+ * @param {boolean} valid whether the record is structurally valid
+ */
+function readyToClose(row, valid) {
+  return row.requirements_satisfied === true && valid && row.status !== 'done' && row.status !== 'cancelled';
 }
 
 /**
  * @param {import('./record.js').ParsedRecord} record
  * @param {string} root
+ * @param {import('./observations.js').ObservationContext} [context]
  */
-function reportFor(record, root) {
-  const observations = observe(record, root);
+function reportFor(record, root, context) {
+  const observations = observe(record, root, context);
   return checkRecord(record, observations);
 }
 
@@ -146,7 +184,25 @@ function printReport(report) {
 
   heading('Reference availability');
   if (report.references.length === 0) out('no references recorded');
-  for (const reference of report.references) out(`${reference.available.padEnd(12)} ${reference.kind}  ${reference.ref}`);
+  // Only the current candidate decides anything, so it is the one printed in
+  // full; a record revised many times listed every earlier one first.
+  const candidates = report.references.filter((reference) => reference.kind === 'candidate');
+  const earlier = candidates.slice(0, -1);
+  if (earlier.length > 0) {
+    const unavailable = earlier.filter((reference) => reference.available === 'unavailable').length;
+    out(`${earlier.length} earlier candidate${earlier.length === 1 ? '' : 's'}, ${unavailable} unavailable`);
+  }
+  for (const reference of [...candidates.slice(-1), ...report.references.filter((entry) => entry.kind !== 'candidate')]) {
+    out(`${reference.available.padEnd(12)} ${reference.kind}  ${reference.ref}${reference.kind === 'candidate' ? '  (current)' : ''}`);
+    if (reference.same_tree_as) out(`             commit ${reference.ref} has the same tree as snapshot ${reference.same_tree_as}`);
+    if (reference.drift === 'matches') out('             working tree matches the snapshot');
+    if (reference.drift === 'differs') {
+      const paths = reference.drift_paths ?? [];
+      const shown = paths.slice(0, 5).join(', ');
+      out(`             working tree differs from the snapshot in ${paths.length} path${paths.length === 1 ? '' : 's'}: ${shown}${paths.length > 5 ? ', …' : ''}`);
+      out('             evidence belongs to the snapshot; take a new one and record a new candidate for the changed tree');
+    }
+  }
 
   heading('Requirement evaluation');
   if (report.requirements.length === 0) out('no requirements declared');
@@ -174,12 +230,16 @@ export function taskLint(root, id, options = {}) {
   }
 
   const duplicates = duplicateIdErrors(all.map((entry) => entry.record));
+  // One lookup for every reference in the run, rather than a git process per
+  // candidate of every record.
+  const context = observationContext(root);
+  prefetchObjects(context, targets.map((entry) => entry.record));
 
   const reports = [];
   let failed = false;
 
   for (const { file, record } of targets) {
-    const report = reportFor(record, root);
+    const report = reportFor(record, root, context);
     const duplicate = duplicates.get(file);
     if (duplicate) {
       report.structural = {

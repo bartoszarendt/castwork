@@ -51,7 +51,7 @@ for (const host of HOSTS) {
     assert.ok(byRole('worker').content.includes(`host: ${host}\n`));
     assert.ok(byRole('verifier').content.includes(`actor: verifier@${host}\n`));
     for (const id of ['worker', 'verifier']) {
-      assert.match(byRole(id).content, /never the machine's\s+name/);
+      assert.match(byRole(id).content, /never\s+the\s+machine's\s+name/);
     }
   });
 

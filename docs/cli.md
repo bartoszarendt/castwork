@@ -1,6 +1,6 @@
 # CLI
 
-Thirteen command paths. Installation, diagnostics, and minimal record
+Fourteen command paths. Installation, diagnostics, and minimal record
 operations. A dedicated command exists only where it does something materially
 better than editing a record by hand.
 
@@ -12,13 +12,45 @@ better than editing a record by hand.
 | `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it. Exits non-zero only on an error-level finding. |
 | `validate` | Check skills, config, links, and generated adapter output. |
 | `task new <title>` | Create a task record from the template with the next id. |
-| `task list` | List task records with their ids, titles, and statuses. |
-| `task show <id> [--json]` | Print one record. `--json` adds the three check outputs. |
-| `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. |
+| `task list [--json]` | List task records with their ids, titles, and statuses. A record that is not `done` or `cancelled`, is structurally valid, and declares at least one requirement, all satisfied, is marked `ready to close`: `task set <id> status done` would accept it. A record that declares none is never marked, although `task set` accepts it. `--json` gives each row `requirements_satisfied`, from requirement evaluation alone (`null` when none are declared); structural validity is `task lint`'s to report. |
+| `task show <id> [--json]` | Print one record. `--json` adds the three check outputs. The id is required; without it, a usage error. |
+| `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line; `--json` keeps every reference. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
 | `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
-| `version` | Print the version. |
+| `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.agenticloop/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.agenticloop/tasks/`, and `.agenticloop/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
+| `version` | Print the version number, and nothing else. `doctor` and `update --check` print where the running copy lives. |
 | `help` | Print the command list. |
+
+## Flags
+
+Each command takes only the flags listed for it. `--debug` and `--help` are
+accepted by every command.
+
+| Command path | Flags |
+|---|---|
+| `setup` | `--host <name>` (repeatable), `--force-generated <path>` (repeatable), `--json` |
+| `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
+| `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `snapshot` | `--json` |
+| `task new`, `task set`, `decision new`, `version`, `help` | none |
+
+An unknown flag, a flag the command does not take, a switch given a value
+(`--check=yes`), a value-taking flag followed by another flag instead of a
+value (`--host --json`), a single-dash option (`-c`), or an argument the
+command has no place for (`update check`) is refused before anything is read
+or written. A value that starts with a dash goes after `=`, as in
+`--force-generated=-x`.
+The error names what was refused and lists what the command accepts, and the
+exit code is 2, so a script can tell it from `update --check` exiting 1
+because the installation is behind. An older copy of the CLI accepted any
+flag: `update --check` run by a copy without `--check` was a plain
+`update`, and rewrote tracked files.
+
+After a bare `--`, every token is an argument, not a flag: `task new -- "-x title"`
+creates a task titled `-x title`. A refused token that starts with a dash says
+so in its hint.
+
+`help` lists each command with its flags. Through npx, run
+`npx --no agenticloop help`, not `--help`: npm reads `--help` itself.
 
 Nothing else. There is no activation, activation store, host-trust,
 event-logging, handoff, readiness, dispatch, return, review, audit, closeout,
@@ -78,9 +110,29 @@ the manifest is old; run `update` again, and it adopts the files already
 written and finishes the rest.
 
 `update --check` runs the same plan and writes nothing. It prints the toolkit
-version and location it ran from, so you can tell an installed package from a
-local checkout, and exits 1 unless the installation is current. The package
-version alone cannot answer that: unreleased builds share it.
+version, location, and `source_digest` it ran from, so you can tell an
+installed package from a local checkout, and exits 1 unless the installation is
+current.
+
+## Generator identity
+
+`.agenticloop/generated.json` records the `version` and the `source_digest`
+of the copy that wrote it. The digest is a sha256, with line endings
+normalised, over these files of the running copy, in this order: every
+`agents/*.md`, `commands/start.md`, every `skills/<id>/SKILL.md`,
+`config.json`, every `src/adapters/*.json`, and the modules that shape
+generated output: `src/adapter-generation.js`, `src/config.js`,
+`src/layout.js`, `src/record.js`, and `src/yaml.js`. Each file is hashed
+with its repository-relative path. The version alone cannot tell builds apart:
+unreleased builds share it.
+
+- A manifest written by a **newer version** makes `setup` and `update` refuse
+  and write nothing. The error names both versions and where the running copy
+  lives; run the newer copy instead. `update --check` reports it as blocked.
+- The **same version with a different digest**, or a manifest written before
+  the field existed, is a warning in `doctor` and `update --check`, not a
+  reason to call the installation behind. The next `update` records the
+  running build, and lists `generated.json` as changed.
 
 `update` regenerates from the copy of Agentic Loop you run. `npx --no
 agenticloop update` uses the one installed in the repository; to adopt a local
@@ -108,6 +160,12 @@ carry the work across, so nothing is lost.
   toolkit generates, or a file that would make `update` write nothing. `doctor`
   exits 0.
 
+It prints the running copy (version, location, `source_digest`) and the
+manifest's version and digest, and warns when they differ. It also warns when
+a generated file was edited by hand, since `update` overwrites the edit only
+when forced and a host reads the file only when a new session starts, and when
+`.agenticloop/project.md` is still exactly the scaffold `setup` wrote.
+
 It compares the installation with the same plan `update --check` prints, and
 reports it as `current`, `behind` (safe to update), or `blocked` (`update`
 would refuse until a file is restored, moved, or forced).
@@ -122,7 +180,13 @@ claims `status: done` while a declared requirement is `not_satisfied` or
 `unknown`. An `unavailable` reference alone is not a failure: the reference may
 resolve in another checkout.
 
-Everything else exits zero unless it could not do what it was asked.
+A usage error exits 2: an unknown command, an unknown or misplaced flag, a
+switch given a value, a flag missing its value, a stray argument, or
+`task show` without an id. It is
+refused before anything is read or written. `update --check` exits 1 when the
+installation is not current, and `doctor` and `validate` exit 1 on an
+error-level finding. Everything else exits zero unless it could not do what it
+was asked, which exits 1.
 
 ## The one refusal
 

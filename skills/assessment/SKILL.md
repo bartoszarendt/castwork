@@ -53,6 +53,36 @@ Assess the candidate the record names, not the current branch. If the reference
 does not resolve in your checkout, say so and assess nothing rather than
 assessing something else.
 
+A reference resolves when it is a commit that exists here, or a `tree:<sha>`
+snapshot whose tree object exists here. A name such as `HEAD` or a branch is
+not the candidate, even when it resolves: it names whatever it points at today.
+Neither is a label such as a worktree name. Say so, and ask for the commit id
+or a snapshot.
+
+A snapshot is not the working tree. `task lint` says whether the working tree
+still matches it; if it does not, the files in front of you are not the
+candidate. Read its contents with plain git, or extract it into a scratch
+directory outside the repository through a temporary index. Both extraction
+commands run with `GIT_INDEX_FILE` set to that temporary file: without it,
+`read-tree` overwrites the repository's real index. The path must be absolute,
+since git resolves a relative `GIT_INDEX_FILE` against the top of the working
+tree:
+
+```sh
+git diff <base> <sha>                 # what the candidate changes
+git show <sha>:<path>                 # one file as the candidate has it
+# <tmp> is an absolute path to a scratch directory outside the repository
+mkdir -p <tmp>/tree
+GIT_INDEX_FILE=<tmp>/index git read-tree <sha>
+GIT_INDEX_FILE=<tmp>/index git --work-tree=<tmp>/tree checkout-index -a
+```
+
+A snapshot exists only in the clone that took it. Reviewing from another clone,
+ask for a commit the project authorizes, or for the base commit and
+`git diff <base> <sha>`: apply the diff to a clean checkout of the base and run
+`npx --no agenticloop snapshot` there. Identical content gives the identical
+`tree:` sha, which proves you hold the candidate.
+
 Do not accept on the strength of a summary. If you did not read it, your verdict
 is about the summary.
 
@@ -76,8 +106,12 @@ that the verifier was independent: a producer's own `verifier` accept satisfies
 you produced the candidate, do not record the verifier's verdict on it.
 
 Write an actor string that identifies you honestly, for example
-`verifier@codex`. The toolkit compares strings and reports them as asserted;
-it cannot tell whether the string is true, and it never claims to.
+`verifier@codex`, or the specialist name you were started as, such as
+`security-reviewer@codex`. Two reviewers of one candidate never share an actor:
+the checks keep the last assessment per actor, so a second lens under the same
+name replaces the first one's verdict. Never choose a name to avoid matching a
+producer. The toolkit compares strings and reports them as asserted; it cannot
+tell whether the string is true, and it never claims to.
 
 ## Verdicts
 

@@ -176,12 +176,12 @@ for (const host of HOSTS) {
     assert.ok(entry, 'the entry procedure is generated');
     assert.match(entry.content, /Read the documents it points to/);
     assert.match(entry.content, /If they do not say what comes\s+next, look for such pointers/);
-    assert.match(entry.content, /Do not search the\s+repository for files that might be plans/);
+    assert.match(entry.content, /Do\s+not\s+search\s+the\s+repository\s+for\s+files\s+that\s+might\s+be\s+plans/);
     assert.match(entry.content, /Every record being done does not mean the project is/);
     assert.match(entry.content, /If there is no argument, report the state, propose the next step, and ask\s+before starting it/);
     assert.match(entry.content, /first a record that can move\s+now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and\s+whose `depends_on` are done/);
     assert.match(entry.content, /Ask an open\s+question only when neither the records nor the documents name anything/);
-    assert.match(entry.content, /also name the document and the part it comes from/);
+    assert.match(entry.content, /also\s+name\s+the\s+document\s+and\s+the\s+part\s+it\s+comes\s+from/);
     assert.doesNotMatch(entry.content, /report the state and ask what to work on/);
   });
 }
@@ -254,8 +254,8 @@ for (const host of HOSTS) {
     assert.match(coordinator.content, /before\s+each\s+batch\s+of\s+roles/);
     assert.match(coordinator.content, /one\s+sentence/);
     assert.match(coordinator.content, /why\s+now/);
-    assert.match(coordinator.content, /`npx --no agenticloop task set`/);
-    assert.match(coordinator.content, /never\s+through\s+a\s+role/);
+    assert.match(coordinator.content, /When\s+you\s+run\s+the\s+roles,\s+statuses\s+are\s+yours/);
+    assert.match(coordinator.content, /set\s+the\s+rest\s+yourself\s+with\s+`npx --no agenticloop task set`/);
   });
 }
 
@@ -267,7 +267,7 @@ for (const host of HOSTS) {
     assert.ok(entry, 'the entry procedure is generated');
     assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
     assert.match(entry.content, /start the host's subagent for that role/);
-    assert.match(entry.content, /A\s+general-purpose subagent told it is the thinker has only the word/);
+    assert.match(entry.content, /A\s+general-purpose\s+subagent\s+told\s+it\s+is\s+the\s+thinker\s+has\s+only\s+the\s+word/);
   });
 }
 

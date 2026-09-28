@@ -1,5 +1,112 @@
 # Changelog
 
+## 0.6.0
+
+Uncommitted candidates get a checkable reference, lint says more about records
+that are well formed but unlikely to mean what they say, the CLI refuses a
+mistyped command before it writes, and the role presets name themselves
+honestly, work alone as well as under a coordinator, and delegate one level.
+Generated role, skill, and entry files change: run `update`, commit what it
+lists, and start new host sessions.
+
+**Breaking: what to do.** There is no compatibility mode or alias for the old
+behaviour; each change below says what to edit.
+
+- **A requirement key outside `requirements:` is a structural error,**
+  `requirement.misplaced`. `checks`, `independent_review`, or
+  `assessment_roles` at the top level of the frontmatter used to be accepted
+  as an unrecognized field, and the requirement silently stopped counting.
+  Such a record now fails `task lint`, and `task set <id> status done` refuses
+  it. Indent the key under `requirements:`; nothing else changes.
+- **Usage errors exit 2.** An unknown command, an unknown or misplaced flag, a
+  switch given a value (`--check=yes`), a flag missing its value, a stray
+  argument, and `task show` without an id exit 2 instead of 1. A script that treated exit 1 as "typed
+  wrong" checks for 2; `update --check` still exits 1 when the installation is
+  not current.
+- **Unknown flags and stray arguments are refused** before anything is read or
+  written. Each command takes only the flags `help` lists for it, and a
+  single-dash option is refused. A flag that takes a value no longer takes the
+  next flag as it: `setup --host --json` is refused rather than naming a host
+  `--json`. Remove the flag or argument; an argument that starts with a dash
+  goes after `--`, as in `task new -- "-x title"`, and a value that starts
+  with a dash goes after `=`, as in `--force-generated=-x`.
+
+**Added**
+
+- `snapshot` names the working tree as a candidate reference, `tree:<sha>`,
+  without a commit: a git tree object built in a temporary index under the
+  repository's own ignore and line-ending rules, leaving out
+  `.agenticloop/tasks/` and `.agenticloop/local/`. It runs from the project
+  root, prints the reference, the base commit, and the paths that differ
+  (`--json` too), writes no record, and writes nothing into `.git` but the
+  tree's objects. A snapshot exists only in the clone that took it; to review
+  it elsewhere, send the base commit and `git diff`, and the reviewer's own
+  snapshot of the result has the same sha. The reference is the first line,
+  and a reader that keeps only it, as `snapshot | head -1` does, ends the
+  command quietly: any command whose reader closes early keeps its own exit
+  code, with no stack trace.
+- `task lint` resolves a `tree:<sha>`, reports whether the working tree still
+  matches the current snapshot (or in which paths it differs; not checked in a
+  sparse checkout, and a dirty submodule is not a difference), and says when a
+  later commit has the same tree as an earlier snapshot. References are looked
+  up with one git process per run. It prints the current candidate in full and
+  the earlier ones as one summary line; `--json` keeps every reference.
+- Informational lint notes, none of which changes an outcome, each listed with
+  what to do in `docs/record-format.md`: `candidate.moving_ref` (the current
+  candidate is `HEAD`, a branch, or a label, not an object id),
+  `entries.in_body`, `evidence.undeclared_check` (once per check name, with a
+  count), `evidence.lint_as_evidence`, `evidence.credential_like`, and
+  `record.large`.
+- `task list` marks a structurally valid record that declares at least one
+  requirement, all satisfied, and that is not `done` or `cancelled`, as
+  `ready to close`.
+  `--json` rows carry `requirements_satisfied`: requirement evaluation alone,
+  `null` when none are declared.
+- When an actor replaces its own blocking verdict with an `accept`, the
+  satisfied requirement says so as a supporting fact.
+- `.agenticloop/generated.json` records `source_digest`, a sha256 over the
+  files that shape generated output, so builds that share a version can be told
+  apart; `docs/cli.md` lists them. A manifest written by a newer version makes
+  `setup` and `update` refuse and write nothing, and `doctor` then says to run
+  that newer copy. `doctor` and `update --check` print the running copy's
+  version, location, and digest; `doctor` also warns about a hand-edited
+  generated file and a scaffold `project.md`.
+- `help` lists each command's flags.
+- Each role names the procedure skills it uses in a closing line of its
+  canonical file, so a Claude Code plugin role, which reads that file as
+  written, finds them among the plugin's skills. In a generated role file the
+  line becomes a `## Procedures` section linking each one at the path its
+  host's adapter generates. On OpenCode, the thinker, worker, and verifier are
+  denied the entry skill.
+- `docs/host-adapters.md` compares the hosts: how a subagent starts, how deep
+  each lets subagents nest, and how each refuses implicit entry-skill use.
+
+**Changed**
+
+- Role presets. Every role treats the task record as authoritative and an
+  inherited conversation as background. An actor is `<name>@<host id>`: the
+  role, or the specialist name the agent was started as, and two reviewers of
+  one candidate never share one; a verifier lens gets its own name, and no
+  name is chosen to avoid matching a producer. When a coordinator runs the
+  roles, statuses are its own and a role records only `blocked` or
+  `needs_context`; working alone, a role sets its own status, and `done` once
+  lint shows the requirements met, with or without a verdict. A role started
+  by another agent starts no agents. The thinker, worker, and verifier consult
+  the host's skills as part of their responsibility. The worker follows
+  written evidence rules and snapshots uncommitted work; the verifier writes
+  only in the record, runs checks on the candidate itself, and asks for a
+  commit id or a snapshot when given a moving name; the coordinator states
+  when each shape of work is worth it and treats repeated revisions as a stall
+  to diagnose.
+- Entry command: roles started by name do not load it; orientation is
+  proportional and happens once; a `## Pausing` section; changes to roles,
+  models, and skills reach only new sessions; routed roles get their actor in
+  the brief, one writer at a time, and a snapshot before a routed write.
+- Skills: `task-record-contract`, `verification-evidence`, `assessment`,
+  `blocked-state`, and `decision-capture` say the same as the presets. The
+  snapshot extraction recipe runs both git commands against an absolute
+  temporary index, so the repository's own index is never overwritten.
+
 ## 0.5.0
 
 Breaking reset. There is no migration path from 0.4.x and no compatibility mode,

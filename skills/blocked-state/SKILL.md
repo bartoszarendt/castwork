@@ -43,10 +43,29 @@ Say four things: what you were doing, what stopped you, what you already tried,
 and what would unblock it. The last one is the point — a blocker without an exit
 is just a complaint.
 
+## Pausing
+
+A pause the user asks for is recorded the same way, so the next session can
+resume from the record rather than from a transcript. Before stopping:
+
+- say where the work stands under `## Blockers and decisions`: what is done,
+  what is half done, and what was about to happen next;
+- claim no check that did not finish as passed; an interrupted run is not
+  evidence;
+- if the candidate is a `tree:<sha>` snapshot, check with `task lint` whether
+  the working tree still matches it, and say so if it does not;
+- tear down what you started, such as a server or a container; if something
+  must keep running, say what and why.
+
+The status stays as it is unless the work is actually blocked or waiting for
+context. When a coordinator started you, it sets every other status; working
+alone, you set it yourself.
+
 ## Do not
 
 - **Do not silently retry.** Repeating a failing approach and hoping is how an
-  hour disappears. Two honest attempts, then write it down.
+  hour disappears. When another attempt would only repeat what already failed,
+  that is a stall: write it down and say what would diagnose it.
 - **Do not guess past a real ambiguity.** If the answer changes what you build,
   that is `needs_context`, not a coin flip.
 - **Do not mark it done.** If the task declares requirements, `task set status

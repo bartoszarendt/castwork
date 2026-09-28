@@ -14,7 +14,7 @@ Agents choose the workflow. Hosts execute it.
 Agentic Loop reports what was recorded and who asserted it; it does not prove
 who wrote a record.
 
-> **Status:** 0.5.0 is a breaking reset. There is no migration path from 0.4.x.
+> **Status:** 0.6.0 is current. 0.5.0 was a breaking reset, with no migration path from 0.4.x.
 
 ## Why
 
@@ -117,9 +117,10 @@ availability, and requirement evaluation. Each supporting fact is reported as
 | `task new`, `task list`, `task show [--json]`, `task lint [--json]` | records and checks |
 | `task set <id> <field> <value>` | one safe frontmatter write |
 | `decision new <title>` | Create a decision record from the template. |
+| `snapshot [--json]` | name the uncommitted working tree as a `tree:<sha>` candidate |
 | `version`, `help` | |
 
-Thirteen command paths. A dedicated command exists only where it does something
+Fourteen command paths. A dedicated command exists only where it does something
 materially better than editing the record by hand — everything else is a text
 edit. See [docs/cli.md](docs/cli.md).
 

@@ -50,9 +50,17 @@ required sequence.
 
 The generated `SKILL.md` is described by when to use Agentic Loop rather than
 by what to do, so OpenCode has a reason not to reach for it during unrelated
-work. OpenCode 1.x documents no key for refusing implicit invocation outright —
-Codex and Claude Code do, and their adapters use it — so here the description is
-the only lever.
+work. OpenCode 1.x documents no key for refusing implicit invocation of a skill
+outright — Codex and Claude Code do, and their adapters use it — so for a
+session the description is the only lever. The generated `thinker`, `worker`,
+and `verifier` agents deny themselves the skill instead, with
+`permission: { skill: { agenticloop: deny } }` in their frontmatter: it is the
+coordinator's entry command, and each role file links the procedures it uses
+under `## Procedures`.
+
+`/agenticloop` runs in whichever primary agent is active, usually `build`. The
+`coordinator` agent's settings under `role_settings.opencode.coordinator` apply
+only when you select that agent.
 
 ## Model bindings, reasoning effort, and variants
 
@@ -100,7 +108,26 @@ npx agenticloop task set T-001 status done
 
 ## Troubleshooting
 
-`npx agenticloop doctor` reports the installation state read-only, and
-`npx agenticloop validate` checks the generated output. If OpenCode does not see
-the roles, confirm `.opencode/` is present and that `agenticloop.json` lists
-`opencode` in `hosts`.
+`npx --no agenticloop doctor` reports the installation state read-only, and
+`npx --no agenticloop validate` checks the generated output. If OpenCode does
+not see the roles, confirm `.opencode/` is present and that `agenticloop.json`
+lists `opencode` in `hosts`.
+
+When a session does not behave as the presets say:
+
+- **Start a new session** after every `update`, and after installing a skill.
+  OpenCode reads agent and skill files when it starts, so a running session
+  keeps what it read, and a hand edit to a generated file changes nothing in
+  it. Sessions started before global skills were installed never saw them.
+- **Check the copy that runs.** `npx --no agenticloop version` prints the
+  version number of the package this repository runs, and
+  `npx --no agenticloop doctor` prints its version and location and which build
+  wrote the generated files. A pinned older version generates older presets
+  whatever the toolkit now says.
+- **Check the generated role files** under `.opencode/agents/` contain the text
+  you expect, such as the `## Procedures` section and the `permission` block,
+  and that `npx --no agenticloop update --check` reports them current.
+- **Check the skills OpenCode exposes** to the session and to each agent. A role
+  can only pick a skill its host lists.
+- Agentic Loop needs no `subagent_depth` above 1: a role started by another
+  agent starts no agents of its own.

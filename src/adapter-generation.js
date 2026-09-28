@@ -10,6 +10,7 @@
  * capability declarations, and no activation slots.
  */
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +27,85 @@ export function toolkitRoot() {
   return path.resolve(here, '..');
 }
 
+/**
+ * The files generation reads, repository-relative, in a fixed order: the role
+ * presets, the entry command, the skills, the shipped defaults, the adapter
+ * descriptors, and the modules that shape generated output: the renderer, and
+ * the YAML formatting, configuration, layout, and record parsing it uses.
+ */
+export function generationInputs() {
+  const root = toolkitRoot();
+  /** @param {string} directory @param {(name: string) => string|null} pick */
+  const list = (directory, pick) => {
+    const full = path.join(root, directory);
+    if (!fs.existsSync(full)) return [];
+    return fs.readdirSync(full).sort().map(pick).filter((relative) => relative !== null && fs.existsSync(path.join(root, relative)));
+  };
+  return [
+    ...list('agents', (name) => (name.endsWith('.md') ? `agents/${name}` : null)),
+    'commands/start.md',
+    ...list('skills', (name) => `skills/${name}/SKILL.md`),
+    'config.json',
+    ...list('src/adapters', (name) => (name.endsWith('.json') ? `src/adapters/${name}` : null)),
+    'src/adapter-generation.js',
+    'src/config.js',
+    'src/layout.js',
+    'src/record.js',
+    'src/yaml.js',
+  ].filter((relative) => fs.existsSync(path.join(root, relative)));
+}
+
+/** @type {string|null} */
+let cachedSourceDigest = null;
+
+/**
+ * One sha256 over every generation input, so two builds that report the same
+ * version can still be told apart. Line endings are normalised first: the
+ * same commit checked out with CRLF on Windows is the same generator.
+ */
+export function sourceDigest() {
+  if (cachedSourceDigest !== null) return cachedSourceDigest;
+  const hash = crypto.createHash('sha256');
+  for (const relative of generationInputs()) {
+    const content = fs.readFileSync(path.join(toolkitRoot(), relative), 'utf8').replace(/\r\n/g, '\n');
+    hash.update(`${relative}\0${content}\0`, 'utf8');
+  }
+  cachedSourceDigest = `sha256:${hash.digest('hex')}`;
+  return cachedSourceDigest;
+}
+
+/** The running package's version. */
+export function packageVersion() {
+  return String(JSON.parse(fs.readFileSync(path.join(toolkitRoot(), 'package.json'), 'utf8')).version);
+}
+
+/**
+ * Compare two `major.minor.patch[-pre]` versions: negative when `a` is older,
+ * positive when newer, zero when equal, and `null` when either is not one.
+ * Build metadata is ignored; a prerelease sorts before its release, and two
+ * prereleases compare as strings, which is enough for the versions this
+ * package uses.
+ *
+ * @param {string} a @param {string} b
+ * @returns {number|null}
+ */
+export function compareVersions(a, b) {
+  const parse = (/** @type {string} */ value) => {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(value).trim());
+    return match ? { parts: [Number(match[1]), Number(match[2]), Number(match[3])], pre: match[4] ?? null } : null;
+  };
+  const left = parse(a);
+  const right = parse(b);
+  if (left === null || right === null) return null;
+  for (let i = 0; i < 3; i += 1) {
+    if (left.parts[i] !== right.parts[i]) return left.parts[i] < right.parts[i] ? -1 : 1;
+  }
+  if (left.pre === right.pre) return 0;
+  if (left.pre === null) return 1;
+  if (right.pre === null) return -1;
+  return left.pre < right.pre ? -1 : 1;
+}
+
 /** @param {string} host */
 export function readAdapter(host) {
   if (!HOSTS.includes(host)) {
@@ -35,6 +115,15 @@ export function readAdapter(host) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/**
+ * The line closing a canonical role that names the procedure skills it uses.
+ * A Claude Code plugin installs the canonical file as written, so this line is
+ * how a plugin's role finds them, as the plugin's own skills. Generation
+ * replaces it with a `## Procedures` section linking each one, so a generated
+ * file names them once.
+ */
+export const PROCEDURE_LINE = /\n\nProcedure skills: (`[a-z0-9-]+`(?:,\s+`[a-z0-9-]+`)*)\.$/;
+
 /** Canonical role presets, in a stable order. */
 export function readRoles() {
   const directory = path.join(toolkitRoot(), 'agents');
@@ -43,13 +132,40 @@ export function readRoles() {
     const file = path.join(directory, `${id}.md`);
     if (!fs.existsSync(file)) continue;
     const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    const body = parsed.body.trim();
+    const line = PROCEDURE_LINE.exec(body);
     roles.push({
       id,
       description: String(parsed.frontmatter.description ?? ''),
-      body: parsed.body.trim(),
+      procedures: line ? [...line[1].matchAll(/`([a-z0-9-]+)`/g)].map((match) => match[1]) : [],
+      body,
     });
   }
   return roles;
+}
+
+/**
+ * The procedures section closing a generated role, with the path of each
+ * procedure this host's adapter generates. Without it, roles reached the
+ * procedures only through the entry skill, which Claude Code and Codex never
+ * load implicitly, and which OpenCode subagents loaded in full every time.
+ *
+ * @param {string[]} procedures
+ * @param {Record<string, unknown>} adapter
+ * @param {string[]} available the skill ids the toolkit has
+ */
+function renderProcedures(procedures, adapter, available) {
+  if (procedures.length === 0) return null;
+  const skillEntry = /** @type {{kind: string, to: string}[]} */ (adapter.files).find((entry) => entry.kind === 'skill');
+  if (!skillEntry) return null;
+  const lines = ['## Procedures', '', 'Read the one that fits the step before you act on it:', ''];
+  for (const id of procedures) {
+    if (!available.includes(id)) {
+      throw new PublicError(`a role names procedure ${id}, which is not a skill under skills/`);
+    }
+    lines.push(`- \`${id}\`: \`${skillEntry.to.replace('{skill}', id)}\``);
+  }
+  return lines.join('\n');
 }
 
 /** Canonical skills, in a stable order. */
@@ -168,7 +284,7 @@ function yamlString(value) {
 }
 
 /**
- * @param {{id: string, description: string, body: string}} role
+ * @param {{id: string, description: string, procedures?: string[], body: string}} role
  * @param {Record<string, unknown>} adapter
  * @param {Record<string, unknown>} settings
  */
@@ -180,16 +296,63 @@ function renderRoleMarkdown(role, adapter, settings) {
     if (value === undefined || value === null || value === '') continue;
     lines.push(`${target}: ${yamlString(String(value))}`);
   }
+  if (role.id !== 'coordinator') lines.push(...nestedFrontmatter(delegatedRoleFrontmatter(adapter), 0, String(adapter.id)));
   lines.push('---', '', role.body, '');
   return lines.join('\n');
 }
 
 /**
- * @param {{id: string, description: string, body: string}} role
+ * Frontmatter a host's adapter adds to the roles a coordinator starts: the
+ * thinker, worker, and verifier. OpenCode uses it to deny them the entry
+ * skill, which is the coordinator's; the coordinator keeps it.
+ *
+ * @param {Record<string, unknown>} adapter
+ * @returns {Record<string, unknown>}
+ */
+export function delegatedRoleFrontmatter(adapter) {
+  const declared = adapter.delegated_role_frontmatter;
+  if (declared === undefined) return {};
+  if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
+    throw new PublicError(`adapter ${String(adapter.id)} declares delegated_role_frontmatter as something other than a mapping`);
+  }
+  return /** @type {Record<string, unknown>} */ (declared);
+}
+
+/**
+ * Nested mappings of strings and booleans as block YAML. Lists and numbers are
+ * refused, as a setting's value is: nothing needs them, and a host reading the
+ * result is not this toolkit's parser.
+ *
+ * @param {Record<string, unknown>} mapping
+ * @param {number} depth
+ * @param {string} host
+ * @returns {string[]}
+ */
+function nestedFrontmatter(mapping, depth, host) {
+  const lines = [];
+  const indent = '  '.repeat(depth);
+  for (const [key, value] of Object.entries(mapping)) {
+    const name = yamlString(key);
+    if (typeof value === 'boolean') lines.push(`${indent}${name}: ${String(value)}`);
+    else if (typeof value === 'string' && value !== '') lines.push(`${indent}${name}: ${yamlString(value)}`);
+    else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      lines.push(`${indent}${name}:`, ...nestedFrontmatter(/** @type {Record<string, unknown>} */ (value), depth + 1, host));
+    } else {
+      throw new PublicError(`adapter ${host} declares delegated_role_frontmatter.${key} as something other than a string, a boolean, or a mapping`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * @param {{id: string, description: string, procedures?: string[], body: string}} role
  * @param {Record<string, unknown>} adapter
  * @param {Record<string, unknown>} settings
  */
 function renderRoleToml(role, adapter, settings) {
+  if (Object.keys(delegatedRoleFrontmatter(adapter)).length > 0) {
+    throw new PublicError(`adapter ${String(adapter.id)} declares delegated_role_frontmatter, which a TOML role file cannot carry`);
+  }
   const mapping = /** @type {Record<string, string>} */ (adapter.role_frontmatter ?? {});
   const lines = [`name = ${tomlString(role.id)}`, `description = ${tomlString(role.description)}`];
   for (const [source, target] of Object.entries(mapping)) {
@@ -333,6 +496,7 @@ function renderRoutes(routes) {
       .map(([key, value]) => `${key} \`${String(value)}\``);
     lines.push(
       `- \`${route.role}\` runs in ${route.label} (\`${route.host}\`). Role file: \`${route.role_file}\`. ` +
+        `Actor: \`${route.role}@${route.host}\`. ` +
         `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}.`,
     );
   }
@@ -397,7 +561,9 @@ export function generateHost(host, options = {}) {
         // A bare `<host>` placeholder was read as the machine's name, the way
         // `user@hostname` is, so records carried computer names instead of
         // the host id. Each host's roles get their own id written in.
-        const role = { ...canonical, body: canonical.body.replaceAll('<host>', String(adapter.id)) };
+        const role = { ...canonical, body: canonical.body.replace(PROCEDURE_LINE, '').replaceAll('<host>', String(adapter.id)) };
+        const procedures = renderProcedures(canonical.procedures, adapter, skills.map((skill) => skill.id));
+        if (procedures !== null) role.body = `${role.body}\n\n${procedures}`;
         if (role.id === 'coordinator' && routes.length > 0) {
           role.body = `${role.body}\n\n${renderCoordinatorRoutes(routes, adapter)}`;
         }

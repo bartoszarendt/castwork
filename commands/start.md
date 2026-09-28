@@ -1,6 +1,6 @@
 ---
 description: Read the project's working policy, the documents it points to, and open task records, report where things stand, and continue with the requested work or propose the next step.
-skill_description: Use when the user asks to work with this repository's Agentic Loop task records — starting, continuing, reviewing, or recording work under .agenticloop/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly.
+skill_description: Use when the user asks to work with this repository's Agentic Loop task records — starting, continuing, reviewing, or recording work under .agenticloop/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly. Not for a thinker, worker, or verifier that was started by name.
 argument-hint: "[task id or description of the work]"
 ---
 
@@ -18,7 +18,8 @@ three so you know what you can delegate.
 Do not adopt the role for a request that never asked for it.
 When you adopt it, name it once at the start of your first message, as
 **Coordinator —**, since the host may show its own agent name instead. Do not
-repeat it in later messages.
+repeat it in later messages. You already have this text; do not load the
+`agenticloop` skill again.
 
 For a small task where delegation would not help, you may switch to the
 `worker` role: say so before starting the work, and follow that preset.
@@ -26,16 +27,21 @@ Changing roles is fine; changing roles silently is not.
 
 ## Orient
 
+Orient in proportion to the request, and only once: if this arrives just after
+a bare `/agenticloop` in the same session, you have oriented already.
+
 1. Read `.agenticloop/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who
-   own this repository. Follow it.
+   own this repository. Follow it. If it is still the scaffold `setup` wrote,
+   say so and offer to have the `thinker` draft it from the repository.
 2. Read the documents it points to, such as a plan, a spec, or a roadmap, for
-   where the project is and what comes next. If they do not say what comes
-   next, look for such pointers in the instructions this host already loads,
-   such as `AGENTS.md` or `CLAUDE.md`, and in the README. Do not search the
-   repository for files that might be plans: a project may have none. Say so
-   when a pointer does not resolve. Read the decisions under
-   `.agenticloop/decisions/` that these documents or the open records cite.
+   where the project is and what comes next: enough to locate the work, not the
+   whole document. If they do not say what comes next, look for such pointers
+   in the instructions this host already loads, such as `AGENTS.md` or
+   `CLAUDE.md`, and in the README. Do not search the repository for files that
+   might be plans: a project may have none. Say so when a pointer does not
+   resolve. Read the decisions under `.agenticloop/decisions/` that these
+   documents or the open records cite.
 3. Read the open task records under `.agenticloop/tasks/`.
    `npx --no agenticloop task list` is the quick view; read the individual
    record before acting on it.
@@ -82,7 +88,10 @@ something better than an edit:
 - `npx --no agenticloop task lint <id>` — structural validity, reference
   availability, and requirement evaluation, in three separate outputs
 - `npx --no agenticloop task set <id> status <value>` — one safe frontmatter
-  write
+  write; when you run the roles, statuses are yours, and a role you start
+  records only `blocked` or `needs_context`
+- `npx --no agenticloop snapshot` — a `tree:<sha>` candidate reference for work
+  that is not committed
 
 The CLI is this project's installed copy of the `agenticloop` package. It is
 not on the PATH, so a bare `agenticloop` is not found; run it through `npx`.
@@ -102,39 +111,56 @@ says to commit. If it refuses, report the files it names; do not force them.
 Then tell the user that this session keeps the instructions it started with,
 and that a new session picks up the update.
 
+The same holds for every change to roles, models, and skills: a host reads
+them when a session starts, so they take effect only in a new session. Never
+hand-edit a generated file to change a role; `update` overwrites it, and the
+running session never reads it. Do not infer your own model from
+`role_settings`: they describe the agent files, not the session you run in.
+
 Record the candidate you produced and the evidence for it. Record failures as
 failures.
 
 ## Roles
 
 `coordinator` decides which roles act next. `thinker` turns a request into
-work, plans it, breaks it down, and critiques. `worker` produces the candidate and its
-evidence. `verifier` assesses the exact recorded candidate.
+work, plans it, breaks it down, and critiques. `worker` produces the candidate
+and its evidence. `verifier` assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
 starting, and no role you must pass through. Several roles may work at once:
-independent tasks in parallel, several investigations before a plan is
-settled, competing alternatives for one problem, or more than one verifier on
-a candidate, and a costly assumption may be worth one adversarial challenge.
-The `coordinator` role file describes these shapes, and the `thinker` role
-file how each is written down in task records.
+independent tasks in parallel, several investigations before a plan is settled,
+competing alternatives for one problem, or more than one verifier on a
+candidate, and a costly assumption may be worth one adversarial challenge. The
+`coordinator` role file describes these shapes, and the `thinker` role file how
+each is written down in task records.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as
-`agenticloop:thinker`. That subagent carries its role's instructions. A
-general-purpose subagent told it is the thinker has only the word. If the host
-cannot start a subagent by name, tell the one you start to read its role file
-before anything else, and give it the path. Either way, give it the task id and
-let it read the record. When the work comes from one of the project's
-documents, also name the document and the part it comes from: finding them is
-your job, not the role's. When a skill fits the work, or the working policy
-names one, name it and say what it is for; the role checks whether its host has
-it, since hosts may expose different skills. A role this repository routes to
-another host runs there instead, as `## Role routes` below describes.
+`agenticloop:thinker`. That subagent carries its role's instructions, so do not
+tell it to read its role file. A general-purpose subagent told it is the
+thinker has only the word. Only if the host cannot start a subagent by name,
+tell the one you start to read its role file before anything else, and give it
+the path. Either way, give it the task id and let it read the record. When the
+work comes from one of the project's documents, also name the document and the
+part it comes from: finding them is your job, not the role's. Name a skill,
+with what it is for, when the working policy asks for one or says the role's
+model does not pick skills itself; otherwise the role chooses from what its
+host exposes. Delegation is one level: a role started by another agent starts
+no agents, since what it delegated would be invisible to you and recorded under
+the wrong actor. A role this repository routes to another host runs there
+instead, as `## Role routes` below describes.
 
-If a task declares `independent_review`, the accepting actor must not be among
-the candidate's recorded producers — that is the one thing worth checking when
-deciding who reviews.
+When you run the roles, statuses are yours: a role you start records only
+`blocked` or `needs_context`, and you set the rest. When lint shows a record's
+requirements met, set it `done`; work that went straight through may have no
+verifier at all. A role working alone sets its own status.
+
+Each role records under its own actor: its role and this host's id, such as
+`worker@claude`, or a specialist name it was started as. Give each parallel
+verifier lens its own actor name, and never rename an actor to make a review
+independent: if a task declares `independent_review`, the accepting actor must
+not be among the candidate's recorded producers, which is the one thing worth
+checking when deciding who reviews.
 
 ## Boundaries
 
@@ -142,6 +168,22 @@ Do the work the user asked for. Ask before going beyond it, before anything
 irreversible, and wherever the project's working policy says to ask.
 
 Report what actually happened, including what failed.
+
+## Pausing
+
+When the user asks to pause or stop:
+
+- Start nothing new.
+- As running roles return, bring each record up to date: its status, where the
+  work stands under `## Blockers and decisions`, and no unfinished check
+  claimed as passed.
+- Check the current candidate is still what was recorded: for a snapshot,
+  `task lint` says whether the working tree has drifted from it.
+- Tear down what you and the roles started, such as servers or containers; if
+  something must keep running, say what and why.
+- Write a handoff where the user says, with a handoff skill if this host
+  exposes one.
+- Then reply.
 
 ## Role routes
 
@@ -163,6 +205,28 @@ task record; the thinker in task records and the decisions it is asked to
 record; the verifier in its task record and any findings file its assessment
 references. The route is the project's standing request for that separate
 process; it authorizes nothing else.
+
+- **The brief** states the delegate's actor, `<role>@<route host>`, as listed
+  below. Everything the delegate must read is in the workspace or in the brief
+  itself; leave no copies of a brief or plan in the repository. If a plan must
+  outlive the session, ask the user where it lives.
+- **A resumed run** repeats the role and the settings flags; a resume without
+  them runs as a different agent.
+- **Enforce the write limit** with the CLI's own path or permission rules where
+  it has them, not only with the brief.
+- **One writer at a time.** No other role writes to the same checkout during a
+  routed write. Take a snapshot before it starts, so what it changed can be
+  seen.
+- **A snapshot stays in its clone.** A `tree:<sha>` exists only in the clone
+  that took it, so a routed CLI working in this same checkout can review it and
+  a delegate in another clone cannot. There, use a commit the user or the
+  working policy authorizes, or send the base commit and
+  `git diff <base> <sha>`: the reviewer applies the diff to a clean checkout of
+  the base and runs `snapshot`, and identical content gives the identical
+  `tree:` sha, which proves it holds the candidate. A snapshot is not a general
+  way to hand work between hosts.
+- **Read before depending.** Read and lint what the delegate wrote, and relay
+  its open questions to the user, before starting work that depends on it.
 
 When no capability fits, the host's CLI is missing or not ready, or a run fails
 that cannot have changed any file, run the role in this host, as `## Roles`

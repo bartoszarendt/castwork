@@ -148,3 +148,23 @@ test('4: task set status done refuses a record with a mixed verdict', (t) => {
   assert.throws(() => taskSet(root, 'T-001', 'status', 'done'), /not satisfied/);
   assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
+
+test('two verifier lenses with their own actors on one candidate each keep their verdict', () => {
+  const lenses = 'assessments:\n  - { candidate: aaa, role: verifier, actor: verifier@opencode, verdict: needs_revision }\n  - { candidate: aaa, role: verifier, actor: security-reviewer@opencode, verdict: accept }\n';
+  for (const [requirements, name] of [[ROLE, 'assessment_roles:verifier'], [INDEPENDENT, 'independent_review']]) {
+    const result = requirement(requirementEvaluation(record(`${requirements}${lenses}`)), name);
+    assert.equal(result.status, 'not_satisfied', name);
+    assert.equal(result.reason, 'assessment.rejected', name);
+  }
+});
+
+test('one actor changing its own verdict is effective as before, and the change stays visible', () => {
+  const changed = 'assessments:\n  - { candidate: aaa, role: verifier, actor: verifier@opencode, verdict: needs_revision }\n  - { candidate: aaa, role: verifier, actor: verifier@opencode, verdict: accept }\n';
+  for (const [requirements, name] of [[ROLE, 'assessment_roles:verifier'], [INDEPENDENT, 'independent_review']]) {
+    const result = requirement(requirementEvaluation(record(`${requirements}${changed}`)), name);
+    assert.equal(result.status, 'satisfied', name);
+    assert.ok(result.facts.some((fact) => fact.fact === 'verifier@opencode recorded needs_revision earlier, then accept' && fact.trust === 'asserted'), name);
+  }
+  const straight = requirement(requirementEvaluation(record(`${ROLE}assessments:\n  - { candidate: aaa, role: verifier, actor: verifier@opencode, verdict: accept }\n`)), 'assessment_roles:verifier');
+  assert.ok(!straight.facts.some((fact) => /earlier, then accept/.test(fact.fact)), 'nothing to say without a change');
+});

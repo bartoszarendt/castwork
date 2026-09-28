@@ -170,3 +170,20 @@ test('checks are pure: the same input gives the same result and nothing is mutat
   assert.equal(first, second);
   assert.equal(JSON.stringify(parsed.frontmatter), before);
 });
+
+test('a commit is named as the same tree as an earlier snapshot only when that snapshot is well formed and resolved', async () => {
+  const { referenceAvailability } = await import('../src/checks.js');
+  const { parseRecord } = await import('../src/record.js');
+  const tree = 'abcdef1234567890abcdef1234567890abcdef12';
+  const parsed = (refs) => parseRecord(`---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n${refs.map((ref) => `  - ref: '${ref}'\n`).join('')}---\n`);
+  const sameTree = (refs, resolved) => {
+    const refsMap = Object.fromEntries(refs.map((ref) => [ref, resolved.includes(ref)]));
+    return referenceAvailability(parsed(refs), { refs: refsMap, trees: { '0123abc': tree } }).find((result) => result.ref === '0123abc').same_tree_as;
+  };
+  assert.equal(sameTree(['tree:abcdef1', '0123abc'], ['tree:abcdef1', '0123abc']), 'tree:abcdef1');
+  assert.equal(sameTree(['tree:ABCDEF1', '0123abc'], ['tree:ABCDEF1', '0123abc']), 'tree:ABCDEF1', 'uppercase hex is the same object');
+  assert.equal(sameTree(['tree:abcdef1', '0123abc'], ['0123abc']), undefined, 'an unresolved snapshot names nothing');
+  assert.equal(sameTree(['tree:', '0123abc'], ['tree:', '0123abc']), undefined, 'an empty prefix names nothing');
+  assert.equal(sameTree(['tree:abc', '0123abc'], ['tree:abc', '0123abc']), undefined, 'too short to be an object id');
+  assert.equal(sameTree(['tree:abcdef1-x', '0123abc'], ['tree:abcdef1-x', '0123abc']), undefined, 'not hex');
+});

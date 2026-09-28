@@ -32,7 +32,10 @@ only mattered for one task.
 **Inside the task, under `## Blockers and decisions`**, when it explains this
 task and stops mattering afterwards.
 
-**In `.agenticloop/decisions/`**, when it outlives the task.
+**In `.agenticloop/decisions/`**, when it outlives the task. A decision the
+owner makes in conversation belongs here too: a session ends, and the choice
+goes with it unless it is written down. Cite the decision's id in each task
+record it governs, so a later reader of the task finds it.
 `npx --no agenticloop decision new "<title>"` writes the template, numbering the
 record for you:
 

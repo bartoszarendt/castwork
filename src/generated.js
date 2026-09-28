@@ -163,7 +163,11 @@ export function digest(content) {
 }
 
 /**
- * @typedef {{layout_version: number, version: string, files: Record<string, string>}} Manifest
+ * `source_digest` names the generator that wrote it, which `version` alone
+ * cannot: unreleased builds share a version. A manifest written before the
+ * field existed reads as `null`.
+ *
+ * @typedef {{layout_version: number, version: string, source_digest: string|null, files: Record<string, string>}} Manifest
  */
 
 /** @param {string} root @returns {Manifest|null} */
@@ -181,6 +185,7 @@ export function readManifest(root) {
     return {
       layout_version: Number(parsed.layout_version ?? 0),
       version: String(parsed.version ?? ''),
+      source_digest: typeof parsed.source_digest === 'string' && parsed.source_digest !== '' ? parsed.source_digest : null,
       files,
     };
   } catch (error) {
@@ -200,6 +205,7 @@ export function writeManifest(root, manifest) {
   const ordered = {
     layout_version: LAYOUT_VERSION,
     version: manifest.version,
+    source_digest: manifest.source_digest,
     files: Object.fromEntries(Object.entries(manifest.files).sort(([a], [b]) => (a < b ? -1 : 1))),
   };
   fs.writeFileSync(file, `${JSON.stringify(ordered, null, 2)}\n`, 'utf8');

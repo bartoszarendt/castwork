@@ -39,12 +39,18 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Blockers and decisions** — what got in the way and what was decided, written
   as it happens rather than reconstructed later.
 
+Candidates, evidence, and assessments go in the frontmatter lists, never in a
+fenced block in the body: the checks read only the frontmatter, and lint reports
+body entries as `entries.in_body`. Append to the lists; do not rewrite someone
+else's entry.
+
 Record durable decisions and material failures. Do not paste command
 transcripts, lint output, or a table of every check you ran. Routine successful
 output does not need to be retained; link a file under `output` only when its
 contents materially support a failure, reproduction, or review finding. A
 milestone narrative belongs in the milestone document, not repeated in every
-task that contributed to it.
+task that contributed to it. Run logs go in linked files: a record past 100 KB
+is reported as `record.large`.
 
 ## Declaring requirements
 
@@ -58,6 +64,10 @@ requirements:
   independent_review: true
   assessment_roles: [verifier]
 ```
+
+Every requirement key goes under `requirements:`. Written at the top level, it
+is a structural error, `requirement.misplaced`: lint fails and the task cannot
+be set to `done` until the key is moved.
 
 - `checks: [name, ...]` — each name needs a passing evidence entry for the
   current candidate. Name them after the project's real commands.
@@ -80,8 +90,15 @@ Removing it defeats the reason for writing it down.
 `draft`, `agent_ready`, `in_progress`, `in_review`, `needs_revision`, `blocked`,
 `needs_context`, `done`, `cancelled`.
 
-Status describes progress. Any status may follow any other, and no status grants
-a permission. The record stays readable and editable in every state.
+Status describes progress. Any status may follow any other, and no status
+grants a permission. The record stays readable and editable in every state.
+
+Who sets it depends on who is working. When a coordinator runs the roles,
+statuses are the coordinator's: a role it started records only `blocked` or
+`needs_context`. An agent working alone sets status itself with
+`npx --no agenticloop task set`, and `done` only once `task lint` shows the
+declared requirements met. `done` does not wait for a verdict: work that went straight
+through may have no verifier, and its requirements decide.
 
 ## Sizing
 

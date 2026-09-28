@@ -2,6 +2,7 @@
   "id": "opencode",
   "label": "OpenCode",
   "role_frontmatter": { "model": "model", "reasoning_effort": "reasoningEffort", "variant": "variant" },
+  "delegated_role_frontmatter": { "permission": { "skill": { "agenticloop": "deny" } } },
   "files": [
     { "kind": "role", "to": ".opencode/agents/{role}.md", "format": "markdown" },
     { "kind": "command", "to": ".opencode/commands/agenticloop.md", "format": "command" },

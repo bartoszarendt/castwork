@@ -17,10 +17,10 @@ export const CHECKED = 'checked';
 export const ASSERTED = 'asserted';
 
 /**
- * @typedef {{ref: string, available: 'available'|'unavailable'|'not_checked', kind: 'candidate'|'link'}} ReferenceResult
+ * @typedef {{ref: string, available: 'available'|'unavailable'|'not_checked', kind: 'candidate'|'link', drift?: 'matches'|'differs'|'not_checked', drift_paths?: string[], same_tree_as?: string}} ReferenceResult
  * @typedef {{fact: string, trust: 'checked'|'asserted'}} SupportingFact
  * @typedef {{requirement: string, status: 'satisfied'|'not_satisfied'|'unknown', reason: string, facts: SupportingFact[]}} RequirementResult
- * @typedef {{refs?: Record<string, boolean>, files?: Record<string, boolean>}} Observations
+ * @typedef {{refs?: Record<string, boolean>, files?: Record<string, boolean>, drift?: Record<string, string[]>, trees?: Record<string, string>}} Observations
  */
 
 /**
@@ -59,15 +59,38 @@ export function referenceAvailability(record, observations = {}) {
   /** @type {ReferenceResult[]} */
   const out = [];
 
-  for (const candidate of candidates) {
+  const drift = observations.drift ?? null;
+  const trees = observations.trees ?? null;
+  candidates.forEach((candidate, index) => {
     const ref = candidate.ref === undefined || candidate.ref === null ? '' : String(candidate.ref);
-    if (ref === '') continue;
-    out.push({
-      ref,
-      kind: 'candidate',
-      available: observed(refs, ref),
-    });
-  }
+    if (ref === '') return;
+    /** @type {ReferenceResult} */
+    const result = { ref, kind: 'candidate', available: observed(refs, ref) };
+    // Whether the working tree still holds the current snapshot: evidence
+    // belongs to the bytes it ran on, and an edit after it leaves the record
+    // describing a tree that is no longer there.
+    if (index === candidates.length - 1 && ref.startsWith('tree:')) {
+      if (drift === null || !Object.hasOwn(drift, ref)) {
+        result.drift = 'not_checked';
+      } else {
+        result.drift = drift[ref].length === 0 ? 'matches' : 'differs';
+        result.drift_paths = [...drift[ref]];
+      }
+    }
+    if (trees !== null && Object.hasOwn(trees, ref)) {
+      const tree = trees[ref].toLowerCase();
+      // Only a well-formed snapshot that resolved here is compared, so a
+      // prefix nobody checked can never name a match.
+      const earlier = candidates.slice(0, index)
+        .map((entry) => String(entry.ref ?? ''))
+        .find((earlierRef) => {
+          const sha = /^tree:([0-9a-f]{7,64})$/i.exec(earlierRef)?.[1];
+          return sha !== undefined && refs !== null && refs[earlierRef] === true && tree.startsWith(sha.toLowerCase());
+        });
+      if (earlier !== undefined) result.same_tree_as = earlier;
+    }
+    out.push(result);
+  });
 
   for (const entry of [...evidence, ...assessments]) {
     const link = entry.output ?? entry.findings;
@@ -158,6 +181,30 @@ export function effectiveAssessments(record, candidateRef) {
     byKey.set(key, entry);
   }
   return [...byKey.values()];
+}
+
+/**
+ * Facts naming each actor whose effective `accept` on a candidate replaced a
+ * blocking verdict of its own. Changing one's verdict is allowed; the change
+ * stays visible.
+ * @param {import('./record.js').ParsedRecord} record
+ * @param {string} candidateRef
+ * @param {Record<string, unknown>[]} accepting effective accepting assessments
+ * @returns {SupportingFact[]}
+ */
+function revisedVerdicts(record, candidateRef, accepting) {
+  const { assessments } = recordEntries(record);
+  /** @type {SupportingFact[]} */
+  const facts = [];
+  for (const entry of accepting) {
+    if (!isIdentity(entry.actor)) continue;
+    const actor = String(entry.actor).trim();
+    const earlier = assessments.slice(0, assessments.indexOf(entry)).filter(
+      (other) => String(other.candidate) === candidateRef && isIdentity(other.actor) && String(other.actor).trim() === actor && isBlockingVerdict(other.verdict),
+    );
+    if (earlier.length > 0) facts.push({ fact: `${actor} recorded ${String(earlier[earlier.length - 1].verdict)} earlier, then accept`, trust: ASSERTED });
+  }
+  return facts;
 }
 
 /**
@@ -301,6 +348,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
           { fact: `accepting actor ${actor}`, trust: ASSERTED },
           { fact: `candidate producers ${producers.join(', ')}`, trust: ASSERTED },
           { fact: `${actor} is not among the producers`, trust: CHECKED },
+          ...revisedVerdicts(record, candidateRef, [entry]),
         ],
       };
     }
@@ -388,6 +436,7 @@ function evaluateAssessmentRole(record, role, candidateRef) {
     facts.push({ fact: 'an effective reject or needs_revision blocks the requirement', trust: CHECKED });
     return { requirement: name, status: 'not_satisfied', reason: 'assessment.rejected', facts };
   }
+  facts.push(...revisedVerdicts(record, candidateRef, forRole));
   return { requirement: name, status: 'satisfied', reason: 'assessment.accepted', facts };
 }
 

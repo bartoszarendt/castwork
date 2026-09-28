@@ -42,7 +42,10 @@ One record carries all four. They are concepts, not files or subsystems.
 
 Unrecognized fields are permitted and reported as informational. They are never
 an error — a project may carry its own fields, and a later version of the format
-may recognize them.
+may recognize them. The one exception is a requirement kind (`checks`,
+`independent_review`, `assessment_roles`) written at the top level instead of
+under `requirements:`: that is a structural error, `requirement.misplaced`,
+because a requirement written there would otherwise stop counting in silence.
 
 Every machine field and multiword enum value is snake_case.
 
@@ -89,16 +92,63 @@ follow any other, and no status grants a permission.
 | `producers` | no | list of actor strings that produced it |
 | `note` | no | free text |
 
-`ref` is a commit when the project's policy permits the agent to make one. A
-symbolic reference to an uncommitted tree — `worktree-T005` — is allowed and is
-ordinary: it is reported `unavailable`, which is not malformed. But a symbolic
-ref names a tree that keeps changing, so nobody can reconstruct later what was
-assessed. When durable comparison matters, obtain an authorized, resolvable
-candidate before running the final evidence and assessment, then reference it.
-Never commit without project or user authorization, and never relabel evidence
-from a mutable worktree as evidence for a later commit. If no durable reference
-is authorized, keep the symbolic ref and treat the result as ephemeral rather
-than strictly comparable.
+A `ref` is one of three kinds, and they differ in what can be checked later:
+
+1. **A resolvable commit**, when the project's policy permits the agent to
+   make one. It is `available` wherever the commit exists.
+2. **A snapshot, `tree:<sha>`**, for work that may not be committed yet.
+   `npx --no agenticloop snapshot`, run from the project root, prints one: a
+   git tree object holding the working tree under the project root, which is
+   normally the whole repository, minus ignored files, `.agenticloop/tasks/`,
+   and `.agenticloop/local/`, with the repository's own line-ending rules
+   applied. It needs no commit and moves no ref. It is `available` while the
+   tree object exists in this clone: it exists only in the clone where it was
+   taken, and since nothing refers to it, `git gc` may prune it once it is
+   older than `gc.pruneExpire` (two weeks by default). For the current
+   candidate, lint also reports whether the working tree still matches the
+   snapshot, or in how many paths it differs; in a sparse checkout it reports
+   that as not checked, and changes inside a submodule's own working tree do
+   not count. When a later candidate is a commit with the same tree, lint says
+   so.
+3. **A name that can move**, such as `HEAD`, a branch, or a label like
+   `worktree-T005`. It is allowed and is not malformed. A branch or `HEAD`
+   resolves, and is reported `available`, because it names some commit today; a
+   label that names nothing is `unavailable`. Either way it names whatever it
+   points at when someone looks, not what was assessed, so nobody can
+   reconstruct the candidate later. When the current candidate is such a name,
+   lint notes `candidate.moving_ref`: record the commit id or take a snapshot
+   instead. Only a hex object id of 7 to 64 digits, or `tree:` followed by one,
+   is not noted.
+
+Evidence belongs to the bytes it ran on. Take the snapshot after the last
+change and before the final evidence. After changing the candidate, take a new
+snapshot and record it as a new candidate: the old evidence stays with the old
+one. Never commit without project or user authorization, and never relabel
+evidence from one candidate as evidence for another.
+
+A verifier inspects a snapshot with plain git, never the current working tree.
+To extract the whole candidate, run both commands with `GIT_INDEX_FILE` set to
+a temporary file: without it, `read-tree` overwrites the repository's real
+index. The path must be absolute, since git resolves a relative
+`GIT_INDEX_FILE` against the top of the working tree.
+
+```sh
+git diff <base> <sha>                 # what the candidate changes
+git show <sha>:<path>                 # one file as the candidate has it
+# the whole candidate; <tmp> is an absolute path outside the repository:
+mkdir -p <tmp>/tree
+GIT_INDEX_FILE=<tmp>/index git read-tree <sha>
+GIT_INDEX_FILE=<tmp>/index git --work-tree=<tmp>/tree checkout-index -a
+```
+
+`<base>` is the commit `snapshot` printed. A snapshot exists only in the clone
+that took it: another clone reports it `unavailable`. It can be reviewed in
+that clone, including by an agent CLI working in the same checkout. For a
+reviewer anywhere else, use a commit the project authorizes, or send the base
+commit and `git diff <base> <sha>`: the reviewer applies the diff to a clean
+checkout of the base and runs `snapshot`, and identical content gives the
+identical `tree:` sha, which proves they hold the candidate. A snapshot is not
+a general way to hand work between hosts or clones.
 
 ### Evidence entry
 
@@ -140,10 +190,18 @@ that state is not part of the portable record.
 
 ### Actor
 
-A non-empty string the agent writes, for example `worker@claude`. The
-toolkit compares strings and reports them as **asserted**. It has no way to
-verify that the actor named is the actor that wrote the entry, and it never
-claims to.
+A non-empty string the agent writes, for example `worker@claude`, or a
+specialist's name such as `security-reviewer@codex`. The toolkit compares
+strings and reports them as **asserted**. It has no way to verify that the
+actor named is the actor that wrote the entry, and it never claims to.
+
+Two reviewers of one candidate never share an actor. The checks keep the last
+assessment per candidate and actor, so a second reviewer, such as a second
+verifier lens, writing under the same string replaces the first one's verdict:
+a `needs_revision` from one lens followed by an `accept` from another would
+read as a changed mind. An actor that does change its own verdict is reported:
+a satisfied requirement then carries the fact that it recorded a blocking
+verdict earlier.
 
 A blank identity is not somebody. `producers: [""]` does not make a reviewer
 independent of nobody: it leaves `independent_review` `unknown`, and the blank
@@ -257,7 +315,7 @@ was recorded. It does not prove who recorded it.
 The checks produce three results and **never merge them**:
 
 **1. Structural validity.** Unparseable frontmatter, unknown status value,
-unknown requirement kind, missing required entry field, duplicate task id,
+unknown requirement kind, a requirement kind at the top level, missing required entry field, duplicate task id,
 duplicate recognized heading, or a recognized structured list that is not a
 list. Unrecognized frontmatter fields are informational, not errors. Additional
 prose headings raise no diagnostic.
@@ -273,14 +331,18 @@ its trust.
 ### Observations
 
 The CLI may gather local observations and pass them to the checks: whether a
-candidate reference resolves in the local repository, whether a linked evidence
-or assessment file exists in the current checkout. Gathering is optional and
-local only, and never looks outside the checkout: a linked path whose real
-destination lies elsewhere is not looked at, and is reported `not_checked`
-rather than `unavailable`. The same holds for a candidate reference when the
-root is not a git repository. `unavailable` means the checks looked and the
-reference was not there; about a file the record does not own they say
-nothing.
+candidate reference resolves in the local repository (a commit, or the tree
+object a `tree:<sha>` snapshot names), whether the working tree still matches
+the current candidate when that is a snapshot, and whether a linked evidence or
+assessment file exists in the current checkout. Gathering writes nothing into
+`.git`: references are looked up with one read-only `git cat-file` per run, and
+the working tree is compared through a temporary index outside the repository.
+Gathering is optional and local only, and never looks outside the checkout: a
+linked path whose real destination lies elsewhere is not looked at, and is
+reported `not_checked` rather than `unavailable`. The same holds for a
+candidate reference when the root is not a git repository. `unavailable` means
+the checks looked and the reference was not there; about a file the record does
+not own they say nothing.
 
 **A pure check never performs I/O.** The pure functions take the parsed record
 plus an optional observation map, and are exported from the package so an
@@ -291,6 +353,17 @@ independent consumer uses the same interface.
 - **`task lint`** prints all three outputs. It exits non-zero when any
   structural error exists, or when the record claims `status: done` while any
   declared requirement is `not_satisfied` or `unknown`. **It never writes.**
+  It prints the current candidate's availability in full and summarises the
+  earlier ones in one line (`N earlier candidates, M unavailable`); `--json`
+  keeps every reference.
+- **`task list`** marks a record that is not `done` or `cancelled`, is
+  structurally valid, and declares at least one requirement, all satisfied, as
+  `ready to close`: `task set <id> status done` would accept it. A record that
+  declares none is never marked, although `task set` accepts it: nothing it
+  declares says the work is finished. Under `--json` each row carries `requirements_satisfied`, from
+  requirement evaluation alone: `true`, `false`, or `null` when the record
+  declares none. Structural validity stays a separate output, which `task lint`
+  and `task show --json` report.
 - **`task show`** loads any record it can parse, in every state, and reports the
   same three outputs under `--json`.
 - **`task set <id> status done`** refuses, without writing, when that record's
@@ -304,6 +377,22 @@ That refusal is write validation on one value — not an authorization or
 transition gate. Every other `task set` value and every direct edit is
 unrestricted. Failed checks, rejecting assessments, and blocked states are
 always recordable, and every record stays readable and editable in every state.
+
+### Lint diagnostics
+
+Beyond the structural errors above, lint reports these. Only the first is an
+error; the rest are informational and change no outcome.
+
+| Code | Level | Meaning | What to do |
+|---|---|---|---|
+| `requirement.misplaced` | error | `checks`, `independent_review`, or `assessment_roles` is at the top level of the frontmatter | move it under `requirements:`; until then lint fails and `task set <id> status done` refuses |
+| `entries.in_body` | info | an unlabeled or YAML fenced block in the body, a list item's included, has `candidates:`, `evidence:`, or `assessments:` among its top-level keys | move the entries into the frontmatter lists; the checks never read the body, so a record kept this way has no candidate, evidence, or assessment |
+| `candidate.moving_ref` | info | the current candidate's `ref` is a name, such as `HEAD`, a branch, or `worktree-T005`, not a hex object id or `tree:` followed by one | record the commit id, or take a snapshot and record its `tree:<sha>`, as a new candidate |
+| `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
+| `evidence.lint_as_evidence` | info | an evidence entry's command runs `agenticloop task lint` | lint reports on the record, not the candidate; record the project's own checks instead |
+| `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
+| `record.large` | info | the record is larger than 100 KB | move run logs and transcripts to linked files and keep the record to what was decided and observed |
+| `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
 
 ## Canonical example
 

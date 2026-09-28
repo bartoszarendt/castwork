@@ -78,6 +78,21 @@ or upgrades the package itself. Upgrade the package first — or, to adopt a
 local checkout, run `node <checkout>/bin/agenticloop.js` in place of
 `npx agenticloop`.
 
+**Check which copy runs.** `npx --no agenticloop` runs the copy installed in
+this repository, and that copy decides what every command means. Before you
+rely on a read-only flag such as `update --check`, run
+`npx --no agenticloop version`, which prints that copy's version number, and
+`npx --no agenticloop doctor`, which prints its version and location and the
+version and `source_digest` of the copy that last wrote the generated files.
+Since 0.6.0 an unknown flag is refused before anything is written, but an older
+copy may read `update --check` as `update` and write.
+
+**What a pinned install means.** A version or commit pinned in `package.json`
+is the copy every agent session runs, whatever the presets upstream now say.
+Updating the toolkit means moving that pin (and the lockfile), then running
+`update` with the new copy. A copy older than the one that wrote the
+generated files refuses to write over them.
+
 **A clean upgrade.**
 
 ```sh
@@ -135,7 +150,7 @@ checked into a `requirements` block.
 Commands you may be looking for are gone rather than renamed: activation,
 dispatch, handoff, readiness, review, audit, closeout, worktree, improvement,
 guidance, hydrate, and the GitHub family. There are no aliases and no deprecated
-forms. See [cli.md](cli.md) for the thirteen that remain.
+forms. See [cli.md](cli.md) for the fourteen that remain.
 
 ## What you should not expect
 

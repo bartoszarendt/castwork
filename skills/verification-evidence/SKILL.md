@@ -24,8 +24,38 @@ candidates:
     producers: [worker@claude]
 ```
 
-`ref` is normally a commit. `producers` is who made it — the actor strings that
-later decide whether a review was independent.
+`ref` is a commit when you may make one. When the work may not be committed
+yet, take a snapshot instead: `npx --no agenticloop snapshot` prints a
+`tree:<sha>` reference to exactly what is in the working tree (ignored files,
+task records, and `.agenticloop/local/` left out), and you record that:
+
+```yaml
+candidates:
+  - ref: tree:4697b75db8a9dbc2c4186c61d299e0069ce1388c
+    producers: [worker@claude]
+```
+
+Do not invent a digest of your own, and do not record a name such as `HEAD`, a
+branch, or a worktree label: it keeps moving, so nobody can tell later what was
+assessed, and lint notes it as `candidate.moving_ref`. If the CLI is not
+available, say so and record the candidate as a label anyway; never invent a
+reference.
+
+A snapshot exists only in the clone that took it: it can be reviewed there,
+including by an agent CLI working in the same checkout, but not from another
+clone. For a reviewer elsewhere, use a commit the project authorizes, or send
+the base commit and `git diff <base> <sha>`; the reviewer applies it to a clean
+checkout of the base and runs `snapshot`, and identical content gives the
+identical `tree:` sha.
+
+Evidence belongs to the bytes it ran on. Take the snapshot after your last
+change and before your final evidence. If you change anything afterwards, take
+a new snapshot, record it as a new candidate, and run the evidence again for
+it. `task lint` says whether the working tree still matches the current
+snapshot.
+
+`producers` is who made it — the actor strings that later decide whether a
+review was independent.
 
 ## Then the evidence
 
@@ -74,6 +104,16 @@ a failure, reproduction, or review finding, put it in a linked file named under
   raised — but the new candidate has no evidence until you record some.
 - **A manual check is still evidence.** Name what you inspected and what you
   concluded. Do not invent an exit code for it.
+- **One command per entry.** `exit_code` belongs to a single command you ran
+  and saw, never to prose or a chain of commands.
+- **Name the check honestly.** A subset of a declared check, such as some of
+  the tests, goes under its own name, never under the declared check's name.
+  `task lint` reports on the record, so it is not evidence about the candidate.
+- **Names, not secrets.** Record an environment variable's name, never its
+  value: records are repository files, and the repository's own checks read
+  them.
+- **Say which clock.** `at` is in UTC with `Z`, or carries an explicit offset.
+  A local time labelled `Z` is wrong by the offset.
 
 ## What the toolkit does with it
 

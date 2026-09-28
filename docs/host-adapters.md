@@ -34,8 +34,16 @@ A role's id, description, and body come from its file under `agents/`;
 and the coordinator close with the routes `role_routes` sets from that host
 (see [Role routes](#role-routes)). The one substitution in a
 role's body is `<host>`, which becomes the adapter's `id`, so a generated role
-records `worker@claude` rather than leaving an agent to guess what a host is. Each host is a descriptor
-in `src/adapters/<host>.json` listing where each kind of file goes and in which
+records `worker@claude` rather than leaving an agent to guess what a host is.
+A canonical role ends with one line naming the procedure skills it uses, such
+as ``Procedure skills: `assessment`, `verification-evidence`.``. The Claude
+Code plugin installs the canonical file as written, so that line is how a
+plugin role finds its procedures, which the plugin exposes as its own skills
+(`agenticloop:assessment`). Generation replaces the line with a closing
+`## Procedures` section linking each one at the path this host's adapter
+generates it to, so a generated role names them once and reaches them without
+loading the entry skill. Each host is a descriptor in
+`src/adapters/<host>.json` listing where each kind of file goes and in which
 format; the generator itself knows nothing about any host.
 
 Generated files contain:
@@ -64,7 +72,34 @@ adapter declares it. Codex gets a `literal` file at
 `disable-model-invocation: true` in the skill index frontmatter, through the
 adapter's `skill_frontmatter` map. Explicit invocation — `$agenticloop` in
 Codex, `/agenticloop` in Claude Code — is unaffected. OpenCode 1.x documents no
-such key, so there the description is the only lever there is.
+such key for the skill itself, so for a session the description is the only
+lever. Its agents can refuse a skill, though: the adapter's
+`delegated_role_frontmatter` gives the generated `thinker`, `worker`, and
+`verifier` `permission: { skill: { agenticloop: deny } }`, which hides the entry
+skill from them. The coordinator keeps it.
+
+## Host differences
+
+| | OpenCode | Claude Code | Codex |
+|---|---|---|---|
+| A subagent starts with | its task prompt | its task prompt | a fork of its parent's conversation |
+| Nesting | `subagent_depth` defaults to 1, so a subagent cannot start one | by default a subagent can start subagents of its own, up to three layers below the main conversation; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` changes that (1 turns nesting off), and a subagent without `Agent` in its tools cannot start one | the runtime tells a spawned agent it may spawn its own; no depth limit is documented, only a cap on concurrent agents |
+| Implicit entry-skill invocation | refused for the delegated roles by a per-agent `permission.skill` deny; otherwise the description | refused by `disable-model-invocation: true` | refused by `allow_implicit_invocation: false` |
+
+Agentic Loop's design wants fresh context, since the task record is the
+handoff, and one level of delegation: a role started by another agent starts
+no agents, since what it delegated would be invisible to the agent that started
+it and recorded under the wrong actor. The hosts differ in what they allow, so
+this is preset guidance, not a host setting, and it holds on every host. On
+Codex a role starts with the conversation it was forked from, so every preset
+says the record is authoritative and an inherited conversation is background.
+No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
+
+On OpenCode, `/agenticloop` runs in whichever primary agent is active, usually
+`build`, not in the generated `coordinator` agent. The
+`role_settings.opencode.coordinator` values are still generated, and they apply
+only when the `coordinator` agent is selected (Tab), not when the entry command
+runs in `build`.
 
 ## Ownership
 
@@ -196,7 +231,8 @@ a separate process, and have that result verified back in Claude Code.
   the example starts its own `worker` subagent as usual.
 
 Generation writes the routes into each host's entry command, under
-`### Routes from this host`, with the role file the delegate reads first and the
+`### Routes from this host`, with the role file the delegate reads first, the
+actor it records (`<role>@<route host>`), and the
 settings to pass: `model`, `reasoning_effort`, and `variant`. Permission
 settings are not listed, because the delegation capability chooses the run's
 permissions from what the role has to write. The same routes close the
@@ -241,7 +277,9 @@ in `src/layout.js`, and add an `adapters.<id>.role_settings` entry to
 `config.json` if the host needs per-role defaults. Settings the host accepts go
 in its `role_frontmatter` map, which maps the name `agenticloop.json` uses to
 the key the host reads. If the host documents a way to refuse implicit
-invocation, put it in `skill_frontmatter` or a `literal` file. Nothing else in
+invocation, put it in `skill_frontmatter` or a `literal` file; frontmatter the
+roles a coordinator starts need, such as a permission, goes in
+`delegated_role_frontmatter`, a nested map of strings and booleans. Nothing else in
 the toolkit should need to know the host exists. If adding a host requires
 changing the checks, the record format, or the CLI, the abstraction has leaked
 — fix that instead.

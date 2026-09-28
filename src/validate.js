@@ -65,11 +65,37 @@ function validateRoles(findings) {
   for (const id of ROLE_IDS) {
     if (!found.includes(id)) error(findings, 'agents/', `canonical role ${id} is missing`);
   }
-  for (const role of roles) {
-    if (role.description.trim() === '') error(findings, `agents/${role.id}.md`, 'frontmatter description is empty');
-    const lines = role.body.split('\n').length;
-    if (lines > 100) warn(findings, `agents/${role.id}.md`, `${lines} lines; roles are meant to stay under 100`);
+  const directory = path.join(toolkitRoot(), 'skills');
+  const skills = fs.existsSync(directory)
+    ? fs.readdirSync(directory).filter((name) => fs.existsSync(path.join(directory, name, 'SKILL.md')))
+    : [];
+  for (const role of roles) findings.push(...roleFindings(role, skills));
+}
+
+/**
+ * Findings for one parsed canonical role, given the skill ids the toolkit has.
+ * Separate from reading the files so a test can check a malformed role.
+ *
+ * @param {{id: string, description: string, procedures: string[], body: string}} role
+ * @param {string[]} skills
+ * @returns {Finding[]}
+ */
+export function roleFindings(role, skills) {
+  /** @type {Finding[]} */
+  const findings = [];
+  const where = `agents/${role.id}.md`;
+  if (role.description.trim() === '') error(findings, where, 'frontmatter description is empty');
+  // A line generation cannot read would leave the role with no procedures in
+  // silence, in the plugin's file and every generated one.
+  if (/^Procedure skills:/m.test(role.body) && role.procedures.length === 0) {
+    error(findings, where, 'has a Procedure skills line that is not its closing line, or names something other than `skill-id`s separated by commas');
   }
+  for (const procedure of role.procedures) {
+    if (!skills.includes(procedure)) error(findings, where, `names procedure ${procedure}, which is not a skill under skills/`);
+  }
+  const lines = role.body.split('\n').length;
+  if (lines >= 100) warn(findings, where, `${lines} body lines; roles are meant to stay under 100`);
+  return findings;
 }
 
 /**
