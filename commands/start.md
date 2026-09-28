@@ -206,6 +206,9 @@ record; the verifier in its task record and any findings file its assessment
 references. The route is the project's standing request for that separate
 process; it authorizes nothing else.
 
+- **Say it first.** Before the capability runs, tell the user in a line which
+  role you are handing to which host's CLI, such as "Routing worker to Codex
+  (`codex`)".
 - **The brief** states the delegate's actor, `<role>@<route host>`, as listed
   below. Everything the delegate must read is in the workspace or in the brief
   itself; leave no copies of a brief or plan in the repository. If a plan must

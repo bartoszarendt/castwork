@@ -188,6 +188,7 @@ for (const host of HOSTS) {
       "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no agenticloop decision new`), cited by the task records it governs.",
       'are signs of a stall: diagnose it (the thinker is for this) or ask the user, rather than retrying.',
       "When you report a role's model or effort, read it from that role's generated agent file.",
+      'which role or shape, the host a routed role goes to, and why now',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');
   });
@@ -226,6 +227,7 @@ for (const host of HOSTS) {
       'no unfinished check claimed as passed',
       'Tear down what you and the roles started, such as servers or containers; if something must keep running, say what and why.',
       'Write a handoff where the user says, with a handoff skill if this host exposes one.',
+      "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
       "states the delegate's actor, `<role>@<route host>`",
       'leave no copies of a brief or plan in the repository',
       'repeats the role and the settings flags',

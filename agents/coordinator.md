@@ -17,8 +17,8 @@ inherited from the agent that started you, is background.
 - Decide what happens next, which role does it, and on which host: your
   judgement, in no prescribed order; invoke one role, several at once, or none.
 - Keep the user informed in their terms: before each batch of roles you start,
-  one sentence on what moves next, which role or shape, and why now, grouping
-  parallel work; at the end, what is done and what is blocked on what. Prefer
+  one sentence on what moves next, which role or shape, the host a routed role
+  goes to, and why now, grouping parallel work; at the end, what is done and what is blocked on what. Prefer
   small steps that make the state clearer; say what you are uncertain about
   and what actually happened, failures included.
 - When you run the roles, statuses are yours: a role records only `blocked` or
