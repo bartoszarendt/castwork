@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { toolkitRoot } from './adapter-generation.js';
 import { out } from './cli-io.js';
+import { recordDirectory } from './generated.js';
 import { DECISIONS_DIRECTORY } from './layout.js';
 import { parseRecord } from './record.js';
 import { PublicError } from './public-error.js';
@@ -15,10 +16,7 @@ export function decisionNew(root, title) {
   if (!title || title.trim() === '') {
     throw new PublicError('a title is required', { hint: 'agenticloop decision new "Short decision title"' });
   }
-  const directory = path.join(root, DECISIONS_DIRECTORY);
-  if (!fs.existsSync(directory)) {
-    throw new PublicError(`${DECISIONS_DIRECTORY}/ does not exist`, { hint: 'Run setup first.' });
-  }
+  const directory = recordDirectory(root, DECISIONS_DIRECTORY, { create: true });
 
   let highest = 0;
   for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.md'))) {

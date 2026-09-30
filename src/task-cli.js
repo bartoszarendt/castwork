@@ -12,6 +12,7 @@ import path from 'node:path';
 import { checkRecord, duplicateIdErrors, mayBeDone, requirementEvaluation, structuralValidity } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
+import { recordDirectory } from './generated.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
 import { observationContext, observe, prefetchObjects } from './observations.js';
 import { parseRecord, STATUS_VALUES } from './record.js';
@@ -19,17 +20,9 @@ import { formatScalar } from './yaml.js';
 import { PublicError } from './public-error.js';
 
 /** @param {string} root */
-function tasksDirectory(root) {
-  const directory = path.join(root, TASKS_DIRECTORY);
-  if (!fs.existsSync(directory)) {
-    throw new PublicError(`${TASKS_DIRECTORY}/ does not exist`, { hint: 'Run setup first.' });
-  }
-  return directory;
-}
-
-/** @param {string} root */
 export function listRecordFiles(root) {
-  const directory = tasksDirectory(root);
+  const directory = recordDirectory(root, TASKS_DIRECTORY);
+  if (!fs.existsSync(directory)) return [];
   return fs
     .readdirSync(directory)
     .filter((name) => name.endsWith('.md'))
@@ -77,7 +70,7 @@ export function taskNew(root, title) {
   const content = template
     .replace(/^id: .*$/m, `id: ${formatScalar(id)}`)
     .replace(/^title: .*$/m, `title: ${formatScalar(title.trim())}`);
-  const file = path.join(tasksDirectory(root), `${id}.md`);
+  const file = path.join(recordDirectory(root, TASKS_DIRECTORY, { create: true }), `${id}.md`);
   if (fs.existsSync(file)) throw new PublicError(`${file} already exists`);
   fs.writeFileSync(file, content, 'utf8');
   out(`created ${path.relative(root, file)}`);

@@ -14,7 +14,7 @@ YAML frontmatter; the body is prose.
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
-  local/            gitignored machine-specific state
+  local/            gitignored machine-specific state, such as a pause handoff
 agenticloop.json    project configuration: hosts, per-host role settings,
                     role routes
 ```

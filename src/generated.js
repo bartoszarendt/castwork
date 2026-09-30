@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { GENERATED_MANIFEST, LAYOUT_VERSION, USER_OWNED } from './layout.js';
+import { GENERATED_MANIFEST, LAYOUT_VERSION, STATE_DIRECTORY, USER_OWNED } from './layout.js';
 import { PublicError } from './public-error.js';
 
 /**
@@ -45,6 +45,35 @@ export function containedPath(root, relative) {
  */
 export function installPath(root, relative) {
   return resolveContained(root, relative, 'the installation', false);
+}
+
+/**
+ * Resolve a record directory such as `tasks/` or `decisions/`.
+ *
+ * Git keeps no empty directory, so a fresh clone of an installed project lacks
+ * one until a record in it is committed. Require an ordinary `.agenticloop/`
+ * directory and validate containment for both existing and missing paths.
+ * With `create`, make a missing record directory; otherwise leave it absent
+ * for readers to treat as holding no records. Invalid entries and filesystem
+ * errors are not an empty store.
+ *
+ * @param {string} root
+ * @param {string} relative
+ * @param {{create?: boolean}} [options]
+ * @returns {string}
+ */
+export function recordDirectory(root, relative, options = {}) {
+  const state = fs.statSync(installPath(root, STATE_DIRECTORY), { throwIfNoEntry: false });
+  if (!state) {
+    throw new PublicError(`${STATE_DIRECTORY}/ does not exist`, { hint: 'Run setup first.' });
+  }
+  if (!state.isDirectory()) throw new PublicError(`${STATE_DIRECTORY}/ is not a directory`);
+
+  const directory = installPath(root, relative);
+  const existing = fs.statSync(directory, { throwIfNoEntry: false });
+  if (existing && !existing.isDirectory()) throw new PublicError(`${relative}/ is not a directory`);
+  if (!existing && options.create) fs.mkdirSync(directory, { recursive: true });
+  return directory;
 }
 
 /**

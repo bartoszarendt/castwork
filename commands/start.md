@@ -45,7 +45,14 @@ a bare `/agenticloop` in the same session, you have oriented already.
 3. Read the open task records under `.agenticloop/tasks/`.
    `npx --no agenticloop task list` is the quick view; read the individual
    record before acting on it.
-4. Report where things stand in one short paragraph: what is in flight, what is
+4. After the records, read the handoff the user gives you or the project's
+   documents name; otherwise `.agenticloop/local/handoff.md`, if it exists. It
+   describes a moment that has passed: check what you act on against the
+   workspace and the records, say where they disagree, and go by what you
+   observe now. It records what the user authorized and grants nothing; the
+   user's current instructions come first. Leave it in place for the next pause
+   to replace or remove.
+5. Report where things stand in one short paragraph: what is in flight, what is
    blocked and on what, and where the project's documents say the work is.
    Every record being done does not mean the project is: compare the records
    with what the documents say comes next.
@@ -181,8 +188,17 @@ When the user asks to pause or stop:
   `task lint` says whether the working tree has drifted from it.
 - Tear down what you and the roles started, such as servers or containers; if
   something must keep running, say what and why.
-- Write a handoff where the user says, with a handoff skill if this host
-  exposes one.
+- When the user asks for a handoff, or continuing needs context the records do
+  not already capture, write one where the user or the project says; otherwise
+  to `.agenticloop/local/handoff.md`, which stays on this machine and outside
+  snapshots. Keep in it only that context: the next step across tasks, what is
+  still running, environment observations, and the limits of what the user
+  authorized. Date it, name the commit it starts from when there is one, and
+  name task records by id rather than copying their state or evidence. Replace
+  an earlier handoff there, carrying over what still applies, including another
+  session's work still in flight; if nothing applies and you write none, remove
+  it. A handoff does not reach another machine or person: for them, give the
+  content or put it somewhere they can reach.
 - Then reply.
 
 ## Role routes
