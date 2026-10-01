@@ -62,6 +62,12 @@ behaviour; each change below says what to edit.
   `ready to close`.
   `--json` rows carry `requirements_satisfied`: requirement evaluation alone,
   `null` when none are declared.
+- `decision list [--json]` lists decision records with their ids, statuses as
+  recorded, dates, and titles, superseded ones included, and lists a record
+  whose frontmatter cannot be read with the reason. It validates nothing. The
+  entry command uses it to find decisions no document cites, and
+  `decision-capture` checks it before a new decision, marking a replaced one
+  `status: superseded`.
 - When an actor replaces its own blocking verdict with an `accept`, the
   satisfied requirement says so as a supporting fact.
 - `.agenticloop/generated.json` records `source_digest`, a sha256 over the
@@ -106,6 +112,11 @@ behaviour; each change below says what to edit.
   `blocked-state`, and `decision-capture` say the same as the presets. The
   snapshot extraction recipe runs both git commands against an absolute
   temporary index, so the repository's own index is never overwritten.
+- Record scanning, used by every `task` and `decision` command, checks each
+  entry as it checks the directory: a record that is a symbolic link or
+  junction is refused rather than read from wherever it points, and a
+  directory named like a record is passed over instead of failing the command
+  with `EISDIR`.
 
 ## 0.5.0
 

@@ -12,7 +12,7 @@ import path from 'node:path';
 import { checkRecord, duplicateIdErrors, mayBeDone, requirementEvaluation, structuralValidity } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
-import { recordDirectory } from './generated.js';
+import { recordDirectory, recordFiles } from './generated.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
 import { observationContext, observe, prefetchObjects } from './observations.js';
 import { parseRecord, STATUS_VALUES } from './record.js';
@@ -21,13 +21,7 @@ import { PublicError } from './public-error.js';
 
 /** @param {string} root */
 export function listRecordFiles(root) {
-  const directory = recordDirectory(root, TASKS_DIRECTORY);
-  if (!fs.existsSync(directory)) return [];
-  return fs
-    .readdirSync(directory)
-    .filter((name) => name.endsWith('.md'))
-    .sort()
-    .map((name) => path.join(directory, name));
+  return recordFiles(root, TASKS_DIRECTORY);
 }
 
 /** @param {string} root @param {string} id */

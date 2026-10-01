@@ -36,6 +36,10 @@ task and stops mattering afterwards.
 owner makes in conversation belongs here too: a session ends, and the choice
 goes with it unless it is written down. Cite the decision's id in each task
 record it governs, so a later reader of the task finds it.
+
+Before writing one, run `npx --no agenticloop decision list` and read any
+decision that covers the same ground: the new one may supersede it (see
+[Changing a decision](#changing-a-decision)). Then
 `npx --no agenticloop decision new "<title>"` writes the template, numbering the
 record for you:
 
@@ -72,5 +76,8 @@ allowed an expiry condition.
 ## Changing a decision
 
 Do not quietly contradict one. Write a new record that supersedes it, or change
-the old one's status and say what replaced it. A project whose decisions drift
-without record is a project that will make the same mistake twice.
+the old one's status and say what replaced it. A replaced decision keeps its
+file: set its `status` to `superseded` and name the record that replaced it
+under `## Decision`, so `decision list` shows it plainly. A project whose
+decisions drift without record is a project that will make the same mistake
+twice.

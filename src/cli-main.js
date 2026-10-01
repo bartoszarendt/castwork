@@ -1,5 +1,5 @@
 /**
- * The CLI: fourteen command paths.
+ * The CLI: fifteen command paths.
  *
  * Installation, diagnostics, and minimal record operations. A dedicated command
  * exists only where it does something materially better than editing a record
@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { err, json, out } from './cli-io.js';
-import { decisionNew } from './decision-cli.js';
+import { decisionList, decisionNew } from './decision-cli.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { CONFIG_FILE, GENERATED_MANIFEST, HOSTS } from './layout.js';
 import { PublicError } from './public-error.js';
@@ -52,6 +52,7 @@ export const COMMAND_PATHS = Object.freeze([
   { path: 'task lint', flags: ['json'], args: 1, summary: 'Report structural validity, references, and requirements. Never writes.' },
   { path: 'task set', flags: [], args: Infinity, summary: 'One safe frontmatter write.' },
   { path: 'decision new', flags: [], args: Infinity, summary: 'Create a decision record from the template.' },
+  { path: 'decision list', flags: ['json'], args: 0, summary: 'List decision records with their ids, statuses, dates, and titles.' },
   { path: 'snapshot', flags: ['json'], args: 0, summary: 'Name the working tree as a tree:<sha> candidate reference. Writes no record.' },
   { path: 'version', flags: [], args: 0, summary: 'Print the version.' },
   { path: 'help', flags: [], args: 0, summary: 'Print this list.' },
@@ -355,11 +356,17 @@ export function run(argv, options = {}) {
     }
 
     case 'decision': {
-      if (positionals[1] !== 'new') {
-        throw new PublicError(`unknown command: decision ${positionals[1] ?? ''}`.trim(), { hint: 'Known: decision new.' });
+      const sub = positionals[1];
+      switch (sub) {
+        case 'new':
+          decisionNew(root, positionals.slice(2).join(' '));
+          return 0;
+        case 'list':
+          decisionList(root, { json: asJson });
+          return 0;
+        default:
+          throw new PublicError(`unknown command: decision ${sub ?? ''}`.trim(), { hint: 'Known: decision new, decision list.' });
       }
-      decisionNew(root, positionals.slice(2).join(' '));
-      return 0;
     }
 
     default:

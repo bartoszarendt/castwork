@@ -4,8 +4,8 @@ import test from 'node:test';
 import { COMMAND_PATHS, parseArgs } from '../src/cli-main.js';
 import { writeFrontmatterField } from '../src/task-cli.js';
 
-test('the CLI declares exactly fourteen command paths', () => {
-  assert.equal(COMMAND_PATHS.length, 14);
+test('the CLI declares exactly fifteen command paths', () => {
+  assert.equal(COMMAND_PATHS.length, 15);
 });
 
 test('every command path is kebab-case', () => {

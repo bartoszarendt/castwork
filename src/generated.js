@@ -77,6 +77,29 @@ export function recordDirectory(root, relative, options = {}) {
 }
 
 /**
+ * The Markdown records in a record directory, sorted by file name. A missing
+ * directory holds no records and is not created.
+ *
+ * Each entry passes the same containment check as the directory, so a record
+ * that is a link is refused rather than read from wherever it points. An entry
+ * that is not a regular file, such as a directory named `x.md`, is no record
+ * and is passed over.
+ * @param {string} root
+ * @param {string} relative
+ * @returns {string[]}
+ */
+export function recordFiles(root, relative) {
+  const directory = recordDirectory(root, relative);
+  if (!fs.existsSync(directory)) return [];
+  return fs
+    .readdirSync(directory)
+    .filter((name) => name.endsWith('.md'))
+    .sort()
+    .map((name) => installPath(root, `${relative}/${name}`))
+    .filter((file) => fs.lstatSync(file).isFile());
+}
+
+/**
  * @param {string} root
  * @param {string} relative
  * @param {string} subject what a refusal names as the source of the path

@@ -1,6 +1,6 @@
 # CLI
 
-Fourteen command paths. Installation, diagnostics, and minimal record
+Fifteen command paths. Installation, diagnostics, and minimal record
 operations. A dedicated command exists only where it does something materially
 better than editing a record by hand.
 
@@ -17,6 +17,7 @@ better than editing a record by hand.
 | `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line; `--json` keeps every reference. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
 | `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
+| `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
 | `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.agenticloop/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.agenticloop/tasks/`, and `.agenticloop/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
 | `version` | Print the version number, and nothing else. `doctor` and `update --check` print where the running copy lives. |
 | `help` | Print the command list. |
@@ -30,7 +31,7 @@ accepted by every command.
 |---|---|
 | `setup` | `--host <name>` (repeatable), `--force-generated <path>` (repeatable), `--json` |
 | `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
-| `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `snapshot` | `--json` |
+| `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `snapshot` | `--json` |
 | `task new`, `task set`, `decision new`, `version`, `help` | none |
 
 An unknown flag, a flag the command does not take, a switch given a value

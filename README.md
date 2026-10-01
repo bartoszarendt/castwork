@@ -116,11 +116,11 @@ availability, and requirement evaluation. Each supporting fact is reported as
 | `validate` | skills, config, links, generated adapter output |
 | `task new`, `task list`, `task show [--json]`, `task lint [--json]` | records and checks |
 | `task set <id> <field> <value>` | one safe frontmatter write |
-| `decision new <title>` | Create a decision record from the template. |
+| `decision new <title>`, `decision list [--json]` | decision records |
 | `snapshot [--json]` | name the uncommitted working tree as a `tree:<sha>` candidate |
 | `version`, `help` | |
 
-Fourteen command paths. A dedicated command exists only where it does something
+Fifteen command paths. A dedicated command exists only where it does something
 materially better than editing the record by hand — everything else is a text
 edit. See [docs/cli.md](docs/cli.md).
 

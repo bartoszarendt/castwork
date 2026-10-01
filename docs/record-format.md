@@ -450,5 +450,8 @@ Any extra heading is fine.
 ## Decision record
 
 One Markdown file per durable decision under `.agenticloop/decisions/`. There is
-a template and nothing more. `decision new <title>` writes it, numbering the
-record for you; the title is required, as it is for `task new`.
+a template and no schema beyond it. `decision new <title>` writes it, numbering
+the record for you; the title is required, as it is for `task new`.
+`decision list` reads each record's `id`, `status`, `date`, and `title` for
+finding the ones that bear on the work; it checks nothing. A replaced decision
+keeps its file with `status: superseded`, by convention.

@@ -150,7 +150,7 @@ checked into a `requirements` block.
 Commands you may be looking for are gone rather than renamed: activation,
 dispatch, handoff, readiness, review, audit, closeout, worktree, improvement,
 guidance, hydrate, and the GitHub family. There are no aliases and no deprecated
-forms. See [cli.md](cli.md) for the fourteen that remain.
+forms. See [cli.md](cli.md) for the fifteen that remain.
 
 ## What you should not expect
 

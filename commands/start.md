@@ -41,7 +41,9 @@ a bare `/agenticloop` in the same session, you have oriented already.
    `CLAUDE.md`, and in the README. Do not search the repository for files that
    might be plans: a project may have none. Say so when a pointer does not
    resolve. Read the decisions under `.agenticloop/decisions/` that these
-   documents or the open records cite.
+   documents or the open records cite. When the work could touch a choice made
+   earlier, `npx --no agenticloop decision list` shows every decision with its
+   status; read the ones that bear on the work, not all of them.
 3. Read the open task records under `.agenticloop/tasks/`.
    `npx --no agenticloop task list` is the quick view; read the individual
    record before acting on it.
