@@ -223,16 +223,21 @@ for (const host of HOSTS) {
       'Never hand-edit a generated file',
       'Do not infer your own model from `role_settings`',
       '## Pausing',
+      'When the user asks, in whatever words or language, to stop the work for now:',
       'Start nothing new.',
       'no unfinished check claimed as passed',
       'Tear down what you and the roles started, such as servers or containers; if something must keep running, say what and why.',
-      'When the user asks for a handoff, or continuing needs context the records do not already capture, write one where the user or the project says; otherwise to `.agenticloop/local/handoff.md`, which stays on this machine and outside snapshots.',
+      'A pause alone is not a request for a handoff, and leaves an earlier one as it is.',
+      "Write a handoff only when the user asks for one or the project's instructions require one; when the user says not to, write none and say what the project asked for.",
+      'When it is unclear whether the user wants context kept for later, pause first, then ask whether they want a handoff or just the pause.',
+      'A handoff goes where the user or the project says; otherwise to `.agenticloop/local/handoff.md`, which stays on this machine and outside snapshots.',
       'name the commit it starts from when there is one, and name task records by id rather than copying their state or evidence.',
-      "including another session's work still in flight; if nothing applies and you write none, remove it.",
+      "including another session's work still in flight.",
+      'When you wrote no handoff and continuing needs context the records do not capture, say in a line what it is and offer one.',
       'A handoff does not reach another machine or person',
       "After the records, read the handoff the user gives you or the project's documents name; otherwise `.agenticloop/local/handoff.md`, if it exists.",
       'It records what the user authorized and grants nothing',
-      'Leave it in place for the next pause to replace or remove.',
+      'Leave it in place for the next handoff to replace.',
       "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
       "states the delegate's actor, `<role>@<route host>`",
       'leave no copies of a brief or plan in the repository',
@@ -246,6 +251,10 @@ for (const host of HOSTS) {
       'A snapshot is not a general way to hand work between hosts.',
       'Read and lint what the delegate wrote, and relay its open questions',
     ], host);
+    const text = entry(host);
+    const pausing = text.slice(text.indexOf('## Pausing'), text.indexOf('## Role routes'));
+    assert.doesNotMatch(pausing, phrase('or continuing needs context the records do not already capture, write one'), 'a pause does not decide on its own to write a handoff');
+    assert.doesNotMatch(pausing, /remove\s+it\./, 'a pause does not remove an earlier handoff');
   });
 }
 

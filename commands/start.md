@@ -50,8 +50,8 @@ a bare `/agenticloop` in the same session, you have oriented already.
    describes a moment that has passed: check what you act on against the
    workspace and the records, say where they disagree, and go by what you
    observe now. It records what the user authorized and grants nothing; the
-   user's current instructions come first. Leave it in place for the next pause
-   to replace or remove.
+   user's current instructions come first. Leave it in place for the next
+   handoff to replace.
 5. Report where things stand in one short paragraph: what is in flight, what is
    blocked and on what, and where the project's documents say the work is.
    Every record being done does not mean the project is: compare the records
@@ -178,7 +178,7 @@ Report what actually happened, including what failed.
 
 ## Pausing
 
-When the user asks to pause or stop:
+When the user asks, in whatever words or language, to stop the work for now:
 
 - Start nothing new.
 - As running roles return, bring each record up to date: its status, where the
@@ -188,18 +188,24 @@ When the user asks to pause or stop:
   `task lint` says whether the working tree has drifted from it.
 - Tear down what you and the roles started, such as servers or containers; if
   something must keep running, say what and why.
-- When the user asks for a handoff, or continuing needs context the records do
-  not already capture, write one where the user or the project says; otherwise
-  to `.agenticloop/local/handoff.md`, which stays on this machine and outside
-  snapshots. Keep in it only that context: the next step across tasks, what is
-  still running, environment observations, and the limits of what the user
-  authorized. Date it, name the commit it starts from when there is one, and
-  name task records by id rather than copying their state or evidence. Replace
-  an earlier handoff there, carrying over what still applies, including another
-  session's work still in flight; if nothing applies and you write none, remove
-  it. A handoff does not reach another machine or person: for them, give the
-  content or put it somewhere they can reach.
-- Then reply.
+- A pause alone is not a request for a handoff, and leaves an earlier one as it
+  is. Write a handoff only when the user asks for one or the project's
+  instructions require one; when the user says not to, write none and say what
+  the project asked for. When it is unclear whether the user wants context
+  kept for later, pause first, then ask whether they want a handoff or just the
+  pause.
+- A handoff goes where the user or the project says; otherwise to
+  `.agenticloop/local/handoff.md`, which stays on this machine and outside
+  snapshots. Keep in it only context the records do not already capture: the
+  next step across tasks, what is still running, environment observations, and
+  the limits of what the user authorized. Date it, name the commit it starts
+  from when there is one, and name task records by id rather than copying their
+  state or evidence. Replace an earlier handoff there, carrying over what still
+  applies, including another session's work still in flight. A handoff does not
+  reach another machine or person: for them, give the content or put it
+  somewhere they can reach.
+- Then reply. When you wrote no handoff and continuing needs context the
+  records do not capture, say in a line what it is and offer one.
 
 ## Role routes
 
