@@ -202,8 +202,28 @@ for (const host of HOSTS) {
       'When several approaches are plausible and trying two costs less than choosing wrong, try each against the same acceptance criteria, then compare once and choose.',
       'each under its own actor',
       'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it: a counterexample, a failure mode, or a hidden assumption. Not a debate, and not for routine work.',
-      'A small task needs none of this: one worker, and a verifier where its requirements want one.',
+      'The default: one worker, and a verifier where its requirements want one. Use another shape only when its condition holds.',
     ], 'coordinator');
+  });
+
+  test(`${host} roles choose a shape before work starts, where the choice is made`, () => {
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      'Decide what happens next, which role does it, in what shape, and on which host',
+      'Choose a shape before each batch; shapes combine, and none is a loop to repeat:',
+    ], 'coordinator');
+    const shapes = coordinator.indexOf('## Choosing the shape');
+    const delegating = coordinator.indexOf('## Delegating');
+    assert.ok(shapes >= 0 && delegating >= 0, 'both sections are generated');
+    assert.ok(shapes < delegating, 'shapes come before delegating');
+    all(role(host, 'thinker'), [
+      'which steps are independent and can proceed in parallel, alternatives worth trying',
+    ], 'thinker');
+    all(entry(host), [
+      'Before anything starts, choose its shape from the `coordinator` role file.',
+      'Straight through is the default for small, clear work.',
+      'Name the shape when you announce what starts.',
+    ], 'entry');
   });
 
   test(`${host} entry command stays out of named roles, orients once, and knows how to pause`, () => {

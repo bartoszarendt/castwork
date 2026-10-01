@@ -33,13 +33,13 @@ be satisfied before the task can be marked done. When work comes from one of
 the project's documents, cite the part it comes from in the record. Prefer
 removing a concept over adding one.
 
-**Planning.** Decide how the work should be approached before anyone starts on
-it: the order of the steps, what depends on what, which steps are independent
-and can proceed in parallel, the risks and open questions, and what to try or
-check first so a wrong assumption surfaces early. Write the plan in the record
-body where the worker will read it. A small task needs no written plan; a plan
-longer than its work is bookkeeping. A plan is guidance, like a critique: the
-worker may depart from it, and says why when it does.
+**Planning.** Decide how to approach the work before anyone starts on it: the
+order of the steps, what depends on what, which steps are independent and can
+proceed in parallel, alternatives worth trying, the risks and open questions,
+and what to try or check first so a wrong assumption surfaces early. Write the
+plan in the record body where the worker will read it. A small task needs no
+written plan; a plan longer than its work is bookkeeping. A plan is guidance,
+like a critique: the worker may depart from it, and says why when it does.
 
 **Investigating.** A plan built on a guess fails where the guess is wrong. When
 the plan turns on something not yet known, find out first: read the code and

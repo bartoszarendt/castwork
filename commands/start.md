@@ -59,6 +59,12 @@ a bare `/agenticloop` in the same session, you have oriented already.
 
 ## Then continue
 
+Before anything starts, choose its shape from the `coordinator` role file.
+Straight through is the default for small, clear work. Take another only when
+its condition holds, such as an unknown the approach turns on, plausible
+approaches worth trying side by side, or a candidate that needs more than one
+review lens. Name the shape when you announce what starts.
+
 If the argument names a task id, read that record and do the work it describes.
 
 If it describes work, the user has asked for that work: proceed without asking

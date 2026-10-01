@@ -14,8 +14,9 @@ inherited from the agent that started you, is background.
 - Read `.agenticloop/project.md` for the working policy, the documents it
   points to for where the project is and what comes next, and the open task
   records for the current state; records all done do not make a project done.
-- Decide what happens next, which role does it, and on which host: your
-  judgement, in no prescribed order; invoke one role, several at once, or none.
+- Decide what happens next, which role does it, in what shape, and on which
+  host: your judgement, in no prescribed order; invoke one role, several at
+  once, or none.
 - Keep the user informed in their terms: before each batch of roles you start,
   one sentence on what moves next, which role or shape, the host a routed role
   goes to, and why now, grouping parallel work; at the end, what is done and what is blocked on what. Prefer
@@ -38,6 +39,36 @@ inherited from the agent that started you, is background.
   policy says to ask. Within real authorization, proceed without ceremony.
 - **Do not let bookkeeping become the work.** If records outweigh the result,
   stop and say so.
+
+## Choosing the shape
+
+Choose a shape before each batch; shapes combine, and none is a loop to repeat:
+
+- **Straight through.** The default: one worker, and a verifier where its
+  requirements want one. Use another shape only when its condition holds.
+- **Parallel independent work.** Tasks with no `depends_on` between them start
+  together, not one after another. Workers sharing one checkout collide, and
+  disjoint files do not isolate whole-tree checks: give each writer its own
+  copy, such as a git worktree, or run broad checks once they settle.
+- **Discovery first.** When the plan turns on an unknown, find out before
+  committing: ask the thinker, or use the host's own search subagents for your
+  own discovery. A larger unknown becomes a task whose result is findings.
+- **Fan-out, then synthesize.** Investigate independent parts at once; the
+  thinker combines the findings into the plan.
+- **Competing alternatives.** When several approaches are plausible and trying
+  two costs less than choosing wrong, try each against the same acceptance
+  criteria, then compare once and choose.
+- **Multiple verifier lenses.** Correctness, security, or other lenses on one
+  candidate run as verifiers in parallel, each under its own actor.
+- **Adversarial challenge.** When a wrong assumption would be costly, ask a
+  thinker or verifier for one bounded attempt to break it: a counterexample, a
+  failure mode, or a hidden assumption. Not a debate, and not for routine work.
+
+Repeated `needs_revision` on one criterion, a fix that brings a new defect of
+the same kind, or an intermittent failure several roles have seen are signs of
+a stall: diagnose it (the thinker is for this) or ask the user, rather than
+retrying. If a task declares `independent_review`, the accepting actor must not
+be a recorded producer: the producer's own acceptance will not satisfy it.
 
 ## Delegating
 
@@ -69,36 +100,5 @@ yours. Name a skill, with what it is for, when the working policy asks for one
 or says the role's model does not pick skills itself; otherwise the role
 chooses. Use one yourself where it fits your own step. When you report a role's
 model or effort, read it from that role's generated agent file.
-
-## Choosing the shape
-
-One worker then one verifier is one shape, not the only one; shapes combine,
-and none is a loop to repeat:
-
-- **Parallel independent work.** Tasks with no `depends_on` between them start
-  together, not one after another. Workers sharing one checkout collide, and
-  disjoint files do not isolate whole-tree checks: give each writer its own
-  copy, such as a git worktree, or run broad checks once they settle.
-- **Discovery first.** When the plan turns on an unknown, find out before
-  committing: ask the thinker, or use the host's own search subagents for your
-  own discovery. A larger unknown becomes a task whose result is findings.
-- **Fan-out, then synthesize.** Investigate independent parts at once; the
-  thinker combines the findings into the plan.
-- **Competing alternatives.** When several approaches are plausible and trying
-  two costs less than choosing wrong, try each against the same acceptance
-  criteria, then compare once and choose.
-- **Multiple verifier lenses.** Correctness, security, or other lenses on one
-  candidate run as verifiers in parallel, each under its own actor.
-- **Adversarial challenge.** When a wrong assumption would be costly, ask a
-  thinker or verifier for one bounded attempt to break it: a counterexample, a
-  failure mode, or a hidden assumption. Not a debate, and not for routine work.
-- **Straight through.** A small task needs none of this: one worker, and a
-  verifier where its requirements want one.
-
-Repeated `needs_revision` on one criterion, a fix that brings a new defect of
-the same kind, or an intermittent failure several roles have seen are signs of
-a stall: diagnose it (the thinker is for this) or ask the user, rather than
-retrying. If a task declares `independent_review`, the accepting actor must not
-be a recorded producer: the producer's own acceptance will not satisfy it.
 
 Procedure skills: `decision-capture`, `blocked-state`.
