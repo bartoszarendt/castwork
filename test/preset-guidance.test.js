@@ -165,6 +165,9 @@ for (const host of HOSTS) {
       'Findings you return to the agent that started you are not a result.',
       'Decide whether a request fits your role before starting; if you decline part way, return what you already found.',
       'all under `requirements:`',
+      '`independent_review: true` where the task must not be done without a second pair of eyes',
+      "`assessment_roles: [verifier]` where it must not be done without the verifier's verdict.",
+      'A review that would help but is not required needs no requirement: it can happen anyway.',
       'Say what would unblock it and, if useful, which role should act next.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
       'if the plan has phases, give each phase its own task.',
@@ -203,6 +206,7 @@ for (const host of HOSTS) {
       'each under its own actor',
       'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it: a counterexample, a failure mode, or a hidden assumption. Not a debate, and not for routine work.',
       'The default: one worker, and a verifier where its requirements want one. Use another shape only when its condition holds.',
+      'Hand the work to the worker, and any judgement it needs to the verifier.',
     ], 'coordinator');
   });
 
@@ -236,7 +240,7 @@ for (const host of HOSTS) {
       "says the role's model does not pick skills itself",
       'Delegation is one level: a role started by another agent starts no agents',
       'When you run the roles, statuses are yours',
-      "When lint shows a record's requirements met, set it `done`; work that went straight through may have no verifier at all.",
+      "When lint shows a record's requirements met, set it `done`; work that went straight through needs no verifier unless the requirements, the working policy, or the user ask for one.",
       'A role working alone sets its own status.',
       'Give each parallel verifier lens its own actor name',
       'they take effect only in a new session',

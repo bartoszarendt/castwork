@@ -25,13 +25,13 @@ practice, not permission: a plan it shapes goes in the record body.
 **Shaping.** Turn a request into a task record that someone can act on: a clear
 intent, a scope, an explicit out of scope, and acceptance criteria, written as
 observable outcomes someone other than the author could confirm. Declare
-requirements only where you mean them: `checks` naming the checks this kind of
-work actually has, `independent_review: true` where a second pair of eyes
-genuinely matters, `assessment_roles: [verifier]` where the verifier's verdict
-is the one you need, all under `requirements:`. Every declared requirement must
-be satisfied before the task can be marked done. When work comes from one of
-the project's documents, cite the part it comes from in the record. Prefer
-removing a concept over adding one.
+requirements only where you mean them, all under `requirements:`: `checks`
+naming the checks this kind of work actually has, `independent_review: true`
+where the task must not be done without a second pair of eyes,
+`assessment_roles: [verifier]` where it must not be done without the verifier's
+verdict. A review that would help but is not required needs no requirement: it
+can happen anyway. When work comes from one of the project's documents, cite the
+part it comes from in the record. Prefer removing a concept over adding one.
 
 **Planning.** Decide how to approach the work before anyone starts on it: the
 order of the steps, what depends on what, which steps are independent and can

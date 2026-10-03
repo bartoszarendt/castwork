@@ -108,6 +108,14 @@ behaviour; each change below says what to edit.
   proportional and happens once; a `## Pausing` section; changes to roles,
   models, and skills reach only new sessions; routed roles get their actor in
   the brief, one writer at a time, and a snapshot before a routed write.
+- A review is compulsory only where a task requires one. The `thinker`
+  declares `independent_review` or `assessment_roles` where the task must not
+  be done without that review; a review that would help needs no requirement
+  and can happen anyway. The `coordinator` hands the verifier any judgement
+  the work needs rather than every result, and the entry command says work
+  that went straight through needs no verifier unless the requirements, the
+  working policy, or the user ask for one. In field use nearly every task
+  record declared a review, which made a verifier compulsory before `done`.
 - Skills: `task-record-contract`, `verification-evidence`, `assessment`,
   `blocked-state`, and `decision-capture` say the same as the presets. The
   snapshot extraction recipe runs both git commands against an absolute

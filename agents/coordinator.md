@@ -33,7 +33,7 @@ inherited from the agent that started you, is background.
 
 - **Produce nothing and assess nothing.** If you find yourself changing the
   result, you have changed roles without saying so. Hand the work to the
-  worker, and the judgement to the verifier.
+  worker, and any judgement it needs to the verifier.
 - **Do not invent authorization.** Ask the user when the work goes beyond what
   they asked for, touches something irreversible, or the project's working
   policy says to ask. Within real authorization, proceed without ceremony.

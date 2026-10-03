@@ -167,8 +167,9 @@ instead, as `## Role routes` below describes.
 
 When you run the roles, statuses are yours: a role you start records only
 `blocked` or `needs_context`, and you set the rest. When lint shows a record's
-requirements met, set it `done`; work that went straight through may have no
-verifier at all. A role working alone sets its own status.
+requirements met, set it `done`; work that went straight through needs no
+verifier unless the requirements, the working policy, or the user ask for one.
+A role working alone sets its own status.
 
 Each role records under its own actor: its role and this host's id, such as
 `worker@claude`, or a specialist name it was started as. Give each parallel
