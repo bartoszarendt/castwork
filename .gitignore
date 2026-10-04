@@ -1,49 +1,33 @@
+# Secrets
 .env
 .env.*
 !.env.example
-.venv/
-__pycache__/
-.pytest_cache/
-.ruff_cache/
-.benchmarks/
-.codegraph/
-.serena/
-.tokensave/
+
+# Dependencies and packed releases
 node_modules/
-.opencode/
+*.tgz
+
+# Host and editor configuration, local to each machine
 .claude/
 .codex/
-.agents/skills/castwork/
-.agents/plugins/marketplace.json
-.cursor/
-.github/agents/
-.github/skills/castwork/
-.github/prompts/castwork.prompt.md
-plugins/castwork/
-# Generated host adapter output for the toolkit itself.
-# Target projects generate their own adapter output under their chosen
-# output directory; for toolkit verification, generate under .castwork/tmp/
-# or keep the legacy root tmp/ path only for compatibility.
+.opencode/
 opencode.jsonc
-.castwork/tmp/
-# Per-lane parallel worktrees live inside the repo root to stay within the
-# host's workspace sandbox; never report them as untracked.
-.castwork/worktrees/
-.castwork/locks/
-.castwork/local/
-.castwork/host-role-capabilities/
-tmp/
-!memory/scaffold/tmp/
-!memory/scaffold/tmp/.gitkeep
-*.log
-*.jsonl
-.DS_Store
-Thumbs.db
+.mcp.json
+.cursor/
 .vscode/
 .idea/
 
-# Internal working docs are local-only and never tracked.
-/.docs
-.mcp.json
-# Playwright MCP session snapshots are host runtime output, never repo source.
+# Local tool state
+.codegraph/
+.serena/
+.tokensave/
 .playwright-mcp/
+
+# Internal working docs and scratch space, never tracked
+/.docs
+tmp/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
