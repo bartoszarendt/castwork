@@ -10,7 +10,7 @@ status: draft
 #   independent_review: true
 #   assessment_roles: [verifier]
 # depends_on: [T-000]
-# allowed_paths: ["src/**", "test/**"]
+# allowed_paths: ["src/**", "tests/**"]
 # candidates:
 #   - ref: <commit or other reference>
 #     producers: [worker@host]

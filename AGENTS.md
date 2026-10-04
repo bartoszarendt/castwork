@@ -18,7 +18,7 @@ adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 | `commands/` | the canonical `start` entry command |
 | `src/adapters/` | per-host templates for Codex, Claude Code, and OpenCode |
 | `memory/` | record templates |
-| `test/` | unit tests |
+| `tests/` | unit tests |
 | `docs/` | public documentation |
 
 Canonical sources live at the repository root. Host directories are generated

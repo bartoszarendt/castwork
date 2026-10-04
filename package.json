@@ -39,7 +39,7 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test \"tests/**/*.test.js\"",
     "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "files": [
