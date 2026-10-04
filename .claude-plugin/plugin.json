@@ -1,12 +1,12 @@
 {
-  "name": "agenticloop",
+  "name": "castwork",
   "description": "A small, portable vocabulary for agent work: task records carrying work, candidates, evidence, and assessments, with four role presets, reusable skills, and pure checks.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": {
     "name": "Bartosz Arendt"
   },
-  "homepage": "https://github.com/bartoszarendt/agenticloop#readme",
-  "repository": "https://github.com/bartoszarendt/agenticloop",
+  "homepage": "https://github.com/bartoszarendt/castwork#readme",
+  "repository": "https://github.com/bartoszarendt/castwork",
   "license": "MIT",
   "keywords": [
     "ai",

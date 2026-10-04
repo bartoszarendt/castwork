@@ -102,7 +102,7 @@ export function roleFindings(role, skills) {
  * The entry command carries two descriptions, and they may not collapse into
  * one. The command description is read after the user invoked it by name; the
  * skill index description is what a host reads when deciding whether to load
- * Agentic Loop unprompted.
+ * Castwork unprompted.
  *
  * @param {Finding[]} findings
  */
@@ -172,7 +172,7 @@ export function shippedConfigFindings(config) {
         continue;
       }
       if (role === 'coordinator') {
-        error(findings, 'config.json', `adapters.${host}.role_settings.coordinator configures the session Agentic Loop is invoked in, which takes no role settings`);
+        error(findings, 'config.json', `adapters.${host}.role_settings.coordinator configures the session Castwork is invoked in, which takes no role settings`);
         continue;
       }
       for (const [key, value] of Object.entries(/** @type {Record<string, unknown>} */ (settings ?? {}))) {
@@ -194,7 +194,7 @@ export function shippedConfigFindings(config) {
 /** @param {Finding[]} findings */
 function validateDocumentLinks(findings) {
   const root = toolkitRoot();
-  const files = ['README.md', 'AGENTIC_LOOP.md', 'AGENTS.md', ...fs.readdirSync(path.join(root, 'docs')).filter((name) => name.endsWith('.md')).map((name) => `docs/${name}`)];
+  const files = ['README.md', 'CASTWORK.md', 'AGENTS.md', ...fs.readdirSync(path.join(root, 'docs')).filter((name) => name.endsWith('.md')).map((name) => `docs/${name}`)];
   for (const relative of files) {
     const full = path.join(root, relative);
     if (!fs.existsSync(full)) continue;

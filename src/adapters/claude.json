@@ -5,8 +5,8 @@
   "skill_frontmatter": { "disable-model-invocation": true },
   "files": [
     { "kind": "role", "to": ".claude/agents/{role}.md", "format": "markdown" },
-    { "kind": "command", "to": ".claude/commands/agenticloop.md", "format": "command" },
-    { "kind": "skill", "to": ".claude/skills/agenticloop/references/{skill}.md", "format": "reference" },
-    { "kind": "index", "to": ".claude/skills/agenticloop/SKILL.md", "format": "skill" }
+    { "kind": "command", "to": ".claude/commands/castwork.md", "format": "command" },
+    { "kind": "skill", "to": ".claude/skills/castwork/references/{skill}.md", "format": "reference" },
+    { "kind": "index", "to": ".claude/skills/castwork/SKILL.md", "format": "skill" }
   ]
 }

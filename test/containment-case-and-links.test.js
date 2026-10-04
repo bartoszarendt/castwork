@@ -16,7 +16,7 @@ import { CONFIG_FILE, GENERATED_MANIFEST, PROJECT_FILE, STATE_DIRECTORY, TASKS_D
 import { remove, setup, update } from '../src/setup.js';
 
 function tmp(t, label) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `agenticloop-${label}-`)));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `castwork-${label}-`)));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -46,22 +46,22 @@ function poison(root, relative, content) {
 
 /**
  * Finding 1: the user-owned comparison was case-sensitive, so a manifest entry
- * spelled `.AGENTICLOOP/TASKS/T-001.md` passed and named the real record on
+ * spelled `.CASTWORK/TASKS/T-001.md` passed and named the real record on
  * every case-insensitive filesystem.
  */
 const CASE_SPELLINGS = [
-  '.AGENTICLOOP/TASKS/T-001.md',
-  '.AGENTICLOOP/tasks/T-001.md',
-  '.agenticloop/TASKS/T-001.md',
-  '.agenticloop/Tasks/T-001.md',
-  '.Agenticloop/tasks/T-001.md',
-  '.agenticloop\\TASKS\\T-001.md',
-  '.agenticloop/./TASKS/T-001.md',
-  '.agenticloop/DECISIONS/D-001.md',
-  '.agenticloop/Decisions/D-001.md',
-  '.AGENTICLOOP/PROJECT.MD',
-  '.agenticloop/Project.md',
-  '.agenticloop/PROJECT.md',
+  '.CASTWORK/TASKS/T-001.md',
+  '.CASTWORK/tasks/T-001.md',
+  '.castwork/TASKS/T-001.md',
+  '.castwork/Tasks/T-001.md',
+  '.Castwork/tasks/T-001.md',
+  '.castwork\\TASKS\\T-001.md',
+  '.castwork/./TASKS/T-001.md',
+  '.castwork/DECISIONS/D-001.md',
+  '.castwork/Decisions/D-001.md',
+  '.CASTWORK/PROJECT.MD',
+  '.castwork/Project.md',
+  '.castwork/PROJECT.md',
 ];
 
 for (const spelling of CASE_SPELLINGS) {
@@ -71,9 +71,9 @@ for (const spelling of CASE_SPELLINGS) {
 }
 
 test('1: the refusal does not extend to a path that merely starts alike', () => {
-  assert.doesNotThrow(() => containedPath('/repo', '.agenticloop/tasksummary.md'));
-  assert.doesNotThrow(() => containedPath('/repo', '.agenticloop/TASKSUMMARY.md'));
-  assert.doesNotThrow(() => containedPath('/repo', '.agenticloop/generated.json'));
+  assert.doesNotThrow(() => containedPath('/repo', '.castwork/tasksummary.md'));
+  assert.doesNotThrow(() => containedPath('/repo', '.castwork/TASKSUMMARY.md'));
+  assert.doesNotThrow(() => containedPath('/repo', '.castwork/generated.json'));
 });
 
 test('1: remove refuses an upper-cased protected path and keeps the record', (t) => {
@@ -82,7 +82,7 @@ test('1: remove refuses an upper-cased protected path and keeps the record', (t)
   const record = path.join(root, TASKS_DIRECTORY, 'T-001.md');
   const content = '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n';
   fs.writeFileSync(record, content, 'utf8');
-  poison(root, '.AGENTICLOOP/TASKS/T-001.md', content);
+  poison(root, '.CASTWORK/TASKS/T-001.md', content);
   assert.throws(() => remove(root), /user-owned path/);
   assert.equal(fs.readFileSync(record, 'utf8'), content);
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
@@ -94,14 +94,14 @@ test('1: update refuses an upper-cased protected path and keeps the record', (t)
   const record = path.join(root, TASKS_DIRECTORY, 'T-001.md');
   const content = '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n';
   fs.writeFileSync(record, content, 'utf8');
-  poison(root, '.agenticloop/Tasks/T-001.md', content);
+  poison(root, '.castwork/Tasks/T-001.md', content);
   assert.throws(() => update(root), /user-owned path/);
   assert.equal(fs.readFileSync(record, 'utf8'), content);
 });
 
 /**
  * Finding 2: writes that used a bare `path.join` and so followed a link placed
- * at `.agenticloop`. A junction reproduces this on Windows; a directory
+ * at `.castwork`. A junction reproduces this on Windows; a directory
  * symlink reproduces it where one can be created.
  */
 function stateLink(t, label, type) {

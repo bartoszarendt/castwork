@@ -1,13 +1,11 @@
 /**
  * The install lifecycle: setup, update, remove, doctor.
  *
- * Ownership is the whole model. `.agenticloop/generated.json` lists every
+ * Ownership is the whole model. `.castwork/generated.json` lists every
  * generated file with its digest. A file whose digest still matches is ours to
  * regenerate or delete; anything else is yours. An update that would have to
  * leave a file of yours in place refuses before writing anything, unless
  * `--force-generated` names that file.
- *
- * There is no migration. A 0.4.x layout is refused with manual steps.
  */
 
 import fs from 'node:fs';
@@ -22,61 +20,12 @@ import {
   GENERATED_MANIFEST,
   HOSTS,
   LAYOUT_VERSION,
-  LEGACY_STATE_DIRECTORIES,
-  LEGACY_STATE_FILES,
   LOCAL_DIRECTORY,
   PROJECT_FILE,
   STATE_DIRECTORY,
   TASKS_DIRECTORY,
 } from './layout.js';
 import { PublicError } from './public-error.js';
-
-/**
- * A 0.4.x installation is refused, never migrated or overwritten.
- * @param {string} root
- * @returns {string[]} reasons, empty when the layout is clean
- */
-export function detectLegacyLayout(root) {
-  const reasons = [];
-  for (const name of LEGACY_STATE_DIRECTORIES) {
-    if (fs.existsSync(path.join(root, STATE_DIRECTORY, name))) {
-      reasons.push(`${STATE_DIRECTORY}/${name}/ exists`);
-    }
-  }
-  for (const name of LEGACY_STATE_FILES) {
-    if (fs.existsSync(path.join(root, STATE_DIRECTORY, name))) {
-      reasons.push(`${STATE_DIRECTORY}/${name} exists`);
-    }
-  }
-  const oldManifest = path.join(root, 'agenticloop', 'manifest.json');
-  if (fs.existsSync(oldManifest)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(oldManifest, 'utf8'));
-      if (parsed.layoutVersion !== undefined && parsed.layout_version === undefined) {
-        reasons.push(`agenticloop/manifest.json declares layoutVersion ${String(parsed.layoutVersion)}`);
-      }
-    } catch {
-      // An unreadable old manifest is not itself proof of a 0.4.x layout.
-    }
-  }
-  return reasons;
-}
-
-/** @param {string[]} reasons */
-function refuseLegacy(reasons) {
-  throw new PublicError(
-    `this looks like a 0.4.x installation: ${reasons.join('; ')}`,
-    {
-      hint: [
-        'There is no migration. To install 0.5.0:',
-        '  1. delete the generated host directories and agenticloop/ from this repository',
-        `  2. delete the 0.4.x state directories under ${STATE_DIRECTORY}/`,
-        `  3. keep ${PROJECT_FILE}, ${TASKS_DIRECTORY}/ and ${DECISIONS_DIRECTORY}/ — they are yours`,
-        '  4. run setup again',
-      ].join('\n'),
-    },
-  );
-}
 
 /**
  * Seed the target-owned state.
@@ -146,7 +95,7 @@ function ensureGitignore(root) {
  * a removal when it is no longer generated. A file that already holds exactly
  * what would be generated is `unchanged` whoever wrote it, so a lost manifest
  * or a hand-synced file is adopted instead of refused. `manifest` says whether
- * `.agenticloop/generated.json` itself would be written, since it is tracked
+ * `.castwork/generated.json` itself would be written, since it is tracked
  * like the files it lists and has to be committed with them.
  *
  * @param {string} root
@@ -267,12 +216,12 @@ function refuseBlocked(plan) {
   if (!planIsBlocked(plan)) return;
   if (plan.downgrade) {
     throw new PublicError(
-      `nothing was written: ${GENERATED_MANIFEST} was written by agenticloop ${plan.manifest_version}, newer than this copy, ${plan.version}, at ${plan.toolkit}`,
+      `nothing was written: ${GENERATED_MANIFEST} was written by castwork ${plan.manifest_version}, newer than this copy, ${plan.version}, at ${plan.toolkit}`,
       {
         hint: [
           'Run the newer copy instead: move the version this repository pins, or run the',
-          'checkout that wrote it with node <checkout>/bin/agenticloop.js. Check which copy',
-          'runs with npx --no agenticloop version.',
+          'checkout that wrote it with node <checkout>/bin/castwork.js. Check which copy',
+          'runs with npx --no castwork version.',
         ].join('\n'),
       },
     );
@@ -332,16 +281,13 @@ function applyPlan(root, plan) {
  * for Codex left `hosts` as `["claude"]`, and the ownership pass then deleted
  * every Codex file it still owned. That is a tracked deletion nobody asked for,
  * and it made a contributor's own host choice a change to the whole repository.
- * Dropping a host is a deliberate edit to `agenticloop.json` followed by
+ * Dropping a host is a deliberate edit to `castwork.json` followed by
  * `update`, which removes what it no longer generates.
  *
  * @param {string} root
  * @param {{hosts?: string[], force?: string[]}} [options]
  */
 export function setup(root, options = {}) {
-  const legacy = detectLegacyLayout(root);
-  if (legacy.length > 0) refuseLegacy(legacy);
-
   const existing = readConfig(root);
   const added = [];
   for (const host of options.hosts ?? []) {
@@ -376,9 +322,6 @@ export function setup(root, options = {}) {
  * @param {{force?: string[], check?: boolean}} [options]
  */
 export function update(root, options = {}) {
-  const legacy = detectLegacyLayout(root);
-  if (legacy.length > 0) refuseLegacy(legacy);
-
   const config = readConfig(root);
   if (config.hosts.length === 0) {
     throw new PublicError(`${CONFIG_FILE} lists no hosts`, { hint: 'Run setup first.' });
@@ -446,14 +389,10 @@ function pruneEmptyDirectories(root, relatives) {
  * @param {string} root
  */
 export function doctor(root) {
-  const legacy = detectLegacyLayout(root);
   const manifest = readManifest(root);
   const config = readConfig(root);
   const findings = [];
 
-  if (legacy.length > 0) {
-    findings.push({ level: 'error', message: `0.4.x layout detected: ${legacy.join('; ')}` });
-  }
   if (!fs.existsSync(path.join(root, STATE_DIRECTORY))) {
     findings.push({ level: 'error', message: `${STATE_DIRECTORY}/ is missing`, next: 'Run setup.' });
   }
@@ -476,12 +415,12 @@ export function doctor(root) {
   /** @type {'current'|'behind'|'blocked'|null} */
   let generated = null;
   const layoutSpoken = manifest === null || manifest.layout_version === LAYOUT_VERSION;
-  if (layoutSpoken && config.hosts.length > 0 && legacy.length === 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
+  if (layoutSpoken && config.hosts.length > 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
     const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }));
     // This copy is older than the one that wrote the manifest, and refuses to
     // update, so neither update nor --force-generated is the way forward.
     const newer = plan.downgrade
-      ? `Run the newer copy, agenticloop ${plan.manifest_version}, that wrote ${GENERATED_MANIFEST}; this copy, ${plan.version}, refuses to update.`
+      ? `Run the newer copy, castwork ${plan.manifest_version}, that wrote ${GENERATED_MANIFEST}; this copy, ${plan.version}, refuses to update.`
       : null;
     for (const relative of plan.modified) {
       findings.push({
@@ -499,7 +438,7 @@ export function doctor(root) {
     if (differing > 0) {
       findings.push({
         level: 'warn',
-        message: `${differing} generated file(s) differ from what agenticloop ${plan.version} generates`,
+        message: `${differing} generated file(s) differ from what castwork ${plan.version} generates`,
         next: newer ?? 'Run update --check to list them, then update. Commit the result on its own and start a new host session.',
       });
     } else if (plan.manifest === 'changed') {
@@ -545,15 +484,15 @@ function identityFindings(manifest) {
   if (order !== null && order > 0) {
     return [{
       level: 'warn',
-      message: `${GENERATED_MANIFEST} was written by agenticloop ${manifest.version}, newer than the copy running now, ${running} at ${location}`,
-      next: `setup and update refuse to write with this copy. Run the newer copy, agenticloop ${manifest.version}, or move the version this repository pins.`,
+      message: `${GENERATED_MANIFEST} was written by castwork ${manifest.version}, newer than the copy running now, ${running} at ${location}`,
+      next: `setup and update refuse to write with this copy. Run the newer copy, castwork ${manifest.version}, or move the version this repository pins.`,
     }];
   }
   if (manifest.version !== running) {
     return [{
       level: 'warn',
-      message: `${GENERATED_MANIFEST} was written by agenticloop ${manifest.version || 'an unknown version'}; the copy running now is ${running} at ${location}`,
-      next: 'Check this is the copy you meant to run (npx --no agenticloop version), then run update --check.',
+      message: `${GENERATED_MANIFEST} was written by castwork ${manifest.version || 'an unknown version'}; the copy running now is ${running} at ${location}`,
+      next: 'Check this is the copy you meant to run (npx --no castwork version), then run update --check.',
     }];
   }
   if (manifest.source_digest !== sourceDigest()) {
@@ -561,7 +500,7 @@ function identityFindings(manifest) {
       level: 'warn',
       message: manifest.source_digest === null
         ? `${GENERATED_MANIFEST} records no source_digest, so the build that wrote it is unknown`
-        : `${GENERATED_MANIFEST} was written by a different build of agenticloop ${running} (${manifest.source_digest}); the copy running now is ${sourceDigest()} at ${location}`,
+        : `${GENERATED_MANIFEST} was written by a different build of castwork ${running} (${manifest.source_digest}); the copy running now is ${sourceDigest()} at ${location}`,
       next: 'Check this is the copy you meant to run. update records this build in the manifest.',
     }];
   }

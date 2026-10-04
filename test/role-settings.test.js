@@ -23,7 +23,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 /** A target with `hosts` installed and `extra` merged into its config. */
 function fixture(t, hosts, extra = {}) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-settings-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-settings-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts });
   const file = path.join(root, CONFIG_FILE);
@@ -186,7 +186,7 @@ test('a setting the host cannot express is refused and the hint lists what it ca
   );
 });
 
-test('the coordinator takes no role settings: it is the session Agentic Loop is invoked in', (t) => {
+test('the coordinator takes no role settings: it is the session Castwork is invoked in', (t) => {
   for (const [host, settings] of [['claude', { model: 'x' }], ['codex', { reasoning_effort: 'high' }], ['opencode', { variant: 'high' }], ['claude', {}]]) {
     const root = fixture(t, [host], { role_settings: { [host]: { coordinator: settings } } });
     assert.throws(

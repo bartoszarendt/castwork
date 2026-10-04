@@ -8,9 +8,9 @@ special machinery.
 
 | Host | Generated into |
 |---|---|
-| `codex` | `.codex/agents/` (TOML) and `.agents/skills/agenticloop/`, including its `agents/openai.yaml` invocation policy |
-| `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/agenticloop/` |
-| `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/agenticloop/` |
+| `codex` | `.codex/agents/` (TOML) and `.agents/skills/castwork/`, including its `agents/openai.yaml` invocation policy |
+| `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/castwork/` |
+| `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/castwork/` |
 
 Copilot and Cursor adapters were removed in 0.5.0.
 
@@ -39,7 +39,7 @@ A canonical role ends with one line naming the procedure skills it uses, such
 as ``Procedure skills: `assessment`, `verification-evidence`.``. The Claude
 Code plugin installs the canonical file as written, so that line is how a
 plugin role finds its procedures, which the plugin exposes as its own skills
-(`agenticloop:assessment`). Generation replaces the line with a closing
+(`castwork:assessment`). Generation replaces the line with a closing
 `## Procedures` section linking each one at the path this host's adapter
 generates it to, so a generated role names them once and reaches them without
 loading the entry skill. Each host is a descriptor in
@@ -60,22 +60,22 @@ that is a bug. The toolkit reports what was recorded; it does not authenticate.
 The entry command carries two descriptions. `description` is projected into a
 command file, which runs because the user asked for it by name.
 `skill_description` is projected into the skill index, which a host reads when
-deciding whether to load Agentic Loop on its own — so it names when to use
-Agentic Loop and when not to. There is no fallback between them: an imperative
+deciding whether to load Castwork on its own — so it names when to use
+Castwork and when not to. There is no fallback between them: an imperative
 written for a command the user invoked reads, as a skill description, like an
 invitation to start orchestrating work nobody asked about.
 
 Where a host documents a way to say "this skill is invoked, not inferred", its
 adapter declares it. Codex gets a `literal` file at
-`.agents/skills/agenticloop/agents/openai.yaml` setting
+`.agents/skills/castwork/agents/openai.yaml` setting
 `policy.allow_implicit_invocation` to `false`. Claude Code gets
 `disable-model-invocation: true` in the skill index frontmatter, through the
-adapter's `skill_frontmatter` map. Explicit invocation — `$agenticloop` in
-Codex, `/agenticloop` in Claude Code — is unaffected. OpenCode 1.x documents no
+adapter's `skill_frontmatter` map. Explicit invocation — `$castwork` in
+Codex, `/castwork` in Claude Code — is unaffected. OpenCode 1.x documents no
 such key for the skill itself, so for a session the description is the only
 lever. Its agents can refuse a skill, though: the adapter's
 `delegated_role_frontmatter` gives the generated `thinker`, `worker`, and
-`verifier` `permission: { skill: { agenticloop: deny } }`, which hides the entry
+`verifier` `permission: { skill: { castwork: deny } }`, which hides the entry
 skill from them. The coordinator keeps it.
 
 ## Host differences
@@ -86,7 +86,7 @@ skill from them. The coordinator keeps it.
 | Nesting | `subagent_depth` defaults to 1, so a subagent cannot start one | by default a subagent can start subagents of its own, up to three layers below the main conversation; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` changes that (1 turns nesting off), and a subagent without `Agent` in its tools cannot start one | the runtime tells a spawned agent it may spawn its own; no depth limit is documented, only a cap on concurrent agents |
 | Implicit entry-skill invocation | refused for the delegated roles by a per-agent `permission.skill` deny; otherwise the description | refused by `disable-model-invocation: true` | refused by `allow_implicit_invocation: false` |
 
-Agentic Loop's design wants fresh context, since the task record is the
+Castwork's design wants fresh context, since the task record is the
 handoff, and one level of delegation: a role started by another agent starts
 no agents, since what it delegated would be invisible to the agent that started
 it and recorded under the wrong actor. The hosts differ in what they allow, so
@@ -97,7 +97,7 @@ No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
 
 ## Ownership
 
-Every generated file is listed in `.agenticloop/generated.json` with its digest.
+Every generated file is listed in `.castwork/generated.json` with its digest.
 That manifest is tracked alongside the files it describes.
 
 - `update` regenerates a file only when its current digest matches the manifest.
@@ -116,7 +116,7 @@ negotiation, and no repair path.
 
 ## Portable project host-generation configuration
 
-`agenticloop.json` at the target root holds which hosts to generate for, any
+`castwork.json` at the target root holds which hosts to generate for, any
 per-host role settings, and any [role routes](#role-routes). It describes the
 repository, not the machine it is checked out on: `hosts` names the hosts the
 project supports, and every `role_settings` value and `role_routes` entry is a
@@ -145,7 +145,7 @@ Settings are for the `thinker`, `worker`, and `verifier`; a `coordinator`
 entry is refused.
 
 A binding is fixed configuration: it changes only when someone edits
-`agenticloop.json`. It is the project's alternative to the per-turn model
+`castwork.json`. It is the project's alternative to the per-turn model
 selection in the TRINITY paper, not an equivalent of it; see
 [background.md](background.md).
 
@@ -167,7 +167,7 @@ Each host declares which settings it accepts, in its adapter's
 A setting a host does not declare is refused with a hint listing what it does
 accept, rather than written into a file the host will ignore.
 
-Values are passed through and never interpreted. Agentic Loop does not know
+Values are passed through and never interpreted. Castwork does not know
 which efforts a host accepts, does not translate one host's vocabulary into
 another's, and does not treat two hosts' `high` as the same thing. A value the
 host rejects fails there, not here.
@@ -184,8 +184,8 @@ you like — normally belongs in your host's own configuration, not here, becaus
 a value written here is generated into tracked files for everyone. Pin one only
 when the repository means it.
 
-Configuration lives here and nowhere else. `.agenticloop/project.md` is prose,
-and `.agenticloop/local/` is reserved for machine-local state: it is gitignored
+Configuration lives here and nowhere else. `.castwork/project.md` is prose,
+and `.castwork/local/` is reserved for machine-local state: it is gitignored
 working space, not a second configuration layer that overrides this file.
 
 ## Role routes
@@ -209,7 +209,7 @@ a separate process, and have that result verified back in Claude Code.
 ```
 
 - The routable roles are `thinker`, `worker`, and `verifier`. The coordinator is
-  the session that routes, and it runs wherever Agentic Loop was invoked.
+  the session that routes, and it runs wherever Castwork was invoked.
 - A route is a host id, and it must be one of the hosts this repository
   generates for, because the delegate reads the role file generated for that
   host. A route to a host that is not generated is refused before anything is
@@ -271,7 +271,7 @@ command name, listing its files — `role`, `skill`, `command`, `index`, or a
 `literal` file whose `content` the descriptor carries; add that id to `HOSTS`
 in `src/layout.js`, and add an `adapters.<id>.role_settings` entry to
 `config.json` if the host needs per-role defaults. Settings the host accepts go
-in its `role_frontmatter` map, which maps the name `agenticloop.json` uses to
+in its `role_frontmatter` map, which maps the name `castwork.json` uses to
 the key the host reads. If the host documents a way to refuse implicit
 invocation, put it in `skill_frontmatter` or a `literal` file; frontmatter the
 roles a coordinator starts need, such as a permission, goes in
@@ -283,7 +283,7 @@ changing the checks, the record format, or the CLI, the abstraction has leaked
 ## Verifying output
 
 ```sh
-npx agenticloop validate
+npx castwork validate
 ```
 
 checks skills, config, links, and generated adapter output. Read the generated

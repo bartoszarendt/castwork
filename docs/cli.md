@@ -6,8 +6,8 @@ better than editing a record by hand.
 
 | Command path | What it does |
 |---|---|
-| `setup` | Install for the selected hosts: create `.agenticloop/`, write `agenticloop.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. Refuses a 0.4.x layout. |
-| `update` | Regenerate for the recorded hosts and report every path written, `.agenticloop/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. |
+| `setup` | Install for the selected hosts: create `.castwork/`, write `castwork.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. |
+| `update` | Regenerate for the recorded hosts and report every path written, `.castwork/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. |
 | `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, or `decisions/`. |
 | `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it. Exits non-zero only on an error-level finding. |
 | `validate` | Check skills, config, links, and generated adapter output. |
@@ -18,7 +18,7 @@ better than editing a record by hand.
 | `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
-| `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.agenticloop/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.agenticloop/tasks/`, and `.agenticloop/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
+| `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.castwork/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.castwork/tasks/`, and `.castwork/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
 | `version` | Print the version number, and nothing else. `doctor` and `update --check` print where the running copy lives. |
 | `help` | Print the command list. |
 
@@ -51,7 +51,7 @@ creates a task titled `-x title`. A refused token that starts with a dash says
 so in its hint.
 
 `help` lists each command with its flags. Through npx, run
-`npx --no agenticloop help`, not `--help`: npm reads `--help` itself.
+`npx --no castwork help`, not `--help`: npm reads `--help` itself.
 
 Nothing else. There is no activation, activation store, host-trust,
 event-logging, handoff, readiness, dispatch, return, review, audit, closeout,
@@ -61,7 +61,7 @@ command — and no aliases or deprecated forms for the ones that are gone.
 ## Installation and configuration
 
 `setup` needs to know which hosts to generate for. Name them with `--host`,
-which is repeatable, or list them under `hosts` in `agenticloop.json`. It adds
+which is repeatable, or list them under `hosts` in `castwork.json`. It adds
 what you named to what was already recorded, so later `setup` and `update` runs
 need no flag. With no hosts named and none recorded, `setup` refuses rather
 than guessing.
@@ -69,10 +69,10 @@ than guessing.
 Naming a host adds it; it never replaces the set. `setup --host claude` in a
 repository that already generates for Codex leaves `hosts` as
 `["codex", "claude"]` and leaves every Codex file where it is. Dropping a host
-is deliberate: remove it from `hosts` in `agenticloop.json` and run `update`,
+is deliberate: remove it from `hosts` in `castwork.json` and run `update`,
 which deletes what it no longer generates and still owns.
 
-`agenticloop.json` is the only configuration, and it is a property of the
+`castwork.json` is the only configuration, and it is a property of the
 repository rather than of your machine. It holds `hosts` — the hosts this
 project supports, not the one you personally run — optional per-host
 `role_settings`, and optional `role_routes`, which name another host a role
@@ -81,7 +81,7 @@ choices; see [host-adapters.md](host-adapters.md#role-routes). Nothing inherits
 from anywhere: defaults come from the installed package. A setting a host
 cannot express, and a value it could not carry, are each refused rather than
 dropped in silence. Omit a setting to let the host's own configuration decide
-it; `.agenticloop/local/` is reserved for machine-local state and is not a
+it; `.castwork/local/` is reserved for machine-local state and is not a
 second configuration layer.
 
 `update` regenerates from the hosts already recorded. It never changes which
@@ -100,7 +100,7 @@ half-updated installation is worse than an old one: an agent reading it cannot
 tell which half it has.
 
 It writes only what differs and names every path it writes as `changed`,
-`added`, or `removed`, `.agenticloop/generated.json` included, so the list is
+`added`, or `removed`, `.castwork/generated.json` included, so the list is
 exactly what to commit and `everything is up to date` means nothing was
 touched. A file that already holds exactly what would be generated is adopted,
 whoever wrote it.
@@ -117,7 +117,7 @@ current.
 
 ## Generator identity
 
-`.agenticloop/generated.json` records the `version` and the `source_digest`
+`.castwork/generated.json` records the `version` and the `source_digest`
 of the copy that wrote it. The digest is a sha256, with line endings
 normalised, over these files of the running copy, in this order: every
 `agents/*.md`, `commands/start.md`, every `skills/<id>/SKILL.md`,
@@ -135,14 +135,14 @@ unreleased builds share it.
   reason to call the installation behind. The next `update` records the
   running build, and lists `generated.json` as changed.
 
-`update` regenerates from the copy of Agentic Loop you run. `npx --no
-agenticloop update` uses the one installed in the repository; to adopt a local
-checkout, run its `bin/agenticloop.js` with `node`. Neither installs or upgrades
+`update` regenerates from the copy of Castwork you run. `npx --no
+castwork update` uses the one installed in the repository; to adopt a local
+checkout, run its `bin/castwork.js` with `node`. Neither installs or upgrades
 the package itself.
 
 Generated files are tracked, so adopting a new version is a change to the
 repository: review what `update` listed and commit it together with whatever
-caused it (an `agenticloop.json` edit, or a package or lockfile upgrade), apart
+caused it (an `castwork.json` edit, or a package or lockfile upgrade), apart
 from task work. A host
 session that is already running keeps the instructions and model settings it
 started with; start a new one, then run the entry command again. Your records
@@ -153,9 +153,9 @@ carry the work across, so nothing is lost.
 
 `doctor` distinguishes two levels and only the first affects its exit status:
 
-- **error** — the installation cannot work as configured: a 0.4.x layout, a
-  missing `.agenticloop/`, or a generated manifest whose `layout_version` this
-  version does not speak. `doctor` exits 1.
+- **error** — the installation cannot work as configured: a missing
+  `.castwork/`, or a generated manifest whose `layout_version` this version
+  does not speak. `doctor` exits 1.
 - **warn** — something is worth doing but nothing is broken: no hosts recorded
   yet, no generated manifest, generated files that differ from what this
   toolkit generates, or a file that would make `update` write nothing. `doctor`
@@ -165,7 +165,7 @@ It prints the running copy (version, location, `source_digest`) and the
 manifest's version and digest, and warns when they differ. It also warns when
 a generated file was edited by hand, since `update` overwrites the edit only
 when forced and a host reads the file only when a new session starts, and when
-`.agenticloop/project.md` is missing or empty, or has sections still exactly as
+`.castwork/project.md` is missing or empty, or has sections still exactly as
 `setup` wrote them or left empty; a file with headings of its own is not
 compared.
 

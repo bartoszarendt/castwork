@@ -1,8 +1,8 @@
 /**
  * Project configuration.
  *
- * It lives in `agenticloop.json` at the target root and nowhere else.
- * `.agenticloop/project.md` owns prose only, and `.agenticloop/local/` is
+ * It lives in `castwork.json` at the target root and nowhere else.
+ * `.castwork/project.md` owns prose only, and `.castwork/local/` is
  * machine-local state rather than a second layer read from here: everything
  * this file holds is generated into tracked output, so it describes the
  * repository and not the machine the repository is checked out on.
@@ -27,7 +27,7 @@ export function defaults() {
   return JSON.parse(fs.readFileSync(path.join(toolkitRoot(), 'config.json'), 'utf8'));
 }
 
-/** The settings one host accepts, in the spelling `agenticloop.json` uses. */
+/** The settings one host accepts, in the spelling `castwork.json` uses. */
 export function settingsFor(host) {
   return Object.keys(/** @type {Record<string, string>} */ (readAdapter(host).role_frontmatter ?? {}));
 }
@@ -95,7 +95,7 @@ function readRoleSettings(raw) {
       }
       if (role === 'coordinator') {
         throw new PublicError(`${CONFIG_FILE} role_settings.${host} cannot configure the coordinator`, {
-          hint: `The coordinator is the session you invoke Agentic Loop in, which runs on the host's own settings. Remove role_settings.${host}.coordinator; settings apply to ${ROLE_IDS.filter((id) => id !== 'coordinator').join(', ')}.`,
+          hint: `The coordinator is the session you invoke Castwork in, which runs on the host's own settings. Remove role_settings.${host}.coordinator; settings apply to ${ROLE_IDS.filter((id) => id !== 'coordinator').join(', ')}.`,
         });
       }
       if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
@@ -255,7 +255,7 @@ export function writeConfig(root, hosts) {
   const existing = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   // No `extends` key: defaults come from the installed package's config.json
   // via defaults(), and 0.5.0 does not copy the toolkit source into the target,
-  // so a pointer to ./agenticloop/config.json would name a path that is not
+  // so a pointer to ./castwork/config.json would name a path that is not
   // there and that nothing reads.
   const next = {
     ...existing,

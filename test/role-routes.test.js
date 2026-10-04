@@ -22,7 +22,7 @@ import { validate } from '../src/validate.js';
 
 /** A target with `hosts` installed and `extra` merged into its config. */
 function fixture(t, hosts, extra = {}) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-routes-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-routes-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts });
   writeExtra(root, extra);
@@ -59,7 +59,7 @@ test('a route reaches the routing host with the role file and the target setting
     role_settings: { codex: { worker: { model: 'gpt-5.4', reasoning_effort: 'high' } } },
   });
   update(root);
-  for (const file of ['.claude/commands/agenticloop.md', '.claude/skills/agenticloop/SKILL.md']) {
+  for (const file of ['.claude/commands/castwork.md', '.claude/skills/castwork/SKILL.md']) {
     const section = routesSection(read(root, file));
     assert.match(section, /`worker` runs in Codex \(`codex`\)/, file);
     assert.match(section, /Role file: `\.codex\/agents\/worker\.toml`/, file);
@@ -73,7 +73,7 @@ test('the route host itself runs the role as usual and lists no route', (t) => {
     role_routes: { worker: 'codex' },
   });
   update(root);
-  assert.match(routesSection(read(root, '.agents/skills/agenticloop/SKILL.md')), /None: every role runs in this host\./);
+  assert.match(routesSection(read(root, '.agents/skills/castwork/SKILL.md')), /None: every role runs in this host\./);
 });
 
 test('a route reaches the routing coordinator, with the file that says how to follow it', (t) => {
@@ -92,12 +92,12 @@ test('a route reaches the routing coordinator, with the file that says how to fo
   // command, still sees the route and where its procedure is.
   const claude = read(root, '.claude/agents/coordinator.md');
   assert.match(claude, /## Role routes/);
-  assert.match(claude, /`## Role routes` section of `\.claude\/skills\/agenticloop\/SKILL\.md`/);
+  assert.match(claude, /`## Role routes` section of `\.claude\/skills\/castwork\/SKILL\.md`/);
   assert.match(claude, /`worker` runs in Codex \(`codex`\)\. Role file: `\.codex\/agents\/worker\.toml`/);
   assert.doesNotMatch(claude, /### Routes from this host|None: every role/);
 
   const codex = read(root, '.codex/agents/coordinator.toml');
-  assert.match(codex, /`## Role routes` section of `\.agents\/skills\/agenticloop\/SKILL\.md`/);
+  assert.match(codex, /`## Role routes` section of `\.agents\/skills\/castwork\/SKILL\.md`/);
   assert.match(codex, /`verifier` runs in Claude Code \(`claude`\)/);
   assert.doesNotMatch(codex, /`worker` runs in/);
   assert.ok(codex.trimEnd().endsWith('"""'), 'the routes stay inside developer_instructions');
@@ -112,18 +112,18 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
     role_settings: { opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } } },
   });
   update(root);
-  assert.match(routesSection(read(root, '.claude/commands/agenticloop.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
+  assert.match(routesSection(read(root, '.claude/commands/castwork.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
 
   // Claude's shipped thinker default is a permission mode, which the
   // delegation capability chooses for the run; the route leaves it out.
-  const opencode = routesSection(read(root, '.opencode/commands/agenticloop.md'));
+  const opencode = routesSection(read(root, '.opencode/commands/castwork.md'));
   assert.match(opencode, /`thinker` runs in Claude Code \(`claude`\)\. .*Settings: the host's own defaults\./);
   assert.doesNotMatch(opencode, /permission_mode/);
 });
 
 test('with no routes every entry file says so', () => {
   for (const host of ['codex', 'claude', 'opencode']) {
-    const entries = generateHost(host).filter((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path));
+    const entries = generateHost(host).filter((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path));
     assert.ok(entries.length > 0);
     for (const entry of entries) {
       assert.match(routesSection(entry.content), /None: every role runs in this host\./, entry.path);
@@ -143,7 +143,7 @@ test('validate accepts a routed repository as current', (t) => {
   // And the check is live: the same repository without the route is behind.
   writeExtra(root, { role_routes: {} });
   const stale = validate(root).findings.filter((finding) => /out of date/.test(finding.message));
-  assert.ok(stale.some((finding) => /agenticloop/.test(finding.where)), 'dropping the route makes the entry files stale');
+  assert.ok(stale.some((finding) => /castwork/.test(finding.where)), 'dropping the route makes the entry files stale');
 });
 
 /* ------------------------------------------------------------------ */
@@ -152,18 +152,18 @@ test('validate accepts a routed repository as current', (t) => {
 
 test('a route to a host that is not generated is refused before anything is written', (t) => {
   const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
-  const before = read(root, '.claude/commands/agenticloop.md');
+  const before = read(root, '.claude/commands/castwork.md');
   assert.throws(
     () => update(root),
     (error) => /role_routes\.worker names codex, which is not a host this repository generates for/.test(error.message) && /setup --host codex/.test(error.hint),
   );
-  assert.equal(read(root, '.claude/commands/agenticloop.md'), before);
+  assert.equal(read(root, '.claude/commands/castwork.md'), before);
 });
 
 test('setup --host adds the host a route already names', (t) => {
   const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
   setup(root, { hosts: ['codex'] });
-  assert.match(routesSection(read(root, '.claude/commands/agenticloop.md')), /`worker` runs in Codex/);
+  assert.match(routesSection(read(root, '.claude/commands/castwork.md')), /`worker` runs in Codex/);
 });
 
 /* ------------------------------------------------------------------ */

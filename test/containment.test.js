@@ -10,7 +10,7 @@ import { doctor, remove, setup, update } from '../src/setup.js';
 
 /** Each fixture is its own temp tree, removed when the test ends. */
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-contain-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-contain-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

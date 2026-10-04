@@ -12,7 +12,7 @@ import { findRecord, taskNew, taskSet } from '../src/task-cli.js';
 import { formatScalar, parseYaml } from '../src/yaml.js';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-scalar-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-scalar-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   return root;

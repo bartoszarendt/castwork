@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.0
+
+Agentic Loop is now Castwork. Every name changes with it: the package and
+command, the state directory, the configuration file, the generated skill and
+entry command, and the repository. Nothing else changes.
+
+**Breaking: what to do.** There is no alias for any old name, and nothing
+recognises an installation under the old names.
+
+- **Rename the state and configuration** — `.agenticloop/` to `.castwork/` and
+  `agenticloop.json` to `castwork.json` — then run `npx castwork setup`. It
+  regenerates the host files under the new names, deletes the old ones it still
+  owns, and adds `.castwork/local/` to `.gitignore`. Delete the
+  `.agenticloop/local/` line there yourself.
+- **Replace the remaining mentions in files you own:** `project.md`, task and
+  decision records, scripts, and an `agenticloop` dependency in
+  `package.json`. `setup` and `update` never rewrite them.
+- **The entry command is `/castwork`** (`$castwork` in Codex). Start new host
+  sessions after the update.
+- **The 0.4.x refusal is gone.** It looked for 0.4.x state under the old
+  names, which no Castwork installation has, so `setup`, `update`, and
+  `doctor` no longer check for it.
+
 ## 0.6.0
 
 Uncommitted candidates get a checkable reference, lint says more about records

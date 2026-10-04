@@ -9,7 +9,7 @@ import { doctor, setup } from '../src/setup.js';
 import { validate } from '../src/validate.js';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-exit-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-exit-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -68,7 +68,7 @@ test('validate agrees with itself across output modes', (t) => {
 test('task lint --json exit status matches the report', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });
-  fs.writeFileSync(path.join(root, '.agenticloop', 'tasks', 'T-001.md'), '---\nschema: 1\nid: T-001\ntitle: t\nstatus: nonsense\n---\n', 'utf8');
+  fs.writeFileSync(path.join(root, '.castwork', 'tasks', 'T-001.md'), '---\nschema: 1\nid: T-001\ntitle: t\nstatus: nonsense\n---\n', 'utf8');
   const { code, out } = capture(['task', 'lint', '--json'], root);
   assert.equal(code, 1);
   assert.equal(JSON.parse(out).ok, false);

@@ -6,11 +6,11 @@ import test from 'node:test';
 
 import { digest, readManifest } from '../src/generated.js';
 import { CONFIG_FILE, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
-import { detectLegacyLayout, doctor, remove, setup, update } from '../src/setup.js';
+import { doctor, remove, setup, update } from '../src/setup.js';
 
 /** Each fixture is its own temp tree, removed when the test ends. */
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-test-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-test-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -29,7 +29,7 @@ test('setup creates the state directories and records what it generated', (t) =>
 test('setup adds the local directory to .gitignore', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });
-  assert.match(fs.readFileSync(path.join(root, '.gitignore'), 'utf8'), /\.agenticloop\/local\//);
+  assert.match(fs.readFileSync(path.join(root, '.gitignore'), 'utf8'), /\.castwork\/local\//);
 });
 
 test('setup refuses without a host rather than guessing', (t) => {
@@ -228,24 +228,6 @@ test('remove keeps a generated file the user modified', (t) => {
   assert.ok(fs.existsSync(path.join(root, target)));
 });
 
-test('a 0.4.x layout is refused with manual steps and nothing is written', (t) => {
-  const root = fixture(t);
-  fs.mkdirSync(path.join(root, '.agenticloop', 'audits'), { recursive: true });
-  assert.deepEqual(detectLegacyLayout(root), ['.agenticloop/audits/ exists']);
-  assert.throws(
-    () => setup(root, { hosts: ['codex'] }),
-    (error) => /0\.4\.x installation/.test(error.message) && /run setup again/.test(error.hint),
-  );
-  assert.ok(!fs.existsSync(path.join(root, GENERATED_MANIFEST)));
-});
-
-test('an old manifest declaring layoutVersion is refused', (t) => {
-  const root = fixture(t);
-  fs.mkdirSync(path.join(root, 'agenticloop'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'agenticloop', 'manifest.json'), JSON.stringify({ layoutVersion: 3 }), 'utf8');
-  assert.equal(detectLegacyLayout(root).length, 1);
-});
-
 test('doctor reports a healthy installation and a missing one', (t) => {
   const root = fixture(t);
   const before = doctor(root);
@@ -348,7 +330,7 @@ test('dropping a host from the config and updating removes its files', (t) => {
   assert.deepEqual(result.hosts, ['codex']);
   assert.ok(result.removed.length > 0);
   assert.ok(result.removed.every((relative) => relative.startsWith('.claude/')));
-  assert.ok(!fs.existsSync(path.join(root, '.claude', 'commands', 'agenticloop.md')));
+  assert.ok(!fs.existsSync(path.join(root, '.claude', 'commands', 'castwork.md')));
   assert.ok(!fs.existsSync(path.join(root, '.claude')), 'an emptied host directory was left standing');
   assert.ok(fs.existsSync(path.join(root, '.codex', 'agents', 'worker.toml')));
 });

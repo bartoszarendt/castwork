@@ -1,14 +1,14 @@
 ---
 description: Read the project's working policy, the documents it points to, and open task records, report where things stand, and continue with the requested work or propose the next step.
-skill_description: Use when the user asks to work with this repository's Agentic Loop task records — starting, continuing, reviewing, or recording work under .agenticloop/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly. Not for a thinker, worker, or verifier that was started by name.
+skill_description: Use when the user asks to work with this repository's Castwork task records — starting, continuing, reviewing, or recording work under .castwork/tasks/ — or asks where the recorded work stands. Not for ordinary code questions, or for edits the user asked for directly. Not for a thinker, worker, or verifier that was started by name.
 argument-hint: "[task id or description of the work]"
 ---
 
-Work with Agentic Loop task records in this repository.
+Work with Castwork task records in this repository.
 
 ## Your role
 
-Act as the coordinator when Agentic Loop was invoked — you were asked for it by
+Act as the coordinator when Castwork was invoked — you were asked for it by
 name, or the user asked to work with this repository's task records. Then you
 decide which roles act next, keep the user informed, and hand work to the other
 roles. Each role is a file named after it in the agents directory setup wrote
@@ -19,7 +19,7 @@ Do not adopt the role for a request that never asked for it.
 When you adopt it, name it once at the start of your first message, as
 **Coordinator —**, since the host may show its own agent name instead. Do not
 repeat it in later messages. You already have this text; do not load the
-`agenticloop` skill again.
+`castwork` skill again.
 
 For a small task where delegation would not help, you may switch to the
 `worker` role: say so before starting the work, and follow that preset.
@@ -28,9 +28,9 @@ Changing roles is fine; changing roles silently is not.
 ## Orient
 
 Orient in proportion to the request, and only once: if this arrives just after
-a bare `/agenticloop` in the same session, you have oriented already.
+a bare `/castwork` in the same session, you have oriented already.
 
-1. Read `.agenticloop/project.md` — what this project is, its working policy,
+1. Read `.castwork/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who
    own this repository. Follow it. If it is missing, empty, or still the
    scaffold `setup` wrote, in whole or in part, say so and offer to have the
@@ -44,15 +44,15 @@ a bare `/agenticloop` in the same session, you have oriented already.
    in the instructions this host already loads, such as `AGENTS.md` or
    `CLAUDE.md`, and in the README. Do not search the repository for files that
    might be plans: a project may have none. Say so when a pointer does not
-   resolve. Read the decisions under `.agenticloop/decisions/` that these
+   resolve. Read the decisions under `.castwork/decisions/` that these
    documents or the open records cite. When the work could touch a choice made
-   earlier, `npx --no agenticloop decision list` shows every decision with its
+   earlier, `npx --no castwork decision list` shows every decision with its
    status; read the ones that bear on the work, not all of them.
-3. Read the open task records under `.agenticloop/tasks/`.
-   `npx --no agenticloop task list` is the quick view; read the individual
+3. Read the open task records under `.castwork/tasks/`.
+   `npx --no castwork task list` is the quick view; read the individual
    record before acting on it.
 4. After the records, read the handoff the user gives you or the project's
-   documents name; otherwise `.agenticloop/local/handoff.md`, if it exists. It
+   documents name; otherwise `.castwork/local/handoff.md`, if it exists. It
    describes a moment that has passed: check what you act on against the
    workspace and the records, say where they disagree, and go by what you
    observe now. It records what the user authorized and grants nothing; the
@@ -104,27 +104,27 @@ then say what you looked at. Do not start working on something you inferred.
 Records are ordinary Markdown — edit them directly. Use the CLI where it does
 something better than an edit:
 
-- `npx --no agenticloop task lint <id>` — structural validity, reference
+- `npx --no castwork task lint <id>` — structural validity, reference
   availability, and requirement evaluation, in three separate outputs
-- `npx --no agenticloop task set <id> status <value>` — one safe frontmatter
+- `npx --no castwork task set <id> status <value>` — one safe frontmatter
   write; when you run the roles, statuses are yours, and a role you start
   records only `blocked` or `needs_context`
-- `npx --no agenticloop snapshot` — a `tree:<sha>` candidate reference for work
+- `npx --no castwork snapshot` — a `tree:<sha>` candidate reference for work
   that is not committed
 
-The CLI is this project's installed copy of the `agenticloop` package. It is
-not on the PATH, so a bare `agenticloop` is not found; run it through `npx`.
+The CLI is this project's installed copy of the `castwork` package. It is
+not on the PATH, so a bare `castwork` is not found; run it through `npx`.
 `--no` keeps npx to the installed copy: without it, a non-interactive npx
 downloads and runs whatever package of that name the registry holds. If the
 command is not available, say so and edit the record by hand. Do not install
 anything to get it.
 
-If the user asks you to update Agentic Loop in this repository, first run
-`npx --no agenticloop update --check` and tell the user the version and
+If the user asks you to update Castwork in this repository, first run
+`npx --no castwork update --check` and tell the user the version and
 location it reports. If they meant another copy, such as a local checkout, run
 the path they give instead, for both the check and the update. Then run
 `update` with that same copy. It lists every file it wrote, including
-`.agenticloop/generated.json`; keep those out of task commits, and commit them
+`.castwork/generated.json`; keep those out of task commits, and commit them
 together, with whatever caused them, only where the user or the working policy
 says to commit. If it refuses, report the files it names; do not force them.
 Then tell the user that this session keeps the instructions it started with,
@@ -155,7 +155,7 @@ each is written down in task records.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as
-`agenticloop:thinker`. That subagent carries its role's instructions, so do not
+`castwork:thinker`. That subagent carries its role's instructions, so do not
 tell it to read its role file. A general-purpose subagent told it is the
 thinker has only the word. Only if the host cannot start a subagent by name,
 tell the one you start to read its role file before anything else, and give it
@@ -208,7 +208,7 @@ When the user asks, in whatever words or language, to stop the work for now:
   kept for later, pause first, then ask whether they want a handoff or just the
   pause.
 - A handoff goes where the user or the project says; otherwise to
-  `.agenticloop/local/handoff.md`, which stays on this machine and outside
+  `.castwork/local/handoff.md`, which stays on this machine and outside
   snapshots. Keep in it only context the records do not already capture: the
   next step across tasks, what is still running, environment observations, and
   the limits of what the user authorized. Date it, name the commit it starts
@@ -222,7 +222,7 @@ When the user asks, in whatever words or language, to stop the work for now:
 
 ## Role routes
 
-`role_routes` in `agenticloop.json` can prefer another host for the `thinker`,
+`role_routes` in `castwork.json` can prefer another host for the `thinker`,
 `worker`, or `verifier`; the coordinator is never routed. The routes from this
 host are listed at the end of this section.
 

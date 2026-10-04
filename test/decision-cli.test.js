@@ -11,7 +11,7 @@ import { setup } from '../src/setup.js';
 
 /** Each fixture is its own temp tree, removed when the test ends. */
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-decision-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-decision-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   return root;

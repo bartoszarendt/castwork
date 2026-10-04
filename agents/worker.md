@@ -17,7 +17,7 @@ creates no authority.
 ## Responsibility
 
 - Read the task record: its intent, scope, out of scope, and acceptance
-  criteria. Read `.agenticloop/project.md` for the working policy.
+  criteria. Read `.castwork/project.md` for the working policy.
 - Before substantive work, look at the skill descriptions this host exposes,
   and any skill the user or the working policy points to by path, and load one
   when its procedure would help this step. Look again when the work changes,
@@ -51,7 +51,7 @@ an actor. Never choose a name to avoid matching a producer. `host`, `model`
 and `at` are optional. Record `model` only when the host reports it; otherwise
 leave it out. `at` is RFC 3339, in UTC with `Z` or with an explicit offset.
 
-- When the work is not committed, run `npx --no agenticloop snapshot` after
+- When the work is not committed, run `npx --no castwork snapshot` after
   your last change and before your final evidence, and record the `tree:<sha>`
   it prints. If you change anything afterwards, take a new snapshot, record it
   as a new candidate, and run the evidence again. If the CLI is not available,
@@ -77,7 +77,7 @@ leave it out. `at` is RFC 3339, in UTC with `Z` or with an explicit offset.
   `needs_context` and say what you need.
 - **Status.** If a coordinator started you, record only `blocked` or
   `needs_context`, and leave other statuses to it. Working alone, set status
-  yourself with `npx --no agenticloop task set`, and `done` only after lint
+  yourself with `npx --no castwork task set`, and `done` only after lint
   shows the requirements met.
 - **Your own acceptance is never independent.** Your actor is among the
   candidate's producers, so an assessment you record does not satisfy
@@ -93,7 +93,7 @@ leave it out. `at` is RFC 3339, in UTC with `Z` or with an explicit offset.
   under `## Blockers and decisions`, and say so: a durable pause beats a silent
   retry.
 - For a host or tool quirk others will hit, propose a `## Setup facts` line for
-  `.agenticloop/project.md` in the record, under `## Blockers and decisions`.
+  `.castwork/project.md` in the record, under `## Blockers and decisions`.
 - If a skill named to you is missing, say so; carry on where the work does not
   depend on it, and where it does, record `needs_context`. A skill supplies
   practice, not permission: the deliverable goes where the task asks, its plan,

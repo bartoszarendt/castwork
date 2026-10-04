@@ -23,7 +23,7 @@ import { taskSet } from '../src/task-cli.js';
 const PREVIOUS_IDS = ['orchestrator', 'maintainer', 'engineer', 'auditor'];
 
 function fixture(t, frontmatter, body = '## Intent\nx\n') {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-roles-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-roles-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, TASKS_DIRECTORY, 'T-001.md');
@@ -162,7 +162,7 @@ for (const host of HOSTS) {
 
 for (const host of HOSTS) {
   test(`${host} entry treats a described task or plan as the request`, () => {
-    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.match(entry.content, /the user has asked for that work: proceed without asking\s+again/);
     assert.match(entry.content, /A plan or a list of tasks\.\*\* Have the `thinker` turn it into task records/);
@@ -172,7 +172,7 @@ for (const host of HOSTS) {
 
 for (const host of HOSTS) {
   test(`${host} entry orients from the project's documents and proposes the next step`, () => {
-    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.match(entry.content, /Read the documents it points to/);
     assert.match(entry.content, /If they do not say what comes\s+next, look for such pointers/);
@@ -188,11 +188,11 @@ for (const host of HOSTS) {
 
 for (const host of HOSTS) {
   test(`${host} entry checks which copy an update runs from and keeps its files out of task commits`, () => {
-    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
-    assert.match(entry.content, /first run\s+`npx --no agenticloop update --check` and tell the user the version and\s+location it reports/);
+    assert.match(entry.content, /first run\s+`npx --no castwork update --check` and tell the user the version and\s+location it reports/);
     assert.match(entry.content, /run\s+the path they give instead, for both the check and the update/);
-    assert.match(entry.content, /including\s+`\.agenticloop\/generated\.json`; keep those out of task commits/);
+    assert.match(entry.content, /including\s+`\.castwork\/generated\.json`; keep those out of task commits/);
     assert.match(entry.content, /only where the user or the working policy\s+says to commit/);
     assert.match(entry.content, /If it refuses, report the files it names; do not force them/);
     assert.match(entry.content, /a new session picks up the update/);
@@ -200,7 +200,7 @@ for (const host of HOSTS) {
 }
 
 test('the scaffolded project.md says what the Documents pointers are for', (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-roles-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-roles-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   const project = fs.readFileSync(path.join(root, PROJECT_FILE), 'utf8');
@@ -255,7 +255,7 @@ for (const host of HOSTS) {
     assert.match(coordinator.content, /one\s+sentence/);
     assert.match(coordinator.content, /why\s+now/);
     assert.match(coordinator.content, /When\s+you\s+run\s+the\s+roles,\s+statuses\s+are\s+yours/);
-    assert.match(coordinator.content, /set\s+the\s+rest\s+yourself\s+with\s+`npx --no agenticloop task set`/);
+    assert.match(coordinator.content, /set\s+the\s+rest\s+yourself\s+with\s+`npx --no castwork task set`/);
   });
 }
 
@@ -263,7 +263,7 @@ for (const host of HOSTS) {
   test(`${host} entry delegates to the named role subagent and says where roles live`, () => {
     const adapter = readAdapter(host);
     const roleDir = adapter.files.find((/** @type {{kind: string}} */ entry) => entry.kind === 'role').to.split('{role}')[0];
-    const entry = generateHost(host).find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
     assert.match(entry.content, /start the host's subagent for that role/);
@@ -274,13 +274,13 @@ for (const host of HOSTS) {
 for (const host of HOSTS) {
   test(`${host} generated files run the CLI through npx --no, never bare`, () => {
     const files = generateHost(host);
-    const entry = files.find((file) => /agenticloop(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
+    const entry = files.find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
-    assert.match(entry.content, /`npx --no agenticloop task lint <id>`/);
+    assert.match(entry.content, /`npx --no castwork task lint <id>`/);
     const decisions = files.find((file) => file.path.endsWith('references/decision-capture.md'));
-    assert.match(decisions.content, /`npx --no agenticloop decision new "<title>"`/);
+    assert.match(decisions.content, /`npx --no castwork decision new "<title>"`/);
     for (const file of files) {
-      assert.doesNotMatch(file.content, /`agenticloop (task|decision)\b/, file.path);
+      assert.doesNotMatch(file.content, /`castwork (task|decision)\b/, file.path);
     }
   });
 }

@@ -1,18 +1,18 @@
-# Agentic Loop repository instructions
+# Castwork repository instructions
 
-This is the Agentic Loop toolkit itself. It provides a small, portable
+This is the Castwork toolkit itself. It provides a small, portable
 vocabulary for agent work: Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.6.0 is current. 0.5.0 was a breaking reset, with no migration from 0.4.x.
+**Status:** version 0.7.0 is current.
 
 ## Layout
 
 | Path | Contents |
 |---|---|
 | `src/` | the CLI, the record parser, and the pure checks |
-| `bin/` | the `agenticloop` entry point |
+| `bin/` | the `castwork` entry point |
 | `agents/` | the four canonical role presets |
 | `skills/` | reusable procedures, one directory per skill |
 | `commands/` | the canonical `start` entry command |
@@ -39,27 +39,27 @@ authoritative copy for one host.
   "history", "policy", "evaluator", or "lane" terminology. If you find yourself
   adding a registry, store, transition table, signature, freshness rule, or
   repair path, stop and remove it.
-- **No authentication.** Agentic Loop reports what was recorded and who asserted
+- **No authentication.** Castwork reports what was recorded and who asserted
   it. It never claims to prove who recorded it.
 - **Candidate references, not HEAD.** Evidence and assessments bind to the
   explicit candidate reference an agent recorded.
 - **Generated files carry no absolute paths** and are tracked in the target
   repository. Machine-specific state belongs in the gitignored
-  `.agenticloop/local/`.
-- **Configuration lives only in `agenticloop.json`** at the target root, and it
+  `.castwork/local/`.
+- **Configuration lives only in `castwork.json`** at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
   project supports, and role settings and role routes are its deliberate
-  choices. `project.md` is prose; `.agenticloop/local/` is machine-local state, not an overlay.
+  choices. `project.md` is prose; `.castwork/local/` is machine-local state, not an overlay.
 - **Four roles, and they do not vary by project.** A specialist is an `actor`
   under a canonical role, carrying a skill, chosen by prose policy. Do not add a
   role registry or derive roles from policy.
 - **Generated skills are invoked, not inferred.** The entry command's
-  `skill_description` says when to use Agentic Loop and when not to, and a host
+  `skill_description` says when to use Castwork and when not to, and a host
   that documents a way to refuse implicit invocation gets it from its adapter.
 
 ## Before changing the product
 
-1. Read `AGENTIC_LOOP.md` for the vocabulary and `docs/record-format.md` for the
+1. Read `CASTWORK.md` for the vocabulary and `docs/record-format.md` for the
    record contract.
 2. Read the role preset or skill you are changing, and keep it independently
    usable: no skill may require activation or a prior command.
@@ -69,7 +69,7 @@ authoritative copy for one host.
 ## Verification
 
 - `npm test` runs the unit suite.
-- `npx agenticloop validate` checks skills, config, links, and generated adapter
+- `npx castwork validate` checks skills, config, links, and generated adapter
   output.
 - `npm run typecheck` runs the TypeScript checker over the JSDoc types.
 
@@ -82,5 +82,5 @@ adding one.
   authorization.
 - Branch `feat/phase-36-followup` and commit `63cd512` are pinned by downstream
   projects; never delete them.
-- Never commit secrets, local runtime state, `.agenticloop/local/`, or the
+- Never commit secrets, local runtime state, `.castwork/local/`, or the
   `.docs` symlink.

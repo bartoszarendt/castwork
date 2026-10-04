@@ -1,14 +1,14 @@
 # Downstream adoption
 
-How to adopt Agentic Loop in a project that has its own way of working, and what
+How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.5.0, a breaking reset. There is no migration path from 0.4.x.
+> **Status:** 0.7.0 is current.
 
 ## What you are adopting
 
 A record format, four role presets, reusable skills, host adapters, and a few
-pure checks. Agentic Loop does not decide how your agents work, what order they
+pure checks. Castwork does not decide how your agents work, what order they
 do things in, or when to ask you. It gives them a shared way to write down what
 happened and a way to check whether a task got what it declared it needed. The
 one exception is the entry command run without a request: it proposes a next
@@ -16,7 +16,7 @@ step from your records and plan and asks before starting it.
 
 ## What it costs
 
-- One directory, `.agenticloop/`, and one config file, `agenticloop.json`.
+- One directory, `.castwork/`, and one config file, `castwork.json`.
 - Generated host directories for the hosts you pick, tracked in your repository.
 - No mandatory step before an authorized task starts. No mandatory bookkeeping
   commit.
@@ -27,13 +27,13 @@ product, it is not earning its place. That failure mode is why 0.5.0 exists.
 ## Install
 
 ```sh
-npx agenticloop setup --host codex
+npx castwork setup --host codex
 ```
 
 `--host` is repeatable and takes `codex`, `claude`, or `opencode`. The
-choice is recorded in `agenticloop.json`, so later runs need no flags.
+choice is recorded in `castwork.json`, so later runs need no flags.
 
-Commit everything it writes except `.agenticloop/local/`. Generated files carry
+Commit everything it writes except `.castwork/local/`. Generated files carry
 no absolute paths, so a colleague who clones the repository gets a working
 installation without running anything.
 
@@ -41,7 +41,7 @@ Pin the version in your `package.json` if you want reproducible generation.
 
 ## Fitting it to an existing project
 
-**Your working policy is prose.** Put it in `.agenticloop/project.md` in plain
+**Your working policy is prose.** Put it in `.castwork/project.md` in plain
 language. The toolkit does not parse it. Keep it short and let it evolve from
 what recurs: when a task stalls for a reason likely to come back, the thinker
 proposes an edit in the task record, and you decide whether it goes in.
@@ -62,27 +62,27 @@ marked done.
 **Name your checks after your commands.** If your test command is `npm test`,
 call the check `test`. The name is yours; the toolkit only matches strings.
 
-**Keep your own task tracker if you have one.** Agentic Loop is files only in
+**Keep your own task tracker if you have one.** Castwork is files only in
 0.5.0 — there is no GitHub backend or projection. Your agents can use GitHub
 through their host's normal tools; the toolkit simply has no opinion about it.
 
 ## Upgrading the toolkit
 
-Generated files are tracked, so adopting a new version of Agentic Loop is a
+Generated files are tracked, so adopting a new version of Castwork is a
 small change to your repository, like a lockfile bump. There is no way to adopt
 it without one, and no command that reloads a host session that is already
 running.
 
-`update` regenerates from the copy of Agentic Loop you run and never installs
+`update` regenerates from the copy of Castwork you run and never installs
 or upgrades the package itself. Upgrade the package first — or, to adopt a
-local checkout, run `node <checkout>/bin/agenticloop.js` in place of
-`npx agenticloop`.
+local checkout, run `node <checkout>/bin/castwork.js` in place of
+`npx castwork`.
 
-**Check which copy runs.** `npx --no agenticloop` runs the copy installed in
+**Check which copy runs.** `npx --no castwork` runs the copy installed in
 this repository, and that copy decides what every command means. Before you
 rely on a read-only flag such as `update --check`, run
-`npx --no agenticloop version`, which prints that copy's version number, and
-`npx --no agenticloop doctor`, which prints its version and location and the
+`npx --no castwork version`, which prints that copy's version number, and
+`npx --no castwork doctor`, which prints its version and location and the
 version and `source_digest` of the copy that last wrote the generated files.
 Since 0.6.0 an unknown flag is refused before anything is written, but an older
 copy may read `update --check` as `update` and write.
@@ -96,11 +96,11 @@ generated files refuses to write over them.
 **A clean upgrade.**
 
 ```sh
-npx agenticloop update --check   # what would change; writes nothing
-npx agenticloop update           # apply it; refuses before writing on a conflict
+npx castwork update --check   # what would change; writes nothing
+npx castwork update           # apply it; refuses before writing on a conflict
 ```
 
-`update` lists every path it wrote, `.agenticloop/generated.json` included.
+`update` lists every path it wrote, `.castwork/generated.json` included.
 Review them and commit them together, with the package or lockfile upgrade that
 caused them, apart from task work. If `update`
 refuses, it names each generated file you edited, or file of yours standing
@@ -110,51 +110,36 @@ release adds a section to the scaffold, the changelog says so and you add it by
 hand.
 
 **Upgrading in the middle of work.** `update` writes only generated files and
-`.agenticloop/generated.json`, so it can run in a working tree that holds
+`.castwork/generated.json`, so it can run in a working tree that holds
 unfinished work. Commit exactly the paths it listed, then close the host
 session and start
-a new one with the entry command and the task id (`/agenticloop T-012`, or
-`$agenticloop T-012` in Codex). The session you close keeps the old
+a new one with the entry command and the task id (`/castwork T-012`, or
+`$castwork T-012` in Codex). The session you close keeps the old
 instructions for as long as it runs; the task record carries the work across,
 which is what it is for. A resumed session still has the old instructions in
 its history, so run the entry command again at once if you resume instead.
 
 **Changing models.** A model you prefer, or the one your account can reach, is
 a personal choice: leave `model` and `reasoning_effort` unset in
-`agenticloop.json` and set them in the host's own configuration. New sessions
+`castwork.json` and set them in the host's own configuration. New sessions
 pick it up, and the repository never changes. A model the project means to pin
-for a role goes under `role_settings.<host>.<role>` in `agenticloop.json`: run
+for a role goes under `role_settings.<host>.<role>` in `castwork.json`: run
 `update`, commit both, and start a new session. See
 [host-adapters.md](host-adapters.md) for the settings each host accepts.
 
 ## Removing it
 
 ```sh
-npx agenticloop remove
+npx castwork remove
 ```
 
 Deletes the generated files it still owns and leaves `project.md`, `tasks/`, and
 `decisions/` in place. Your records are ordinary Markdown and remain readable
 without the toolkit installed — that is the point of the format.
 
-## Coming from 0.4.x
-
-There is no migration. `setup` and `update` refuse a 0.4.x layout and print the
-manual steps: remove the old generated files, keep your records, run `setup`.
-
-Your old task records will not satisfy the 0.5.0 format and are not rewritten
-for you. They stay where they are, readable. Port the ones you still care about
-by hand — in practice that means adding `schema: 1` and moving what you want
-checked into a `requirements` block.
-
-Commands you may be looking for are gone rather than renamed: activation,
-dispatch, handoff, readiness, review, audit, closeout, worktree, improvement,
-guidance, hydrate, and the GitHub family. There are no aliases and no deprecated
-forms. See [cli.md](cli.md) for the fifteen that remain.
-
 ## What you should not expect
 
-Agentic Loop does not prove who wrote a record. An `actor` is a string an agent
+Castwork does not prove who wrote a record. An `actor` is a string an agent
 typed. The toolkit compares strings and tells you they matched or did not; it
 reports every such fact as asserted. If you need authenticated identity, you
 need something else, and no setting here will give it to you.

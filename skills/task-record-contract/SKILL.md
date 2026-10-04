@@ -10,7 +10,7 @@ metadata:
 
 # Task record contract
 
-A task record is ordinary Markdown under `.agenticloop/tasks/`. Structured data
+A task record is ordinary Markdown under `.castwork/tasks/`. Structured data
 lives in the YAML frontmatter; the body is prose. The full contract is
 `docs/record-format.md`; this is how to write a good one.
 
@@ -96,7 +96,7 @@ grants a permission. The record stays readable and editable in every state.
 Who sets it depends on who is working. When a coordinator runs the roles,
 statuses are the coordinator's: a role it started records only `blocked` or
 `needs_context`. An agent working alone sets status itself with
-`npx --no agenticloop task set`, and `done` only once `task lint` shows the
+`npx --no castwork task set`, and `done` only once `task lint` shows the
 declared requirements met. `done` does not wait for a verdict: work that went straight
 through may have no verifier, and its requirements decide.
 

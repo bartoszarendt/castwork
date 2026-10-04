@@ -32,15 +32,15 @@ only mattered for one task.
 **Inside the task, under `## Blockers and decisions`**, when it explains this
 task and stops mattering afterwards.
 
-**In `.agenticloop/decisions/`**, when it outlives the task. A decision the
+**In `.castwork/decisions/`**, when it outlives the task. A decision the
 owner makes in conversation belongs here too: a session ends, and the choice
 goes with it unless it is written down. Cite the decision's id in each task
 record it governs, so a later reader of the task finds it.
 
-Before writing one, run `npx --no agenticloop decision list` and read any
+Before writing one, run `npx --no castwork decision list` and read any
 decision that covers the same ground: the new one may supersede it (see
 [Changing a decision](#changing-a-decision)). Then
-`npx --no agenticloop decision new "<title>"` writes the template, numbering the
+`npx --no castwork decision new "<title>"` writes the template, numbering the
 record for you:
 
 ```markdown

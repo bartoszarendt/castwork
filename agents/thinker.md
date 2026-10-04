@@ -74,7 +74,7 @@ would unblock it and, if useful, which role should act next. Name the cause in
 how the work was done, not only the check or verdict that reported it. If the
 cause will affect other tasks, such as a setup fact nobody wrote down, a check
 nobody named, or a quirk of this host or model, write a proposed edit to
-`.agenticloop/project.md` in the task record, under
+`.castwork/project.md` in the task record, under
 `## Blockers and decisions`: the section it belongs in (`## Working policy`,
 `## Checks`, or `## Setup facts`), the wording, and what it would prevent. Do
 not edit `project.md` unless the user asks.

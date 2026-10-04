@@ -1,6 +1,6 @@
 {
-  "name": "agenticloop",
-  "version": "0.6.0",
+  "name": "castwork",
+  "version": "0.7.0",
   "description": "A small, portable vocabulary for agent work: Markdown task records carrying work, candidates, evidence, and assessments, with reusable roles, skills, host adapters, and pure checks",
   "type": "module",
   "license": "MIT",
@@ -9,7 +9,7 @@
   },
   "packageManager": "npm@10.8.2",
   "bin": {
-    "agenticloop": "./bin/agenticloop.js"
+    "castwork": "./bin/castwork.js"
   },
   "exports": {
     ".": "./src/cli-main.js",
@@ -19,11 +19,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bartoszarendt/agenticloop.git"
+    "url": "git+https://github.com/bartoszarendt/castwork.git"
   },
-  "homepage": "https://github.com/bartoszarendt/agenticloop#readme",
+  "homepage": "https://github.com/bartoszarendt/castwork#readme",
   "bugs": {
-    "url": "https://github.com/bartoszarendt/agenticloop/issues"
+    "url": "https://github.com/bartoszarendt/castwork/issues"
   },
   "keywords": [
     "ai",
@@ -47,7 +47,7 @@
     "src/*.js",
     "src/adapters/",
     ".claude-plugin/",
-    "AGENTIC_LOOP.md",
+    "CASTWORK.md",
     "agents/",
     "skills/",
     "commands/",

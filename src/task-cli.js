@@ -57,7 +57,7 @@ function nextId(root) {
 /** @param {string} root @param {string} title */
 export function taskNew(root, title) {
   if (!title || title.trim() === '') {
-    throw new PublicError('a title is required', { hint: 'agenticloop task new "Short task title"' });
+    throw new PublicError('a title is required', { hint: 'castwork task new "Short task title"' });
   }
   const id = nextId(root);
   const template = fs.readFileSync(path.join(toolkitRoot(), 'memory', 'task-record.md'), 'utf8');
@@ -272,7 +272,7 @@ export function taskLint(root, id, options = {}) {
  */
 export function taskSet(root, id, field, value) {
   if (field === undefined || value === undefined) {
-    throw new PublicError('a field and a value are required', { hint: 'agenticloop task set T-001 status in_review' });
+    throw new PublicError('a field and a value are required', { hint: 'castwork task set T-001 status in_review' });
   }
   const { file, record } = findRecord(root, id);
 

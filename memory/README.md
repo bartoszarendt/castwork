@@ -1,12 +1,12 @@
 # Record templates (read-only package source)
 
 This directory holds the toolkit-owned record shapes. The live mutable store is
-`.agenticloop/` in each target project.
+`.castwork/` in each target project.
 
 ```text
 memory/
   scaffold/
-    project.md          seeded once into .agenticloop/, never overwritten
+    project.md          seeded once into .castwork/, never overwritten
     decisions/.gitkeep  directory marker (not copied into targets)
     tasks/.gitkeep      directory marker (not copied into targets)
   task-record.md        the shape `task new` writes

@@ -1,4 +1,4 @@
-# Agentic Loop
+# Castwork
 
 **A small, portable vocabulary for agent work.** Markdown task records carrying
 work, candidates, evidence, and assessments; four role presets based on the
@@ -11,10 +11,10 @@ checked.
 
 Agents choose the workflow. Hosts execute it.
 
-Agentic Loop reports what was recorded and who asserted it; it does not prove
+Castwork reports what was recorded and who asserted it; it does not prove
 who wrote a record.
 
-> **Status:** 0.6.0 is current. 0.5.0 was a breaking reset, with no migration path from 0.4.x.
+> **Status:** 0.7.0 is current.
 
 ## Why
 
@@ -33,24 +33,24 @@ whether what a task declared it needed has actually been obtained.
 ## Install
 
 ```sh
-npx agenticloop setup --host codex --host claude
+npx castwork setup --host codex --host claude
 ```
 
 Name the hosts you want; `--host` is repeatable and takes `codex`,
 `claude`, or `opencode`. There is no prompt — `setup` never asks a question
 it could be told, and a run with no hosts and none recorded refuses rather than
-guessing. Later runs reuse the `hosts` recorded in `agenticloop.json`, so
-`npx agenticloop setup` on its own is enough once it is installed.
+guessing. Later runs reuse the `hosts` recorded in `castwork.json`, so
+`npx castwork setup` on its own is enough once it is installed.
 
 This generates host integrations for the hosts you named and creates
-`.agenticloop/` in your repository. Generated files are tracked and contain no
+`.castwork/` in your repository. Generated files are tracked and contain no
 absolute paths.
 
 ```sh
-npx agenticloop doctor          # read-only diagnosis, including whether generated files are current
-npx agenticloop update --check  # list what update would change; write nothing
-npx agenticloop update          # refresh generated files; refuses before writing on a conflict
-npx agenticloop remove     # remove generated files, keep your records
+npx castwork doctor          # read-only diagnosis, including whether generated files are current
+npx castwork update --check  # list what update would change; write nothing
+npx castwork update          # refresh generated files; refuses before writing on a conflict
+npx castwork remove     # remove generated files, keep your records
 ```
 
 `remove` never touches `project.md`, `tasks/`, or `decisions/`.
@@ -101,7 +101,7 @@ Users should be greeted by name.
 The record declares what it needs. The checks report whether it was obtained.
 
 ```sh
-npx agenticloop task lint T-001
+npx castwork task lint T-001
 ```
 
 Three separate outputs, never merged: structural validity, reference
@@ -143,7 +143,7 @@ complete, and responsive. The paper evaluates the same three roles on coding,
 math, reasoning, and knowledge benchmarks, and removing the role split lowered
 its average score.
 
-Agentic Loop keeps those responsibilities and adds what the paper leaves open:
+Castwork keeps those responsibilities and adds what the paper leaves open:
 work grounded in a real repository, durable records instead of a transcript,
 verdicts bound to an exact candidate, and declared requirements, not a single
 accept, deciding when a task is done. It is based on TRINITY's role model, not
@@ -174,7 +174,7 @@ Structure is added only when a named consumer requires it.
 
 ## Documentation
 
-- [AGENTIC_LOOP.md](AGENTIC_LOOP.md) — the vocabulary and its rules
+- [CASTWORK.md](CASTWORK.md) — the vocabulary and its rules
 - [docs/record-format.md](docs/record-format.md) — the record contract
 - [docs/cli.md](docs/cli.md) — the command paths
 - [docs/getting-started.md](docs/getting-started.md) — first task, end to end

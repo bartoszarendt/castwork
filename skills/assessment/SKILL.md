@@ -80,7 +80,7 @@ GIT_INDEX_FILE=<tmp>/index git --work-tree=<tmp>/tree checkout-index -a
 A snapshot exists only in the clone that took it. Reviewing from another clone,
 ask for a commit the project authorizes, or for the base commit and
 `git diff <base> <sha>`: apply the diff to a clean checkout of the base and run
-`npx --no agenticloop snapshot` there. Identical content gives the identical
+`npx --no castwork snapshot` there. Identical content gives the identical
 `tree:` sha, which proves you hold the candidate.
 
 Do not accept on the strength of a summary. If you did not read it, your verdict

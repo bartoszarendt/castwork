@@ -135,7 +135,7 @@ test('4: mayBeDone refuses the mixed verdict for both requirement kinds', () => 
 });
 
 test('4: task set status done refuses a record with a mixed verdict', (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-verdict-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-verdict-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, TASKS_DIRECTORY, 'T-001.md');

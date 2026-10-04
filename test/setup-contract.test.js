@@ -11,7 +11,7 @@ import { setup, update } from '../src/setup.js';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-contract-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-contract-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -60,7 +60,7 @@ test('no shipped document shows a bare setup as a first-install command', () => 
     const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
     for (const block of text.matchAll(/```sh\n([\s\S]*?)```/g)) {
       for (const line of block[1].split('\n')) {
-        if (!/^\s*npx agenticloop setup\b/.test(line)) continue;
+        if (!/^\s*npx castwork setup\b/.test(line)) continue;
         assert.match(line, /--host/, `${relative} shows a bare setup in a shell block: ${line.trim()}`);
       }
     }
@@ -79,7 +79,7 @@ test('the written config carries no pointer to a path that is not there', (t) =>
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });
   const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
-  assert.ok(!('extends' in config), 'agenticloop.json must not declare extends');
+  assert.ok(!('extends' in config), 'castwork.json must not declare extends');
   assert.deepEqual(Object.keys(config).sort(), ['hosts']);
 });
 
@@ -88,13 +88,13 @@ test('an existing extends key is dropped rather than carried forward', (t) => {
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, CONFIG_FILE);
   const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-  config.extends = './agenticloop/config.json';
+  config.extends = './castwork/config.json';
   fs.writeFileSync(file, JSON.stringify(config, null, 2), 'utf8');
   setup(root, { hosts: ['codex'] });
   assert.ok(!('extends' in JSON.parse(fs.readFileSync(file, 'utf8'))));
 });
 
-test('a user key in agenticloop.json survives a rerun', (t) => {
+test('a user key in castwork.json survives a rerun', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, CONFIG_FILE);

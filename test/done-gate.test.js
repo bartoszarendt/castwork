@@ -19,7 +19,7 @@ import { setup } from '../src/setup.js';
 import { taskLint, taskSet } from '../src/task-cli.js';
 
 function fixture(t, frontmatter) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-donegate-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-donegate-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, TASKS_DIRECTORY, 'T-001.md');

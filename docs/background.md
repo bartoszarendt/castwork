@@ -1,10 +1,10 @@
 # Background: the TRINITY role model
 
-Agentic Loop's four roles are based on the role model of one paper. This page
+Castwork's four roles are based on the role model of one paper. This page
 says what the paper defines and found, how the project applies it, where the
 project goes further, and what it deliberately does not take.
 
-Agentic Loop is based on the TRINITY role model. It is not an implementation of
+Castwork is based on the TRINITY role model. It is not an implementation of
 TRINITY, and it has no learned coordinator.
 
 ## Source
@@ -63,7 +63,7 @@ Three limits apply to reading these figures:
 
 ## How the project applies it
 
-Agentic Loop takes the three roles as responsibility and boundary presets, and
+Castwork takes the three roles as responsibility and boundary presets, and
 adds the coordinator as a fourth:
 
 | Role | From the paper | Responsibility here | Boundary |
@@ -87,7 +87,7 @@ toolkit selects roles, and no order of roles is required.
 
 **Model binding is the project's alternative to the paper's per-turn model
 selection, not an equivalent.** `role_settings.<host>.<role>` in
-`agenticloop.json` is fixed configuration: it binds a model, reasoning effort,
+`castwork.json` is fixed configuration: it binds a model, reasoning effort,
 and similar settings to each generated role, and it changes only when someone
 edits it. Nothing chooses a model per turn. Separating the thinker from the
 verifier does let planning and judgement bind different models, and
@@ -99,7 +99,7 @@ choosing a host each time.
 ## Where the project goes beyond the paper
 
 The paper names its own limitation (section 6): "the system can devise plans
-involving tools but cannot yet act on them". Agentic Loop works in that gap:
+involving tools but cannot yet act on them". Castwork works in that gap:
 
 - **Grounded work.** Roles act in a real repository, on real files, with real
   checks.

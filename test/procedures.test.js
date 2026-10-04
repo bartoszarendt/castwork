@@ -51,7 +51,7 @@ test('a Claude Code plugin role, installed as written, names skills the plugin s
     assert.equal(parseRecord(raw).frontmatter.procedures, undefined, `${id} keeps its procedures in the text a plugin role reads, not in frontmatter`);
     const closing = raw.trimEnd().split('\n\n').pop();
     assert.equal(closing.replace(/\s+/g, ' '), `Procedure skills: ${procedures.map((procedure) => `\`${procedure}\``).join(', ')}.`, id);
-    // The plugin's default skills/ scan exposes each one as agenticloop:<id>.
+    // The plugin's default skills/ scan exposes each one as castwork:<id>.
     for (const procedure of procedures) assert.ok(fs.existsSync(path.join(toolkitRoot(), 'skills', procedure, 'SKILL.md')), procedure);
   }
 });
@@ -116,7 +116,7 @@ test('opencode denies the entry skill to the thinker, worker, and verifier, and 
   const files = generateHost('opencode');
   for (const id of ['thinker', 'worker', 'verifier']) {
     const front = frontmatterOf(files.find((file) => file.path === `.opencode/agents/${id}.md`).content);
-    assert.deepEqual(front.permission, { skill: { agenticloop: 'deny' } }, id);
+    assert.deepEqual(front.permission, { skill: { castwork: 'deny' } }, id);
     assert.equal(front.name, id);
   }
   const coordinator = frontmatterOf(files.find((file) => file.path === '.opencode/agents/coordinator.md').content);
@@ -129,7 +129,7 @@ test('the deny sits alongside role settings, and other hosts carry no permission
   const front = frontmatterOf(worker.content);
   assert.equal(front.model, 'openai/gpt-5.6');
   assert.equal(front.variant, 'high');
-  assert.deepEqual(front.permission, { skill: { agenticloop: 'deny' } });
+  assert.deepEqual(front.permission, { skill: { castwork: 'deny' } });
 
   for (const file of generateHost('claude').filter((entry) => entry.path.startsWith('.claude/agents/'))) {
     assert.equal(frontmatterOf(file.content).permission, undefined, file.path);

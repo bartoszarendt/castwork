@@ -289,7 +289,7 @@ function entryNotes(frontmatter, evidence) {
       undeclared.set(check, [...(undeclared.get(check) ?? []), index]);
     }
     const command = typeof entry.command === 'string' ? entry.command : '';
-    if (/\bagenticloop(?:\.js)?\s+task\s+lint\b/.test(command)) {
+    if (/\bcastwork(?:\.js)?\s+task\s+lint\b/.test(command)) {
       notes.push({
         code: 'evidence.lint_as_evidence',
         message: `evidence[${index}] records task lint, which reports on the record, not on the candidate`,

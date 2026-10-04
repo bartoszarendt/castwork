@@ -13,25 +13,25 @@ node_modules/
 .opencode/
 .claude/
 .codex/
-.agents/skills/agenticloop/
+.agents/skills/castwork/
 .agents/plugins/marketplace.json
 .cursor/
 .github/agents/
-.github/skills/agenticloop/
-.github/prompts/agenticloop.prompt.md
-plugins/agenticloop/
+.github/skills/castwork/
+.github/prompts/castwork.prompt.md
+plugins/castwork/
 # Generated host adapter output for the toolkit itself.
 # Target projects generate their own adapter output under their chosen
-# output directory; for toolkit verification, generate under .agenticloop/tmp/
+# output directory; for toolkit verification, generate under .castwork/tmp/
 # or keep the legacy root tmp/ path only for compatibility.
 opencode.jsonc
-.agenticloop/tmp/
+.castwork/tmp/
 # Per-lane parallel worktrees live inside the repo root to stay within the
 # host's workspace sandbox; never report them as untracked.
-.agenticloop/worktrees/
-.agenticloop/locks/
-.agenticloop/local/
-.agenticloop/host-role-capabilities/
+.castwork/worktrees/
+.castwork/locks/
+.castwork/local/
+.castwork/host-role-capabilities/
 tmp/
 !memory/scaffold/tmp/
 !memory/scaffold/tmp/.gitkeep

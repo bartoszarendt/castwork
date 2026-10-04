@@ -11,7 +11,7 @@ import { setup } from '../src/setup.js';
 import { findRecord, taskLint, taskSet } from '../src/task-cli.js';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-dup-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-dup-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   return root;

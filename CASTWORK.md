@@ -1,18 +1,18 @@
-# Agentic Loop
+# Castwork
 
 A small, portable vocabulary for agent work.
 
-Agentic Loop provides the task record format and its status vocabulary, pure
+Castwork provides the task record format and its status vocabulary, pure
 checks over recorded facts, four role presets, reusable skills, and thin host
 adapters. **Agents choose the workflow. Hosts execute it.**
 
-Agentic Loop interprets what was recorded. It does not prove who recorded it.
+Castwork interprets what was recorded. It does not prove who recorded it.
 
-**Status:** version 0.6.0 is current. 0.5.0 was a breaking reset, with no migration from 0.4.x.
+**Status:** version 0.7.0 is current.
 
 ## What the toolkit provides, and what it does not
 
-| Agentic Loop provides | Agent, host, and user decide |
+| Castwork provides | Agent, host, and user decide |
 |---|---|
 | The task record format and its status vocabulary | Task breakdown, sequencing, parallelism |
 | Pure checks over recorded facts and optional local observations | What an unmet or unknown requirement means now |
@@ -40,7 +40,7 @@ around them in layers, and none of it is a fifth concept:
 | Layer | Terms | What they are |
 |---|---|---|
 | Relations and constraints | requirement, actor, dependency | a requirement is part of the work, satisfied by effective evidence and assessments of the current candidate; an actor is who produced a candidate or recorded an entry, and independence compares actors, not roles; a dependency (`depends_on`) says one task needs another |
-| Adjacent durable artifact | decision | one file under `.agenticloop/decisions/`, for a choice that outlives a task |
+| Adjacent durable artifact | decision | one file under `.castwork/decisions/`, for a choice that outlives a task |
 | Execution context | role, skill, policy, host, model | how the work was done; an assessment names its `role`, evidence and assessments may name their `host` and `model`, and skill and policy are not record fields |
 
 ## Requirements, not workflow
@@ -154,27 +154,27 @@ See [docs/skill-anatomy.md](docs/skill-anatomy.md#project-and-host-skills).
 ## Policy is prose
 
 The project's working policy is an ordinary sentence or paragraph in
-`.agenticloop/project.md`. The toolkit does not compile prose into rules.
+`.castwork/project.md`. The toolkit does not compile prose into rules.
 Checkable requirements are declared per task.
 
 ## Files
 
 ```
-.agenticloop/
+.castwork/
   project.md        prose: setup facts, working policy, pointers
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
-agenticloop.json    project configuration: hosts, per-host role settings,
+castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
-Nothing else is written under `.agenticloop/`.
+Nothing else is written under `.castwork/`.
 
 ## Getting started
 
-`npx agenticloop setup --host <name>` installs for the hosts you name. See
+`npx castwork setup --host <name>` installs for the hosts you name. See
 [docs/getting-started.md](docs/getting-started.md).
 
 ## What this is not

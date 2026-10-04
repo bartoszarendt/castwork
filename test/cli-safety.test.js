@@ -18,10 +18,10 @@ import { COMMAND_PATHS, FLAGS, GLOBAL_FLAGS, checkUsage, parseArgs } from '../sr
 import { GENERATED_MANIFEST, PROJECT_FILE } from '../src/layout.js';
 import { doctor, setup, update } from '../src/setup.js';
 
-const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'agenticloop.js');
+const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'castwork.js');
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-safety-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-safety-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -132,7 +132,7 @@ test('every accepted flag is one the CLI knows, and help lists each command\'s f
   const help = cli(root, 'help').out;
   assert.match(help, /update +Regenerate[^\n]*\n +flags: --check, --force-generated <path>, --json/);
   assert.match(help, /setup +Install[^\n]*\n +flags: --host <name>, --force-generated <path>, --json/);
-  assert.match(help, /npx --no agenticloop help/);
+  assert.match(help, /npx --no castwork help/);
 });
 
 test('parseArgs records the flags named, in order', () => {
@@ -188,7 +188,7 @@ test('a manifest written by a newer version makes setup and update refuse and wr
 
   const check = cli(root, 'update', '--check');
   assert.equal(check.code, 1);
-  assert.match(check.out, /blocked .*generated\.json \(written by agenticloop 9\.9\.9, newer than this copy\)/);
+  assert.match(check.out, /blocked .*generated\.json \(written by castwork 9\.9\.9, newer than this copy\)/);
   assert.equal(JSON.parse(cli(root, 'update', '--check', '--json').out).downgrade, true);
   assert.deepEqual(tree(root), before, '--check wrote nothing');
 });
@@ -201,11 +201,11 @@ test('doctor reports the running identity and the manifest identity, and warns w
   assert.equal(report.toolkit_location, toolkitRoot());
   assert.equal(report.toolkit_source_digest, sourceDigest());
   assert.equal(report.source_digest, sourceDigest());
-  assert.ok(!report.findings.some((finding) => /agenticloop/.test(finding.message) && /written by/.test(finding.message)));
+  assert.ok(!report.findings.some((finding) => /castwork/.test(finding.message) && /written by/.test(finding.message)));
 
   const printed = cli(root, 'doctor').out;
-  assert.ok(printed.includes(`running: agenticloop ${packageVersion()} at ${toolkitRoot()} (${sourceDigest()})`));
-  assert.ok(printed.includes(`manifest: agenticloop ${packageVersion()} (${sourceDigest()})`));
+  assert.ok(printed.includes(`running: castwork ${packageVersion()} at ${toolkitRoot()} (${sourceDigest()})`));
+  assert.ok(printed.includes(`manifest: castwork ${packageVersion()} (${sourceDigest()})`));
 
   editManifest(root, (manifest) => { manifest.source_digest = `sha256:${'0'.repeat(64)}`; });
   assert.ok(doctor(root).findings.some((finding) => finding.level === 'warn' && /different build/.test(finding.message)));
@@ -287,14 +287,14 @@ test('after a bare --, every token is an argument, so a title may start with a d
   setup(root, { hosts: ['codex'] });
   const created = cli(root, 'task', 'new', '--', '-x title');
   assert.equal(created.code, 0, created.err);
-  const record = fs.readFileSync(path.join(root, '.agenticloop', 'tasks', 'T-001.md'), 'utf8');
+  const record = fs.readFileSync(path.join(root, '.castwork', 'tasks', 'T-001.md'), 'utf8');
   assert.match(record, /^title: "?-x title"?$/m);
   assert.deepEqual(parseArgs(['task', 'new', '--', '--json', '-x']).positionals, ['task', 'new', '--json', '-x']);
   assert.deepEqual(parseArgs(['task', 'new', '--', '--json']).named, [], 'a flag after -- is not a flag');
 
   const debug = cli(root, 'task', 'new', '--', '--debug');
   assert.equal(debug.code, 0, debug.err);
-  assert.match(fs.readFileSync(path.join(root, '.agenticloop', 'tasks', 'T-002.md'), 'utf8'), /^title: "?--debug"?$/m);
+  assert.match(fs.readFileSync(path.join(root, '.castwork', 'tasks', 'T-002.md'), 'utf8'), /^title: "?--debug"?$/m);
 });
 
 test('a refused dash-leading token names -- in its hint', (t) => {
@@ -328,7 +328,7 @@ test('doctor tells an older copy to run the newer one, not to update or force', 
     assert.doesNotMatch(finding.next, /--force-generated|Run update|run update --check/, finding.message);
   }
   for (const finding of findings.filter((entry) => /modified locally|differ from/.test(entry.message))) {
-    assert.match(finding.next, /Run the newer copy, agenticloop 9\.9\.9/, finding.message);
+    assert.match(finding.next, /Run the newer copy, castwork 9\.9\.9/, finding.message);
   }
-  assert.match(doctor(root).findings.find((finding) => /newer than the copy running now/.test(finding.message)).next, /Run the newer copy, agenticloop 9\.9\.9/);
+  assert.match(doctor(root).findings.find((finding) => /newer than the copy running now/.test(finding.message)).next, /Run the newer copy, castwork 9\.9\.9/);
 });

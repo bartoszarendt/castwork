@@ -18,7 +18,7 @@ import { formatScalar, parseYaml, YamlError } from './yaml.js';
 /** @param {string} root @param {string} title */
 export function decisionNew(root, title) {
   if (!title || title.trim() === '') {
-    throw new PublicError('a title is required', { hint: 'agenticloop decision new "Short decision title"' });
+    throw new PublicError('a title is required', { hint: 'castwork decision new "Short decision title"' });
   }
   const directory = recordDirectory(root, DECISIONS_DIRECTORY, { create: true });
 

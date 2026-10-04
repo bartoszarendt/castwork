@@ -2,11 +2,11 @@
   "id": "opencode",
   "label": "OpenCode",
   "role_frontmatter": { "model": "model", "reasoning_effort": "reasoningEffort", "variant": "variant" },
-  "delegated_role_frontmatter": { "permission": { "skill": { "agenticloop": "deny" } } },
+  "delegated_role_frontmatter": { "permission": { "skill": { "castwork": "deny" } } },
   "files": [
     { "kind": "role", "to": ".opencode/agents/{role}.md", "format": "markdown" },
-    { "kind": "command", "to": ".opencode/commands/agenticloop.md", "format": "command" },
-    { "kind": "skill", "to": ".opencode/skills/agenticloop/references/{skill}.md", "format": "reference" },
-    { "kind": "index", "to": ".opencode/skills/agenticloop/SKILL.md", "format": "skill" }
+    { "kind": "command", "to": ".opencode/commands/castwork.md", "format": "command" },
+    { "kind": "skill", "to": ".opencode/skills/castwork/references/{skill}.md", "format": "reference" },
+    { "kind": "index", "to": ".opencode/skills/castwork/SKILL.md", "format": "skill" }
   ]
 }

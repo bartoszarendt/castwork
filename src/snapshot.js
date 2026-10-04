@@ -108,7 +108,7 @@ export function snapshotScope(top, root) {
  * @returns {T}
  */
 export function withTemporaryIndex(work) {
-  const file = path.join(os.tmpdir(), `agenticloop-index-${process.pid}-${crypto.randomBytes(6).toString('hex')}`);
+  const file = path.join(os.tmpdir(), `castwork-index-${process.pid}-${crypto.randomBytes(6).toString('hex')}`);
   try {
     return work({ GIT_INDEX_FILE: file }, file);
   } finally {
@@ -209,7 +209,7 @@ export function takeSnapshot(root, options = {}) {
   // subdirectory, a snapshot would have named only that subdirectory's files.
   if (!fs.existsSync(path.join(root, STATE_DIRECTORY))) {
     throw new PublicError(`${STATE_DIRECTORY}/ does not exist here`, {
-      hint: 'Run snapshot from the project root, where setup created .agenticloop/. Nothing was written.',
+      hint: 'Run snapshot from the project root, where setup created .castwork/. Nothing was written.',
     });
   }
   let base = null;

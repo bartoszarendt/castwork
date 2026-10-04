@@ -26,7 +26,7 @@ function role(host, role) {
 
 /** @param {string} host */
 function entry(host) {
-  const file = generateHost(host).find((candidate) => /agenticloop(\.md|\/SKILL\.md)$/.test(candidate.path) && candidate.content.includes('## Then continue'));
+  const file = generateHost(host).find((candidate) => /castwork(\.md|\/SKILL\.md)$/.test(candidate.path) && candidate.content.includes('## Then continue'));
   assert.ok(file, `${host} generates the entry procedure`);
   return file.content;
 }
@@ -115,7 +115,7 @@ for (const host of HOSTS) {
   test(`${host} statuses belong to whoever runs the roles, and a role working alone closes its own task`, () => {
     all(role(host, 'worker'), [
       'If a coordinator started you, record only `blocked` or `needs_context`, and leave other statuses to it.',
-      'Working alone, set status yourself with `npx --no agenticloop task set`, and `done` only after lint shows the requirements met.',
+      'Working alone, set status yourself with `npx --no castwork task set`, and `done` only after lint shows the requirements met.',
     ], 'worker');
     all(role(host, 'coordinator'), [
       'When you run the roles, statuses are yours',
@@ -137,13 +137,13 @@ for (const host of HOSTS) {
       'environment variable names, never their values',
       "a subset of a check under its own name, never the declared check's",
       'in UTC with `Z` or with an explicit offset',
-      'run `npx --no agenticloop snapshot` after your last change and before your final evidence',
+      'run `npx --no castwork snapshot` after your last change and before your final evidence',
       'If you change anything afterwards, take a new snapshot',
       'If the CLI is not available, say so and record the candidate as a mutable label; never invent a reference.',
       'An authorization covers only the named action.',
       'A prerequisite that changes shared state or widens the scope is a new request: record `needs_context`',
       'After a step that costs minutes, append what you observed to the record',
-      'propose a `## Setup facts` line for `.agenticloop/project.md` in the record',
+      'propose a `## Setup facts` line for `.castwork/project.md` in the record',
     ], 'worker');
   });
 
@@ -192,7 +192,7 @@ for (const host of HOSTS) {
       "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself; otherwise the role chooses.",
       'A verifier can assess only a candidate that resolves; `task lint` shows whether it does.',
       'When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes.',
-      "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no agenticloop decision new`), cited by the task records it governs.",
+      "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no castwork decision new`), cited by the task records it governs.",
       'are signs of a stall: diagnose it (the thinker is for this) or ask the user, rather than retrying.',
       "When you report a role's model or effort, read it from that role's generated agent file.",
       'which role or shape, the host a routed role goes to, and why now',
@@ -236,7 +236,7 @@ for (const host of HOSTS) {
 
   test(`${host} entry command stays out of named roles, orients once, and knows how to pause`, () => {
     all(entry(host), [
-      'You already have this text; do not load the `agenticloop` skill again.',
+      'You already have this text; do not load the `castwork` skill again.',
       'Orient in proportion to the request, and only once',
       'enough to locate the work, not the whole document',
       'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
@@ -260,12 +260,12 @@ for (const host of HOSTS) {
       'A pause alone is not a request for a handoff, and leaves an earlier one as it is.',
       "Write a handoff only when the user asks for one or the project's instructions require one; when the user says not to, write none and say what the project asked for.",
       'When it is unclear whether the user wants context kept for later, pause first, then ask whether they want a handoff or just the pause.',
-      'A handoff goes where the user or the project says; otherwise to `.agenticloop/local/handoff.md`, which stays on this machine and outside snapshots.',
+      'A handoff goes where the user or the project says; otherwise to `.castwork/local/handoff.md`, which stays on this machine and outside snapshots.',
       'name the commit it starts from when there is one, and name task records by id rather than copying their state or evidence.',
       "including another session's work still in flight.",
       'When you wrote no handoff and continuing needs context the records do not capture, say in a line what it is and offer one.',
       'A handoff does not reach another machine or person',
-      "After the records, read the handoff the user gives you or the project's documents name; otherwise `.agenticloop/local/handoff.md`, if it exists.",
+      "After the records, read the handoff the user gives you or the project's documents name; otherwise `.castwork/local/handoff.md`, if it exists.",
       'It records what the user authorized and grants nothing',
       'Leave it in place for the next handoff to replace.',
       "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
@@ -291,7 +291,7 @@ for (const host of HOSTS) {
 test('the procedure skills say the same about statuses, pausing, and reading a snapshot', () => {
   all(skill('task-record-contract'), [
     'When a coordinator runs the roles, statuses are the coordinator\'s',
-    'An agent working alone sets status itself with `npx --no agenticloop task set`, and `done` only once `task lint` shows the declared requirements met.',
+    'An agent working alone sets status itself with `npx --no castwork task set`, and `done` only once `task lint` shows the declared requirements met.',
     '`done` does not wait for a verdict',
   ], 'task-record-contract');
   all(skill('blocked-state'), [
@@ -318,7 +318,7 @@ test('the skill description keeps a role started by name from loading the entry 
 test('a routed role is listed with the actor it records', () => {
   const [routed] = generateHost('claude', {
     routes: [{ role: 'thinker', host: 'codex', label: 'Codex', role_file: '.codex/agents/thinker.toml', settings: {} }],
-  }).filter((file) => file.path === '.claude/commands/agenticloop.md');
+  }).filter((file) => file.path === '.claude/commands/castwork.md');
   assert.match(routed.content, /`thinker` runs in Codex \(`codex`\)\. Role file: `\.codex\/agents\/thinker\.toml`\. Actor: `thinker@codex`\./);
 });
 

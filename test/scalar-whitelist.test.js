@@ -79,7 +79,7 @@ test('r4-2: boolean-like words and everything outside the whitelist are quoted',
 /* ------------------------------------------------------------------ */
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-r4model-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-r4model-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex', 'claude', 'opencode'] });
   const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));

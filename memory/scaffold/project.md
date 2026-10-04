@@ -1,6 +1,6 @@
 # Project
 
-Prose only. Machine configuration lives in `agenticloop.json` at the repository
+Prose only. Machine configuration lives in `castwork.json` at the repository
 root, not here.
 
 ## What this project is

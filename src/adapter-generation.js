@@ -192,7 +192,7 @@ export function readSkills() {
  * It carries two descriptions because it is projected two ways. `description`
  * is read when the user invoked the command by name, so it may be a plain
  * instruction. `skill_description` is read by a host deciding **whether** to
- * load Agentic Loop at all, so it has to name its trigger and its boundary.
+ * load Castwork at all, so it has to name its trigger and its boundary.
  * There is deliberately no fallback between them: an imperative written for an
  * invoked command becomes, as a skill description, an invitation to start
  * orchestrating work nobody asked about.
@@ -226,12 +226,12 @@ export function commandDescriptions(frontmatter) {
   }
   if (typeof skillDescription !== 'string' || skillDescription.trim() === '') {
     throw new PublicError('the entry command has no skill_description', {
-      hint: 'A generated skill index needs its own description string, naming when to use Agentic Loop and when not to.',
+      hint: 'A generated skill index needs its own description string, naming when to use Castwork and when not to.',
     });
   }
   if (description.trim() === skillDescription.trim()) {
     throw new PublicError('the entry command repeats its description as skill_description', {
-      hint: 'A skill index says when to use Agentic Loop; a command the user invoked by name does not have to.',
+      hint: 'A skill index says when to use Castwork; a command the user invoked by name does not have to.',
     });
   }
   return { description: description.trim(), skill_description: skillDescription.trim() };
@@ -388,14 +388,14 @@ function renderReference(skill) {
 function renderSkillIndex(command, skills, roles, adapter, routes) {
   const lines = [
     '---',
-    'name: agenticloop',
-    `description: ${yamlString(command?.skill_description ?? "Use when asked to work with this repository's Agentic Loop task records.")}`,
+    'name: castwork',
+    `description: ${yamlString(command?.skill_description ?? "Use when asked to work with this repository's Castwork task records.")}`,
     ...skillFrontmatter(adapter),
   ];
   lines.push(
     '---',
     '',
-    '# Agentic Loop',
+    '# Castwork',
     '',
     command ? command.body : '',
     ...(command ? ['', renderRoutes(routes)] : []),
@@ -478,7 +478,7 @@ const ROUTE_SETTINGS = Object.freeze(['model', 'reasoning_effort', 'variant']);
  *
  * It is written for every host, `None` included, so the coordinator reads what
  * this repository routes rather than inferring it from a missing section.
- * Settings keep the names `agenticloop.json` uses; the coordinator passes them
+ * Settings keep the names `castwork.json` uses; the coordinator passes them
  * to the target CLI's own options.
  *
  * @param {ResolvedRoute[]} routes

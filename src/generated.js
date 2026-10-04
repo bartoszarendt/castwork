@@ -1,7 +1,7 @@
 /**
  * Ownership of generated files.
  *
- * `.agenticloop/generated.json` lists every generated file with its digest and
+ * `.castwork/generated.json` lists every generated file with its digest and
  * is tracked alongside the files it describes. That is the whole model: no
  * certificate, no layout negotiation, no repair path.
  */
@@ -32,10 +32,10 @@ export function containedPath(root, relative) {
 
 /**
  * Resolve a path the installer itself writes: the state directories,
- * `project.md`, `.gitignore`, and `agenticloop.json`.
+ * `project.md`, `.gitignore`, and `castwork.json`.
  *
  * These were the writes that used a bare `path.join` and so followed a link
- * placed at `.agenticloop`. They share every containment rule with a generated
+ * placed at `.castwork`. They share every containment rule with a generated
  * path except one: they are allowed to be user-owned, because seeding them is
  * exactly their job.
  *
@@ -51,7 +51,7 @@ export function installPath(root, relative) {
  * Resolve a record directory such as `tasks/` or `decisions/`.
  *
  * Git keeps no empty directory, so a fresh clone of an installed project lacks
- * one until a record in it is committed. Require an ordinary `.agenticloop/`
+ * one until a record in it is committed. Require an ordinary `.castwork/`
  * directory and validate containment for both existing and missing paths.
  * With `create`, make a missing record directory; otherwise leave it absent
  * for readers to treat as holding no records. Invalid entries and filesystem
@@ -111,7 +111,7 @@ function resolveContained(root, relative, subject, refuseUserOwned) {
     throw new PublicError(`${subject} contains an empty generated path`);
   }
   // Normalise separators first: a backslash is a path separator on Windows, so
-  // `.agenticloop\\tasks\\T-001.md` and `.agenticloop/tasks/T-001.md` are the
+  // `.castwork\\tasks\\T-001.md` and `.castwork/tasks/T-001.md` are the
   // same file and must be judged the same way.
   const unified = relative.replace(/\\/g, '/');
   if (path.posix.isAbsolute(unified) || /^[A-Za-z]:/.test(unified) || unified.startsWith('\\\\')) {
@@ -147,7 +147,7 @@ function resolveContained(root, relative, subject, refuseUserOwned) {
  *
  * The comparison is case-insensitive on every platform, not only where the
  * filesystem is. A generated path never legitimately differs from a user-owned
- * path by case alone, so `.AGENTICLOOP/TASKS/T-001.md` is refused on Linux too:
+ * path by case alone, so `.CASTWORK/TASKS/T-001.md` is refused on Linux too:
  * refusing costs nothing and being case-sensitive cost the real record on
  * Windows and macOS.
  *
@@ -167,7 +167,7 @@ function isUserOwned(normalised) {
  *
  * Resolving only the parent was not enough: a link whose descendants do not
  * exist yet resolved to nothing and was allowed, and a generated path that was
- * itself a link let a write follow it to an arbitrary file. Agentic Loop never
+ * itself a link let a write follow it to an arbitrary file. Castwork never
  * generates a symlink, so encountering one on a generated path is always either
  * a mistake or an attack, and it fails closed either way.
  *
@@ -224,7 +224,7 @@ export function digest(content) {
 
 /** @param {string} root @returns {Manifest|null} */
 export function readManifest(root) {
-  // Contained before it is read, so a linked `.agenticloop` is refused before
+  // Contained before it is read, so a linked `.castwork` is refused before
   // any caller has written anything rather than at the closing write.
   const file = containedPath(root, GENERATED_MANIFEST);
   if (!fs.existsSync(file)) return null;

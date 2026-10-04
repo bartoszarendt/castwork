@@ -1,6 +1,6 @@
 # Getting started
 
-Agentic Loop gives your agents a shared way to record work, candidates,
+Castwork gives your agents a shared way to record work, candidates,
 evidence, and assessments, and a way to check whether a task got what it
 declared it needed. It does not tell them how to work.
 
@@ -9,7 +9,7 @@ declared it needed. It does not tell them how to work.
 From the root of the repository you want to work in:
 
 ```sh
-npx agenticloop setup --host codex --host claude --host opencode
+npx castwork setup --host codex --host claude --host opencode
 ```
 
 Name the hosts you want. `--host` is repeatable and accepts `codex`,
@@ -17,30 +17,27 @@ Name the hosts you want. `--host` is repeatable and accepts `codex`,
 guessing if you name none and none are recorded. It writes:
 
 ```
-.agenticloop/
+.castwork/
   project.md        prose: setup facts, working policy, pointers
   tasks/
   decisions/
   generated.json    tracked ownership manifest
   local/            gitignored
-agenticloop.json    project configuration: hosts, per-host role settings,
+castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
 plus the host directories for the hosts you named. They are recorded under
-`hosts` in `agenticloop.json`, so later `setup` and `update` runs reuse them and
+`hosts` in `castwork.json`, so later `setup` and `update` runs reuse them and
 need no flags, and naming another host later adds it rather than replacing what
-is there. Commit all of it except `.agenticloop/local/`, which `setup` adds to
+is there. Commit all of it except `.castwork/local/`, which `setup` adds to
 your `.gitignore`. Generated files contain no absolute paths, so they work for
 everyone who clones the repository — a contributor does not run `setup` to pick
 a host of their own, because `hosts` says which hosts the project supports.
 
-If `setup` finds a 0.4.x installation it refuses and prints the manual steps. It
-will not migrate or overwrite anything.
-
 ## 2. Write the working policy
 
-`.agenticloop/project.md` is prose. Put your project's working policy there in a
+`.castwork/project.md` is prose. Put your project's working policy there in a
 sentence or a paragraph — how careful to be, what needs a second pair of eyes,
 when to ask. Agents read it. The toolkit does not compile it into rules.
 
@@ -59,15 +56,15 @@ report where the work is and to propose the next step:
 > - `docs/PLAN.md`: the current phase and what comes next.
 > - `docs/architecture.md`: how the system fits together.
 
-Project configuration does not go here; it lives in `agenticloop.json`.
+Project configuration does not go here; it lives in `castwork.json`.
 
 ## 3. Create a task
 
 ```sh
-npx agenticloop task new "Greet by name"
+npx castwork task new "Greet by name"
 ```
 
-That writes `.agenticloop/tasks/T-001.md`:
+That writes `.castwork/tasks/T-001.md`:
 
 ```markdown
 ---
@@ -137,7 +134,7 @@ asserted, informational metadata.
 ## 6. Check it
 
 ```sh
-npx agenticloop task lint T-001
+npx castwork task lint T-001
 ```
 
 Three separate outputs, never merged:
@@ -177,7 +174,7 @@ assessment by that actor changes it. Record it honestly; nothing stops you.
 ## 8. Mark it done
 
 ```sh
-npx agenticloop task set T-001 status done
+npx castwork task set T-001 status done
 ```
 
 This is the one place the toolkit refuses: if a declared requirement is not
@@ -187,11 +184,11 @@ edit is unrestricted, and the record stays readable and editable either way.
 ## Day to day
 
 ```sh
-npx agenticloop task list          # what is open
-npx agenticloop task show T-001    # one record, --json for the checks
-npx agenticloop doctor             # is the installation healthy (see docs/cli.md)
-npx agenticloop decision new "Store money as minor units"   # a durable decision
-npx agenticloop decision list      # the decisions recorded so far
+npx castwork task list          # what is open
+npx castwork task show T-001    # one record, --json for the checks
+npx castwork doctor             # is the installation healthy (see docs/cli.md)
+npx castwork decision new "Store money as minor units"   # a durable decision
+npx castwork decision list      # the decisions recorded so far
 ```
 
 ## When a candidate changes

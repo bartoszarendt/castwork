@@ -25,9 +25,9 @@ candidates:
 ```
 
 `ref` is a commit when you may make one. When the work may not be committed
-yet, take a snapshot instead: `npx --no agenticloop snapshot` prints a
+yet, take a snapshot instead: `npx --no castwork snapshot` prints a
 `tree:<sha>` reference to exactly what is in the working tree (ignored files,
-task records, and `.agenticloop/local/` left out), and you record that:
+task records, and `.castwork/local/` left out), and you record that:
 
 ```yaml
 candidates:

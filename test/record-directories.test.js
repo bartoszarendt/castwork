@@ -17,7 +17,7 @@ import { setup } from '../src/setup.js';
 import { listRecordFiles, taskLint, taskList, taskNew, taskSet } from '../src/task-cli.js';
 
 function tmp(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-records-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-records-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -126,7 +126,7 @@ for (const type of ['junction', 'dir']) {
     assert.deepEqual(fs.readdirSync(outside), []);
   });
 
-  test(`a missing decisions directory is not created through a ${type} at .agenticloop`, (t) => {
+  test(`a missing decisions directory is not created through a ${type} at .castwork`, (t) => {
     const root = tmp(t);
     const outside = tmp(t);
     try {
@@ -139,7 +139,7 @@ for (const type of ['junction', 'dir']) {
     assert.equal(fs.existsSync(path.join(outside, 'decisions')), false);
   });
 
-  test(`existing records are not read or written through a ${type} at .agenticloop`, (t) => {
+  test(`existing records are not read or written through a ${type} at .castwork`, (t) => {
     const root = tmp(t);
     const outside = tmp(t);
     const tasks = path.join(outside, 'tasks');

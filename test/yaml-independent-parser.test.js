@@ -76,7 +76,7 @@ test('3: a flow duplicate is a frontmatter.unparseable structural error', () => 
 });
 
 test('3: task set status done refuses a record whose flow mapping repeats a key', (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-flowdup-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-flowdup-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   const file = path.join(root, TASKS_DIRECTORY, 'T-001.md');
@@ -128,12 +128,12 @@ for (const host of MARKDOWN_HOSTS) {
     const index = generateHost(host).find((entry) => entry.path.endsWith('SKILL.md'));
     assert.ok(index, `${host} generated no skill index`);
     const parsed = independentYaml.parse(frontmatterOf(index.content));
-    assert.equal(parsed.name, 'agenticloop');
+    assert.equal(parsed.name, 'castwork');
     assert.equal(parsed.description, readCommand().skill_description);
   });
 
   test(`9: the ${host} entry command frontmatter is valid for an independent parser`, () => {
-    const command = generateHost(host).find((entry) => entry.path.endsWith('commands/agenticloop.md'));
+    const command = generateHost(host).find((entry) => entry.path.endsWith('commands/castwork.md'));
     assert.ok(command, `${host} generated no entry command`);
     const parsed = independentYaml.parse(frontmatterOf(command.content));
     assert.equal(parsed.description, readCommand().description);

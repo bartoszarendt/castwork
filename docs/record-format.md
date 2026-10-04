@@ -9,18 +9,18 @@ YAML frontmatter; the body is prose.
 ## Where records live
 
 ```
-.agenticloop/
+.castwork/
   project.md        prose: setup facts, working policy, pointers
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state, such as a pause handoff
-agenticloop.json    project configuration: hosts, per-host role settings,
+castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
-Nothing else is written under `.agenticloop/`. Project configuration lives in
-`agenticloop.json` and nowhere else; `project.md` owns prose only.
+Nothing else is written under `.castwork/`. Project configuration lives in
+`castwork.json` and nowhere else; `project.md` owns prose only.
 
 ## The four concepts
 
@@ -97,10 +97,10 @@ A `ref` is one of three kinds, and they differ in what can be checked later:
 1. **A resolvable commit**, when the project's policy permits the agent to
    make one. It is `available` wherever the commit exists.
 2. **A snapshot, `tree:<sha>`**, for work that may not be committed yet.
-   `npx --no agenticloop snapshot`, run from the project root, prints one: a
+   `npx --no castwork snapshot`, run from the project root, prints one: a
    git tree object holding the working tree under the project root, which is
-   normally the whole repository, minus ignored files, `.agenticloop/tasks/`,
-   and `.agenticloop/local/`, with the repository's own line-ending rules
+   normally the whole repository, minus ignored files, `.castwork/tasks/`,
+   and `.castwork/local/`, with the repository's own line-ending rules
    applied. It needs no commit and moves no ref. It is `available` while the
    tree object exists in this clone: it exists only in the clone where it was
    taken, and since nothing refers to it, `git gc` may prune it once it is
@@ -307,7 +307,7 @@ A checked comparison between two asserted values does not upgrade the values.
 Equality of two actor strings is checked; the identities behind those strings
 remain asserted.
 
-This distinction is the honest limit of the format. Agentic Loop interprets what
+This distinction is the honest limit of the format. Castwork interprets what
 was recorded. It does not prove who recorded it.
 
 ## The three outputs
@@ -389,7 +389,7 @@ error; the rest are informational and change no outcome.
 | `entries.in_body` | info | an unlabeled or YAML fenced block in the body, a list item's included, has `candidates:`, `evidence:`, or `assessments:` among its top-level keys | move the entries into the frontmatter lists; the checks never read the body, so a record kept this way has no candidate, evidence, or assessment |
 | `candidate.moving_ref` | info | the current candidate's `ref` is a name, such as `HEAD`, a branch, or `worktree-T005`, not a hex object id or `tree:` followed by one | record the commit id, or take a snapshot and record its `tree:<sha>`, as a new candidate |
 | `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
-| `evidence.lint_as_evidence` | info | an evidence entry's command runs `agenticloop task lint` | lint reports on the record, not the candidate; record the project's own checks instead |
+| `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint` | lint reports on the record, not the candidate; record the project's own checks instead |
 | `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
 | `record.large` | info | the record is larger than 100 KB | move run logs and transcripts to linked files and keep the record to what was decided and observed |
 | `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
@@ -449,7 +449,7 @@ Any extra heading is fine.
 
 ## Decision record
 
-One Markdown file per durable decision under `.agenticloop/decisions/`. There is
+One Markdown file per durable decision under `.castwork/decisions/`. There is
 a template and no schema beyond it. `decision new <title>` writes it, numbering
 the record for you; the title is required, as it is for `task new`.
 `decision list` reads each record's `id`, `status`, `date`, and `title` for

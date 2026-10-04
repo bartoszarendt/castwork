@@ -22,7 +22,7 @@ import { taskSet } from '../src/task-cli.js';
 const HEAD = 'schema: 1\nid: T-001\ntitle: t\n';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-contract-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-contract-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   setup(root, { hosts: ['codex'] });
   return root;
@@ -140,7 +140,7 @@ test('evidence for a check the record did not declare is noted once per check na
 });
 
 test('task lint recorded as evidence is noted', () => {
-  for (const command of ['npx --no agenticloop task lint T-001', 'node bin/agenticloop.js task lint', 'agenticloop task lint --json']) {
+  for (const command of ['npx --no castwork task lint T-001', 'node bin/castwork.js task lint', 'castwork task lint --json']) {
     const record = parse(`status: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: lint, candidate: aaa, result: pass, command: "${command}" }\n`);
     assert.equal(codes(record, 'evidence.lint_as_evidence').length, 1, command);
   }

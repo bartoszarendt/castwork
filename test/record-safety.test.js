@@ -10,7 +10,7 @@ import { parseRecord } from '../src/record.js';
 import { formatScalar, parseYaml, YamlError } from '../src/yaml.js';
 
 function tmp(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-safety-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-safety-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -120,16 +120,16 @@ for (const link of ['../secret.txt', '../../etc/passwd', 'a/../../b.txt', '/etc/
 
 test('8: an ordinary root-relative link is still a link', () => {
   assert.equal(isRelativePath('logs/lint.txt'), true);
-  assert.equal(isRelativePath('.agenticloop/logs/out.txt'), true);
+  assert.equal(isRelativePath('.castwork/logs/out.txt'), true);
 });
 
 test('8: a traversing link is never observed', (t) => {
   const root = tmp(t);
   const outside = tmp(t);
   fs.writeFileSync(path.join(outside, 'known.txt'), 'SECRET\n', 'utf8');
-  fs.mkdirSync(path.join(root, '.agenticloop', 'tasks'), { recursive: true });
-  const relative = path.relative(path.join(root, '.agenticloop', 'tasks'), path.join(outside, 'known.txt')).split(path.sep).join('/');
-  const file = path.join(root, '.agenticloop', 'tasks', 'T-001.md');
+  fs.mkdirSync(path.join(root, '.castwork', 'tasks'), { recursive: true });
+  const relative = path.relative(path.join(root, '.castwork', 'tasks'), path.join(outside, 'known.txt')).split(path.sep).join('/');
+  const file = path.join(root, '.castwork', 'tasks', 'T-001.md');
   fs.writeFileSync(file, `---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: test, candidate: aaa, result: pass, output: "${relative}" }\n---\n`, 'utf8');
   const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
   // The observation maps carry a null prototype since the third round, so they
@@ -139,10 +139,10 @@ test('8: a traversing link is never observed', (t) => {
 
 test('8: an in-checkout link is observed, resolved from the repository root', (t) => {
   const root = tmp(t);
-  fs.mkdirSync(path.join(root, '.agenticloop', 'tasks'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.castwork', 'tasks'), { recursive: true });
   fs.mkdirSync(path.join(root, 'logs'), { recursive: true });
   fs.writeFileSync(path.join(root, 'logs', 'lint.txt'), 'out\n', 'utf8');
-  const file = path.join(root, '.agenticloop', 'tasks', 'T-001.md');
+  const file = path.join(root, '.castwork', 'tasks', 'T-001.md');
   fs.writeFileSync(file, '---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: lint, candidate: aaa, result: pass, output: "logs/lint.txt" }\n  - { check: test, candidate: aaa, result: pass, output: "logs/absent.txt" }\n---\n', 'utf8');
   const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
   assert.deepEqual({ ...observe(record, root).files }, { 'logs/lint.txt': true, 'logs/absent.txt': false });

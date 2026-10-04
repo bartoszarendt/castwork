@@ -74,16 +74,16 @@ for (const host of HOSTS) {
 
 for (const host of HOSTS) {
   test(`${host} entry file claims the coordinator role only when invoked`, () => {
-    const entry = generateHost(host).find((file) => /agenticloop\.md$|agenticloop\/SKILL\.md$/.test(file.path));
+    const entry = generateHost(host).find((file) => /castwork\.md$|castwork\/SKILL\.md$/.test(file.path));
     assert.ok(entry, `${host} has no entry file`);
-    assert.match(entry.content, /Act as the coordinator when Agentic Loop was invoked/);
+    assert.match(entry.content, /Act as the coordinator when Castwork was invoked/);
     assert.match(entry.content, /Do not adopt the role for a request that never asked for it/);
     assert.match(entry.content, /name\s+it\s+once\s+at\s+the\s+start\s+of\s+your\s+first\s+message,\s+as\s+\*\*Coordinator —\*\*/);
     assert.doesNotMatch(entry.content, /You are the coordinator for this session/);
   });
 
-  test(`${host} skill index says when to use Agentic Loop, not what to do`, () => {
-    const index = generateHost(host).find((file) => file.path.endsWith('agenticloop/SKILL.md'));
+  test(`${host} skill index says when to use Castwork, not what to do`, () => {
+    const index = generateHost(host).find((file) => file.path.endsWith('castwork/SKILL.md'));
     assert.ok(index, `${host} has no skill index`);
     const command = readCommand();
     assert.ok(
@@ -103,7 +103,7 @@ test('the entry command carries two distinct descriptions', () => {
 
 test('a generated command file is described by what it does', () => {
   for (const host of ['claude', 'opencode']) {
-    const file = generateHost(host).find((entry) => entry.path.endsWith('commands/agenticloop.md'));
+    const file = generateHost(host).find((entry) => entry.path.endsWith('commands/castwork.md'));
     assert.ok(file, `${host} has no command file`);
     assert.ok(
       file.content.includes(`description: ${formatScalar(readCommand().description)}`),
@@ -112,17 +112,17 @@ test('a generated command file is described by what it does', () => {
   }
 });
 
-test('codex declines implicit invocation of the Agentic Loop skill', () => {
-  const policy = generateHost('codex').find((file) => file.path === '.agents/skills/agenticloop/agents/openai.yaml');
+test('codex declines implicit invocation of the Castwork skill', () => {
+  const policy = generateHost('codex').find((file) => file.path === '.agents/skills/castwork/agents/openai.yaml');
   assert.ok(policy, 'codex generates no invocation policy');
   assert.equal(policy.content, 'policy:\n  allow_implicit_invocation: false\n');
 });
 
-test('claude declines model invocation of the Agentic Loop skill', () => {
-  const index = generateHost('claude').find((file) => file.path.endsWith('agenticloop/SKILL.md'));
+test('claude declines model invocation of the Castwork skill', () => {
+  const index = generateHost('claude').find((file) => file.path.endsWith('castwork/SKILL.md'));
   assert.match(index.content, /^disable-model-invocation: true$/m);
   for (const host of ['codex', 'opencode']) {
-    const other = generateHost(host).find((file) => file.path.endsWith('agenticloop/SKILL.md'));
+    const other = generateHost(host).find((file) => file.path.endsWith('castwork/SKILL.md'));
     assert.doesNotMatch(other.content, /disable-model-invocation/, `${host} declares a key it does not document`);
   }
 });

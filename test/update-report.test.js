@@ -14,7 +14,7 @@ import { GENERATED_MANIFEST } from '../src/layout.js';
 import { setup } from '../src/setup.js';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-report-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-report-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

@@ -19,7 +19,7 @@ import { observe } from '../src/observations.js';
 import { parseRecord } from '../src/record.js';
 
 function tmp(t, label) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `agenticloop-${label}-`)));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `castwork-${label}-`)));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }

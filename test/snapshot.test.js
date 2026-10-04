@@ -20,15 +20,15 @@ import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
 import { snapshotDrift, snapshotTree, takeSnapshot } from '../src/snapshot.js';
 
-const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'agenticloop.js');
+const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'castwork.js');
 
 function git(root, ...args) {
   return execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-/** A repository with one commit and Agentic Loop installed. */
+/** A repository with one commit and Castwork installed. */
 function repository(t, { commit = true } = {}) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-snapshot-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-snapshot-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   git(root, 'init', '--quiet');
   git(root, 'config', 'core.autocrlf', 'false');
@@ -73,7 +73,7 @@ function state(root) {
 /** @param {string} root @param {string} candidates */
 function writeTask(root, candidates) {
   fs.writeFileSync(
-    path.join(root, '.agenticloop', 'tasks', 'T-001.md'),
+    path.join(root, '.castwork', 'tasks', 'T-001.md'),
     `---\nschema: 1\nid: T-001\ntitle: t\nstatus: in_review\ncandidates:\n${candidates}---\n\n## Intent\nx\n`,
     'utf8',
   );
@@ -110,8 +110,8 @@ test('task records and machine-local state do not change the snapshot', (t) => {
   const root = repository(t);
   const before = takeSnapshot(root).ref;
   writeTask(root, '  - ref: anything\n');
-  fs.mkdirSync(path.join(root, '.agenticloop', 'local'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.agenticloop', 'local', 'state.json'), '{}\n', 'utf8');
+  fs.mkdirSync(path.join(root, '.castwork', 'local'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.castwork', 'local', 'state.json'), '{}\n', 'utf8');
   assert.equal(takeSnapshot(root).ref, before);
 });
 
@@ -149,7 +149,7 @@ test('a snapshot leaves the real index, HEAD, refs, and working tree untouched',
   assert.equal(after.refs, before.refs);
   assert.equal(after.status, before.status);
   assert.equal(after.app, before.app);
-  assert.equal(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(`agenticloop-index-${process.pid}-`)).length, 0, 'the temporary index is deleted');
+  assert.equal(fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith(`castwork-index-${process.pid}-`)).length, 0, 'the temporary index is deleted');
 });
 
 test('a repository without a commit has no base, and every path differs', (t) => {
@@ -157,7 +157,7 @@ test('a repository without a commit has no base, and every path differs', (t) =>
   const snapshot = takeSnapshot(root);
   assert.equal(snapshot.base, null);
   assert.ok(snapshot.paths.includes('app.txt'));
-  assert.ok(!snapshot.paths.some((relative) => relative.startsWith('.agenticloop/tasks')));
+  assert.ok(!snapshot.paths.some((relative) => relative.startsWith('.castwork/tasks')));
 });
 
 test('lint resolves a tree: reference and reports a missing or malformed one as unavailable', (t) => {
@@ -251,7 +251,7 @@ test('the snapshot command prints the reference first, then the base and the pat
   const data = JSON.parse(cli(root, 'snapshot', '--json').out);
   assert.equal(data.ref, lines[0]);
   assert.deepEqual(data.paths, ['app.txt']);
-  assert.equal(fs.readdirSync(path.join(root, '.agenticloop', 'tasks')).length, 0, 'no record is written');
+  assert.equal(fs.readdirSync(path.join(root, '.castwork', 'tasks')).length, 0, 'no record is written');
 });
 
 test('a reader that keeps only the first line, as `snapshot | head -1` does, ends the command quietly', async (t) => {
@@ -275,7 +275,7 @@ test('a reader that keeps only the first line, as `snapshot | head -1` does, end
 });
 
 test('the snapshot command refuses outside a git working tree', (t) => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-nogit-')));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-nogit-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const result = cli(root, 'snapshot');
   assert.equal(result.code, 1);
@@ -308,14 +308,14 @@ test('a tasks directory that is tracked and then ignored does not stop a snapsho
   writeTask(root, '  - ref: 0123abc\n');
   git(root, 'add', '-A');
   git(root, 'commit', '--quiet', '-m', 'a tracked record');
-  fs.appendFileSync(path.join(root, '.gitignore'), '.agenticloop/tasks/\n');
+  fs.appendFileSync(path.join(root, '.gitignore'), '.castwork/tasks/\n');
   git(root, 'add', '.gitignore');
   git(root, 'commit', '--quiet', '-m', 'ignore the records');
   const before = takeSnapshot(root);
   assert.equal(before.tree, git(root, 'rev-parse', 'HEAD^{tree}').trim());
 
   writeTask(root, '  - ref: 0123abc\n  - ref: 4567def\n');
-  fs.writeFileSync(path.join(root, '.agenticloop', 'tasks', 'T-002.md'), '---\nschema: 1\n---\n', 'utf8');
+  fs.writeFileSync(path.join(root, '.castwork', 'tasks', 'T-002.md'), '---\nschema: 1\n---\n', 'utf8');
   const printed = cli(root, 'snapshot');
   assert.equal(printed.code, 0, printed.err);
   assert.equal(printed.out.split('\n')[0], before.ref, 'records do not change the snapshot');
@@ -326,7 +326,7 @@ test('a tasks directory that is tracked and then ignored does not stop a snapsho
 test('machine-local state never changes the snapshot, ignored or not', (t) => {
   const root = repository(t);
   const before = takeSnapshot(root).ref;
-  const local = path.join(root, '.agenticloop', 'local');
+  const local = path.join(root, '.castwork', 'local');
   fs.mkdirSync(local, { recursive: true });
   fs.writeFileSync(path.join(local, 'state.json'), '{}\n', 'utf8');
   assert.equal(takeSnapshot(root).ref, before, 'ignored, as setup leaves it');
@@ -346,7 +346,7 @@ test('snapshot runs only from the project root, as every other command reads it'
   fs.writeFileSync(path.join(root, 'src', 'a.txt'), 'a\n', 'utf8');
   const result = cli(path.join(root, 'src'), 'snapshot');
   assert.equal(result.code, 1);
-  assert.match(result.err, /\.agenticloop\/ does not exist here/);
+  assert.match(result.err, /\.castwork\/ does not exist here/);
   assert.match(result.err, /Run snapshot from the project root/);
   const whole = cli(root, 'snapshot');
   assert.equal(whole.code, 0, whole.err);
@@ -401,7 +401,7 @@ test('with core.autocrlf on, CRLF on disk is the same candidate and no drift', (
 
 test('a dirty submodule is not drift', (t) => {
   const root = repository(t);
-  const module = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-module-')));
+  const module = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-module-')));
   t.after(() => fs.rmSync(module, { recursive: true, force: true }));
   git(module, 'init', '--quiet');
   fs.writeFileSync(path.join(module, 'lib.txt'), 'lib\n', 'utf8');
@@ -454,7 +454,7 @@ test('with a split index, a snapshot adds only its objects to .git, and lint wri
 
 test('the temporary index is removed after the command, through the CLI', (t) => {
   const root = repository(t);
-  const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agenticloop-temp-')));
+  const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-temp-')));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   fs.writeFileSync(path.join(root, 'app.txt'), 'two\n', 'utf8');
   const snapshot = cliWithTemp(root, temp, 'snapshot', '--json');

@@ -11,7 +11,7 @@ inherited from the agent that started you, is background.
 
 ## Responsibility
 
-- Read `.agenticloop/project.md` (offer a thinker draft of whatever is still
+- Read `.castwork/project.md` (offer a thinker draft of whatever is still
   unwritten), the documents it names for where the project is and what comes
   next, and the open task records; records all done do not make a project done.
 - Decide what happens next, which role does it, in what shape, and on which
@@ -23,10 +23,10 @@ inherited from the agent that started you, is background.
   small steps that make the state clearer; say what you are uncertain about
   and what actually happened, failures included.
 - When you run the roles, statuses are yours: a role records only `blocked` or
-  `needs_context`; set the rest yourself with `npx --no agenticloop task set`.
+  `needs_context`; set the rest yourself with `npx --no castwork task set`.
   When lint shows the requirements met, set the record `done`.
 - Record durable decisions where they will be found again; an owner's decision
-  goes in a decision record (`npx --no agenticloop decision new`), cited by the
+  goes in a decision record (`npx --no castwork decision new`), cited by the
   task records it governs.
 
 ## Boundaries

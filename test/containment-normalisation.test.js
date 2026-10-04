@@ -9,7 +9,7 @@ import { GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout
 import { remove, setup, update } from '../src/setup.js';
 
 function tmp(t, label) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `agenticloop-${label}-`)));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `castwork-${label}-`)));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
@@ -39,14 +39,14 @@ function poison(root, relative, content) {
 
 /** Finding 1a: the protected-path check must see through normalisation. */
 const PROTECTED_SPELLINGS = [
-  '.agenticloop/./tasks/T-001.md',
-  './.agenticloop/tasks/T-001.md',
-  '.agenticloop/tasks/../tasks/T-001.md',
-  '.agenticloop/decisions/../tasks/T-001.md',
-  '.agenticloop//tasks/T-001.md',
-  '.agenticloop\\tasks\\T-001.md',
-  '.agenticloop/./project.md',
-  './.agenticloop/decisions/D-001.md',
+  '.castwork/./tasks/T-001.md',
+  './.castwork/tasks/T-001.md',
+  '.castwork/tasks/../tasks/T-001.md',
+  '.castwork/decisions/../tasks/T-001.md',
+  '.castwork//tasks/T-001.md',
+  '.castwork\\tasks\\T-001.md',
+  '.castwork/./project.md',
+  './.castwork/decisions/D-001.md',
 ];
 
 for (const spelling of PROTECTED_SPELLINGS) {
@@ -61,7 +61,7 @@ test('1a: remove refuses a normalised protected path and keeps the record', (t) 
   const record = path.join(root, TASKS_DIRECTORY, 'T-001.md');
   const content = '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n';
   fs.writeFileSync(record, content, 'utf8');
-  poison(root, '.agenticloop/./tasks/T-001.md', content);
+  poison(root, '.castwork/./tasks/T-001.md', content);
   assert.throws(() => remove(root), /user-owned path/);
   assert.equal(fs.readFileSync(record, 'utf8'), content);
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
