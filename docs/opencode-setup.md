@@ -58,10 +58,6 @@ and `verifier` agents deny themselves the skill instead, with
 coordinator's entry command, and each role file links the procedures it uses
 under `## Procedures`.
 
-`/agenticloop` runs in whichever primary agent is active, usually `build`. The
-`coordinator` agent's settings under `role_settings.opencode.coordinator` apply
-only when you select that agent.
-
 ## Model bindings, reasoning effort, and variants
 
 Optional, in `agenticloop.json`:

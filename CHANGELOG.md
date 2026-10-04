@@ -30,6 +30,12 @@ behaviour; each change below says what to edit.
   `--json`. Remove the flag or argument; an argument that starts with a dash
   goes after `--`, as in `task new -- "-x title"`, and a value that starts
   with a dash goes after `=`, as in `--force-generated=-x`.
+- **`role_settings.<host>.coordinator` is refused.** The coordinator is the
+  session Agentic Loop is invoked in, which runs on the host's own settings,
+  so a coordinator entry configured only a generated agent file the entry
+  command never runs in. Delete the entry; set the session's model and effort
+  in the host. Settings for the `thinker`, `worker`, and `verifier` are
+  unchanged.
 
 **Added**
 
@@ -76,7 +82,9 @@ behaviour; each change below says what to edit.
   `setup` and `update` refuse and write nothing, and `doctor` then says to run
   that newer copy. `doctor` and `update --check` print the running copy's
   version, location, and digest; `doctor` also warns about a hand-edited
-  generated file and a scaffold `project.md`.
+  generated file and a `project.md` that is missing, empty, or has
+  sections still as `setup` wrote them; the entry command and the
+  coordinator offer a thinker draft for it.
 - `help` lists each command's flags.
 - Each role names the procedure skills it uses in a closing line of its
   canonical file, so a Claude Code plugin role, which reads that file as

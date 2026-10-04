@@ -165,7 +165,9 @@ It prints the running copy (version, location, `source_digest`) and the
 manifest's version and digest, and warns when they differ. It also warns when
 a generated file was edited by hand, since `update` overwrites the edit only
 when forced and a host reads the file only when a new session starts, and when
-`.agenticloop/project.md` is still exactly the scaffold `setup` wrote.
+`.agenticloop/project.md` is missing or empty, or has sections still exactly as
+`setup` wrote them or left empty; a file with headings of its own is not
+compared.
 
 It compares the installation with the same plan `update --check` prints, and
 reports it as `current`, `behind` (safe to update), or `blocked` (`update`

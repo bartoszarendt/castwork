@@ -95,12 +95,6 @@ Codex a role starts with the conversation it was forked from, so every preset
 says the record is authoritative and an inherited conversation is background.
 No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
 
-On OpenCode, `/agenticloop` runs in whichever primary agent is active, usually
-`build`, not in the generated `coordinator` agent. The
-`role_settings.opencode.coordinator` values are still generated, and they apply
-only when the `coordinator` agent is selected (Tab), not when the entry command
-runs in `build`.
-
 ## Ownership
 
 Every generated file is listed in `.agenticloop/generated.json` with its digest.
@@ -147,6 +141,8 @@ Settings are per host because model namespaces do not overlap: `claude-opus-5`,
 `gpt-5.4` and `openai/gpt-5.6` each name a model to a different host, and
 reasoning effort is spelled differently in each too. A model binding is one of
 these settings and has no map of its own.
+Settings are for the `thinker`, `worker`, and `verifier`; a `coordinator`
+entry is refused.
 
 A binding is fixed configuration: it changes only when someone edits
 `agenticloop.json`. It is the project's alternative to the per-turn model

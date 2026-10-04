@@ -186,6 +186,16 @@ test('a setting the host cannot express is refused and the hint lists what it ca
   );
 });
 
+test('the coordinator takes no role settings: it is the session Agentic Loop is invoked in', (t) => {
+  for (const [host, settings] of [['claude', { model: 'x' }], ['codex', { reasoning_effort: 'high' }], ['opencode', { variant: 'high' }], ['claude', {}]]) {
+    const root = fixture(t, [host], { role_settings: { [host]: { coordinator: settings } } });
+    assert.throws(
+      () => readConfig(root),
+      (error) => /cannot configure the coordinator/.test(error.message) && new RegExp(`Remove role_settings\\.${host}\\.coordinator`).test(error.hint) && /thinker, worker, verifier/.test(error.hint),
+    );
+  }
+});
+
 test('role_settings shaped as anything but nested maps is refused', (t) => {
   for (const value of [['claude'], 'claude', { claude: ['worker'] }, { claude: { worker: 'opus' } }]) {
     const root = fixture(t, ['claude'], { role_settings: value });
@@ -216,9 +226,11 @@ test('validate reports a shipped default that no host could accept', () => {
   shipped.adapters.claude.role_settings.worker.reasoning_efort = 'high';
   shipped.adapters.claude.role_settings.engineer = { model: 'x' };
   shipped.adapters.codex.role_settings.worker = { permission_mode: 'acceptEdits' };
+  shipped.adapters.opencode.role_settings.coordinator = { model: 'x' };
 
   const messages = shippedConfigFindings(shipped).map((finding) => finding.message);
   assert.ok(messages.some((m) => /reasoning_efort is not a setting claude accepts/.test(m)), 'a misspelled key');
   assert.ok(messages.some((m) => /role_settings.engineer is not a role id/.test(m)), 'an unknown role');
   assert.ok(messages.some((m) => /permission_mode is not a setting codex accepts/.test(m)), 'a key from another host');
+  assert.ok(messages.some((m) => /opencode.role_settings.coordinator configures the session/.test(m)), 'the coordinator');
 });

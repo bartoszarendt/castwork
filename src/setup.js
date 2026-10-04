@@ -513,8 +513,8 @@ export function doctor(root) {
   }
 
   if (manifest !== null) findings.push(...identityFindings(manifest));
-  const scaffold = scaffoldFinding(root);
-  if (scaffold) findings.push(scaffold);
+  const project = projectFinding(root);
+  if (project) findings.push(project);
 
   return {
     ok: findings.every((finding) => finding.level !== 'error'),
@@ -569,20 +569,51 @@ function identityFindings(manifest) {
 }
 
 /**
- * `project.md` still exactly as `setup` seeded it. Agents read it for the
- * working policy, the checks, and the plan, and a scaffold says none of that.
+ * `project.md` missing, empty, or still holding what `setup` seeded. Agents
+ * read it for the working policy, the checks, and the plan, and a scaffold
+ * says none of that. Whether what it says is still true is the agents' call;
+ * this only spots what is plainly unwritten. A section the project removed is
+ * its choice, and a file with headings of its own is not compared.
  *
  * @param {string} root
+ * @returns {{level: 'warn', message: string, next: string}|null}
  */
-function scaffoldFinding(root) {
+function projectFinding(root) {
+  if (!fs.existsSync(path.join(root, STATE_DIRECTORY))) return null;
+  const fill = 'what the project is, its working policy, its checks, its setup facts, and the documents that say what comes next';
   const file = path.join(root, PROJECT_FILE);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    return { level: 'warn', message: `${PROJECT_FILE} is missing`, next: `Run setup to seed it, then fill in ${fill}.` };
+  }
   const normalise = (/** @type {string} */ text) => text.replace(/\r\n/g, '\n').trim();
-  const scaffold = fs.readFileSync(path.join(toolkitRoot(), 'memory', 'scaffold', 'project.md'), 'utf8');
-  if (normalise(fs.readFileSync(file, 'utf8')) !== normalise(scaffold)) return null;
+  const text = normalise(fs.readFileSync(file, 'utf8'));
+  if (text === '') {
+    return { level: 'warn', message: `${PROJECT_FILE} is empty`, next: `Write ${fill}.` };
+  }
+  const scaffold = normalise(fs.readFileSync(path.join(toolkitRoot(), 'memory', 'scaffold', 'project.md'), 'utf8'));
+  if (text === scaffold) {
+    return { level: 'warn', message: `${PROJECT_FILE} is still the scaffold setup wrote`, next: `Fill in ${fill}.` };
+  }
+  const written = sections(text);
+  const unwritten = [...sections(scaffold)]
+    .filter(([heading, body]) => written.has(heading) && (written.get(heading) === '' || written.get(heading) === body))
+    .map(([heading]) => heading);
+  if (unwritten.length === 0) return null;
   return {
-    level: /** @type {'warn'} */ ('warn'),
-    message: `${PROJECT_FILE} is still the scaffold setup wrote`,
-    next: 'Fill in what the project is, its working policy, its checks, its setup facts, and the documents that say what comes next.',
+    level: 'warn',
+    message: `${PROJECT_FILE} has sections still as setup wrote them, or empty: ${unwritten.join(', ')}`,
+    next: 'Fill them in, or remove a section that does not apply here.',
   };
+}
+
+/** Each `## ` section's body by heading. @param {string} text */
+function sections(text) {
+  /** @type {Map<string, string>} */
+  const byHeading = new Map();
+  for (const part of text.split(/^## /m).slice(1)) {
+    const newline = part.indexOf('\n');
+    const heading = (newline === -1 ? part : part.slice(0, newline)).trim();
+    byHeading.set(heading, newline === -1 ? '' : part.slice(newline + 1).trim());
+  }
+  return byHeading;
 }

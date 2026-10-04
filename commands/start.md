@@ -32,8 +32,12 @@ a bare `/agenticloop` in the same session, you have oriented already.
 
 1. Read `.agenticloop/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who
-   own this repository. Follow it. If it is still the scaffold `setup` wrote,
-   say so and offer to have the `thinker` draft it from the repository.
+   own this repository. Follow it. If it is missing, empty, or still the
+   scaffold `setup` wrote, in whole or in part, say so and offer to have the
+   `thinker` draft it from the repository; what is written there changes only
+   with the user's say-so. If a check or document it names that the work
+   depends on does not match the repository, say so; ask only when the gap
+   affects the work.
 2. Read the documents it points to, such as a plan, a spec, or a roadmap, for
    where the project is and what comes next: enough to locate the work, not the
    whole document. If they do not say what comes next, look for such pointers

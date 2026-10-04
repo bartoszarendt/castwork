@@ -241,6 +241,35 @@ test('doctor warns while project.md is still the scaffold, and stops once it is 
   assert.equal(scaffold(doctor(root)), undefined);
 });
 
+test('doctor warns about a project.md that is missing, empty, or only partly written', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const file = path.join(root, PROJECT_FILE);
+  const project = (report) => report.findings.find((finding) => finding.message.startsWith(PROJECT_FILE));
+  const scaffold = fs.readFileSync(file, 'utf8');
+
+  fs.appendFileSync(file, '\nThis project sells tea.\n');
+  const partial = project(doctor(root));
+  assert.match(partial.message, /sections still as setup wrote them, or empty: What this project is, Working policy, Checks, Setup facts$/);
+  assert.equal(partial.level, 'warn');
+
+  fs.writeFileSync(file, scaffold.replace('One or two sentences: what it does and who uses it.', 'A tea shop.'), 'utf8');
+  assert.doesNotMatch(project(doctor(root)).message, /What this project is/, 'a written section is not listed');
+
+  fs.writeFileSync(file, '# Project\n\n## What this project is\n\nA tea shop.\n\n## Documents\n\n', 'utf8');
+  assert.match(project(doctor(root)).message, /or empty: Documents$/, 'an empty section is listed; a removed one is not');
+
+  fs.writeFileSync(file, '# Tea\n\nA tea shop. Run `npm test`.\n', 'utf8');
+  assert.equal(project(doctor(root)), undefined, 'headings of its own are not compared');
+
+  fs.writeFileSync(file, ' \n\n', 'utf8');
+  assert.match(project(doctor(root)).message, /is empty$/);
+
+  fs.rmSync(file);
+  assert.match(project(doctor(root)).message, /is missing$/);
+  assert.equal(doctor(root).ok, true, 'warnings, not errors');
+});
+
 test('compareVersions orders versions, prereleases before releases, and refuses what is not one', () => {
   assert.equal(compareVersions('0.5.1', '0.5.0'), 1);
   assert.equal(compareVersions('0.5.0', '0.5.1'), -1);

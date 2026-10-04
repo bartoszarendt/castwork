@@ -92,6 +92,10 @@ for (const host of HOSTS) {
     assert.doesNotMatch(role(host, 'coordinator'), /do not assign an actor/);
   });
 
+  test(`${host} coordinator offers a draft of an unwritten project.md when started directly`, () => {
+    all(role(host, 'coordinator'), ['offer a thinker draft of whatever is still unwritten'], 'coordinator');
+  });
+
   test(`${host} a role started by another agent starts no agents, and the thinker alone may search`, () => {
     for (const id of ROLES) {
       all(role(host, id), [
@@ -235,7 +239,9 @@ for (const host of HOSTS) {
       'You already have this text; do not load the `agenticloop` skill again.',
       'Orient in proportion to the request, and only once',
       'enough to locate the work, not the whole document',
-      'If it is still the scaffold `setup` wrote, say so and offer to have the `thinker` draft it',
+      'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
+      "what is written there changes only with the user's say-so",
+      'ask only when the gap affects the work',
       'so do not tell it to read its role file',
       "says the role's model does not pick skills itself",
       'Delegation is one level: a role started by another agent starts no agents',

@@ -93,6 +93,11 @@ function readRoleSettings(raw) {
           hint: `Known roles: ${ROLE_IDS.join(', ')}.`,
         });
       }
+      if (role === 'coordinator') {
+        throw new PublicError(`${CONFIG_FILE} role_settings.${host} cannot configure the coordinator`, {
+          hint: `The coordinator is the session you invoke Agentic Loop in, which runs on the host's own settings. Remove role_settings.${host}.coordinator; settings apply to ${ROLE_IDS.filter((id) => id !== 'coordinator').join(', ')}.`,
+        });
+      }
       if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
         throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role} must be a map of setting to value`);
       }

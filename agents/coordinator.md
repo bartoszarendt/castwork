@@ -11,9 +11,9 @@ inherited from the agent that started you, is background.
 
 ## Responsibility
 
-- Read `.agenticloop/project.md` for the working policy, the documents it
-  points to for where the project is and what comes next, and the open task
-  records for the current state; records all done do not make a project done.
+- Read `.agenticloop/project.md` (offer a thinker draft of whatever is still
+  unwritten), the documents it names for where the project is and what comes
+  next, and the open task records; records all done do not make a project done.
 - Decide what happens next, which role does it, in what shape, and on which
   host: your judgement, in no prescribed order; invoke one role, several at
   once, or none.

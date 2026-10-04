@@ -171,6 +171,10 @@ export function shippedConfigFindings(config) {
         error(findings, 'config.json', `adapters.${host}.role_settings.${role} is not a role id`);
         continue;
       }
+      if (role === 'coordinator') {
+        error(findings, 'config.json', `adapters.${host}.role_settings.coordinator configures the session Agentic Loop is invoked in, which takes no role settings`);
+        continue;
+      }
       for (const [key, value] of Object.entries(/** @type {Record<string, unknown>} */ (settings ?? {}))) {
         if (!accepted.includes(key)) {
           error(findings, 'config.json', `adapters.${host}.role_settings.${role}.${key} is not a setting ${host} accepts`);
