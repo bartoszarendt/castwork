@@ -13,7 +13,7 @@ import path from 'node:path';
 
 import { compareVersions, generateAll, packageVersion, sourceDigest, toolkitRoot } from './adapter-generation.js';
 import { readConfig, writeConfig } from './config.js';
-import { containedPath, digest, installPath, ownership, readManifest, writeManifest } from './generated.js';
+import { containedPath, digest, diskDigest, installPath, ownership, readManifest, writeManifest } from './generated.js';
 import {
   CONFIG_FILE,
   DECISIONS_DIRECTORY,
@@ -136,7 +136,7 @@ export function planGenerated(root, files, options = {}) {
       plan.added.push(file.path);
       continue;
     }
-    const actual = digest(fs.readFileSync(containedPath(root, file.path), 'utf8'));
+    const actual = diskDigest(containedPath(root, file.path));
     if (actual === wanted) plan.unchanged.push(file.path);
     else if (state === 'owned_unchanged' || force.has(file.path)) plan.changed.push(file.path);
     else if (state === 'owned_modified') plan.modified.push(file.path);
@@ -148,7 +148,7 @@ export function planGenerated(root, files, options = {}) {
     if (plan.files[relative] !== undefined) continue;
     const full = containedPath(root, relative);
     if (!fs.existsSync(full)) continue;
-    if (digest(fs.readFileSync(full, 'utf8')) === recorded || force.has(relative)) plan.removed.push(relative);
+    if (diskDigest(full) === recorded || force.has(relative)) plan.removed.push(relative);
     else plan.modified.push(relative);
   }
 
@@ -346,7 +346,7 @@ export function remove(root) {
   for (const [relative, recorded] of Object.entries(manifest.files)) {
     const full = containedPath(root, relative);
     if (!fs.existsSync(full)) continue;
-    if (digest(fs.readFileSync(full, 'utf8')) === recorded) {
+    if (diskDigest(full) === recorded) {
       fs.rmSync(full);
       removed.push(relative);
     } else {

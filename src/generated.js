@@ -215,6 +215,20 @@ export function digest(content) {
 }
 
 /**
+ * The digest of a generated file as it stands on disk, with CRLF read as LF.
+ *
+ * Generated content is always LF, but Git with `core.autocrlf=true` checks a
+ * tracked generated file out with CRLF. Hashing the raw bytes would call every
+ * such file modified on a fresh Windows clone or branch switch, and update
+ * would refuse. Line endings are not an edit; any other change still is.
+ *
+ * @param {string} file absolute path, already contained
+ */
+export function diskDigest(file) {
+  return digest(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n'));
+}
+
+/**
  * `source_digest` names the generator that wrote it, which `version` alone
  * cannot: unreleased builds share a version. A manifest written before the
  * field existed reads as `null`.
@@ -275,5 +289,5 @@ export function ownership(root, relative, manifest) {
   const recorded = manifest?.files?.[relative];
   if (!fs.existsSync(file)) return recorded ? 'absent' : 'absent';
   if (!recorded) return 'user_owned';
-  return digest(fs.readFileSync(file, 'utf8')) === recorded ? 'owned_unchanged' : 'owned_modified';
+  return diskDigest(file) === recorded ? 'owned_unchanged' : 'owned_modified';
 }

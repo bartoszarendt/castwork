@@ -7,6 +7,7 @@ import test from 'node:test';
 import { digest, readManifest } from '../src/generated.js';
 import { CONFIG_FILE, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
 import { doctor, remove, setup, update } from '../src/setup.js';
+import { validate } from '../src/validate.js';
 
 /** Each fixture is its own temp tree, removed when the test ends. */
 function fixture(t) {
@@ -333,4 +334,61 @@ test('dropping a host from the config and updating removes its files', (t) => {
   assert.ok(!fs.existsSync(path.join(root, '.claude', 'commands', 'castwork.md')));
   assert.ok(!fs.existsSync(path.join(root, '.claude')), 'an emptied host directory was left standing');
   assert.ok(fs.existsSync(path.join(root, '.codex', 'agents', 'worker.toml')));
+});
+
+/** What Git with core.autocrlf=true leaves on disk for a checked-out file. */
+function checkOutWithCrlf(root, relative) {
+  const file = path.join(root, relative);
+  fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/\n/g, '\r\n'), 'utf8');
+}
+
+test('generated files checked out with CRLF line endings are not edits', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex', 'claude'] });
+  for (const relative of result.added) checkOutWithCrlf(root, relative);
+
+  const updated = update(root);
+  assert.deepEqual([...updated.added, ...updated.changed, ...updated.removed], []);
+  const report = doctor(root);
+  assert.equal(report.generated, 'current');
+  assert.ok(!report.findings.some((finding) => finding.message.includes('modified locally')));
+});
+
+test('CRLF line endings do not hide a real edit', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex'] });
+  const target = result.added[0];
+  fs.writeFileSync(path.join(root, target), 'edited by hand\r\n', 'utf8');
+  assert.throws(() => update(root), (error) => /nothing was written/.test(error.message) && error.message.includes(target));
+});
+
+test('a dropped host whose files were checked out with CRLF is still removed', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex', 'claude'] });
+  for (const relative of result.added.filter((relative) => relative.startsWith('.claude/'))) checkOutWithCrlf(root, relative);
+  const file = path.join(root, CONFIG_FILE);
+  const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+  config.hosts = ['codex'];
+  fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+
+  const updated = update(root);
+  assert.ok(updated.removed.length > 0);
+  assert.ok(!fs.existsSync(path.join(root, '.claude')));
+});
+
+test('remove deletes generated files checked out with CRLF', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex'] });
+  for (const relative of result.added) checkOutWithCrlf(root, relative);
+  const removed = remove(root);
+  assert.deepEqual(removed.kept, []);
+  assert.equal(removed.removed.length, result.added.length);
+});
+
+test('validate does not report generated files checked out with CRLF', (t) => {
+  const root = fixture(t);
+  const result = setup(root, { hosts: ['codex'] });
+  for (const relative of result.added) checkOutWithCrlf(root, relative);
+  const flagged = validate(root).findings.filter((finding) => /manifest digest|out of date/.test(finding.message));
+  assert.deepEqual(flagged, []);
 });

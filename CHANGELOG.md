@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.1
+
+A fix for Windows checkouts. Run `update`; nothing else changes.
+
+**Fixed**
+
+- **Generated files checked out with CRLF line endings no longer block
+  `update`.** With `core.autocrlf=true`, Git checks tracked generated files out
+  with CRLF, so a fresh clone or a branch switch made every one of them look
+  modified: `update` refused, `remove` kept them, and `doctor` and `validate`
+  reported them as changed by hand. Line endings are now ignored when a file on
+  disk is compared with the manifest; any other change still counts as an edit.
+
 ## 0.7.0
 
 Agentic Loop is now Castwork. Every name changes with it: the package and

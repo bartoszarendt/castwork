@@ -9,7 +9,7 @@ import path from 'node:path';
 
 import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
 import { readConfig, settingsFor } from './config.js';
-import { containedPath, digest, readManifest } from './generated.js';
+import { containedPath, digest, diskDigest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
@@ -240,7 +240,7 @@ function validateGeneratedOutput(findings, root) {
         error(findings, file.path, 'is in the manifest but missing on disk; run update');
         continue;
       }
-      const actual = digest(fs.readFileSync(full, 'utf8'));
+      const actual = diskDigest(full);
       if (actual !== recorded) {
         warn(findings, file.path, 'differs from the manifest digest; update writes nothing until it is restored or forced');
       } else if (actual !== digest(file.content)) {

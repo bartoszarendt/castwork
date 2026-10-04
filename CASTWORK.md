@@ -8,7 +8,7 @@ adapters. **Agents choose the workflow. Hosts execute it.**
 
 Castwork interprets what was recorded. It does not prove who recorded it.
 
-**Status:** version 0.7.0 is current.
+**Status:** version 0.7.1 is current.
 
 ## What the toolkit provides, and what it does not
 

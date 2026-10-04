@@ -1,6 +1,6 @@
 {
   "name": "castwork",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A small, portable vocabulary for agent work: Markdown task records carrying work, candidates, evidence, and assessments, with reusable roles, skills, host adapters, and pure checks",
   "type": "module",
   "license": "MIT",
