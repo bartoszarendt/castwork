@@ -32,7 +32,12 @@ whether what a task declared it needed has actually been obtained.
 
 ## Install
 
+Castwork is not published to npm; install it from GitHub as a development
+dependency of the repository you want to work in, then run `setup` with the
+copy you installed. Add `#<commit>` to the dependency to pin one commit.
+
 ```sh
+npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host codex --host claude
 ```
 

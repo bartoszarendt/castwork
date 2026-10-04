@@ -6,9 +6,11 @@ declared it needed. It does not tell them how to work.
 
 ## 1. Install
 
-From the root of the repository you want to work in:
+From the root of the repository you want to work in, install Castwork from
+GitHub as a development dependency, then run `setup`:
 
 ```sh
+npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host codex --host claude --host opencode
 ```
 

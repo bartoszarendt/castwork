@@ -2,9 +2,10 @@
 
 ## Install
 
-From the root of your repository:
+From the root of your repository, install Castwork from GitHub, then run `setup`:
 
 ```sh
+npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host codex
 ```
 

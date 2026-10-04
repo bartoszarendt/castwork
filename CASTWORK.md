@@ -174,7 +174,8 @@ Nothing else is written under `.castwork/`.
 
 ## Getting started
 
-`npx castwork setup --host <name>` installs for the hosts you name. See
+Install it from GitHub with `npm install --save-dev github:bartoszarendt/castwork`,
+then `npx castwork setup --host <name>` installs for the hosts you name. See
 [docs/getting-started.md](docs/getting-started.md).
 
 ## What this is not

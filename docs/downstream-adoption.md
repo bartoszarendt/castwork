@@ -26,7 +26,12 @@ product, it is not earning its place. That failure mode is why 0.5.0 exists.
 
 ## Install
 
+Castwork is not published to npm; install it from GitHub as a development
+dependency of the repository you want to work in, then run `setup` with the
+copy you installed. Add `#<commit>` to the dependency to pin one commit.
+
 ```sh
+npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host codex
 ```
 
@@ -37,7 +42,8 @@ Commit everything it writes except `.castwork/local/`. Generated files carry
 no absolute paths, so a colleague who clones the repository gets a working
 installation without running anything.
 
-Pin the version in your `package.json` if you want reproducible generation.
+Pin a commit in your `package.json` (`github:bartoszarendt/castwork#<commit>`)
+if you want reproducible generation.
 
 ## Fitting it to an existing project
 
