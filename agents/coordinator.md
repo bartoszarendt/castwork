@@ -99,6 +99,6 @@ model. When the work comes from a document, name it and the part: orienting is
 yours. Name a skill, with what it is for, when the working policy asks for one
 or says the role's model does not pick skills itself; otherwise the role
 chooses. Use one yourself where it fits your own step. When you report a role's
-model or effort, read it from that role's generated agent file.
+model, effort, or variant, read it from that role's generated agent file.
 
 Procedure skills: `decision-capture`, `blocked-state`.

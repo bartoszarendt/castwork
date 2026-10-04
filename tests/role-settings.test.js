@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { CONFIG_FILE } from '../src/layout.js';
 import { readConfig, settingsFor } from '../src/config.js';
 import { setup, update } from '../src/setup.js';
-import { shippedConfigFindings } from '../src/validate.js';
+import { shippedConfigFindings, validate } from '../src/validate.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -41,31 +41,39 @@ function read(root, relative) {
 /* Each host's own spelling                                            */
 /* ------------------------------------------------------------------ */
 
-test('reasoning effort reaches a Claude role as the host key effort', (t) => {
+test('Claude effort reaches its role file under the native key', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { claude: { verifier: { reasoning_effort: 'xhigh' } } },
+    role_settings: { claude: { verifier: { effort: 'xhigh' } } },
   });
   update(root);
   assert.match(read(root, '.claude/agents/verifier.md'), /^effort: xhigh$/m);
 });
 
-test('reasoning effort reaches a Codex role as the host key model_reasoning_effort', (t) => {
+test('Codex model_reasoning_effort reaches its role file under the native key', (t) => {
   const root = fixture(t, ['codex'], {
-    role_settings: { codex: { verifier: { reasoning_effort: 'xhigh' } } },
+    role_settings: { codex: { verifier: { model_reasoning_effort: 'xhigh' } } },
   });
   update(root);
   assert.match(read(root, '.codex/agents/verifier.toml'), /^model_reasoning_effort = "xhigh"$/m);
 });
 
-test('reasoning effort reaches an OpenCode role as the host key reasoningEffort', (t) => {
-  const root = fixture(t, ['opencode'], {
-    role_settings: { opencode: { verifier: { reasoning_effort: 'high' } } },
-  });
-  update(root);
-  assert.match(read(root, '.opencode/agents/verifier.md'), /^reasoningEffort: high$/m);
+test('the retired unified effort setting is refused on every host before generation', (t) => {
+  for (const [host, migration] of [
+    ['opencode', /retired: remove it, and choose a variant .* beside an explicit model/],
+    ['claude', /retired: rename it to effort\./],
+    ['codex', /retired: rename it to model_reasoning_effort\./],
+  ]) {
+    const root = fixture(t, [host], {
+      role_settings: { [host]: { worker: { reasoning_effort: 'high' } } },
+    });
+    const manifest = read(root, '.castwork/generated.json');
+    assert.throws(() => update(root), (error) => error.message.includes(`role_settings.${host}.worker.reasoning_effort: host ${host} has no setting reasoning_effort`)
+      && migration.test(error.hint), host);
+    assert.equal(read(root, '.castwork/generated.json'), manifest, host);
+  }
 });
 
-test('an OpenCode variant is its own setting, beside the effort option', (t) => {
+test('an OpenCode model and variant are emitted separately without an effort option', (t) => {
   const root = fixture(t, ['opencode'], {
     role_settings: { opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } } },
   });
@@ -73,12 +81,36 @@ test('an OpenCode variant is its own setting, beside the effort option', (t) => 
   const verifier = read(root, '.opencode/agents/verifier.md');
   assert.match(verifier, /^model: openai\/gpt-5.6$/m);
   assert.match(verifier, /^variant: high$/m);
+  assert.doesNotMatch(verifier, /^reasoningEffort:/m);
+  assert.deepEqual(validate(root).findings, [], 'a separate model and variant are portable');
+});
+
+test('an OpenCode inline model variant is refused before update changes generated files', (t) => {
+  const root = fixture(t, ['opencode'], {
+    role_settings: { opencode: { worker: { model: 'openai/gpt-5.6#high' } } },
+  });
+  const before = read(root, '.opencode/agents/worker.md');
+  const manifest = read(root, '.castwork/generated.json');
+  assert.throws(() => update(root), (error) => /role_settings.opencode.worker.model.*inline variant/.test(error.message)
+    && /model.*variant.*separate/.test(error.hint));
+  assert.equal(read(root, '.opencode/agents/worker.md'), before);
+  assert.equal(read(root, '.castwork/generated.json'), manifest);
+});
+
+test('an OpenCode variant without a model is refused, since v2 drops it', (t) => {
+  for (const settings of [{ variant: 'high' }, { model: null, variant: 'high' }]) {
+    const root = fixture(t, ['opencode'], { role_settings: { opencode: { verifier: settings } } });
+    const manifest = read(root, '.castwork/generated.json');
+    assert.throws(() => update(root), (error) => /role_settings.opencode.verifier.variant is set without a model/.test(error.message)
+      && /set model as provider\/model beside it/.test(error.hint), JSON.stringify(settings));
+    assert.equal(read(root, '.castwork/generated.json'), manifest);
+  }
 });
 
 test('the adapter is the only place a host declares what it accepts', () => {
-  assert.deepEqual(settingsFor('claude'), ['model', 'permission_mode', 'reasoning_effort']);
-  assert.deepEqual(settingsFor('codex'), ['model', 'reasoning_effort']);
-  assert.deepEqual(settingsFor('opencode'), ['model', 'reasoning_effort', 'variant']);
+  assert.deepEqual(settingsFor('claude'), ['model', 'permission_mode', 'effort']);
+  assert.deepEqual(settingsFor('codex'), ['model', 'model_reasoning_effort']);
+  assert.deepEqual(settingsFor('opencode'), ['model', 'variant']);
 });
 
 /* ------------------------------------------------------------------ */
@@ -87,7 +119,7 @@ test('the adapter is the only place a host declares what it accepts', () => {
 
 test('a value this toolkit has never heard of reaches the host intact', (t) => {
   const root = fixture(t, ['codex'], {
-    role_settings: { codex: { worker: { reasoning_effort: 'ultra' } } },
+    role_settings: { codex: { worker: { model_reasoning_effort: 'ultra' } } },
   });
   update(root);
   assert.match(read(root, '.codex/agents/worker.toml'), /^model_reasoning_effort = "ultra"$/m);
@@ -95,10 +127,10 @@ test('a value this toolkit has never heard of reaches the host intact', (t) => {
 
 test('a value that is not a scalar is refused rather than stringified into the file', (t) => {
   for (const value of [{ level: 'high' }, ['high'], true, 3, '']) {
-    const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { reasoning_effort: value } } } });
+    const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { effort: value } } } });
     assert.throws(
       () => readConfig(root),
-      /role_settings.claude.worker.reasoning_effort (must be a string|is empty)/,
+      /role_settings.claude.worker.effort (must be a string|is empty)/,
       `${JSON.stringify(value)} should be refused`,
     );
   }
@@ -112,7 +144,7 @@ test('null leaves a setting unset, which is how a shipped default is cleared', (
 
 test('an effort value a YAML reader would take for a number is quoted', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { claude: { worker: { reasoning_effort: '1e3' } } },
+    role_settings: { claude: { worker: { effort: '1e3' } } },
   });
   update(root);
   assert.match(read(root, '.claude/agents/worker.md'), /^effort: "1e3"$/m);
@@ -152,7 +184,7 @@ test('a shipped default is overridable now that settings are user-writable', (t)
 
 test('settings for a host that is not selected are checked but not projected', (t) => {
   const root = fixture(t, ['claude'], {
-    role_settings: { codex: { worker: { reasoning_effort: 'high' } } },
+    role_settings: { codex: { worker: { model_reasoning_effort: 'high' } } },
   });
   assert.doesNotThrow(() => readConfig(root));
   update(root);
@@ -182,12 +214,12 @@ test('a setting the host cannot express is refused and the hint lists what it ca
   const root = fixture(t, ['claude'], { role_settings: { claude: { worker: { variant: 'high' } } } });
   assert.throws(
     () => readConfig(root),
-    (error) => /has no setting variant/.test(error.message) && /accepts: model, permission_mode, reasoning_effort/.test(error.hint),
+    (error) => /has no setting variant/.test(error.message) && /accepts: model, permission_mode, effort/.test(error.hint),
   );
 });
 
 test('the coordinator takes no role settings: it is the session Castwork is invoked in', (t) => {
-  for (const [host, settings] of [['claude', { model: 'x' }], ['codex', { reasoning_effort: 'high' }], ['opencode', { variant: 'high' }], ['claude', {}]]) {
+  for (const [host, settings] of [['claude', { model: 'x' }], ['codex', { model_reasoning_effort: 'high' }], ['opencode', { variant: 'high' }], ['claude', {}]]) {
     const root = fixture(t, [host], { role_settings: { [host]: { coordinator: settings } } });
     assert.throws(
       () => readConfig(root),
@@ -227,10 +259,14 @@ test('validate reports a shipped default that no host could accept', () => {
   shipped.adapters.claude.role_settings.engineer = { model: 'x' };
   shipped.adapters.codex.role_settings.worker = { permission_mode: 'acceptEdits' };
   shipped.adapters.opencode.role_settings.coordinator = { model: 'x' };
+  shipped.adapters.opencode.role_settings.worker = { model: 'openai/gpt-5.6#high' };
+  shipped.adapters.opencode.role_settings.verifier = { variant: 'high' };
 
   const messages = shippedConfigFindings(shipped).map((finding) => finding.message);
   assert.ok(messages.some((m) => /reasoning_efort is not a setting claude accepts/.test(m)), 'a misspelled key');
   assert.ok(messages.some((m) => /role_settings.engineer is not a role id/.test(m)), 'an unknown role');
   assert.ok(messages.some((m) => /permission_mode is not a setting codex accepts/.test(m)), 'a key from another host');
   assert.ok(messages.some((m) => /opencode.role_settings.coordinator configures the session/.test(m)), 'the coordinator');
+  assert.ok(messages.some((m) => /opencode.role_settings.worker.model.*inline variant/.test(m)), 'inline OpenCode variants');
+  assert.ok(messages.some((m) => /opencode.role_settings.verifier.variant is set without a model/.test(m)), 'an OpenCode variant alone');
 });

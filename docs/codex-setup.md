@@ -75,14 +75,14 @@ Optional, in `castwork.json`:
   "role_settings": {
     "codex": {
       "worker": { "model": "gpt-5.4" },
-      "verifier": { "reasoning_effort": "xhigh" }
+      "verifier": { "model_reasoning_effort": "xhigh" }
     }
   }
 }
 ```
 
-Codex accepts `model` and `reasoning_effort`, which it spells
-`model_reasoning_effort` in the generated `.codex/agents/<role>.toml`. Codex
+Codex accepts `model` and its native `model_reasoning_effort` setting, emitted
+unchanged in `.codex/agents/<role>.toml`. Codex
 documents `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`, and a value set
 in an agent file takes precedence over the surrounding configuration.
 

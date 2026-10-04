@@ -112,15 +112,17 @@ test('codex keeps the procedures inside developer_instructions', () => {
   assert.ok(worker.content.trimEnd().endsWith('"""'));
 });
 
-test('opencode denies the entry skill to the thinker, worker, and verifier, and not to the coordinator', () => {
+test('opencode delegated roles support primary and subagent use and deny the entry skill', () => {
   const files = generateHost('opencode');
   for (const id of ['thinker', 'worker', 'verifier']) {
     const front = frontmatterOf(files.find((file) => file.path === `.opencode/agents/${id}.md`).content);
     assert.deepEqual(front.permission, { skill: { castwork: 'deny' } }, id);
+    assert.equal(front.mode, 'all', `${id} must not inherit v2's primary-only default`);
     assert.equal(front.name, id);
   }
   const coordinator = frontmatterOf(files.find((file) => file.path === '.opencode/agents/coordinator.md').content);
   assert.equal(coordinator.permission, undefined, 'the coordinator keeps the entry skill');
+  assert.equal(coordinator.mode, undefined, 'the coordinator uses the host default');
 });
 
 test('the deny sits alongside role settings, and other hosts carry no permission key', () => {

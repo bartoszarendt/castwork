@@ -71,12 +71,13 @@ adapter declares it. Codex gets a `literal` file at
 `policy.allow_implicit_invocation` to `false`. Claude Code gets
 `disable-model-invocation: true` in the skill index frontmatter, through the
 adapter's `skill_frontmatter` map. Explicit invocation — `$castwork` in
-Codex, `/castwork` in Claude Code — is unaffected. OpenCode 1.x documents no
-such key for the skill itself, so for a session the description is the only
-lever. Its agents can refuse a skill, though: the adapter's
+Codex, `/castwork` in Claude Code — is unaffected. OpenCode v2 also reads
+`disable-model-invocation: true`; v1 ignores it and uses the description as
+session-level guidance. Its agents can refuse a skill in both versions: the adapter's
 `delegated_role_frontmatter` gives the generated `thinker`, `worker`, and
 `verifier` `permission: { skill: { castwork: deny } }`, which hides the entry
-skill from them. The coordinator keeps it.
+skill from them. The coordinator keeps it. The same block sets `mode: all`,
+preserving direct and delegated use across v1's `all` and v2's `primary` defaults.
 
 ## Host differences
 
@@ -84,7 +85,7 @@ skill from them. The coordinator keeps it.
 |---|---|---|---|
 | A subagent starts with | its task prompt | its task prompt | a fork of its parent's conversation |
 | Nesting | `subagent_depth` defaults to 1, so a subagent cannot start one | by default a subagent can start subagents of its own, up to three layers below the main conversation; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` changes that (1 turns nesting off), and a subagent without `Agent` in its tools cannot start one | the runtime tells a spawned agent it may spawn its own; no depth limit is documented, only a cap on concurrent agents |
-| Implicit entry-skill invocation | refused for the delegated roles by a per-agent `permission.skill` deny; otherwise the description | refused by `disable-model-invocation: true` | refused by `allow_implicit_invocation: false` |
+| Implicit entry-skill invocation | v2 reads `disable-model-invocation: true`; v1 uses the description; delegated roles also deny `permission.skill` in both | refused by `disable-model-invocation: true` | refused by `allow_implicit_invocation: false` |
 
 Castwork's design wants fresh context, since the task record is the
 handoff, and one level of delegation: a role started by another agent starts
@@ -128,8 +129,8 @@ without running anything.
 {
   "hosts": ["codex", "claude"],
   "role_settings": {
-    "claude": { "worker": { "model": "claude-opus-5" }, "verifier": { "reasoning_effort": "xhigh" } },
-    "codex": { "verifier": { "model": "gpt-5.4", "reasoning_effort": "high" } }
+    "claude": { "worker": { "model": "claude-opus-5" }, "verifier": { "effort": "xhigh" } },
+    "codex": { "verifier": { "model": "gpt-5.4", "model_reasoning_effort": "high" } }
   }
 }
 ```
@@ -139,8 +140,8 @@ no file to inherit from. The package's defaults first, then `role_settings`.
 
 Settings are per host because model namespaces do not overlap: `claude-opus-5`,
 `gpt-5.4` and `openai/gpt-5.6` each name a model to a different host, and
-reasoning effort is spelled differently in each too. A model binding is one of
-these settings and has no map of its own.
+effort uses each host's own setting name. OpenCode selects a model variant
+instead. A model binding is one of these settings and has no map of its own.
 Settings are for the `thinker`, `worker`, and `verifier`; a `coordinator`
 entry is refused.
 
@@ -161,7 +162,8 @@ Each host declares which settings it accepts, in its adapter's
 |---|---|---|---|
 | `model` | `model` | `model` | `model` |
 | `permission_mode` | — | `permissionMode` | — |
-| `reasoning_effort` | `model_reasoning_effort` | `effort` | `reasoningEffort` |
+| `model_reasoning_effort` | `model_reasoning_effort` | — | — |
+| `effort` | — | `effort` | — |
 | `variant` | — | — | `variant` |
 
 A setting a host does not declare is refused with a hint listing what it does
@@ -172,8 +174,19 @@ which efforts a host accepts, does not translate one host's vocabulary into
 another's, and does not treat two hosts' `high` as the same thing. A value the
 host rejects fails there, not here.
 
-A mapping is only ever right for the host version it was written against:
-these are Claude Code's and Codex's current agent keys and OpenCode 1.x's.
+A mapping is only ever right for the host versions that read it. OpenCode uses
+the shared v1 agent format, which v2 translates on load. Write its model and
+variant as separate settings; inline `model#variant` is refused, and so is a
+`variant` without a `model`. A variant is a
+provider-defined bundle, not a universal effort level. See
+[OpenCode setup](opencode-setup.md).
+
+The former unified `reasoning_effort` setting is no longer accepted. Rename it
+to `model_reasoning_effort` for Codex or `effort` for Claude Code. For OpenCode,
+remove it and choose a supported `variant` with an explicit `model`; do not
+assume a same-named variant has the same effect. There are no aliases or
+automatic conversions. Update the configuration before running `update`, then
+start a new host session.
 
 A binding is optional runtime configuration and never role identity: binding a
 model grants no authority and changes no assessment's meaning.
@@ -203,7 +216,7 @@ a separate process, and have that result verified back in Claude Code.
     "verifier": "claude"
   },
   "role_settings": {
-    "codex": { "worker": { "model": "gpt-5.4", "reasoning_effort": "high" } }
+    "codex": { "worker": { "model": "gpt-5.4", "model_reasoning_effort": "high" } }
   }
 }
 ```
@@ -229,9 +242,10 @@ a separate process, and have that result verified back in Claude Code.
 Generation writes the routes into each host's entry command, under
 `### Routes from this host`, with the role file the delegate reads first, the
 actor it records (`<role>@<route host>`), and the
-settings to pass: `model`, `reasoning_effort`, and `variant`. Permission
-settings are not listed, because the delegation capability chooses the run's
-permissions from what the role has to write. The same routes close the
+settings to pass: every setting the route's host declares, under its names —
+`model`, `model_reasoning_effort` (Codex), `effort` (Claude Code), or `variant`
+(OpenCode) — except `permission_mode`, because the delegation capability
+chooses the run's permissions from what the role has to write. The same routes close the
 generated coordinator role, with the path of the entry file that holds the
 procedure, so a coordinator started directly as the host's agent sees them too.
 The other role files are unchanged. The entry command's `## Role routes`

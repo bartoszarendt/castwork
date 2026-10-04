@@ -234,7 +234,7 @@ what it does, never by its name or where it is installed; do not search for one
 or install one. Follow its procedure for checking the CLI is ready, running,
 monitoring, and reviewing the result. Give the delegate the task id and the
 listed role file to read first, start the role by name where that CLI can, pass
-the listed settings through the CLI's own model and reasoning options, and allow
+the listed settings through the CLI's own model, reasoning, or variant options, and allow
 writes only where the role writes: the worker within the task's scope and in its
 task record; the thinker in task records and the decisions it is asked to
 record; the verifier in its task record and any findings file its assessment

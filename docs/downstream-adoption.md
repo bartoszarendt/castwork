@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.7.1 is current.
+> **Status:** 0.8.0 is current.
 
 ## What you are adopting
 
@@ -126,7 +126,7 @@ which is what it is for. A resumed session still has the old instructions in
 its history, so run the entry command again at once if you resume instead.
 
 **Changing models.** A model you prefer, or the one your account can reach, is
-a personal choice: leave `model` and `reasoning_effort` unset in
+a personal choice: leave model and effort or variant settings unset in
 `castwork.json` and set them in the host's own configuration. New sessions
 pick it up, and the repository never changes. A model the project means to pin
 for a role goes under `role_settings.<host>.<role>` in `castwork.json`: run

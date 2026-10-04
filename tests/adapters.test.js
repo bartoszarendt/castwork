@@ -118,13 +118,13 @@ test('codex declines implicit invocation of the Castwork skill', () => {
   assert.equal(policy.content, 'policy:\n  allow_implicit_invocation: false\n');
 });
 
-test('claude declines model invocation of the Castwork skill', () => {
-  const index = generateHost('claude').find((file) => file.path.endsWith('castwork/SKILL.md'));
-  assert.match(index.content, /^disable-model-invocation: true$/m);
-  for (const host of ['codex', 'opencode']) {
-    const other = generateHost(host).find((file) => file.path.endsWith('castwork/SKILL.md'));
-    assert.doesNotMatch(other.content, /disable-model-invocation/, `${host} declares a key it does not document`);
+test('claude and opencode v2 decline model invocation of the Castwork skill', () => {
+  for (const host of ['claude', 'opencode']) {
+    const index = generateHost(host).find((file) => file.path.endsWith('castwork/SKILL.md'));
+    assert.match(index.content, /^disable-model-invocation: true$/m, host);
   }
+  const codex = generateHost('codex').find((file) => file.path.endsWith('castwork/SKILL.md'));
+  assert.doesNotMatch(codex.content, /disable-model-invocation/, 'codex uses its own invocation policy');
 });
 
 test('codex role files carry the prompt under the key Codex reads', () => {

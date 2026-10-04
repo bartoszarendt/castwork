@@ -15,7 +15,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { CONFIG_FILE } from '../src/layout.js';
-import { readConfig } from '../src/config.js';
+import { readConfig, settingsFor } from '../src/config.js';
 import { generateHost } from '../src/adapter-generation.js';
 import { setup, update } from '../src/setup.js';
 import { validate } from '../src/validate.js';
@@ -56,14 +56,14 @@ function routesSection(content) {
 test('a route reaches the routing host with the role file and the target settings', (t) => {
   const root = fixture(t, ['claude', 'codex'], {
     role_routes: { worker: 'codex' },
-    role_settings: { codex: { worker: { model: 'gpt-5.4', reasoning_effort: 'high' } } },
+    role_settings: { codex: { worker: { model: 'gpt-5.4', model_reasoning_effort: 'high' } } },
   });
   update(root);
   for (const file of ['.claude/commands/castwork.md', '.claude/skills/castwork/SKILL.md']) {
     const section = routesSection(read(root, file));
     assert.match(section, /`worker` runs in Codex \(`codex`\)/, file);
     assert.match(section, /Role file: `\.codex\/agents\/worker\.toml`/, file);
-    assert.match(section, /model `gpt-5\.4`, reasoning_effort `high`/, file);
+    assert.match(section, /model `gpt-5\.4`, model_reasoning_effort `high`/, file);
     assert.doesNotMatch(section, /Fallback/, file);
   }
 });
@@ -109,7 +109,10 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
       verifier: 'opencode',
       thinker: 'claude',
     },
-    role_settings: { opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } } },
+    role_settings: {
+      opencode: { verifier: { model: 'openai/gpt-5.6', variant: 'high' } },
+      claude: { thinker: { effort: 'xhigh' } },
+    },
   });
   update(root);
   assert.match(routesSection(read(root, '.claude/commands/castwork.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
@@ -117,8 +120,25 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
   // Claude's shipped thinker default is a permission mode, which the
   // delegation capability chooses for the run; the route leaves it out.
   const opencode = routesSection(read(root, '.opencode/commands/castwork.md'));
-  assert.match(opencode, /`thinker` runs in Claude Code \(`claude`\)\. .*Settings: the host's own defaults\./);
+  assert.match(opencode, /`thinker` runs in Claude Code \(`claude`\)\. .*Settings: effort `xhigh`\./);
   assert.doesNotMatch(opencode, /permission_mode/);
+});
+
+test('a route lists every non-permission setting its host declares', (t) => {
+  for (const [target, from] of [['codex', 'claude'], ['claude', 'codex'], ['opencode', 'claude']]) {
+    const worker = Object.fromEntries(settingsFor(target).map((key) => [key, key === 'permission_mode' ? 'acceptEdits' : `${key}-value`]));
+    const root = fixture(t, [from, target], {
+      role_routes: { worker: target },
+      role_settings: { [target]: { worker } },
+    });
+    update(root);
+    const entry = { claude: '.claude/commands/castwork.md', codex: '.agents/skills/castwork/SKILL.md' }[from];
+    const section = routesSection(read(root, entry));
+    for (const key of Object.keys(worker)) {
+      if (key === 'permission_mode') assert.doesNotMatch(section, /permission_mode/, target);
+      else assert.match(section, new RegExp(`${key} \`${key}-value\``), `${target} ${key}`);
+    }
+  }
 });
 
 test('with no routes every entry file says so', () => {

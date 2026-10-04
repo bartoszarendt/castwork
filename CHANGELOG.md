@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.8.0
+
+Role settings use each host's own effort control, and the generated OpenCode
+files work in both OpenCode v1 and v2.
+
+**Breaking: what to do.** The unified `reasoning_effort` setting is gone, with
+no alias and no automatic conversion: a `castwork.json` that still sets it is
+refused, and the refusal names the replacement for that host. Edit
+`role_settings` before running `update`, then start a new host session.
+
+- **Codex:** rename `reasoning_effort` to `model_reasoning_effort`.
+- **Claude Code:** rename `reasoning_effort` to `effort`.
+- **OpenCode:** remove `reasoning_effort` and choose a `variant` the model
+  supports, beside an explicit `model`. A variant is a provider-defined bundle,
+  not an effort level, so a same-named one need not have the same effect.
+
+**Changed**
+
+- Routes list every setting the route's host declares, under that host's
+  names, except `permission_mode`.
+
+**Fixed**
+
+- OpenCode's delegated roles explicitly set `mode: all`, preserving direct and
+  subagent use across v1 and v2. The entry skill sets
+  `disable-model-invocation: true` for v2; v1 keeps its description guidance and
+  the delegated roles' skill deny. Run `update` and start a new host session.
+- OpenCode model bindings containing an inline `#variant` are refused before
+  generation, with a hint to use separate `model` and `variant` settings.
+- An OpenCode `variant` without a `model` is refused before generation: v2
+  drops a variant whose agent names no model.
+- A setting a host does not accept is reported with its place in
+  `castwork.json`, and a retired `reasoning_effort` says what replaces it on
+  that host.
+
 ## 0.7.1
 
 A fix for Windows checkouts. Run `update`; nothing else changes.

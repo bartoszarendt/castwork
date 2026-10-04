@@ -14,7 +14,7 @@ Agents choose the workflow. Hosts execute it.
 Castwork reports what was recorded and who asserted it; it does not prove
 who wrote a record.
 
-> **Status:** 0.7.1 is current.
+> **Status:** 0.8.0 is current.
 
 ## Why
 

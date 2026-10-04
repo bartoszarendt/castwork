@@ -17,6 +17,11 @@ npx castwork setup --host opencode
 
 then run `npx castwork update`.
 
+The same `opencode` host and generated files support OpenCode v1 and v2.
+V2 reads this shared agent, command, and skill format through its compatibility
+layer; converting generated files to native v2 fields would break v1 support.
+After upgrading Castwork, run `npx castwork update` and start a new host session.
+
 ## What is generated
 
 ```
@@ -46,14 +51,18 @@ is prompt-level instruction; OpenCode's own agent selection stays on whatever
 agent is active, unless you switch to `coordinator` with Tab. There is nothing
 to activate first.
 
-The four roles are available as agents. Delegating to one is a choice, not a
-required sequence.
+The four roles are available as agents. The generated `thinker`, `worker`, and
+`verifier` set `mode: all`, so they can run directly or as subagents in either
+version. Without it, v1 defaults custom agents to `all`, while v2 defaults them
+to `primary` and refuses to launch them as subagents. Delegating to a role is a
+choice, not a required sequence.
 
 The generated `SKILL.md` is described by when to use Castwork rather than
 by what to do, so OpenCode has a reason not to reach for it during unrelated
-work. OpenCode 1.x documents no key for refusing implicit invocation of a skill
-outright — Codex and Claude Code do, and their adapters use it — so for a
-session the description is the only lever. The generated `thinker`, `worker`,
+work. Its frontmatter also sets `disable-model-invocation: true`, which v2
+reads to hide it from the model's available skills while keeping explicit
+invocation available. V1 ignores that flag, so the description remains its
+session-level guidance. The generated `thinker`, `worker`,
 and `verifier` agents deny themselves the skill instead, with
 `permission: { skill: { castwork: deny } }` in their frontmatter: it is the
 coordinator's entry command, and each role file links the procedures it uses
@@ -68,28 +77,40 @@ Optional, in `castwork.json`:
   "hosts": ["opencode"],
   "role_settings": {
     "opencode": {
-      "worker": { "model": "openai/gpt-5.6" },
-      "verifier": { "reasoning_effort": "high" },
-      "thinker": { "variant": "high" }
+      "worker": { "model": "openai/gpt-5.6", "variant": "high" },
+      "verifier": { "model": "openai/gpt-5.6", "variant": "high" }
     }
   }
 }
 ```
 
-OpenCode accepts `model`, `reasoning_effort`, and `variant`.
+OpenCode accepts `model` and `variant`.
 
-`reasoning_effort` is emitted as OpenCode's own `reasoningEffort` key, a
-provider option passed straight through to the model. `variant` is emitted as
-`variant`: a named bundle of options defined on the model, which often sets
-reasoning effort but may also set verbosity or a reasoning summary. Use
-`reasoning_effort` for the single option and `variant` for a bundle you have
-defined or that ships with the provider. A model selector may also carry a
-variant inline as `provider/model#high`.
+For both versions, write `model` as `provider/model` and `variant` as a
+separate setting. `variant` selects a named bundle defined on that model,
+which may set reasoning effort, verbosity, or other provider options. Choose
+one the provider supports. An inline `provider/model#high` is refused with a
+hint to separate the settings: v1 reads it as a literal model id, and v2's
+legacy agent parser can drop the binding. A `variant` without a `model` is
+refused too: v2 drops a variant whose agent names no model, and a variant name
+means something only for the model that defines it.
 
-These are the spellings OpenCode 1.x reads. Its v2 configuration schema keeps a
-top-level `variant` but routes provider options such as `reasoningEffort`
-through a nested `request` object, which this adapter cannot emit — it writes
-flat scalar keys only. Moving to v2 will need more than a new key name here.
+The former `reasoning_effort` setting is refused. Remove it and choose a
+supported variant with an explicit model. Both versions support variants;
+Castwork does not translate effort into a variant, since they need not mean
+the same thing. Direct provider options in v2's per-agent `request.body` are
+not sent to the model by the runner in the builds checked, so adding a nested
+request field would not provide the missing behavior.
+
+Local probes on v1 `1.18.34`, v2 preview `0.0.0-beta-19271`, and v2 `2.0.22`
+confirmed role loading, command and skill discovery, and outgoing request
+settings using a local mock endpoint. The former direct effort option sent
+`high` in v1 but `medium` in both v2 builds;
+selecting the `high` model variant sent `high` in v2. These probes do not establish
+a complete delegated workflow. See OpenCode's
+[migration guide](https://opencode.ai/v2/docs/migrate-v1/),
+[agent request limitation](https://opencode.ai/v2/docs/agents/#request), and
+[skill invocation settings](https://opencode.ai/v2/docs/skills/#frontmatter).
 
 A binding is runtime configuration, not role identity.
 

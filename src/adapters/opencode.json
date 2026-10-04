@@ -1,8 +1,9 @@
 {
   "id": "opencode",
   "label": "OpenCode",
-  "role_frontmatter": { "model": "model", "reasoning_effort": "reasoningEffort", "variant": "variant" },
-  "delegated_role_frontmatter": { "permission": { "skill": { "castwork": "deny" } } },
+  "role_frontmatter": { "model": "model", "variant": "variant" },
+  "delegated_role_frontmatter": { "mode": "all", "permission": { "skill": { "castwork": "deny" } } },
+  "skill_frontmatter": { "disable-model-invocation": true },
   "files": [
     { "kind": "role", "to": ".opencode/agents/{role}.md", "format": "markdown" },
     { "kind": "command", "to": ".opencode/commands/castwork.md", "format": "command" },

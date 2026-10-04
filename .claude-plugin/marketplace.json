@@ -9,7 +9,7 @@
       "name": "castwork",
       "source": "./",
       "description": "A small, portable vocabulary for agent work: task records carrying work, candidates, evidence, and assessments, with four role presets, reusable skills, and pure checks.",
-      "version": "0.7.1"
+      "version": "0.8.0"
     }
   ]
 }

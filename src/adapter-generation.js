@@ -466,12 +466,24 @@ export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = 
 }
 
 /**
- * The settings a route lists: the ones the coordinator passes through the
- * target CLI's model and reasoning options. Permission settings stay in the
- * route host's own role file, because the delegation capability chooses the
- * permissions for the run from what the role has to write.
+ * Settings a route never lists. Every other setting the route's host declares
+ * is one the coordinator passes through the target CLI's model, reasoning, or
+ * variant options, so a setting an adapter adds reaches routes without a second
+ * list to keep in step. Permission settings stay in the route host's own role
+ * file, because the delegation capability chooses the permissions for the run
+ * from what the role has to write.
  */
-const ROUTE_SETTINGS = Object.freeze(['model', 'reasoning_effort', 'variant']);
+const PERMISSION_SETTINGS = Object.freeze(['permission_mode']);
+
+/**
+ * The settings a route to `host` lists, in its adapter's order.
+ *
+ * @param {string} host
+ */
+function routeSettings(host) {
+  return Object.keys(/** @type {Record<string, string>} */ (readAdapter(host).role_frontmatter ?? {}))
+    .filter((key) => !PERMISSION_SETTINGS.includes(key));
+}
 
 /**
  * The route list closing the entry command's `## Role routes` section.
@@ -490,7 +502,7 @@ function renderRoutes(routes) {
     return lines.join('\n');
   }
   for (const route of routes) {
-    const settings = ROUTE_SETTINGS
+    const settings = routeSettings(route.host)
       .map((key) => [key, route.settings[key]])
       .filter(([, value]) => value !== undefined && value !== null && value !== '')
       .map(([key, value]) => `${key} \`${String(value)}\``);

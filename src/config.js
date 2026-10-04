@@ -57,6 +57,49 @@ function settingValue(value, where) {
 }
 
 /**
+ * What to do instead of the retired unified `reasoning_effort`, per host. It
+ * is refused like any other undeclared setting; this only makes the refusal
+ * say where the setting went.
+ */
+const RETIRED_EFFORT = Object.freeze({
+  claude: 'reasoning_effort was retired: rename it to effort.',
+  codex: 'reasoning_effort was retired: rename it to model_reasoning_effort.',
+  opencode: 'reasoning_effort was retired: remove it, and choose a variant the model supports beside an explicit model. A variant is not an effort level.',
+});
+
+/**
+ * The problem with one role's resolved OpenCode settings, or null.
+ *
+ * OpenCode v1 and v2 both read the shared agent format, but only as a separate
+ * `model` and `variant`: v1 takes `provider/model#high` for a literal model id,
+ * v2 drops it, and v2 drops a `variant` whose agent names no model. Both would
+ * leave the role on settings nobody chose, without an error.
+ *
+ * @param {string} host
+ * @param {Record<string, unknown>} settings shipped defaults merged with overrides
+ * @returns {{key: string, problem: string, hint: string}|null}
+ */
+export function bindingProblem(host, settings) {
+  if (host !== 'opencode') return null;
+  const { model, variant } = settings;
+  if (typeof model === 'string' && model.includes('#')) {
+    return {
+      key: 'model',
+      problem: 'contains an inline variant',
+      hint: 'Write model and variant as separate settings; the shared OpenCode agent format does not support model#variant.',
+    };
+  }
+  if (typeof variant === 'string' && variant !== '' && (typeof model !== 'string' || model === '')) {
+    return {
+      key: 'variant',
+      problem: 'is set without a model',
+      hint: 'A variant belongs to a model: set model as provider/model beside it. OpenCode v2 drops a variant whose agent names no model.',
+    };
+  }
+  return null;
+}
+
+/**
  * Read `role_settings`, refusing anything that would otherwise be ignored in
  * silence: an unknown host, an unknown role, a setting the named host has no
  * way to express, or a value that cannot survive the trip into a host file.
@@ -85,6 +128,7 @@ function readRoleSettings(raw) {
       throw new PublicError(`${CONFIG_FILE} role_settings.${host} must be a map of role to settings`);
     }
     const accepted = settingsFor(host);
+    const hostDefaults = defaults()?.adapters?.[host]?.role_settings ?? {};
     /** @type {Record<string, Record<string, unknown>>} */
     const byRole = {};
     for (const [role, settings] of Object.entries(roles)) {
@@ -105,11 +149,18 @@ function readRoleSettings(raw) {
       const checked = {};
       for (const [key, value] of Object.entries(settings)) {
         if (!accepted.includes(key)) {
-          throw new PublicError(`host ${host} has no setting ${key}`, {
-            hint: `${host} accepts: ${accepted.join(', ')}.`,
+          const retired = key === 'reasoning_effort' ? `${RETIRED_EFFORT[/** @type {keyof typeof RETIRED_EFFORT} */ (host)]} ` : '';
+          throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role}.${key}: host ${host} has no setting ${key}`, {
+            hint: `${retired}${host} accepts: ${accepted.join(', ')}.`,
           });
         }
         checked[key] = settingValue(value, `${CONFIG_FILE} role_settings.${host}.${role}.${key}`);
+      }
+      const binding = bindingProblem(host, { ...(hostDefaults[role] ?? {}), ...checked });
+      if (binding) {
+        throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role}.${binding.key} ${binding.problem}`, {
+          hint: `${binding.hint} Settings go under role_settings.${host}.${role}.`,
+        });
       }
       byRole[role] = checked;
     }

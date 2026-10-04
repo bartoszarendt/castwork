@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
-import { readConfig, settingsFor } from './config.js';
+import { bindingProblem, readConfig, settingsFor } from './config.js';
 import { containedPath, digest, diskDigest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
@@ -182,6 +182,8 @@ export function shippedConfigFindings(config) {
           error(findings, 'config.json', `adapters.${host}.role_settings.${role}.${key} is not a non-empty string`);
         }
       }
+      const binding = bindingProblem(host, /** @type {Record<string, unknown>} */ (settings ?? {}));
+      if (binding) error(findings, 'config.json', `adapters.${host}.role_settings.${role}.${binding.key} ${binding.problem}. ${binding.hint}`);
     }
   }
   for (const key of JSON.stringify(config).match(/"[a-z_]*[A-Z][A-Za-z_]*":/g) ?? []) {

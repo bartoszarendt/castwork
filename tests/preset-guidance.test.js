@@ -194,7 +194,7 @@ for (const host of HOSTS) {
       'When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes.',
       "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no castwork decision new`), cited by the task records it governs.",
       'are signs of a stall: diagnose it (the thinker is for this) or ask the user, rather than retrying.',
-      "When you report a role's model or effort, read it from that role's generated agent file.",
+      "When you report a role's model, effort, or variant, read it from that role's generated agent file.",
       'which role or shape, the host a routed role goes to, and why now',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');

@@ -83,14 +83,14 @@ Optional, in `castwork.json`:
   "role_settings": {
     "claude": {
       "worker": { "model": "claude-opus-5" },
-      "verifier": { "model": "claude-sonnet-5", "reasoning_effort": "xhigh" }
+      "verifier": { "model": "claude-sonnet-5", "effort": "xhigh" }
     }
   }
 }
 ```
 
-Claude Code accepts `model`, `permission_mode`, and `reasoning_effort`, which it
-spells `effort` in the generated subagent frontmatter. Claude Code documents
+Claude Code accepts `model`, `permission_mode`, and its native `effort` setting,
+emitted unchanged in subagent frontmatter. Claude Code documents
 `low`, `medium`, `high`, `xhigh`, and `max`.
 
 Effort is not extended thinking: Claude Code subagents inherit the main
