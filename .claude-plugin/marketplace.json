@@ -8,7 +8,7 @@
     {
       "name": "castwork",
       "source": "./",
-      "description": "A small, portable vocabulary for agent work: task records carrying work, candidates, evidence, and assessments, with four role presets, reusable skills, and pure checks.",
+      "description": "Shared task records and roles for agent work: Markdown records of work, candidates, evidence, and assessments, with four role presets, reusable skills, and checks against each task's declared requirements.",
       "version": "0.8.0"
     }
   ]

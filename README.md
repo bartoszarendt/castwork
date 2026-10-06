@@ -1,195 +1,221 @@
 # Castwork
 
-**A small, portable vocabulary for agent work.** Markdown task records carrying
-work, candidates, evidence, and assessments; four role presets based on the
-[TRINITY](https://arxiv.org/abs/2512.04695) role model; reusable skills; thin
-adapters for Codex, Claude Code, and OpenCode; and a few pure checks over what
-the records say.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-brightgreen.svg)](package.json)
 
-Code, documents, analyses: any result that lives in a repository and can be
-checked.
+**Shared task records and roles for agent work.**
 
-Agents choose the workflow. Hosts execute it.
+Castwork keeps agent work clear across sessions: what you asked for, which
+result was produced, what was checked, and what is still open. Task records are
+Markdown files in your repository, written in a small shared vocabulary — work,
+candidate, evidence, assessment — defined once and used by every supported host.
+Role guidance covers planning, producing, and reviewing, and a CLI checks the
+recorded evidence against each task's declared requirements. Integrations are generated for Claude Code, Codex, and
+OpenCode.
 
-Castwork reports what was recorded and who asserted it; it does not prove
-who wrote a record.
+Agents choose how to approach the work. The record gives you and the next agent
+something concrete to inspect and continue.
 
-> **Status:** 0.8.0 is current.
+> **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.8.0 is
+> current.
 
-## Why
+## When it helps
 
-Agents drift scope, conflate producing a result with proving it, and lose
-context between sessions. A shared record helps.
+- **Work that spans sessions or hosts.** The next session reads the record
+  instead of reconstructing what happened.
+- **Work you delegate.** The record shows what was asked, what was produced,
+  and what was checked, so you review the result rather than a transcript.
+- **Changes that need proof before they count as done.** A task can require
+  named checks or an independent review, and the CLI reports whether the record
+  shows them for the exact result.
+- **Decisions worth keeping.** Decision records outlive the task that made them.
 
-The previous version of this toolkit answered that with a full lifecycle:
-activation, dispatch, receipts, gates, closeout. In sustained field use the
-control plane began spending its effort governing itself — agents repaired and
-reconciled workflow artifacts while the product work was already correct.
+A small, direct edit needs no record; ask your agent for it as usual.
 
-So the lifecycle is gone. What remains is the part that earned its place: a
-record format agents can read and write by hand, and checks that tell you
-whether what a task declared it needed has actually been obtained.
+## Why this approach
 
-## Install
+Castwork comes from running agents on real projects. Each part of its design
+answers something that went wrong there.
 
-Castwork is not published to npm; install it from GitHub as a development
-dependency of the repository you want to work in, then run `setup` with the
-copy you installed. Add `#<commit>` to the dependency to pin one commit.
+| Lesson | Design choice | What you get |
+|---|---|---|
+| Context is lost between sessions. | Intent, scope, decisions, and progress live in repository files. | Another session, host, or person resumes from a record they can inspect. |
+| Producing a result and judging it are different jobs. | Separate roles for planning, producing, and reviewing. Independence compares who produced and who reviewed. | You can tell the plan, the result, and the assessment apart, and see whether the review came from someone other than the producer. |
+| Checks and reviews drift to a different revision. | Evidence and assessments name the exact candidate: a commit or a snapshot. | A pass for an earlier revision does not count for a new one. |
+| Requiring review everywhere creates work without value. | Each task declares its own requirements. | Checks and review where the consequences warrant them, none where they do not. |
+| Workflow administration can crowd out the product work. | Records are edited directly, and agents choose the workflow. | Routine work carries little procedural overhead. |
+
+The last lesson cost the most. An earlier version enforced a full task
+lifecycle, and in sustained use agents spent their effort keeping the workflow
+consistent while the product work was already correct. Castwork keeps only the
+record and the checks over it. [docs/background.md](docs/background.md) covers
+this and the research behind the roles.
+
+## Quick start
+
+Requires Node.js 22 or newer. Castwork is not published to npm; install it from
+GitHub as a development dependency of the repository you want to work in, then
+run `setup` for the hosts you use:
 
 ```sh
 npm install --save-dev github:bartoszarendt/castwork
-npx castwork setup --host codex --host claude
+npx castwork setup --host claude --host codex
 ```
 
-Name the hosts you want; `--host` is repeatable and takes `codex`,
-`claude`, or `opencode`. There is no prompt — `setup` never asks a question
-it could be told, and a run with no hosts and none recorded refuses rather than
-guessing. Later runs reuse the `hosts` recorded in `castwork.json`, so
-`npx castwork setup` on its own is enough once it is installed.
+`--host` is repeatable and takes `claude`, `codex`, or `opencode`. Later runs
+reuse the hosts recorded in `castwork.json`. Add `#<commit>` to the dependency
+to pin one commit.
 
-This generates host integrations for the hosts you named and creates
-`.castwork/` in your repository. Generated files are tracked and contain no
-absolute paths.
+`setup` creates `.castwork/` with `project.md`, `tasks/`, and `decisions/`,
+plus the files each host needs. Commit all of it except `.castwork/local/`; the
+generated files contain no absolute paths, so they work for everyone who clones
+the repository.
 
-```sh
-npx castwork doctor          # read-only diagnosis, including whether generated files are current
-npx castwork update --check  # list what update would change; write nothing
-npx castwork update          # refresh generated files; refuses before writing on a conflict
-npx castwork remove     # remove generated files, keep your records
-```
+Write your working policy in `.castwork/project.md`: a few sentences on how
+careful to be, what needs a review, and when to ask. Agents read it as written.
 
-`remove` never touches `project.md`, `tasks/`, or `decisions/`.
+Then start your agent in the repository and invoke Castwork:
 
-## A task record
-
-Ordinary Markdown. Structured data in the frontmatter, prose in the body.
-
-```markdown
----
-schema: 1
-id: T-001
-title: Greet by name
-status: in_review
-requirements:
-  checks: [test, lint]
-  independent_review: true
-candidates:
-  - ref: 007c7f8
-    producers: [worker@claude]
-evidence:
-  - check: test
-    candidate: 007c7f8
-    result: pass
-    command: "npm test"
-    exit_code: 0
-    host: claude
-    model: claude-opus-5
-    at: "2026-09-18T12:34:56Z"
-  - { check: lint, candidate: 007c7f8, result: pass }
-assessments:
-  - candidate: 007c7f8
-    role: verifier
-    actor: verifier@codex
-    verdict: accept
-    host: codex
-    model: openai/gpt-5.6-sol
-    at: "2026-09-18T13:02:10Z"
----
-
-## Intent
-Users should be greeted by name.
-
-## Acceptance criteria
-- `greet("Ada")` returns `"Hello, Ada"`.
-```
-
-The record declares what it needs. The checks report whether it was obtained.
-
-```sh
-npx castwork task lint T-001
-```
-
-Three separate outputs, never merged: structural validity, reference
-availability, and requirement evaluation. Each supporting fact is reported as
-**checked** (the CLI observed it) or **asserted** (an agent wrote it).
-
-## Commands
-
-| Command | Purpose |
+| Host | Invocation |
 |---|---|
-| `setup`, `update`, `remove`, `doctor` | install lifecycle with ownership tracking |
-| `validate` | skills, config, links, generated adapter output |
-| `task new`, `task list`, `task show [--json]`, `task lint [--json]` | records and checks |
-| `task set <id> <field> <value>` | one safe frontmatter write |
-| `decision new <title>`, `decision list [--json]` | decision records |
-| `snapshot [--json]` | name the uncommitted working tree as a `tree:<sha>` candidate |
-| `version`, `help` | |
+| Claude Code, OpenCode | `/castwork` |
+| Codex | `$castwork` |
 
-Fifteen command paths. A dedicated command exists only where it does something
-materially better than editing the record by hand — everything else is a text
-edit. See [docs/cli.md](docs/cli.md).
+On its own, it reads your policy, the documents the policy points to, and the
+open task records, reports where things stand, and proposes a next step. It asks
+before starting that step. With a task id or a request — `/castwork T-004`,
+`/castwork add rate limiting to the login endpoint` — it does that work and
+writes a record where the work warrants one.
 
-## The one refusal
+[docs/getting-started.md](docs/getting-started.md) walks through a first task
+end to end.
 
-`task set <id> status done` refuses, without writing, when a declared
-requirement is not satisfied. That is the only place the toolkit declines to do
-what you asked, and it is validation on one value — not an authorization gate.
-Every other field and every direct edit is unrestricted. Failed checks and
-rejecting assessments are always recordable.
+## An example
 
-## Roles
+```
+/castwork Renewals charge the request locale's currency instead of the
+subscription's. Fix it; it needs tests, lint, and an independent review.
+```
 
-The role model is based on *TRINITY: An Evolved LLM Coordinator* (Xu et al.,
-[arXiv:2512.04695](https://arxiv.org/abs/2512.04695)). In TRINITY a small
-coordinator picks, turn by turn, a model and one of three roles: a **Thinker**
-that plans, decomposes, and critiques; a **Worker** that makes concrete
-progress; and a **Verifier** that checks whether the result is correct,
-complete, and responsive. The paper evaluates the same three roles on coding,
-math, reasoning, and knowledge benchmarks, and removing the role split lowered
-its average score.
+One way this can go — the agents choose:
 
-Castwork keeps those responsibilities and adds what the paper leaves open:
-work grounded in a real repository, durable records instead of a transcript,
-verdicts bound to an exact candidate, and declared requirements, not a single
-accept, deciding when a task is done. It is based on TRINITY's role model, not
-an implementation of TRINITY: there is no learned coordinator.
-[docs/background.md](docs/background.md) sets out the paper's findings, how the
-project applies them, and what it does not adopt.
+1. The thinker writes task `T-011`: intent, scope, acceptance criteria, and the
+   requirements `checks: [test, lint]`, `independent_review: true`, and
+   `assessment_roles: [verifier]`.
+2. A worker in Claude Code fixes it, commits `8c1d004`, and records the test
+   and lint results against that commit.
+3. A verifier in Codex reviews `8c1d004` and records `accept` with its findings.
+
+Afterwards you can see what the record supports:
+
+```sh
+npx castwork task lint T-011
+```
+
+Illustrative output, with an example commit id:
+
+```
+Structural validity
+-------------------
+valid
+
+Reference availability
+----------------------
+available    candidate  8c1d004  (current)
+
+Requirement evaluation
+----------------------
+satisfied      checks:test  (evidence.pass)
+               asserted  evidence for test on 8c1d004 is pass
+               asserted  recorded exit_code 0
+satisfied      checks:lint  (evidence.pass)
+               asserted  evidence for lint on 8c1d004 is pass
+               asserted  recorded exit_code 0
+satisfied      independent_review  (actor.independent)
+               asserted  accepting actor verifier@codex
+               asserted  candidate producers worker@claude
+               checked   verifier@codex is not among the producers
+satisfied      assessment_roles:verifier  (assessment.accepted)
+               asserted  effective verifier verdicts: accept
+```
+
+Each fact is marked **checked**, when the CLI observed it, or **asserted**, when
+an agent wrote it. Castwork evaluates recorded claims: it does not prove that a
+test ran, and it does not authenticate the people or agents behind actor names.
+
+`npx castwork task set T-011 status done` refuses while a declared requirement
+is unmet. `task lint` also reports unmet requirements when a record has been
+marked done by hand. Every other field is an ordinary edit. The full record is in
+[docs/examples/delegated.md](docs/examples/delegated.md), and the format in
+[docs/record-format.md](docs/record-format.md).
+
+## Roles and skills
+
+The roles are based on the role model of *TRINITY: An Evolved LLM Coordinator*
+(Xu et al., [arXiv:2512.04695](https://arxiv.org/abs/2512.04695)), in which a
+coordinator assigns each turn to a thinker, a worker, or a verifier. Castwork
+grounds those roles in a real repository, with durable records and verdicts
+bound to an exact candidate. It is not an implementation of TRINITY: there is no
+learned coordinator.
 
 | Role | Responsibility |
 |---|---|
-| `coordinator` | decides which roles act next and keeps the user informed |
-| `thinker` | turns a request into work: intent, scope, acceptance criteria, requirements; plans the approach and breaks it into tasks; critiques and diagnoses |
+| `coordinator` | decides which roles act next and keeps you informed |
+| `thinker` | turns a request into work: intent, scope, acceptance criteria, requirements; plans, breaks work into tasks, critiques, and diagnoses |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate: responsive, complete, correct |
 
-Each is a responsibility and boundary preset, independently usable, with no
-mandatory delegation sequence. Loading a role creates no authority.
+Each role is usable on its own, with no required order, and loading one grants
+no authority. The thinker, worker, and verifier can each have their own model
+and settings per host under `role_settings` in `castwork.json`. The
+coordinator uses the settings of the session in which you invoke Castwork.
+`role_routes` can run a role in another host — for example, to have Codex
+review work produced in Claude Code. See
+[docs/host-adapters.md](docs/host-adapters.md#role-routes).
 
-`independent_review` compares the reviewer's actor string against the
-candidate's recorded producers — not against role names. The same actor as
-producer and reviewer is not independent whatever roles it claimed.
+Castwork bundles five skills for working with its records:
+`task-record-contract`, `verification-evidence`, `assessment`,
+`decision-capture`, and `blocked-state`. Guidance for the work itself —
+planning, debugging, testing, review — comes from your project or your host.
+[Agent Skills](https://github.com/bartoszarendt/agent-skills) provides reusable
+guidance for how agents work; Castwork gives that work a shared record and role
+structure. They can be used together, and each is independently usable.
 
-## What this is not
+## Day-to-day commands
 
-Not an agent host, graph runtime, autonomous controller, rigid universal
-workflow, transcript archive, skill marketplace, or policy engine. There is no
-activation, no receipts, no signatures, no hardened mode, and no GitHub backend.
-Structure is added only when a named consumer requires it.
+```sh
+npx castwork task list          # task records and statuses
+npx castwork task lint T-011    # what one record satisfies
+npx castwork decision list      # decisions recorded so far
+npx castwork doctor             # installation health, including generated files
+npx castwork update             # refresh generated files after upgrading
+npx castwork remove             # remove generated files; records stay
+```
+
+[docs/cli.md](docs/cli.md) lists every command and flag.
+
+## Scope
+
+Castwork does not run agents, order their work, or grant permissions. Your host
+runs the agents; you and your project's policy decide what is authorized.
 
 ## Documentation
 
-- [CASTWORK.md](CASTWORK.md) — the vocabulary and its rules
-- [docs/record-format.md](docs/record-format.md) — the record contract
-- [docs/cli.md](docs/cli.md) — the command paths
 - [docs/getting-started.md](docs/getting-started.md) — first task, end to end
-- [docs/host-adapters.md](docs/host-adapters.md) — how generation works
-- [docs/downstream-adoption.md](docs/downstream-adoption.md) — adopting it in a project
+- [docs/downstream-adoption.md](docs/downstream-adoption.md) — adopting it in an existing project
+- [Claude Code](docs/claude-setup.md), [Codex](docs/codex-setup.md), and [OpenCode](docs/opencode-setup.md) setup
+- [docs/record-format.md](docs/record-format.md) — the record contract
+- [CASTWORK.md](CASTWORK.md) — the vocabulary and its rules
+- [docs/cli.md](docs/cli.md) — commands and flags
+- [docs/host-adapters.md](docs/host-adapters.md) — how host files are generated
+- [docs/background.md](docs/background.md) — design experience and the TRINITY role model
 
-## Requirements
+## Contributing
 
-Node 22 or newer.
+[AGENTS.md](AGENTS.md) describes the repository layout and the rules for
+changes. Run `npm test` and `npx castwork validate` before proposing one.
 
 ## License
 
-MIT
+[MIT](LICENSE)

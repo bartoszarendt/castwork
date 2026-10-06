@@ -1,13 +1,61 @@
-# Background: the TRINITY role model
+# Background
 
-Castwork's four roles are based on the role model of one paper. This page
+Castwork's design has two sources: experience running agents on real projects,
+and the role model of one research paper. This page sets them out separately.
+The experience explains the records, the checks, and what was left out; the
+paper explains the roles.
+
+## Design experience
+
+Castwork's predecessor enforced a full task lifecycle, with mandatory steps
+before, between, and after the work itself. In sustained use on real projects
+the machinery began to cost more than it protected. Agents repaired and
+reconciled workflow files while the product work was already correct, most
+commits recorded workflow state rather than product changes, and the owner's
+turns went into correcting the agents' reading of the process instead of the
+product. Castwork was rebuilt around what remained useful.
+
+These are observations from use on a small number of projects, not
+measurements. They explain the design; they are not evidence that Castwork
+makes agents faster or more accurate.
+
+**Workflow administration can crowd out the product work.** So records are
+ordinary Markdown that agents and people edit directly, nothing has to happen
+before an authorized task starts, and agents choose the workflow. The one
+refusal is marking a task done while a requirement it declared is unmet.
+
+**Agents drift from the request.** So a task records its intent, scope, what is
+out of scope, and acceptance criteria before the work starts, in a file the
+producer and the reviewer both read.
+
+**Context is lost between sessions.** So the state of the work lives in
+repository files rather than a transcript, and a new session, another host, or
+a person resumes from the record.
+
+**Producing a result and judging it are different jobs.** So planning,
+producing, and reviewing are separate roles, and `independent_review` compares
+the reviewer with the candidate's recorded producers rather than with role
+names.
+
+**Checks and reviews drift to a different revision.** So evidence and
+assessments name the exact candidate they concern, and a new candidate leaves
+them behind instead of inheriting them.
+
+**Requiring review everywhere creates work without value.** In field use nearly
+every task declared a review, which made a verifier compulsory before every
+`done`. So each task declares only the requirements its consequences warrant,
+and a review that would merely help needs no requirement.
+
+## The TRINITY role model
+
+Castwork's four roles are based on the role model of one paper. This section
 says what the paper defines and found, how the project applies it, where the
 project goes further, and what it deliberately does not take.
 
 Castwork is based on the TRINITY role model. It is not an implementation of
 TRINITY, and it has no learned coordinator.
 
-## Source
+### Source
 
 Jinglue Xu, Qi Sun, Peter Schwendeman, Stefan Nielsen, Edoardo Cetin, Yujin
 Tang. *TRINITY: An Evolved LLM Coordinator.* arXiv:2512.04695, version 3,
@@ -16,7 +64,7 @@ Tang. *TRINITY: An Evolved LLM Coordinator.* arXiv:2512.04695, version 3,
 Quotations below are from section 3.2 of that version unless another section is
 named.
 
-## The three roles
+### The three roles
 
 The paper gives each agent turn one of three roles:
 
@@ -34,7 +82,7 @@ each turn, of a model and a role together, from the current transcript. The
 paper's design rests on the observation that "the coordinator itself need not
 be as capable as the underlying agents": in TRINITY it is a small learned model.
 
-## What the paper found
+### What the paper found
 
 The paper's ablation (Table 2) removes parts of the role design and measures
 the effect:
@@ -61,7 +109,7 @@ Three limits apply to reading these figures:
   Table 2 uses a limit of 4,096 output tokens. The two figures come from
   different settings and are not comparable with each other.
 
-## How the project applies it
+### How the project applies it
 
 Castwork takes the three roles as responsibility and boundary presets, and
 adds the coordinator as a fourth:
@@ -96,7 +144,7 @@ configuration: where a route exists, the coordinator follows it, running the
 role in its own host only when the route's host is unavailable, rather than
 choosing a host each time.
 
-## Where the project goes beyond the paper
+### Where the project goes beyond the paper
 
 The paper names its own limitation (section 6): "the system can devise plans
 involving tools but cannot yet act on them". Castwork works in that gap:
@@ -117,7 +165,7 @@ involving tools but cannot yet act on them". Castwork works in that gap:
 - **Human authorization.** The user and the project's policy decide what may
   be done. No role or status grants permission.
 
-## What it does not take
+### What it does not take
 
 - the learned coordinator;
 - the evolutionary optimisation used to train it;

@@ -1,7 +1,7 @@
 # Castwork repository instructions
 
-This is the Castwork toolkit itself. It provides a small, portable
-vocabulary for agent work: Markdown task records carrying work, candidates,
+This is the Castwork toolkit itself: shared task records and roles for agent
+work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 

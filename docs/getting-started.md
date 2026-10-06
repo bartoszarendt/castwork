@@ -199,8 +199,8 @@ Add a new candidate. Earlier evidence and assessments concern the old one and
 are simply not applied to the new one — no diagnostic is raised against them,
 and nothing is invalidated. Re-record evidence for the new candidate.
 
-## What you will not find
+## Nothing to run first
 
-No activation step, no dispatch, no receipts, no gates, no closeout. An
-authorized task starts by editing a file. If a tool ever seems to require a
-ceremony before you can begin, that is a bug.
+An authorized task starts by editing a file or asking your agent; no step has
+to happen before the work. If a tool ever seems to require a ceremony before
+you can begin, that is a bug.

@@ -1,6 +1,7 @@
 # Castwork
 
-A small, portable vocabulary for agent work.
+Shared task records and roles for agent work. This document defines the
+vocabulary the records use and the rules the checks apply.
 
 Castwork provides the task record format and its status vocabulary, pure
 checks over recorded facts, four role presets, reusable skills, and thin host

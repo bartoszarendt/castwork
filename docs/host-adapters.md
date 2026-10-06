@@ -49,7 +49,7 @@ format; the generator itself knows nothing about any host.
 Generated files contain:
 
 - no absolute paths, so the repository stays portable across machines;
-- no workflow infrastructure, capability declarations, or activation slots;
+- no step an agent must complete before it can start work;
 - nothing a host cannot act on.
 
 If you find generated output asking an agent to prove something about itself,

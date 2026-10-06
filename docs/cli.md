@@ -53,10 +53,9 @@ so in its hint.
 `help` lists each command with its flags. Through npx, run
 `npx --no castwork help`, not `--help`: npm reads `--help` itself.
 
-Nothing else. There is no activation, activation store, host-trust,
-event-logging, handoff, readiness, dispatch, return, review, audit, closeout,
-worktree, improvement, GitHub, guidance, generate, configure, hydrate, or init
-command — and no aliases or deprecated forms for the ones that are gone.
+That is the whole command set. A dedicated command exists only where it does
+something materially better than editing the record: adding a candidate,
+recording evidence, or writing an assessment is an edit to the file.
 
 ## Installation and configuration
 

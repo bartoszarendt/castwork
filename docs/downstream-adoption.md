@@ -22,7 +22,8 @@ step from your records and plan and asks before starting it.
   commit.
 
 If adopting it makes your agents spend time on the toolkit instead of your
-product, it is not earning its place. That failure mode is why 0.5.0 exists.
+product, it is not earning its place. Castwork was rebuilt to avoid that failure; see
+[background.md](background.md).
 
 ## Install
 
@@ -68,9 +69,9 @@ marked done.
 **Name your checks after your commands.** If your test command is `npm test`,
 call the check `test`. The name is yours; the toolkit only matches strings.
 
-**Keep your own task tracker if you have one.** Castwork is files only in
-0.5.0 — there is no GitHub backend or projection. Your agents can use GitHub
-through their host's normal tools; the toolkit simply has no opinion about it.
+**Keep your own task tracker if you have one.** Castwork keeps its records in
+files only. Your agents can use GitHub issues and pull requests through their
+host's normal tools; Castwork neither reads nor writes them.
 
 ## Upgrading the toolkit
 

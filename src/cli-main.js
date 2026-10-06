@@ -174,7 +174,7 @@ function version() {
 
 function help() {
   out('castwork <command> [options]\n');
-  out('Castwork provides a small, portable vocabulary for agent work.');
+  out('Castwork: shared task records and roles for agent work.');
   out('Agents choose the workflow. Hosts execute it.\n');
   out('Commands:');
   const width = Math.max(...COMMAND_PATHS.map((entry) => entry.path.length));
