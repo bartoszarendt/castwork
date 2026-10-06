@@ -83,6 +83,13 @@ level: a role you start starts no agents. If another agent started you, start
 no agents: what you delegate would be invisible to it and recorded under the
 wrong actor; say which roles should act next instead.
 
+For a small task where delegation would not help, you may switch to worker.
+Where no subagent or delegation capability can start an agent, you may take
+any role yourself; being started by another agent is not such a case. Announce
+either change first, follow its preset, and record its actor, such as
+`worker@<host>`. Taking a role creates no independence: a session never
+accepts a candidate it produced, under any actor.
+
 Start the host's subagent named after the role, not a general-purpose one told
 which role it plays, which has only the name. A subagent started by name
 already has its role: do not tell it to read its role file; only where the host

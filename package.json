@@ -1,6 +1,6 @@
 {
   "name": "castwork",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Shared task records and roles for agent work: Markdown records of work, candidates, evidence, and assessments, with role presets, host adapters, and checks against each task's declared requirements",
   "type": "module",
   "license": "MIT",
@@ -33,7 +33,8 @@
     "markdown",
     "opencode",
     "codex",
-    "claude"
+    "claude",
+    "pi"
   ],
   "publishConfig": {
     "access": "public"
@@ -48,6 +49,7 @@
     "src/adapters/",
     ".claude-plugin/",
     "CASTWORK.md",
+    "AGENTS.md",
     "agents/",
     "skills/",
     "commands/",
@@ -64,6 +66,7 @@
     "docs/codex-setup.md",
     "docs/claude-setup.md",
     "docs/opencode-setup.md",
+    "docs/pi-setup.md",
     "CHANGELOG.md",
     "LICENSE"
   ],

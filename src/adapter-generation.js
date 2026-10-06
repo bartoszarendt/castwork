@@ -201,7 +201,7 @@ export function readCommand() {
   const file = path.join(toolkitRoot(), 'commands', 'start.md');
   if (!fs.existsSync(file)) return null;
   const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
-  return { ...commandDescriptions(parsed.frontmatter), body: parsed.body.trim() };
+  return { ...commandDescriptions(parsed.frontmatter), argument_hint: parsed.frontmatter['argument-hint'], body: parsed.body.trim() };
 }
 
 /**
@@ -411,12 +411,50 @@ function renderSkillIndex(command, skills, roles, adapter, routes) {
 }
 
 /**
- * @param {{description: string, body: string}|null} command
+ * @param {{description: string, argument_hint?: unknown, body: string}|null} command
  * @param {ResolvedRoute[]} routes
+ * @param {{arguments?: unknown, source?: string}} [entry]
  */
-function renderCommand(command, routes) {
+export function renderCommand(command, routes, entry = {}) {
+  const declared = Object.hasOwn(entry, 'arguments');
+  const source = entry.source ?? 'adapter command';
+  if (declared && (typeof entry.arguments !== 'string' || entry.arguments.trim() === '')) {
+    throw new PublicError(`${source} declares arguments as something other than a non-empty string`);
+  }
   if (!command) return '';
-  return `---\ndescription: ${yamlString(command.description)}\n---\n\n${command.body}\n\n${renderRoutes(routes)}\n`;
+  const lines = ['---', `description: ${yamlString(command.description)}`];
+  if (declared) {
+    if (typeof command.argument_hint !== 'string' || command.argument_hint.trim() === '') {
+      throw new PublicError('commands/start.md argument-hint must be a non-empty string for an adapter declaring arguments');
+    }
+    // Check the text actually carried into the command, not unused settings.
+    // Dollar signs in inserted route values would be expanded by the host too.
+    const sources = [
+      ['commands/start.md description', command.description],
+      ['commands/start.md argument-hint', command.argument_hint],
+      ['commands/start.md body', command.body],
+    ];
+    for (const route of routes) {
+      sources.push([`src/adapters/${route.host}.json label or role path`, `${route.label} ${route.role_file}`]);
+      for (const key of routeSettings(route.host)) {
+        const value = route.settings[key];
+        if (value !== undefined && value !== null) {
+          sources.push([`castwork.json role_settings.${route.host}.${route.role}.${key}`, String(value)]);
+        }
+      }
+    }
+    for (const [where, value] of sources) {
+      if (value.includes('$')) throw new PublicError(`${source} cannot carry a dollar sign from ${where}`, {
+        hint: 'Only the adapter\'s declared arguments string may contain a dollar sign in the generated command.',
+      });
+    }
+    lines.push(`argument-hint: ${yamlString(command.argument_hint)}`);
+  }
+  lines.push('---', '', command.body, '', renderRoutes(routes));
+  const content = `${lines.join('\n')}\n`;
+  if (!declared) return content;
+  if (content.includes('$')) throw new PublicError(`${source} produced a dollar sign outside its arguments from generated command text`);
+  return `${content}\n## Argument\n\n${String(entry.arguments)}\n`;
 }
 
 /**
@@ -567,7 +605,7 @@ export function generateHost(host, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
-  for (const entry of /** @type {{kind: string, to: string, format: string, content?: string}[]} */ (adapter.files)) {
+  for (const entry of /** @type {{kind: string, to: string, format: string, content?: string, arguments?: unknown}[]} */ (adapter.files)) {
     if (entry.kind === 'role') {
       for (const canonical of roles) {
         // A bare `<host>` placeholder was read as the machine's name, the way
@@ -594,9 +632,13 @@ export function generateHost(host, options = {}) {
       continue;
     }
     if (entry.kind === 'command') {
+      const commandEntry = { ...entry, source: `src/adapters/${host}.json command ${entry.to}` };
+      if (Object.hasOwn(entry, 'arguments') && entry.format !== 'command') {
+        throw new PublicError(`${commandEntry.source} declares arguments on a non-command format`);
+      }
       files.push({
         path: entry.to,
-        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter, routes) : renderCommand(command, routes),
+        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter, routes) : renderCommand(command, routes, commandEntry),
       });
       continue;
     }

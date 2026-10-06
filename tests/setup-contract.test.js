@@ -54,8 +54,16 @@ test('an unknown host in the config is refused', (t) => {
   assert.throws(() => update(root), /unknown host copilot/);
 });
 
+test('package includes the Pi setup guide and repository guidance linked from README', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+  for (const file of ['docs/pi-setup.md', 'AGENTS.md']) {
+    assert.ok(manifest.files.includes(file), `${file} would be missing from the packed package`);
+    assert.ok(fs.existsSync(path.join(repoRoot, file)));
+  }
+});
+
 test('no shipped document shows a bare setup as a first-install command', () => {
-  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md'];
+  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md', 'docs/pi-setup.md'];
   for (const relative of docs) {
     const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
     for (const block of text.matchAll(/```sh\n([\s\S]*?)```/g)) {
@@ -68,7 +76,7 @@ test('no shipped document shows a bare setup as a first-install command', () => 
 });
 
 test('no shipped document claims setup prompts for a host', () => {
-  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md'];
+  const docs = ['README.md', 'docs/getting-started.md', 'docs/downstream-adoption.md', 'docs/codex-setup.md', 'docs/claude-setup.md', 'docs/opencode-setup.md', 'docs/pi-setup.md'];
   for (const relative of docs) {
     const text = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
     assert.doesNotMatch(text, /when asked|asks which hosts/i, `${relative} still describes a prompt`);

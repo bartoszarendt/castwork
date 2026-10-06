@@ -5,7 +5,7 @@ work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.8.0 is current.
+**Status:** version 0.9.0 is current.
 
 ## Layout
 
@@ -16,7 +16,7 @@ adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 | `agents/` | the four canonical role presets |
 | `skills/` | reusable procedures, one directory per skill |
 | `commands/` | the canonical `start` entry command |
-| `src/adapters/` | per-host templates for Codex, Claude Code, and OpenCode |
+| `src/adapters/` | per-host templates for Codex, Claude Code, OpenCode, and Pi |
 | `memory/` | record templates |
 | `tests/` | unit tests |
 | `docs/` | public documentation |

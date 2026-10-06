@@ -41,6 +41,16 @@ function read(root, relative) {
 /* Each host's own spelling                                            */
 /* ------------------------------------------------------------------ */
 
+test('Pi accepts model only and preserves provider/id:thinking suffixes', (t) => {
+  assert.deepEqual(settingsFor('pi'), ['model']);
+  const root = fixture(t, ['pi'], {
+    role_settings: { pi: { verifier: { model: 'provider/id:high' } } },
+  });
+  update(root);
+  assert.match(read(root, '.pi/agents/verifier.md'), /^model: "provider\/id:high"$/m);
+  assert.deepEqual(validate(root).findings, []);
+});
+
 test('Claude effort reaches its role file under the native key', (t) => {
   const root = fixture(t, ['claude'], {
     role_settings: { claude: { verifier: { effort: 'xhigh' } } },
@@ -62,6 +72,7 @@ test('the retired unified effort setting is refused on every host before generat
     ['opencode', /retired: remove it, and choose a variant .* beside an explicit model/],
     ['claude', /retired: rename it to effort\./],
     ['codex', /retired: rename it to model_reasoning_effort\./],
+    ['pi', /thinking as a model suffix.*provider\/id:high/],
   ]) {
     const root = fixture(t, [host], {
       role_settings: { [host]: { worker: { reasoning_effort: 'high' } } },

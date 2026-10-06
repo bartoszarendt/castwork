@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.9.0
+
+**Added**
+
+- Pi as a fourth host: four `.pi/agents/` role presets, the `/castwork` prompt
+  template, and procedure references by path, with no Pi skill index, extension,
+  runner, or settings file. Pi accepts `model` only, preserving
+  `provider/id:thinking` suffixes in roles and routes.
+- Pi's thinker, worker and verifier opt into appended prompts, project and
+  global instructions, and skills under `pi-subagents`; the coordinator is the
+  `/castwork` session and carries no child-inheritance keys.
+- Optional adapter command `arguments`: argument-hint propagation and a closing
+  Argument section. Pi uses `${ARGUMENTS:-none}`. Setup, update and validate
+  refuse every other dollar sign in that command, naming its source, before
+  writes. Existing hosts without this field retain their rendering contract.
+
+**Changed**
+
+- The coordinator preset and the entry command now say when the coordinator may
+  take a role itself: the existing small-task switch to worker, and any role
+  where no subagent or delegation capability can start an agent. Being started
+  by another agent does not qualify. Role changes are announced, and a session
+  that produced a candidate never accepts it under any actor. The verifier
+  preset says the same.
+- Codex's generated entry skill also carries `disable-model-invocation: true`,
+  keeping it out of Pi's implicit skill catalog when both hosts are generated.
+  The Codex invocation policy remains.
+- `validate` reports a generation refusal with its hint, as `setup` prints it.
+
+Run `update` and start a new host session for the new shared prose and Codex
+marker. See [Pi setup](docs/pi-setup.md) for trust, optional delegation,
+argument parsing, write limits, and what has not yet been checked live.
+
 ## 0.8.0
 
 Role settings use each host's own effort control, and the generated OpenCode

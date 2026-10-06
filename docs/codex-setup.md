@@ -56,9 +56,11 @@ policy:
 ```
 
 so the skill is never matched implicitly against whatever you happened to ask
-for. Explicit invocation — `$castwork`, or picking it from `/skills` — keeps
-working. Castwork is a way to record work, not a mode a session should fall
-into.
+for. Its `SKILL.md` also carries `disable-model-invocation: true`, so hosts such
+as Pi that discover `.agents/skills/` but do not read Codex's policy file do not
+advertise it implicitly; Codex 0.160.1 accepts the key. Explicit invocation —
+`$castwork`, or picking it from `/skills` — keeps working. Castwork is a way to
+record work, not a mode a session should fall into.
 
 To work as a particular role, point Codex at that role's file under
 `.codex/agents/`. Role files are TOML, carrying the role's name, description,

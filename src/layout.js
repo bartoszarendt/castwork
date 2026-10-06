@@ -31,7 +31,7 @@ export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISION
 /**
  * Supported host ids.
  *
- * Each is the host's own command name — `codex`, `claude`, `opencode` — which
+ * Each is the host's own command name — `codex`, `claude`, `opencode`, `pi` — which
  * is what a user types and the one spelling per concept the project keeps.
  */
-export const HOSTS = Object.freeze(['codex', 'claude', 'opencode']);
+export const HOSTS = Object.freeze(['codex', 'claude', 'opencode', 'pi']);

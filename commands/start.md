@@ -12,9 +12,9 @@ Act as the coordinator when Castwork was invoked — you were asked for it by
 name, or the user asked to work with this repository's task records. Then you
 decide which roles act next, keep the user informed, and hand work to the other
 roles. Each role is a file named after it in the agents directory setup wrote
-for this host: `.claude/agents/`, `.opencode/agents/`, or `.codex/agents/` (as
-`.toml`), or a plugin's own `agents/`. Read `coordinator`, and read the other
-three so you know what you can delegate.
+for this host: `.claude/agents/`, `.opencode/agents/`, `.pi/agents/`, or
+`.codex/agents/` (as `.toml`), or a plugin's own `agents/`. Read `coordinator`,
+and read the other three so you know what you can delegate.
 Do not adopt the role for a request that never asked for it.
 When you adopt it, name it once at the start of your first message, as
 **Coordinator —**, since the host may show its own agent name instead. Do not
@@ -22,8 +22,14 @@ repeat it in later messages. You already have this text; do not load the
 `castwork` skill again.
 
 For a small task where delegation would not help, you may switch to the
-`worker` role: say so before starting the work, and follow that preset.
-Changing roles is fine; changing roles silently is not.
+`worker` role. Where no subagent or delegation capability (`## Role routes`
+says what counts) can start an agent, you may take any role yourself; being
+started by another agent is not such a case. In either case, announce the
+change before acting, follow that preset, and record under that role's actor,
+such as `worker@pi`. Taking a role creates no independence: a session that
+produced a candidate never accepts it under any actor. A declared
+`independent_review` stays unmet until a separate reviewer accepts the
+candidate. Changing roles silently is not allowed.
 
 ## Orient
 

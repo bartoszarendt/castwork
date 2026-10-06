@@ -11,6 +11,7 @@ special machinery.
 | `codex` | `.codex/agents/` (TOML) and `.agents/skills/castwork/`, including its `agents/openai.yaml` invocation policy |
 | `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/castwork/` |
 | `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/castwork/` |
+| `pi` | `.pi/agents/`, `.pi/prompts/castwork.md`, `.pi/skills/castwork/references/` (no skill index) |
 
 Copilot and Cursor adapters were removed in 0.5.0.
 
@@ -68,7 +69,7 @@ invitation to start orchestrating work nobody asked about.
 Where a host documents a way to say "this skill is invoked, not inferred", its
 adapter declares it. Codex gets a `literal` file at
 `.agents/skills/castwork/agents/openai.yaml` setting
-`policy.allow_implicit_invocation` to `false`. Claude Code gets
+`policy.allow_implicit_invocation` to `false`. Codex and Claude Code also get
 `disable-model-invocation: true` in the skill index frontmatter, through the
 adapter's `skill_frontmatter` map. Explicit invocation — `$castwork` in
 Codex, `/castwork` in Claude Code — is unaffected. OpenCode v2 also reads
@@ -78,6 +79,11 @@ session-level guidance. Its agents can refuse a skill in both versions: the adap
 `verifier` `permission: { skill: { castwork: deny } }`, which hides the entry
 skill from them. The coordinator keeps it. The same block sets `mode: all`,
 preserving direct and delegated use across v1's `all` and v2's `primary` defaults.
+
+Pi uses a prompt template, not a skill index. It also discovers Codex's
+`.agents/skills/` when both hosts are generated, so Codex's skill frontmatter
+marker keeps that entry out of Pi's system prompt. The existing Codex policy
+file remains, and Codex 0.160.1 accepts the marker.
 
 ## Host differences
 
@@ -95,6 +101,24 @@ this is preset guidance, not a host setting, and it holds on every host. On
 Codex a role starts with the conversation it was forked from, so every preset
 says the record is authoritative and an inherited conversation is background.
 No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
+
+Pi has no built-in subagents or `--agent` option. The `/castwork` session is the
+coordinator; do not start it as a child. Castwork recommends the optional
+`pi-subagents` extension, without installing or requiring it. The thinker,
+worker, and verifier carry `systemPromptMode: append`,
+`inheritProjectContext: true`, `inheritGlobalContext: true`, and
+`inheritSkills: true`; the coordinator carries none of those keys. The upstream
+example is a minimal alternative and requires `agentScope: "project"` or
+`"both"`. See [Pi setup](pi-setup.md) for trust, write limits, and what has not
+yet been checked in live sessions.
+
+On any host, a small task may warrant switching to worker rather than
+delegating. Where no subagent or delegation capability can start an agent, the
+coordinator may take any role; a coordinator started by another agent does not
+qualify. Announce the change, follow its preset, and record its actor.
+Taking a role or changing actor names creates no independence: a session that
+produced a candidate never accepts it under any actor. A declared
+`independent_review` needs a separate accepting reviewer.
 
 ## Ownership
 
@@ -158,13 +182,17 @@ rather than stringified into a generated file.
 Each host declares which settings it accepts, in its adapter's
 `role_frontmatter` map:
 
-| Setting | codex | claude | opencode |
-|---|---|---|---|
-| `model` | `model` | `model` | `model` |
-| `permission_mode` | — | `permissionMode` | — |
-| `model_reasoning_effort` | `model_reasoning_effort` | — | — |
-| `effort` | — | `effort` | — |
-| `variant` | — | — | `variant` |
+| Setting | codex | claude | opencode | pi |
+|---|---|---|---|---|
+| `model` | `model` | `model` | `model` | `model` |
+| `permission_mode` | — | `permissionMode` | — | — |
+| `model_reasoning_effort` | `model_reasoning_effort` | — | — | — |
+| `effort` | — | `effort` | — | — |
+| `variant` | — | — | `variant` | — |
+
+Pi accepts only `model`, including an unchanged `provider/id:high` thinking
+suffix. There is no Castwork `thinking` setting. Routes to Pi list only this
+model setting, not the inheritance keys.
 
 A setting a host does not declare is refused with a hint listing what it does
 accept, rather than written into a file the host will ignore.
@@ -184,7 +212,8 @@ provider-defined bundle, not a universal effort level. See
 The former unified `reasoning_effort` setting is no longer accepted. Rename it
 to `model_reasoning_effort` for Codex or `effort` for Claude Code. For OpenCode,
 remove it and choose a supported `variant` with an explicit `model`; do not
-assume a same-named variant has the same effect. There are no aliases or
+assume a same-named variant has the same effect. For Pi, remove it and put
+thinking in the `model` suffix, such as `provider/id:high`. There are no aliases or
 automatic conversions. Update the configuration before running `update`, then
 start a new host session.
 
@@ -290,7 +319,23 @@ the key the host reads. If the host documents a way to refuse implicit
 invocation, put it in `skill_frontmatter` or a `literal` file; frontmatter the
 roles a coordinator starts need, such as a permission, goes in
 `delegated_role_frontmatter`, a nested map of strings and booleans. Nothing else in
-the toolkit should need to know the host exists. If adding a host requires
+the toolkit should need to know the host exists.
+
+A `command` entry with `format: "command"` may declare `arguments`: a non-empty
+string containing the host's argument placeholder. Generation then carries
+`argument-hint` from `commands/start.md` into frontmatter and appends a closing
+`## Argument` section with that string, written literally. Pi declares
+`${ARGUMENTS:-none}`. Without this field, command output is unchanged; Claude
+Code and OpenCode keep their native argument appending. Invalid declarations
+are refused. With it, any other dollar sign in the generated command is refused,
+naming its canonical source or `castwork.json role_settings.<host>.<role>.<key>`.
+`setup` and `update` generate against the real project configuration before
+writing anything; `validate` reports the same refusal even without a manifest.
+This prevents a route model such as `custom-$1` from being expanded as user
+input by the host. The placeholder is adapter data, not syntax the generator
+interprets.
+
+If adding a host requires
 changing the checks, the record format, or the CLI, the abstraction has leaked
 — fix that instead.
 

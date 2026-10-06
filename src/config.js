@@ -62,6 +62,7 @@ function settingValue(value, where) {
  * say where the setting went.
  */
 const RETIRED_EFFORT = Object.freeze({
+  pi: 'reasoning_effort was retired: remove it and write thinking as a model suffix, for example provider/id:high.',
   claude: 'reasoning_effort was retired: rename it to effort.',
   codex: 'reasoning_effort was retired: rename it to model_reasoning_effort.',
   opencode: 'reasoning_effort was retired: remove it, and choose a variant the model supports beside an explicit model. A variant is not an effort level.',

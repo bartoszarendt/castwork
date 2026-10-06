@@ -94,8 +94,19 @@ export function roleFindings(role, skills) {
     if (!skills.includes(procedure)) error(findings, where, `names procedure ${procedure}, which is not a skill under skills/`);
   }
   const lines = role.body.split('\n').length;
-  if (lines >= 100) warn(findings, where, `${lines} body lines; roles are meant to stay under 100`);
+  const limit = roleLineLimit(role.id);
+  if (lines >= limit) warn(findings, where, `${lines} body lines; ${role.id} is meant to stay under ${limit}`);
   return findings;
+}
+
+/**
+ * The body lines a role preset stays under. The coordinator also says when it
+ * may take another role itself.
+ *
+ * @param {string} id
+ */
+export function roleLineLimit(id) {
+  return id === 'coordinator' ? 110 : 100;
 }
 
 /**
@@ -217,7 +228,6 @@ function validateGeneratedOutput(findings, root) {
   const manifest = readManifest(root);
   if (!manifest) {
     warn(findings, CONFIG_FILE, 'hosts are configured but no generated manifest exists; run setup');
-    return;
   }
   for (const host of config.hosts) {
     /** @type {{path: string, content: string}[]} */
@@ -228,9 +238,14 @@ function validateGeneratedOutput(findings, root) {
         routes: resolveRoutes(host, config.role_routes, config.role_settings, config.hosts),
       });
     } catch (generationError) {
-      error(findings, `adapters/${host}`, `generation failed: ${String(generationError)}`);
+      // A refusal reads as setup would print it; anything else keeps its type.
+      const reason = generationError instanceof PublicError
+        ? [generationError.message, generationError.hint].filter(Boolean).join('. ')
+        : String(generationError);
+      error(findings, `adapters/${host}`, `generation failed: ${reason}`);
       continue;
     }
+    if (!manifest) continue;
     for (const file of planned) {
       const recorded = manifest.files[file.path];
       if (recorded === undefined) {

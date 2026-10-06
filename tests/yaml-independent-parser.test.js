@@ -19,7 +19,7 @@ import test from 'node:test';
 
 import * as independentYaml from 'yaml';
 
-import { generateHost, readRoles, readSkills, readCommand } from '../src/adapter-generation.js';
+import { generateHost, readRoles, readSkills, readCommand, readAdapter } from '../src/adapter-generation.js';
 import { HOSTS, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord } from '../src/record.js';
 import { setup } from '../src/setup.js';
@@ -124,7 +124,7 @@ for (const host of MARKDOWN_HOSTS) {
     assert.equal(checked, roles.length);
   });
 
-  test(`9: the ${host} skill index frontmatter is valid for an independent parser`, () => {
+  if (readAdapter(host).files.some((entry) => entry.kind === 'index')) test(`9: the ${host} skill index frontmatter is valid for an independent parser`, () => {
     const index = generateHost(host).find((entry) => entry.path.endsWith('SKILL.md'));
     assert.ok(index, `${host} generated no skill index`);
     const parsed = independentYaml.parse(frontmatterOf(index.content));
@@ -133,7 +133,8 @@ for (const host of MARKDOWN_HOSTS) {
   });
 
   test(`9: the ${host} entry command frontmatter is valid for an independent parser`, () => {
-    const command = generateHost(host).find((entry) => entry.path.endsWith('commands/castwork.md'));
+    const destination = readAdapter(host).files.find((entry) => entry.kind === 'command').to;
+    const command = generateHost(host).find((entry) => entry.path === destination);
     assert.ok(command, `${host} generated no entry command`);
     const parsed = independentYaml.parse(frontmatterOf(command.content));
     assert.equal(parsed.description, readCommand().description);
@@ -163,7 +164,7 @@ for (const host of MARKDOWN_HOSTS) {
 test('9: the skill index lists every bundled skill with its canonical description', () => {
   const skills = readSkills();
   assert.ok(skills.length > 0);
-  for (const host of MARKDOWN_HOSTS) {
+  for (const host of MARKDOWN_HOSTS.filter((host) => readAdapter(host).files.some((entry) => entry.kind === 'index'))) {
     const index = generateHost(host).find((entry) => entry.path.endsWith('SKILL.md'));
     for (const skill of skills) {
       assert.ok(index.content.includes(`\`${skill.id}\``), `${host} index omits ${skill.id}`);

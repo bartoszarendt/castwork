@@ -16,6 +16,77 @@ function fixture(t) {
   return root;
 }
 
+for (const hosts of [['pi'], ['pi', 'codex']]) {
+  test(`${hosts.join('+')} setup, update, host removal and remove retain ownership boundaries`, (t) => {
+    const root = fixture(t);
+    const collision = '.pi/prompts/castwork.md';
+    fs.mkdirSync(path.join(root, '.pi/prompts'), { recursive: true });
+    fs.writeFileSync(path.join(root, collision), 'user prompt');
+    const before = snapshot(root);
+    assert.throws(() => setup(root, { hosts }), /nothing was written/);
+    assert.deepEqual(snapshot(root), before);
+    fs.rmSync(path.join(root, collision));
+    const installed = setup(root, { hosts });
+    assert.equal(installed.added.filter((file) => file.startsWith('.pi/')).length, 10);
+    assert.deepEqual(update(root).changed, []);
+    const edited = '.pi/agents/worker.md';
+    fs.appendFileSync(path.join(root, edited), '\nuser edit\n');
+    const modified = snapshot(root);
+    assert.throws(() => update(root), /nothing was written/);
+    assert.deepEqual(snapshot(root), modified);
+    update(root, { force: [edited] });
+    fs.writeFileSync(path.join(root, TASKS_DIRECTORY, 'T-004.md'), 'user record');
+    fs.writeFileSync(path.join(root, '.pi/agents/unrelated.md'), 'user agent');
+    if (hosts.includes('codex')) {
+      fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify({ hosts: ['codex'] }));
+      const dropped = update(root);
+      assert.equal(dropped.removed.filter((file) => file.startsWith('.pi/')).length, 10);
+      assert.ok(fs.existsSync(path.join(root, '.codex/agents/worker.toml')));
+    } else {
+      fs.appendFileSync(path.join(root, edited), '\nuser edit\n');
+    }
+    const removed = remove(root);
+    if (!hosts.includes('codex')) assert.ok(removed.kept.includes(edited));
+    assert.equal(fs.readFileSync(path.join(root, '.pi/agents/unrelated.md'), 'utf8'), 'user agent');
+    assert.equal(fs.readFileSync(path.join(root, TASKS_DIRECTORY, 'T-004.md'), 'utf8'), 'user record');
+    assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
+  });
+}
+
+test('Pi dollar-sign refusal uses real route settings before setup, update or validate writes', (t) => {
+  for (const installed of [false, true]) {
+    const root = fixture(t);
+    if (installed) setup(root, { hosts: ['pi', 'codex'] });
+    fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify({
+      hosts: ['pi', 'codex'],
+      role_routes: { verifier: 'codex' },
+      role_settings: { codex: { verifier: { model: 'custom-$1' } } },
+    }));
+    const before = snapshot(root);
+    const refusal = /dollar sign from castwork.json role_settings.codex.verifier.model/;
+    assert.throws(() => setup(root, { hosts: ['pi'] }), refusal);
+    assert.deepEqual(snapshot(root), before);
+    assert.throws(() => update(root), refusal);
+    assert.deepEqual(snapshot(root), before);
+    const report = validate(root);
+    assert.equal(report.ok, false);
+    const finding = report.findings.find((candidate) => refusal.test(candidate.message));
+    assert.ok(finding);
+    assert.doesNotMatch(finding.message, /PublicError/);
+    assert.match(finding.message, /Only the adapter's declared arguments string may contain a dollar sign/);
+    assert.deepEqual(snapshot(root), before);
+  }
+  const root = fixture(t);
+  fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify({
+    hosts: ['claude', 'codex'],
+    role_routes: { verifier: 'codex' },
+    role_settings: { codex: { verifier: { model: 'custom-$1' } } },
+  }));
+  setup(root);
+  assert.equal(validate(root).ok, true, 'hosts without argument expansion are unaffected');
+  assert.match(fs.readFileSync(path.join(root, '.claude/commands/castwork.md'), 'utf8'), /custom-\$1/);
+});
+
 test('setup creates the state directories and records what it generated', (t) => {
   const root = fixture(t);
   const result = setup(root, { hosts: ['codex'] });

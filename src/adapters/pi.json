@@ -1,0 +1,31 @@
+{
+  "id": "pi",
+  "label": "Pi",
+  "role_frontmatter": {
+    "model": "model"
+  },
+  "delegated_role_frontmatter": {
+    "systemPromptMode": "append",
+    "inheritProjectContext": true,
+    "inheritGlobalContext": true,
+    "inheritSkills": true
+  },
+  "files": [
+    {
+      "kind": "role",
+      "to": ".pi/agents/{role}.md",
+      "format": "markdown"
+    },
+    {
+      "kind": "command",
+      "to": ".pi/prompts/castwork.md",
+      "format": "command",
+      "arguments": "${ARGUMENTS:-none}"
+    },
+    {
+      "kind": "skill",
+      "to": ".pi/skills/castwork/references/{skill}.md",
+      "format": "reference"
+    }
+  ]
+}

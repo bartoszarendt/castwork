@@ -156,7 +156,7 @@ test('containment failures happen before any mutation', (t) => {
 
 test('an ordinary installation is unaffected by the hardening', (t) => {
   const root = tmp(t, 'ok');
-  const result = setup(root, { hosts: ['codex', 'claude', 'opencode'] });
+  const result = setup(root, { hosts: ['codex', 'claude', 'opencode', 'pi'] });
   assert.ok(result.added.length > 0);
   assert.equal(readManifest(root).files[result.added[0]] !== undefined, true);
   assert.doesNotThrow(() => update(root));

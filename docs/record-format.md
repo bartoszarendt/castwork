@@ -174,9 +174,9 @@ a general way to hand work between hosts or clones.
 
 These optional attributes are asserted metadata:
 
-- `host` is the host id that performed the work: `claude`, `codex`, or
-  `opencode`, never the machine's name. The role presets use the same id after
-  the `@` in an actor string, such as `worker@claude`. The three ids are how to
+- `host` is the host id that performed the work: `claude`, `codex`, `opencode`,
+  or `pi`, never the machine's name. The role presets use the same id after
+  the `@` in an actor string, such as `worker@pi`. These ids are how to
   record it, not an enum: any non-empty value is accepted, so a record written
   with a machine's name stays valid.
 - `model` is the exact model identifier that host reported; it is not normalized

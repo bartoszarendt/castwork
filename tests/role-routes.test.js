@@ -68,6 +68,19 @@ test('a route reaches the routing host with the role file and the target setting
   }
 });
 
+test('a route to Pi lists its role file, actor and uninterpreted model suffix only', (t) => {
+  const root = fixture(t, ['claude', 'pi'], {
+    role_routes: { verifier: 'pi' },
+    role_settings: { pi: { verifier: { model: 'provider/id:high' } } },
+  });
+  update(root);
+  const section = routesSection(read(root, '.claude/commands/castwork.md'));
+  assert.match(section, /Role file: `\.pi\/agents\/verifier\.md`/);
+  assert.match(section, /Actor: `verifier@pi`/);
+  assert.match(section, /Settings: model `provider\/id:high`\./);
+  assert.doesNotMatch(section, /thinking|effort|inherit/);
+});
+
 test('the route host itself runs the role as usual and lists no route', (t) => {
   const root = fixture(t, ['claude', 'codex'], {
     role_routes: { worker: 'codex' },
@@ -125,7 +138,7 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
 });
 
 test('a route lists every non-permission setting its host declares', (t) => {
-  for (const [target, from] of [['codex', 'claude'], ['claude', 'codex'], ['opencode', 'claude']]) {
+  for (const [target, from] of [['codex', 'claude'], ['claude', 'codex'], ['opencode', 'claude'], ['pi', 'claude']]) {
     const worker = Object.fromEntries(settingsFor(target).map((key) => [key, key === 'permission_mode' ? 'acceptEdits' : `${key}-value`]));
     const root = fixture(t, [from, target], {
       role_routes: { worker: target },
@@ -142,7 +155,7 @@ test('a route lists every non-permission setting its host declares', (t) => {
 });
 
 test('with no routes every entry file says so', () => {
-  for (const host of ['codex', 'claude', 'opencode']) {
+  for (const host of ['codex', 'claude', 'opencode', 'pi']) {
     const entries = generateHost(host).filter((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path));
     assert.ok(entries.length > 0);
     for (const entry of entries) {

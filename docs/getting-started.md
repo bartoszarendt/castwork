@@ -15,7 +15,7 @@ npx castwork setup --host codex --host claude --host opencode
 ```
 
 Name the hosts you want. `--host` is repeatable and accepts `codex`,
-`claude`, and `opencode`; `setup` does not prompt, and refuses rather than
+`claude`, `opencode`, and `pi`; `setup` does not prompt, and refuses rather than
 guessing if you name none and none are recorded. It writes:
 
 ```
@@ -36,6 +36,11 @@ is there. Commit all of it except `.castwork/local/`, which `setup` adds to
 your `.gitignore`. Generated files contain no absolute paths, so they work for
 everyone who clones the repository — a contributor does not run `setup` to pick
 a host of their own, because `hosts` says which hosts the project supports.
+
+For Pi, use `npx castwork setup --host pi`, trust the project with `/trust`,
+then invoke `/castwork`. Pi needs an optional subagent extension to start other
+agents; without one the session announces taking the needed role itself, and
+cannot independently accept its own candidate. See [Pi setup](pi-setup.md).
 
 ## 2. Write the working policy
 

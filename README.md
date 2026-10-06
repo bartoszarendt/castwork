@@ -10,14 +10,13 @@ result was produced, what was checked, and what is still open. Task records are
 Markdown files in your repository, written in a small shared vocabulary — work,
 candidate, evidence, assessment — defined once and used by every supported host.
 Role guidance covers planning, producing, and reviewing, and a CLI checks the
-recorded evidence against each task's declared requirements. Integrations are generated for Claude Code, Codex, and
-OpenCode.
+recorded evidence against each task's declared requirements. Integrations are generated for Claude Code, Codex, OpenCode, and Pi.
 
 Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.8.0 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.0 is
 > current.
 
 ## When it helps
@@ -63,7 +62,7 @@ npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host claude --host codex
 ```
 
-`--host` is repeatable and takes `claude`, `codex`, or `opencode`. Later runs
+`--host` is repeatable and takes `claude`, `codex`, `opencode`, or `pi`. Later runs
 reuse the hosts recorded in `castwork.json`. Add `#<commit>` to the dependency
 to pin one commit.
 
@@ -79,7 +78,7 @@ Then start your agent in the repository and invoke Castwork:
 
 | Host | Invocation |
 |---|---|
-| Claude Code, OpenCode | `/castwork` |
+| Claude Code, OpenCode, Pi | `/castwork` |
 | Codex | `$castwork` |
 
 On its own, it reads your policy, the documents the policy points to, and the
@@ -204,7 +203,7 @@ runs the agents; you and your project's policy decide what is authorized.
 
 - [docs/getting-started.md](docs/getting-started.md) — first task, end to end
 - [docs/downstream-adoption.md](docs/downstream-adoption.md) — adopting it in an existing project
-- [Claude Code](docs/claude-setup.md), [Codex](docs/codex-setup.md), and [OpenCode](docs/opencode-setup.md) setup
+- [Claude Code](docs/claude-setup.md), [Codex](docs/codex-setup.md), [OpenCode](docs/opencode-setup.md), and [Pi](docs/pi-setup.md) setup
 - [docs/record-format.md](docs/record-format.md) — the record contract
 - [CASTWORK.md](CASTWORK.md) — the vocabulary and its rules
 - [docs/cli.md](docs/cli.md) — commands and flags

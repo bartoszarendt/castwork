@@ -84,12 +84,30 @@ for (const host of HOSTS) {
     assert.match(role(host, 'thinker'), phrase('Give the model only when the host reports it.'));
     assert.match(role(host, 'worker'), phrase('`host`, `model` and `at` are optional.'));
     all(role(host, 'verifier'), [
-      'If yours is among the producers, you are not independent; claiming the verifier role does not create independence.',
+      'If yours is among the producers, you are not independent.',
+      'A session that produced a candidate never accepts it under any actor; taking this role creates no independence.',
     ]);
     all(role(host, 'coordinator'), [
       'Give each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Do not assign a model.',
     ]);
     assert.doesNotMatch(role(host, 'coordinator'), /do not assign an actor/);
+  });
+
+  test(`${host} role-taking keeps both conditions explicit without manufacturing independence`, () => {
+    all(role(host, 'coordinator'), [
+      'For a small task where delegation would not help, you may switch to worker.',
+      'Where no subagent or delegation capability can start an agent, you may take any role yourself; being started by another agent is not such a case.',
+      'Announce either change first, follow its preset, and record its actor',
+      'Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.',
+      'the accepting actor must not be a recorded producer',
+    ]);
+    all(entry(host), [
+      'For a small task where delegation would not help, you may switch to the `worker` role.',
+      'Where no subagent or delegation capability (`## Role routes` says what counts) can start an agent, you may take any role yourself; being started by another agent is not such a case.',
+      'announce the change before acting, follow that preset, and record under that role\'s actor',
+      'a session that produced a candidate never accepts it under any actor.',
+      'A declared `independent_review` stays unmet until a separate reviewer accepts the candidate.',
+    ]);
   });
 
   test(`${host} coordinator offers a draft of an unwritten project.md when started directly`, () => {

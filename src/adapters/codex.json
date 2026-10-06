@@ -1,6 +1,7 @@
 {
   "id": "codex",
   "label": "Codex",
+  "skill_frontmatter": { "disable-model-invocation": true },
   "role_frontmatter": { "model": "model", "model_reasoning_effort": "model_reasoning_effort" },
   "files": [
     { "kind": "role", "to": ".codex/agents/{role}.toml", "format": "toml" },

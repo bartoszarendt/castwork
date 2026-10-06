@@ -190,7 +190,7 @@ test('2: setup refuses when project.md is a symlink to an outside file', (t) => 
 
 test('2: an ordinary installation still sets up, updates and removes', (t) => {
   const root = tmp(t, 'plain');
-  const result = setup(root, { hosts: ['codex', 'claude', 'opencode'] });
+  const result = setup(root, { hosts: ['codex', 'claude', 'opencode', 'pi'] });
   assert.ok(result.added.length > 0);
   assert.doesNotThrow(() => update(root));
   assert.doesNotThrow(() => remove(root));
