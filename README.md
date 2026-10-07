@@ -16,7 +16,7 @@ Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.0 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.1 is
 > current.
 
 ## When it helps
@@ -31,6 +31,15 @@ something concrete to inspect and continue.
 - **Decisions worth keeping.** Decision records outlive the task that made them.
 
 A small, direct edit needs no record; ask your agent for it as usual.
+
+## Read back the work
+
+`npx --no castwork report` shows the project's recorded state, rework, decisions,
+and record quality. `report <id>` gives a bounded account of a task's earlier
+rounds and current requirements, or of a decision and its mentions. Add `--json`
+to retain everything text folds away. It reads records and local Git, writes
+nothing, and never replaces the task contract or a review of the candidate.
+See [CLI](docs/cli.md#report).
 
 ## Why this approach
 

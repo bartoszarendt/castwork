@@ -54,9 +54,16 @@ a bare `/castwork` in the same session, you have oriented already.
    documents or the open records cite. When the work could touch a choice made
    earlier, `npx --no castwork decision list` shows every decision with its
    status; read the ones that bear on the work, not all of them.
-3. Read the open task records under `.castwork/tasks/`.
-   `npx --no castwork task list` is the quick view; read the individual
-   record before acting on it.
+3. Find open tasks with `npx --no castwork task list`. Use
+   `npx --no castwork report` when the user asks where the project stands or
+   the documents and records do not say; a bare invocation need not run both.
+   Check task file size without loading its contents. For a large record
+   (over 100 KB) or when earlier rounds matter, such as resuming or revising
+   after a blocking verdict, run `report <id>` before reading the task record.
+   Then, before substantive work read Intent, Scope, Out of scope, Acceptance
+   criteria, and cited decisions using section-only reads on large files, not
+   unrestricted reads of their entry lists. A report never replaces the contract or assessment of the current
+   candidate; earlier verdicts carry nothing over.
 4. After the records, read the handoff the user gives you or the project's
    documents name; otherwise `.castwork/local/handoff.md`, if it exists. It
    describes a moment that has passed: check what you act on against the

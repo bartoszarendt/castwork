@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.1
+
+- Added read-only `report [<id>] [--json]`: project state and rework with named
+  counting bases, bounded task history and recorded-prose excerpts, and decision
+  views with descriptive mentions. JSON preserves omitted material and reports
+  derivation coverage and problems, even on errors. Local Git is optional.
+- Corrected report/lint reference and current-mapping parity, canonical section
+  selection, nested logical excerpts and sub-millisecond date comparisons.
+  Attention retains all blocked/context tasks beyond its ordinary-row bound;
+  findings references and Blockers-cited decision mentions stay visible. Report
+  reads reuse validated directories while checking every leaf and real destination.
+  Report ids use the same key as `task show` and lint, so an array id and its
+  scalar twin are one ambiguous id; a literal trailing `#` stays in a heading's
+  title; a heading indented into a list item stays with that item.
+- Documented optional candidate `host`, exact reported `model`, and recorded-at
+  `at`; omit unknown models and mixed-producer attributes. No validation change.
+- Roles keep `task list` for finding work and use reports for project context or
+  earlier rounds; the task contract and current-candidate assessment still apply.
+  Regenerate projections with `update`, then start a new host session.
+
 ## 0.9.0
 
 **Added**

@@ -58,6 +58,21 @@ export const RECOGNIZED_FIELDS = Object.freeze([
 const REQUIRED_FIELDS = Object.freeze(['schema', 'id', 'title', 'status']);
 
 /**
+ * Safe conversion at the check/diagnostic boundary. Preserve the existing
+ * scalar and array comparisons; YAML mappings have no primitive conversion.
+ * This never changes the recorded frontmatter values.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function recordValueText(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => item == null ? '' : recordValueText(item)).join(',');
+  }
+  if (value !== null && typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/**
  * @typedef {{code: string, message: string, field?: string, index?: number}} Diagnostic
  */
 
@@ -146,7 +161,7 @@ function validateEntries(errors, frontmatter, field, required, enums) {
     }
     for (const [key, allowed] of Object.entries(enums)) {
       const found = entry[key];
-      if (found !== undefined && found !== null && !allowed.includes(String(found))) {
+      if (found !== undefined && found !== null && !allowed.includes(recordValueText(found))) {
         push(errors, 'entry.unknown_value', `${field}[${index}].${key} is not one of ${allowed.join(', ')}`, { field, index });
       }
     }
@@ -279,12 +294,12 @@ function entryNotes(frontmatter, evidence) {
   /** @type {Diagnostic[]} */
   const notes = [];
   const requirements = frontmatter.requirements;
-  const declared = isPlainObject(requirements) && Array.isArray(requirements.checks) ? requirements.checks.map(String) : null;
+  const declared = isPlainObject(requirements) && Array.isArray(requirements.checks) ? requirements.checks.map(recordValueText) : null;
   /** @type {Map<string, number[]>} */
   const undeclared = new Map();
   evidence.forEach((entry, index) => {
     const where = { field: 'evidence', index };
-    const check = entry.check === undefined || entry.check === null ? '' : String(entry.check);
+    const check = entry.check === undefined || entry.check === null ? '' : recordValueText(entry.check);
     if (declared !== null && check !== '' && !declared.includes(check)) {
       undeclared.set(check, [...(undeclared.get(check) ?? []), index]);
     }
@@ -346,7 +361,7 @@ export function parseRecord(text, options = {}) {
         readable = true;
       }
     } catch (error) {
-      const message = error instanceof YamlError ? error.message : String(error);
+      const message = error instanceof YamlError ? error.message : recordValueText(error);
       push(errors, 'frontmatter.unparseable', `frontmatter could not be parsed: ${message}`);
     }
   }
@@ -364,8 +379,8 @@ export function parseRecord(text, options = {}) {
   }
 
   const status = frontmatter.status;
-  if (status !== undefined && status !== null && !STATUS_VALUES.includes(String(status))) {
-    push(errors, 'status.unknown', `unknown status value ${String(status)}`, { field: 'status' });
+  if (status !== undefined && status !== null && !STATUS_VALUES.includes(recordValueText(status))) {
+    push(errors, 'status.unknown', `unknown status value ${recordValueText(status)}`, { field: 'status' });
   }
 
   for (const field of ['depends_on', 'allowed_paths']) {
@@ -391,8 +406,8 @@ export function parseRecord(text, options = {}) {
         }
         if (kind === 'assessment_roles' && Array.isArray(value)) {
           for (const role of value) {
-            if (!ROLE_IDS.includes(String(role))) {
-              push(errors, 'requirement.unknown_role', `requirements.assessment_roles contains unknown role ${String(role)}`, { field: 'requirements' });
+            if (!ROLE_IDS.includes(recordValueText(role))) {
+              push(errors, 'requirement.unknown_role', `requirements.assessment_roles contains unknown role ${recordValueText(role)}`, { field: 'requirements' });
             }
           }
         }
@@ -449,7 +464,7 @@ export function parseRecord(text, options = {}) {
 
   info.push(...entryNotes(frontmatter, evidenceEntries));
   const current = candidateEntries[candidateEntries.length - 1];
-  const currentRef = current === undefined || current.ref === undefined || current.ref === null ? '' : String(current.ref);
+  const currentRef = current === undefined || current.ref === undefined || current.ref === null ? '' : recordValueText(current.ref);
   if (currentRef !== '' && !isObjectId(currentRef)) {
     info.push({
       code: 'candidate.moving_ref',
@@ -509,8 +524,8 @@ export function declaredRequirements(record) {
   if (!isPlainObject(requirements)) return {};
   /** @type {{checks?: string[], independent_review?: boolean, assessment_roles?: string[]}} */
   const out = {};
-  if (Array.isArray(requirements.checks)) out.checks = requirements.checks.map(String);
+  if (Array.isArray(requirements.checks)) out.checks = requirements.checks.map(recordValueText);
   if (typeof requirements.independent_review === 'boolean') out.independent_review = requirements.independent_review;
-  if (Array.isArray(requirements.assessment_roles)) out.assessment_roles = requirements.assessment_roles.map(String);
+  if (Array.isArray(requirements.assessment_roles)) out.assessment_roles = requirements.assessment_roles.map(recordValueText);
   return out;
 }

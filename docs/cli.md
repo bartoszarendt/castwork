@@ -1,6 +1,6 @@
 # CLI
 
-Fifteen command paths. Installation, diagnostics, and minimal record
+Sixteen command paths. Installation, diagnostics, and minimal record
 operations. A dedicated command exists only where it does something materially
 better than editing a record by hand.
 
@@ -18,6 +18,7 @@ better than editing a record by hand.
 | `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
+| `report [<id>] [--json]` | Read-only project account, or task/decision view selected by declared id. See [Report](#report). |
 | `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.castwork/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.castwork/tasks/`, and `.castwork/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
 | `version` | Print the version number, and nothing else. `doctor` and `update --check` print where the running copy lives. |
 | `help` | Print the command list. |
@@ -31,7 +32,7 @@ accepted by every command.
 |---|---|
 | `setup` | `--host <name>` (repeatable), `--force-generated <path>` (repeatable), `--json` |
 | `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
-| `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `snapshot` | `--json` |
+| `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `report`, `snapshot` | `--json` |
 | `task new`, `task set`, `decision new`, `version`, `help` | none |
 
 An unknown flag, a flag the command does not take, a switch given a value
@@ -56,6 +57,137 @@ so in its hint.
 That is the whole command set. A dedicated command exists only where it does
 something materially better than editing the record: adding a candidate,
 recording evidence, or writing an assessment is an edit to the file.
+
+## Report
+
+```sh
+npx --no castwork report
+npx --no castwork report T-011
+npx --no castwork report D-002 --json
+```
+
+| Command | Where it sits |
+|---|---|
+| `task list` | Find task ids, titles, statuses, readiness. |
+| `report` | Understand recorded project state, rework, decisions and quality. |
+| `report <id>` | Understand a task's rounds or a decision. |
+| `task lint <id>` | Evaluate structure, references and declared requirements. |
+
+There is no `task report` or extra report flag. Reports read records and local
+Git only: one read-only log over `.castwork/`, no fetch, write, cache or index.
+Every Git call uses `--no-optional-locks`. Output grants no permission.
+
+Readable frontmatter counts, including invalid records and legacy values;
+unreadable frontmatter is excluded and listed. Exit 0 means a report was
+produced, not that its records are valid or its work accepted. Ids are keyed as
+`task show` and `task lint` key them, so `id: [T-1]` and `id: T-1` are the same
+id; raw values stay in frontmatter. Unknown or ambiguous selected ids and operational read failures exit 1; usage errors exit
+2. Text keeps derivation preceding a read failure. Git observations are optional:
+unavailable Git omits dates with an explanation and leaves exit 0.
+
+JSON stdout is exactly one document, including on non-zero exits; human messages
+go to stderr. `complete` means derivation coverage only; fully interpreted invalid
+records and failing requirements do not make it false. `problems` gives codes,
+applicable paths and messages. Project JSON includes every readable record's
+frontmatter, body and derived entries. Selected JSON includes `selected` in full
+and the corpus's identities and relations. Its totals, quality, problems and
+mention frequencies still describe the corpus, not only the selected record.
+Other records omit frontmatter, bodies, sections, task entries and Git details;
+`recent` and `attention` are empty in selected views because those collections
+are omitted, not because the corpus has no such events or records. Selected
+text omissions remain in the full `selected` record; use project JSON for the
+other records and project collections. Unknown results/verdicts stay as written, never become failure, missing
+evidence or blocking verdicts; affected aggregates are named in problems and
+coverage becomes incomplete. Only literal `pass`/`fail` and recognized verdict
+strings count as recognized outcomes; arrays and mappings stay raw in JSON and
+are displayed safely. Requirements remain exactly those of `task lint`, including
+its existing comparisons for readable invalid values. Duplicate task files count
+separately, but are structurally invalid and never ready to close.
+
+### Counting and dates
+
+All rework units are within a record file, not merged by shared ids or refs:
+
+- Candidate entries are separate from distinct recorded refs.
+- Blocking verdicts count every recorded `needs_revision` and `reject`.
+- Declared-check fails count every recorded `fail`, reruns included.
+- Outcome triples have a base of every file × distinct candidate ref × declared
+  check, with effective `pass`, `fail`, no evidence, and unrecognized separately.
+- Current triples in Attention use non-`done`, non-`cancelled` records; fail and
+  missing evidence are separate. Other checks count distinct undeclared names
+  and their effective results per ref, not runs.
+
+Document order selects and presents entries within a task. Reference keys use
+`recordValueText()`, the same interpretation as the checks: numeric and quoted
+equivalents group together; readable array/mapping refs use the checks' existing
+comparisons. Raw YAML values remain unchanged in frontmatter and entries. Missing
+or unusable refs are diagnosed, not confused with a non-string type. Results for
+a ref appear once under its last mapping entry; repeated current refs name their
+earlier entries. Recent is grouped by the timestamp's own recorded calendar day, then
+ordered by instant, with date-only entries last and marked. Malformed dates are
+excluded and counted under Record quality. Git dates mean first/last commits
+visible locally, never creation or closure; uncommitted changes are identified,
+including when the project is nested below the Git root. Latest recorded timestamps
+are compared by instant, not spelling, including all accepted fractional digits
+rather than truncating comparisons to milliseconds. Date-only observations retain their precision
+and are reported separately when timestamps coexist; no midnight is invented.
+
+Task text targets about 60 lines at 100 columns, but current candidate details,
+declared-check results, effective assessments, requirement results with reason
+codes, and dependencies both ways are never cut to fit. History shows at most
+five earlier assessed refs, mentions at most five each way, with omissions
+counted. Optional candidate notes are excerpts with an explicit omission indication;
+maximum-candidate ties show at most five records, naming the total and omitted count.
+The current candidate is the last **mapping** returned by lint's
+`currentCandidate()`. A trailing scalar is retained at its raw position and
+explicitly diagnosed as malformed, not evaluated as current. A last mapping
+with a missing ref stays current; it never falls back to an older valid ref.
+Raw totals include malformed entries; current numbering and shown/omitted
+counts use original array positions. When malformed entries occur, History
+excludes only the evaluated entry, including any malformed tail in the omissions.
+Affected counts retain incomplete-coverage diagnostics.
+
+Named sections prefer the canonical `##` heading; absent that, the shallowest
+matching heading wins, with document order breaking ties. Duplicate-heading
+lint diagnostics are unchanged. Blockers and decisions is **recorded prose**:
+section length and file:line pointer, first and last positional entries, each
+at most two lines. Nested subsections count until the next same-or-higher
+heading; headings inside code fences or indented into a list item do not count.
+A closing run of `#` needs whitespace before it, so `## Decision#` is not
+`## Decision`. Paragraphs and list items are logical entries: children,
+child headings and continuation lines stay with their parent, including
+indented paragraphs separated by blank lines. Fences retain their
+contents. JSON preserves whole entries before text excerpting.
+
+Attention always retains every nonterminal blocked/needs_context record, plus
+at most ten ordinary rows. This may explicitly overflow ten total records;
+omissions count only ordinary rows left out. Current failures and unrecognized
+outcomes still have display priority. Candidate-less drafts are summarized by
+count; project JSON retains every Attention record. For retained statuses,
+Blockers shows its first physical line, bounded and attributed, with a continuation
+marker when the logical paragraph/item continues. Prose and display order never
+change selection, authority or a requirement result.
+
+Wrapped continuation lines are indented under their labels. A recorded scalar
+whose indentation already occupies 100 columns is kept intact, possibly wider,
+rather than truncated or allowed to stall wrapping. Current details remain full.
+Assessment findings keep original anchors/paths visible and label them references.
+A same-record heading anchor receives a bounded recorded-prose excerpt and source
+pointer only when it resolves unambiguously from the loaded body; external or
+unresolved references cause no file reads and remain references, not replacements
+for the assessment.
+
+Mentions match only declared ids with no adjacent letter, digit, hyphen or
+underscore; they are descriptive, not dependencies. Outgoing text mentions prefer
+decision ids explicitly cited in the displayed Blockers excerpts, then other
+decisions, then other mentions, each in stable existing order. The five-item bound
+and omission count remain; corpus membership/frequencies are unchanged. Occurrence
+counts imply no applicability, authority or recency.
+
+The pure `castwork/report` export derives this data from parsed records and an
+optional Git observation; the CLI owns I/O. A report never replaces reading
+Intent, Scope, Out of scope, Acceptance criteria and cited decisions, or assessing
+the current candidate itself.
 
 ## Installation and configuration
 

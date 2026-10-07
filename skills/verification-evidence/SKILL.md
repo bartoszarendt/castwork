@@ -22,6 +22,9 @@ since:
 candidates:
   - ref: 007c7f8
     producers: [worker@claude]
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:30:00Z"
 ```
 
 `ref` is a commit when you may make one. When the work may not be committed
@@ -33,6 +36,9 @@ task records, and `.castwork/local/` left out), and you record that:
 candidates:
   - ref: tree:4697b75db8a9dbc2c4186c61d299e0069ce1388c
     producers: [worker@claude]
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:30:00Z"
 ```
 
 Do not invent a digest of your own, and do not record a name such as `HEAD`, a
@@ -55,7 +61,10 @@ it. `task lint` says whether the working tree still matches the current
 snapshot.
 
 `producers` is who made it — the actor strings that later decide whether a
-review was independent.
+review was independent. Optional candidate `host`, `model`, and `at` are
+asserted: use the host id and exact reported model; `at` means recorded at.
+Omit an unknown model, never write `unknown`; omit mixed-producer host/model
+attributes rather than picking one. These attributes never decide outcomes.
 
 ## Then the evidence
 

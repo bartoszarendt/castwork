@@ -1,5 +1,5 @@
 /**
- * The CLI: fifteen command paths.
+ * The CLI: sixteen command paths.
  *
  * Installation, diagnostics, and minimal record operations. A dedicated command
  * exists only where it does something materially better than editing a record
@@ -18,6 +18,7 @@ import { doctor, remove, setup, update } from './setup.js';
 import { taskLint, taskList, taskNew, taskSet, taskShow } from './task-cli.js';
 import { takeSnapshot } from './snapshot.js';
 import { validate } from './validate.js';
+import { reportCommand } from './report-cli.js';
 
 /**
  * Every flag the CLI knows. `--debug` and `--help` are global; every other
@@ -53,6 +54,7 @@ export const COMMAND_PATHS = Object.freeze([
   { path: 'task set', flags: [], args: Infinity, summary: 'One safe frontmatter write.' },
   { path: 'decision new', flags: [], args: Infinity, summary: 'Create a decision record from the template.' },
   { path: 'decision list', flags: ['json'], args: 0, summary: 'List decision records with their ids, statuses, dates, and titles.' },
+  { path: 'report', flags: ['json'], args: 1, summary: 'Read-only project, task or decision account: report [<id>].' },
   { path: 'snapshot', flags: ['json'], args: 0, summary: 'Name the working tree as a tree:<sha> candidate reference. Writes no record.' },
   { path: 'version', flags: [], args: 0, summary: 'Print the version.' },
   { path: 'help', flags: [], args: 0, summary: 'Print this list.' },
@@ -237,12 +239,19 @@ export function run(argv, options = {}) {
   const asJson = flags.json === true;
   const command = positionals[0];
 
+  if (command === 'report' && flags.help === true && asJson) {
+    json({complete: true, problems: [], usage: 'castwork report [<id>] [--json]'});
+    return 0;
+  }
   if (command === undefined || command === 'help' || flags.help === true) {
     help();
     return 0;
   }
 
   switch (command) {
+    case 'report':
+      return reportCommand(root, positionals[1] ?? null, {json: asJson}).code;
+
     case 'version': {
       out(version());
       return 0;
@@ -380,9 +389,31 @@ export function main(argv) {
   const end = argv.indexOf('--');
   const options = end < 0 ? argv : argv.slice(0, end);
   const debug = options.includes('--debug');
+  // Identify the command without accepting malformed flags, so a task title
+  // containing "report" never changes another command's error output.
+  let requestCommand;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === '--') {
+      requestCommand = argv[index + 1];
+      break;
+    }
+    if (token === '--host' || token === '--force-generated') {
+      index += 1;
+      continue;
+    }
+    if (!token.startsWith('-')) {
+      requestCommand = token;
+      break;
+    }
+  }
   try {
     return run([...options.filter((token) => token !== '--debug'), ...(end < 0 ? [] : argv.slice(end))]);
   } catch (error) {
+    // Report promises one JSON document even when argument parsing refuses it.
+    if (requestCommand === 'report' && options.some((token) => /^--json(?:=|$)/.test(token))) {
+      json({complete: false, problems: [{code: error instanceof PublicError && error.exitCode === 2 ? 'report.usage' : 'report.operation_failed', message: error instanceof Error ? error.message : String(error), incomplete: true}]});
+    }
     if (error instanceof PublicError) {
       err(`error: ${error.message}`);
       if (error.hint) err(error.hint);

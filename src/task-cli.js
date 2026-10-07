@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { checkRecord, duplicateIdErrors, mayBeDone, requirementEvaluation, structuralValidity } from './checks.js';
+import { checkRecord, duplicateIdErrors, mayBeDone, readyToClose, requirementEvaluation, structuralValidity } from './checks.js';
 import { heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { recordDirectory, recordFiles } from './generated.js';
@@ -117,19 +117,6 @@ function requirementsSatisfied(record) {
   const results = requirementEvaluation(record);
   if (results.length === 0) return null;
   return results.every((result) => result.status === 'satisfied');
-}
-
-/**
- * Work whose declared requirements are met but whose status was never closed:
- * records `task set <id> status done` would accept. A record that declares no
- * requirement is accepted too, but is never marked: nothing it declares says
- * the work is finished.
- *
- * @param {{status: string, requirements_satisfied: boolean|null}} row
- * @param {boolean} valid whether the record is structurally valid
- */
-function readyToClose(row, valid) {
-  return row.requirements_satisfied === true && valid && row.status !== 'done' && row.status !== 'cancelled';
 }
 
 /**

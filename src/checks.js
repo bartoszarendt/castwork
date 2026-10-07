@@ -10,7 +10,20 @@
  * and requirement evaluation.
  */
 
-import { declaredRequirements, recordEntries } from './record.js';
+import { declaredRequirements, recordEntries, recordValueText } from './record.js';
+
+/**
+ * Work whose declared requirements are met but whose status was never closed:
+ * records `task set <id> status done` would accept. A record that declares no
+ * requirement is accepted too, but is never marked: nothing it declares says
+ * the work is finished.
+ *
+ * @param {{status: string, requirements_satisfied: boolean|null}} row
+ * @param {boolean} valid whether the record is structurally valid
+ */
+export function readyToClose(row, valid) {
+  return row.requirements_satisfied === true && valid && row.status !== 'done' && row.status !== 'cancelled';
+}
 
 /** Trust of a supporting fact. */
 export const CHECKED = 'checked';
@@ -62,7 +75,7 @@ export function referenceAvailability(record, observations = {}) {
   const drift = observations.drift ?? null;
   const trees = observations.trees ?? null;
   candidates.forEach((candidate, index) => {
-    const ref = candidate.ref === undefined || candidate.ref === null ? '' : String(candidate.ref);
+    const ref = candidate.ref === undefined || candidate.ref === null ? '' : recordValueText(candidate.ref);
     if (ref === '') return;
     /** @type {ReferenceResult} */
     const result = { ref, kind: 'candidate', available: observed(refs, ref) };
@@ -82,7 +95,7 @@ export function referenceAvailability(record, observations = {}) {
       // Only a well-formed snapshot that resolved here is compared, so a
       // prefix nobody checked can never name a match.
       const earlier = candidates.slice(0, index)
-        .map((entry) => String(entry.ref ?? ''))
+        .map((entry) => recordValueText(entry.ref ?? ''))
         .find((earlierRef) => {
           const sha = /^tree:([0-9a-f]{7,64})$/i.exec(earlierRef)?.[1];
           return sha !== undefined && refs !== null && refs[earlierRef] === true && tree.startsWith(sha.toLowerCase());
@@ -157,8 +170,8 @@ export function effectiveEvidence(record, check, candidateRef) {
   const { evidence } = recordEntries(record);
   let found = null;
   for (const entry of evidence) {
-    if (String(entry.check) !== check) continue;
-    if (String(entry.candidate) !== candidateRef) continue;
+    if (recordValueText(entry.check) !== check) continue;
+    if (recordValueText(entry.candidate) !== candidateRef) continue;
     found = entry;
   }
   return found;
@@ -175,9 +188,9 @@ export function effectiveAssessments(record, candidateRef) {
   /** @type {Map<string, Record<string, unknown>>} */
   const byKey = new Map();
   for (const entry of assessments) {
-    if (String(entry.candidate) !== candidateRef) continue;
-    const actor = entry.actor === undefined || entry.actor === null ? '' : String(entry.actor);
-    const key = actor === '' ? `role:${String(entry.role)}` : `actor:${actor}`;
+    if (recordValueText(entry.candidate) !== candidateRef) continue;
+    const actor = entry.actor === undefined || entry.actor === null ? '' : recordValueText(entry.actor);
+    const key = actor === '' ? `role:${recordValueText(entry.role)}` : `actor:${actor}`;
     byKey.set(key, entry);
   }
   return [...byKey.values()];
@@ -198,11 +211,11 @@ function revisedVerdicts(record, candidateRef, accepting) {
   const facts = [];
   for (const entry of accepting) {
     if (!isIdentity(entry.actor)) continue;
-    const actor = String(entry.actor).trim();
+    const actor = recordValueText(entry.actor).trim();
     const earlier = assessments.slice(0, assessments.indexOf(entry)).filter(
-      (other) => String(other.candidate) === candidateRef && isIdentity(other.actor) && String(other.actor).trim() === actor && isBlockingVerdict(other.verdict),
+      (other) => recordValueText(other.candidate) === candidateRef && isIdentity(other.actor) && recordValueText(other.actor).trim() === actor && isBlockingVerdict(other.verdict),
     );
-    if (earlier.length > 0) facts.push({ fact: `${actor} recorded ${String(earlier[earlier.length - 1].verdict)} earlier, then accept`, trust: ASSERTED });
+    if (earlier.length > 0) facts.push({ fact: `${actor} recorded ${recordValueText(earlier[earlier.length - 1].verdict)} earlier, then accept`, trust: ASSERTED });
   }
   return facts;
 }
@@ -223,7 +236,7 @@ export function requirementEvaluation(record, observations = {}) {
   /** @type {RequirementResult[]} */
   const out = [];
 
-  const candidateRef = candidate && candidate.ref !== undefined && candidate.ref !== null ? String(candidate.ref) : null;
+  const candidateRef = candidate && candidate.ref !== undefined && candidate.ref !== null ? recordValueText(candidate.ref) : null;
 
   if (requirements.checks) {
     for (const check of requirements.checks) {
@@ -261,11 +274,11 @@ function evaluateCheck(record, check, candidateRef) {
     return { requirement: name, status: 'not_satisfied', reason: 'evidence.missing', facts: [] };
   }
   /** @type {SupportingFact[]} */
-  const facts = [{ fact: `evidence for ${check} on ${candidateRef} is ${String(entry.result)}`, trust: ASSERTED }];
+  const facts = [{ fact: `evidence for ${check} on ${candidateRef} is ${recordValueText(entry.result)}`, trust: ASSERTED }];
   if (entry.exit_code !== undefined && entry.exit_code !== null) {
-    facts.push({ fact: `recorded exit_code ${String(entry.exit_code)}`, trust: ASSERTED });
+    facts.push({ fact: `recorded exit_code ${recordValueText(entry.exit_code)}`, trust: ASSERTED });
   }
-  if (String(entry.result) === 'pass') {
+  if (recordValueText(entry.result) === 'pass') {
     return { requirement: name, status: 'satisfied', reason: 'evidence.pass', facts };
   }
   return { requirement: name, status: 'not_satisfied', reason: 'evidence.fail', facts };
@@ -286,7 +299,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
   }
   const producers = identityList(candidate.producers);
   const effective = effectiveAssessments(record, candidateRef);
-  const accepting = effective.filter((entry) => String(entry.verdict) === 'accept');
+  const accepting = effective.filter((entry) => recordValueText(entry.verdict) === 'accept');
 
   if (accepting.length === 0) {
     const anyAssessment = effective.length > 0;
@@ -321,7 +334,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
   // can make the review independent, and only they can block it. A producer
   // rejecting their own work says nothing about independence.
   const blocking = effective.filter(
-    (entry) => isBlockingVerdict(entry.verdict) && isIdentity(entry.actor) && !producers.includes(String(entry.actor).trim()),
+    (entry) => isBlockingVerdict(entry.verdict) && isIdentity(entry.actor) && !producers.includes(recordValueText(entry.actor).trim()),
   );
   if (blocking.length > 0) {
     const actors = blocking.map(assessorName);
@@ -338,7 +351,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
   }
 
   for (const entry of withActor) {
-    const actor = String(entry.actor).trim();
+    const actor = recordValueText(entry.actor).trim();
     if (!producers.includes(actor)) {
       return {
         requirement: name,
@@ -354,7 +367,7 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
     }
   }
 
-  const actors = withActor.map((entry) => String(entry.actor).trim());
+  const actors = withActor.map((entry) => recordValueText(entry.actor).trim());
   return {
     requirement: name,
     status: 'not_satisfied',
@@ -393,7 +406,7 @@ export function isIdentity(value) {
  * @param {unknown} value
  */
 function isBlockingVerdict(value) {
-  const verdict = String(value);
+  const verdict = recordValueText(value);
   return verdict === 'reject' || verdict === 'needs_revision';
 }
 
@@ -402,7 +415,7 @@ function isBlockingVerdict(value) {
  * @param {Record<string, unknown>} entry
  */
 function assessorName(entry) {
-  return isIdentity(entry.actor) ? String(entry.actor).trim() : `${String(entry.role)} (no actor)`;
+  return isIdentity(entry.actor) ? recordValueText(entry.actor).trim() : `${recordValueText(entry.role)} (no actor)`;
 }
 
 /**
@@ -416,18 +429,18 @@ function evaluateAssessmentRole(record, role, candidateRef) {
   if (candidateRef === null) {
     return { requirement: name, status: 'not_satisfied', reason: 'candidate.missing', facts: [] };
   }
-  const forRole = effectiveAssessments(record, candidateRef).filter((entry) => String(entry.role) === role);
+  const forRole = effectiveAssessments(record, candidateRef).filter((entry) => recordValueText(entry.role) === role);
   if (forRole.length === 0) {
     return { requirement: name, status: 'not_satisfied', reason: 'assessment.missing', facts: [] };
   }
-  const verdicts = forRole.map((entry) => String(entry.verdict));
+  const verdicts = forRole.map((entry) => recordValueText(entry.verdict));
   /** @type {SupportingFact[]} */
   const facts = [{ fact: `effective ${role} verdicts: ${verdicts.join(', ')}`, trust: ASSERTED }];
 
   // `some(accept)` let one verifier overrule another: two effective
   // assessments, one accepting and one rejecting, reported satisfied. Every
   // actor holding the role is relevant, so one blocking verdict is enough.
-  if (!forRole.some((entry) => String(entry.verdict) === 'accept')) {
+  if (!forRole.some((entry) => recordValueText(entry.verdict) === 'accept')) {
     return { requirement: name, status: 'not_satisfied', reason: 'assessment.not_accepted', facts };
   }
   const blocking = forRole.filter((entry) => isBlockingVerdict(entry.verdict));
@@ -472,8 +485,8 @@ export function duplicateIdErrors(records) {
   const byId = new Map();
   records.forEach((record, index) => {
     const id = record.frontmatter.id;
-    if (id === undefined || id === null || String(id).trim() === '') return;
-    const key = String(id);
+    if (id === undefined || id === null || recordValueText(id).trim() === '') return;
+    const key = recordValueText(id);
     if (!byId.has(key)) byId.set(key, []);
     (byId.get(key) ?? []).push({ path: record.path, index });
   });
@@ -484,7 +497,7 @@ export function duplicateIdErrors(records) {
     if (entries.length < 2) continue;
     for (const entry of entries) {
       const others = entries.filter((other) => other.index !== entry.index).map((other) => other.path ?? '<unknown>');
-      errors.set(entry.path ?? String(entry.index), {
+      errors.set(entry.path ?? recordValueText(entry.index), {
         code: 'id.duplicate',
         message: `duplicate task id ${id}, also declared by ${others.join(', ')}`,
         field: 'id',

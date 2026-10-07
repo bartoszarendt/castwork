@@ -91,6 +91,7 @@ follow any other, and no status grants a permission.
 | `ref` | yes | a commit or equivalent reference |
 | `producers` | no | list of actor strings that produced it |
 | `note` | no | free text |
+| `host`, `model`, `at` | no | asserted producer attributes; `at` is when the entry was recorded |
 
 A `ref` is one of three kinds, and they differ in what can be checked later:
 
@@ -172,17 +173,25 @@ a general way to hand work between hosts or clones.
 | `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
 
+Candidates may carry these same optional attributes for the agent that produced
+and recorded the candidate. `at` means **recorded at**, not produced at. For
+producers on different hosts or models, omit the mixed attributes rather than
+picking one producer's values. Omit an unknown model; never write a placeholder
+such as `unknown`. No attribute validation is added.
+
 These optional attributes are asserted metadata:
 
 - `host` is the host id that performed the work: `claude`, `codex`, `opencode`,
   or `pi`, never the machine's name. The role presets use the same id after
   the `@` in an actor string, such as `worker@pi`. These ids are how to
-  record it, not an enum: any non-empty value is accepted, so a record written
-  with a machine's name stays valid.
+  record it, not a validated enum: these attributes are accepted as written,
+  so a record written with a machine's name stays valid.
 - `model` is the exact model identifier that host reported; it is not normalized
   across hosts.
 - `at` is an RFC 3339 timestamp when one is useful. It is informational only:
-  timestamps never decide ordering, freshness, validity, or completion.
+  timestamps never select effective task evidence or assessments, or decide
+  freshness, validity, or completion. Reports may order informational Recent and
+  legacy-host observations by instant, preserving recorded fractional precision.
 
 Record them when the record needs to remain self-contained or comparable
 without host-local telemetry. A host may retain the same facts elsewhere, but
@@ -282,7 +291,12 @@ the requirements mean.
 Document order is the only ordering the checks use. There is no supersession
 protocol, timestamp comparison, or freshness rule.
 
-- The **current candidate** is the last entry in the `candidates` list.
+- The **current candidate** is the last mapping entry in the `candidates` list,
+  as returned by `currentCandidate()`. A malformed non-mapping tail is not
+  evaluated; a last mapping with a missing ref remains current, rather than
+  falling back to an older ref. Reports retain malformed raw entries and their
+  positions, and diagnose incomplete coverage. Reference comparisons use
+  `recordValueText()` without rewriting the raw YAML values.
 - For a named check and a candidate, the **last evidence entry in document
   order** with that check and candidate is the effective result. A later `fail`
   overrides an earlier `pass`.
@@ -408,6 +422,9 @@ requirements:
 candidates:
   - ref: 007c7f8
     producers: [worker@claude]
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:30:00Z"
 evidence:
   - check: test
     candidate: 007c7f8

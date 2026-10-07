@@ -52,6 +52,22 @@ milestone narrative belongs in the milestone document, not repeated in every
 task that contributed to it. Run logs go in linked files: a record past 100 KB
 is reported as `record.large`.
 
+## Candidate attributes
+
+```yaml
+candidates:
+  - ref: 007c7f8
+    producers: [worker@claude]
+    host: claude
+    model: claude-opus-5
+    at: "2026-09-18T12:30:00Z"
+```
+
+Optional, asserted attributes: use the host id, not the machine name, and the
+exact model the host reports. Omit an unknown model, never write `unknown`.
+For producers on different hosts or models, omit the mixed attributes rather
+than selecting one. Candidate `at` means recorded at; it never orders entries.
+
 ## Declaring requirements
 
 Requirements are the one thing the toolkit checks. Declare only what you would

@@ -340,6 +340,20 @@ test('a routed role is listed with the actor it records', () => {
   assert.match(routed.content, /`thinker` runs in Codex \(`codex`\)\. Role file: `\.codex\/agents\/thinker\.toml`\. Actor: `thinker@codex`\./);
 });
 
+test('report-first guidance prevents loading large entry lists just to discover record size', () => {
+  for (const host of HOSTS) {
+    for (const id of ROLES) {
+      const content = role(host, id);
+      assert.match(content, phrase('file size without loading its contents'), `${host} ${id}`);
+      assert.match(content, phrase('before reading the task record'), `${host} ${id}`);
+      assert.match(content, phrase('section-only reads on large files'), `${host} ${id}`);
+    }
+    assert.match(entry(host), phrase('file size without loading its contents'));
+    assert.match(entry(host), phrase('before reading the task record'));
+    assert.match(entry(host), phrase('section-only reads on large files'));
+  }
+});
+
 test('no preset or entry command phrases a stall or a retry as a count', () => {
   const counters = [
     /\b(retry budget|at most \d+|after \d+ (attempts|tries|retries)|(two|three) (honest )?attempts)\b/i,

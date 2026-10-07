@@ -8,8 +8,9 @@ checks over recorded facts, four role presets, reusable skills, and thin host
 adapters. **Agents choose the workflow. Hosts execute it.**
 
 Castwork interprets what was recorded. It does not prove who recorded it.
+`report [<id>]` reads task and decision records and local Git; it decides nothing.
 
-**Status:** version 0.9.0 is current.
+**Status:** version 0.9.1 is current.
 
 ## What the toolkit provides, and what it does not
 
