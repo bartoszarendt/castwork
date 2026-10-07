@@ -154,9 +154,10 @@ failures.
 
 ## Roles
 
-`coordinator` decides which roles act next. `thinker` turns a request into
-work, plans it, breaks it down, and critiques. `worker` produces the candidate
-and its evidence. `verifier` assesses the exact recorded candidate.
+`coordinator` decides which roles act next. `thinker` examines the problem and
+the approach: it turns a request into work, plans it, breaks it down, critiques,
+and diagnoses. `worker` produces the candidate and its evidence. `verifier`
+assesses the exact recorded candidate.
 
 Delegate when it helps. There is no required order, nothing to obtain before
 starting, and no role you must pass through. Several roles may work at once:
@@ -165,6 +166,12 @@ competing alternatives for one problem, or more than one verifier on a
 candidate, and a costly assumption may be worth one adversarial challenge. The
 `coordinator` role file describes these shapes, and the `thinker` role file how
 each is written down in task records.
+
+The thinker is not only a first step. When a worker returns `needs_context`, or
+a blocking finding questions the work rather than the candidate, resolve what
+the available evidence answers; consider the thinker when deeper investigation
+or a separate perspective would help, and ask the user when what remains is
+their decision. A plain defect goes back to the worker.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as

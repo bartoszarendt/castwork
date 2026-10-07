@@ -10,7 +10,7 @@ adapters. **Agents choose the workflow. Hosts execute it.**
 Castwork interprets what was recorded. It does not prove who recorded it.
 `report [<id>]` reads task and decision records and local Git; it decides nothing.
 
-**Status:** version 0.9.1 is current.
+**Status:** version 0.9.2 is current.
 
 ## What the toolkit provides, and what it does not
 
@@ -100,7 +100,7 @@ paper and what it does not.
 | Role | Responsibility |
 |---|---|
 | `coordinator` | decides which roles act next and keeps the user informed |
-| `thinker` | turns a request into work, plans the approach, breaks it down, critiques partial results, diagnoses a stall |
+| `thinker` | examines the problem and the approach, before or during the work: turns a request into work, plans it, breaks it down, critiques partial results, diagnoses stalls and disputes |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate for responsiveness, completeness, and correctness, and records a verdict |
 

@@ -117,7 +117,7 @@ adds the coordinator as a fourth:
 | Role | From the paper | Responsibility here | Boundary |
 |---|---|---|---|
 | `coordinator` | selects an agent and a role each turn | decides which roles act next and on which host; keeps the user informed; records durable decisions | produces nothing, assesses nothing, invents no authorization |
-| `thinker` | plans, decompositions, critiques | turns a request into work: intent, scope, out of scope, acceptance criteria, declared requirements; plans the approach: order, dependencies, what can run in parallel, risks, what to check first; investigates what the plan turns on; breaks work into tasks; critiques partial results; diagnoses a stall; may recommend the next role | produces no result, records no verdict, drops no declared requirement |
+| `thinker` | plans, decompositions, critiques | turns a request into work: intent, scope, out of scope, acceptance criteria, declared requirements; plans the approach: order, dependencies, what can run in parallel, risks, what to check first; investigates what the plan or the work under way turns on; breaks work into tasks; critiques partial results and revises records not yet started; diagnoses stalls and disputes over a criterion; audits the work; may recommend the next role | produces no result, records no verdict, drops no declared requirement |
 | `worker` | makes concrete progress | produces the smallest result that meets the acceptance criteria; runs the declared checks; records the candidate and evidence, failures included | stays in scope; its own acceptance is never independent; fabricates no evidence |
 | `verifier` | checks correct, complete, responsive | assesses the exact recorded candidate: responsive, complete, correct; records a verdict with findings, saying what was and was not checked | read-only on the result; treats no recorded claim as fact; assesses nothing it cannot resolve |
 
@@ -125,6 +125,11 @@ The thinker is responsible for the work, the worker for the candidate and its
 evidence, and the verifier for the assessment. That division is guidance in
 the presets, not a checked boundary: a record does not say who shaped the work,
 and any role may write any entry.
+
+As in the paper, where the coordinator may select a thinker at any turn, the
+thinker is not only a first step. Judging whether the work is the right problem
+and the approach sound is the thinker's whenever that comes into question;
+assessing a candidate stays the verifier's.
 
 The paper's verdicts map onto the record's: ACCEPT is `accept` and REVISE is
 `needs_revision`. The record's `reject` has no counterpart in the paper.

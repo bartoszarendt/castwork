@@ -170,7 +170,7 @@ learned coordinator.
 | Role | Responsibility |
 |---|---|
 | `coordinator` | decides which roles act next and keeps you informed |
-| `thinker` | turns a request into work: intent, scope, acceptance criteria, requirements; plans, breaks work into tasks, critiques, and diagnoses |
+| `thinker` | examines the problem and the approach, before or during the work: turns a request into work (intent, scope, acceptance criteria, requirements), plans, breaks work into tasks, critiques, and diagnoses stalls and disputes |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate: responsive, complete, correct |
 

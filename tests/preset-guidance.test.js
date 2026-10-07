@@ -211,7 +211,8 @@ for (const host of HOSTS) {
       'A verifier can assess only a candidate that resolves; `task lint` shows whether it does.',
       'When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes.',
       "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no castwork decision new`), cited by the task records it governs.",
-      'are signs of a stall: diagnose it (the thinker is for this) or ask the user, rather than retrying.',
+      "Do not just retry: resolve what the evidence answers, ask the thinker when that would help, and ask the user what only they can decide; the same goes for a worker's `needs_context`.",
+      'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from that role's generated agent file.",
       'which role or shape, the host a routed role goes to, and why now',
     ], 'coordinator');
@@ -228,8 +229,39 @@ for (const host of HOSTS) {
       'each under its own actor',
       'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it: a counterexample, a failure mode, or a hidden assumption. Not a debate, and not for routine work.',
       'The default: one worker, and a verifier where its requirements want one. Use another shape only when its condition holds.',
-      'Hand the work to the worker, and any judgement it needs to the verifier.',
+      'Hand the work to the worker, a question about the work or its approach to the thinker, and an assessment of the candidate to the verifier.',
     ], 'coordinator');
+  });
+
+  test(`${host} the thinker is asked whenever the work comes into question, not only before it starts`, () => {
+    const thinker = role(host, 'thinker');
+    all(thinker, [
+      'before it starts and whenever that comes into question: is this the right problem, and is the approach sound?',
+      'You do not produce the result or record a verdict on it.',
+      'When the plan, or work already under way, turns on something not yet known, find out first',
+      'When a worker returns `blocked` or `needs_context`, a blocking finding questions the work rather than the candidate, or a plan is half done,',
+      "Revise unstarted records a finding changes, saying why; changing what was asked is for the user.",
+      "try once to break the approach, even of work that passed, and say if it held; breaking the candidate is the verifier's.",
+      "For `needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision.",
+      'When a worker and a verifier read a criterion differently, say where they diverge and clarify the record as above.',
+      'Never rewrite an assessment. Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own.',
+      'Asked for an audit, audit the work, not a candidate',
+      'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
+      "Judging the approach is yours; assessing the candidate is the verifier's.",
+    ], 'thinker');
+    assert.doesNotMatch(thinker, phrase('or judge it'), 'judging the approach is not forbidden');
+    all(role(host, 'coordinator'), [
+      'A blocking finding that questions the work rather than the candidate',
+      'is a sign of a stall the first time;',
+      'ask it rather than thinking alone when fresh context, its own model or route, or reasoning kept in the record would help.',
+    ], 'coordinator');
+    assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
+    const start = entry(host);
+    all(start, [
+      'The thinker is not only a first step.',
+      'resolve what the available evidence answers; consider the thinker when deeper investigation or a separate perspective would help, and ask the user when what remains is their decision.',
+    ], 'entry');
+    assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
   });
 
   test(`${host} roles choose a shape before work starts, where the choice is made`, () => {

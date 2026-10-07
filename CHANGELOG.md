@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.2
+
+- The thinker is no longer only a first step. Its description and preset now
+  cover examining the problem and the approach during the work as well as
+  before it: critiquing and replanning when a worker returns `blocked` or
+  `needs_context`, diagnosing a stall or a dispute over a criterion, and
+  auditing the work against the project's documents. It revises unstarted
+  records only within what was asked and proposes anything more to the user;
+  clarifying a criterion supersedes no assessment. Judging the approach is the
+  thinker's; assessing a candidate stays the verifier's.
+- The coordinator hands questions about the work or its approach to the
+  thinker and candidate assessments to the verifier. A blocking finding that
+  questions the work is a sign of a stall the first time; the coordinator
+  resolves what the evidence answers, asks the thinker when that would help,
+  and asks the user what only they can decide. A plain defect goes back to the
+  worker. Nothing requires a thinker step.
+- Regenerate projections with `update`, then start a new host session.
+
 ## 0.9.1
 
 - Added read-only `report [<id>] [--json]`: project state and rework with named
