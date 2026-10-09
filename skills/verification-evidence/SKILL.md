@@ -105,6 +105,10 @@ a failure, reproduction, or review finding, put it in a linked file named under
 
 - **Record what you ran.** An `exit_code` you did not observe is worse than no
   evidence at all. If you did not run it, there is no evidence entry.
+  Resolve a declared check to the project's actual invocation: working directory,
+  paths, flags and selection. Run that invocation within existing authority; a
+  narrower or modified command is a different check and leaves the declared one
+  unmet. If the invocation is unclear or cannot be run, name that gap.
 - **Record failures.** A `fail` is information. The later entry for the same
   check and candidate wins, so a `fail` after a `pass` correctly says the check
   is now failing.
@@ -118,6 +122,11 @@ a failure, reproduction, or review finding, put it in a linked file named under
 - **Name the check honestly.** A subset of a declared check, such as some of
   the tests, goes under its own name, never under the declared check's name.
   `task lint` reports on the record, so it is not evidence about the candidate.
+- **Compare when attribution matters.** Reuse applicable baseline or batch
+  evidence, or make a proportionate comparison within existing authority, using
+  comparable commands, inputs and conditions. Matching baseline failures may
+  establish non-introduction; they do not establish the cause. Do not require a
+  fresh baseline run for every check or silently spend another run allowance.
 - **Names, not secrets.** Record an environment variable's name, never its
   value: records are repository files, and the repository's own checks read
   them.

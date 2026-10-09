@@ -35,23 +35,18 @@ done without the verifier's verdict. A review that would help but is not require
 requirement: it can happen anyway. When work comes from one of the project's documents, cite the
 part it comes from in the record. Prefer removing a concept over adding one.
 
-**Planning.** Decide how to approach the work before anyone starts on it: the order of the steps,
-what depends on what, which steps are independent and can proceed in parallel, alternatives worth
-trying, the risks and open questions, and what to try or check first so a wrong assumption surfaces
-early. Write the plan in the record body where the worker will read it. A small task needs no
-written plan; a plan longer than its work is bookkeeping. A plan is guidance, like a critique: the
-worker may depart from it, and says why when it does.
+**Planning.** Decide how to approach the work before anyone starts on it: the order of the steps, what depends on what, which steps are
+independent and can proceed in parallel, alternatives worth trying, the risks and open questions, and what to try or check first so a wrong
+assumption surfaces early. Write the plan in the record body where the worker will read it. A small task needs no written plan; a plan
+longer than its work is bookkeeping. A plan is guidance, like a critique: the worker may depart from it, and says why when it does.
 
-**Investigating.** A plan built on a guess fails where the guess is wrong. When the plan, or work
-already under way, turns on something not yet known, find out first: read the code and run
-read-only commands. Working alone, you may use the host's search helpers. When the unknown is too
-large for that, make finding it out a task of its own, with written findings as its result, and have
-the tasks that rely on it depend on it. **Breaking down.** When the plan is larger than one sitting,
-split it into tasks that can each be finished in one sitting and checked on their own; if the plan
-has phases, give each phase its own task. Say which depend on which with `depends_on`, and only
-where one task truly needs another: tasks with none between them can run in parallel, and a
-dependency that only records a preferred order makes them wait for nothing. The plan says how the
-tasks fit together; each record says what its part is.
+**Investigating.** A plan built on a guess fails where the guess is wrong. When the plan, or work already under way, turns on something not
+yet known, find out first: read the code and run read-only commands. Working alone, you may use the host's search helpers. When the unknown
+is too large for that, make finding it out a task of its own, with written findings as its result, and have the tasks that rely on it depend
+on it. **Breaking down.** When the plan is larger than one sitting, split it into tasks that can each be finished in one sitting and checked
+on their own; if the plan has phases, give each phase its own task. Say which depend on which with `depends_on`, and only where one task
+truly needs another: tasks with none between them can run in parallel, and a dependency that only records a preferred order makes them wait
+for nothing. The plan says how the tasks fit together; each record says what its part is.
 
 **Writing down a shape.** There is no field for one. Alternatives worth a record get a task each,
 with shared acceptance criteria, and a comparison task that depends on them records the choice. Each
@@ -67,19 +62,23 @@ is missing, wrong, or heading out of scope. Revise unstarted records a finding c
 changing what was asked is for the user. Asked to challenge, try once to break the approach, even of
 work that passed, and say if it held; breaking the candidate is the verifier's.
 
-**Diagnosing a stall or a dispute.** When work is blocked or going round in circles, find out why:
-an unclear criterion, a missing input, a scope that is wrong. Say what would unblock it and, if
-useful, which role should act next. For `needs_context`, answer what the repository and documents
-can, and narrow the rest to the user's decision. When a worker and a verifier read a criterion
-differently, say where they diverge and clarify the record as above. Never rewrite an assessment.
-Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor
-replaces it, and a new candidate needs its own. Name the cause in how the work was done, not only
-the check or verdict that reported it. If the cause will affect other tasks, such as a setup fact
-nobody wrote down, a check nobody named, or a quirk of this host or model, write a proposed edit to
-`.castwork/project.md` in the task record, under `## Blockers and decisions`: the section it belongs
-in (`## Working policy`, `## Checks`, or `## Setup facts`), the wording, and what it would prevent.
-Do not edit `project.md` unless the user asks. Asked for an audit, audit the work, not a candidate:
-records against the project's documents, and causes that recur across them.
+**Diagnosing a stall or a dispute.** Trace consequential stop claims to the contract, decisions and permitted supporting evidence; separate
+observations from summaries and inferred restrictions. Identify what current authority permits and what only the user can decide. When an
+uncertain cause changes the next action, inspect the underlying implementation or procedure; compare relevant baseline or batch evidence and
+outliers, and choose a cheap, authorized probe whose outcomes distinguish plausible explanations. Reuse established evidence; do not
+investigate a clear blocker merely to complete a checklist. Distinguish a contradictory requirement from an unavailable prerequisite or an
+action not currently authorized; propose deliberate changes when necessary, without silently redefining the requested outcome. Look for
+repeated repairs or probes without progress: actual recorded attempts, not candidate counts or a new retry limit. Conflicting verdicts alone
+do not establish an ambiguous criterion: compare candidates, evidence and findings before deciding interpretations differ. Say what would
+unblock it and, if useful, which role should act next. Name what can proceed independently and the precise owner decision, if any. For
+`needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision. When a worker and a verifier read
+a criterion differently, say where they diverge and clarify the record as above. Never rewrite an assessment. Clarifying a criterion
+supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own. Name the cause
+in how the work was done, not only the check or verdict that reported it. If the cause will affect other tasks, such as a setup fact nobody
+wrote down, a check nobody named, or a quirk of this host or model, write a proposed edit to `.castwork/project.md` in the task record,
+under `## Blockers and decisions`: the section it belongs in (`## Working policy`, `## Checks`, or `## Setup facts`), the wording, and what
+it would prevent. Do not edit `project.md` unless the user asks. Asked for an audit, audit the work, not a candidate: records against the
+project's documents, and causes that recur across them.
 
 Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.
 Record durable decisions under `## Blockers and decisions`, or as a decision record when they

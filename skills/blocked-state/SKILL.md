@@ -25,6 +25,12 @@ task with enough written down that someone can pick it up.
 Both are ordinary status values. Neither is a failure state and neither locks
 anything: the record stays readable and editable.
 
+A failed check, blocking verdict, or stopped workflow does not itself mean no
+authorized next step remains. Record genuine external blockers promptly; consider
+permitted diagnosis or independent work while execution is blocked, and honor
+explicit stops. A workflow's termination returns the problem to the agent running
+it, like a role's return; it does not decide that all work must end.
+
 ## What to write
 
 Set the status and record the details under `## Blockers and decisions`:
@@ -42,6 +48,15 @@ it is meant to come from.
 Say four things: what you were doing, what stopped you, what you already tried,
 and what would unblock it. The last one is the point — a blocker without an exit
 is just a complaint.
+
+For the user, give the verified state, the obstacle and its cause or remaining
+uncertainty, what can proceed independently, and only decisions they own. Give a
+recommended answer for each decision and concrete approval wording with scope,
+cost, stop conditions and what proceeds after approval where those matter.
+Prepare what existing authority permits before asking; a clear external blocker
+needs no extra investigation merely to complete a checklist. Keep temporary
+proposals in the task body; use a separate decision record only when the choice
+outlives the task, and distinguish a proposal from an accepted owner decision.
 
 ## Pausing
 
@@ -65,7 +80,15 @@ alone, you set it yourself.
 
 - **Do not silently retry.** Repeating a failing approach and hoping is how an
   hour disappears. When another attempt would only repeat what already failed,
-  that is a stall: write it down and say what would diagnose it.
+  that is a stall: write it down and pursue diagnosis within existing authority.
+  A category such as environmental, flaky, known, or busy, or an owner's
+  disposition, establishes no mechanism. Reuse a documented diagnosis when its
+  evidence applies here; otherwise investigate a cause that progress depends on,
+  using the thinker when deeper investigation or another perspective would help.
+  Diagnosis using information and resources already authorized for the task
+  needs no further approval. A proposal grants no authority to implement it:
+  fixes, access, spending, and additional runs keep their existing boundaries.
+  Honor explicit owner budgets; do not invent a retry count as the reason to stop.
 - **Do not guess past a real ambiguity.** If the answer changes what you build,
   that is `needs_context`, not a coin flip.
 - **Do not mark it done.** If the task declares requirements, `task set status

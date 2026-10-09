@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.9.3
+
+- A stop is not the end of the work. A failed check, a blocking verdict, and a
+  stopped workflow no longer read as "no authorized next step remains": the
+  coordinator considers permitted diagnosis or independent work, records genuine
+  external blockers promptly, honors explicit stops, and honors owner budgets
+  rather than inventing a retry count as the reason to stop. A workflow's
+  termination returns the problem to the agent that wrote it, like a role's
+  return.
+- A cause must be established, not labeled. "Environmental", "flaky", "known",
+  or "busy" and an owner's disposition name no mechanism: when progress depends
+  on a cause not established, the coordinator investigates it, reuses a
+  documented diagnosis whose evidence applies here, reaches for the thinker when
+  deeper investigation or another perspective would help, and gives an
+  established answer directly. An unclear criterion still needs a clarified
+  record, not a retry.
+- A proposal grants no authority to implement it. Diagnosis using information
+  and resources already authorized for the task needs no further approval; fixes,
+  access, spending, and additional runs keep their existing boundaries. The
+  thinker traces a consequential stop claim to the contract and the permitted
+  evidence, distinguishes a contradictory requirement from an unavailable
+  prerequisite or an action not currently authorized, and looks for repeated
+  repairs rather than candidate counts.
+- At a stop, the coordinator reports verified state, the obstacle and its cause
+  or remaining uncertainty, what can proceed, and only decisions the user owns,
+  with a recommended answer and concrete approval wording carrying scope, cost,
+  stop conditions, and what proceeds after approval.
+- Checks run as declared. The verifier and the verification-evidence skill
+  resolve a declared check to the project's actual invocation — working
+  directory, paths, flags, and selection — and name the gap when it is unclear
+  or cannot be run, since a scoped variant is a different check. Baseline or
+  batch comparison is reused where its evidence applies, and matching baseline
+  failures establish non-introduction, not the cause.
+- Regenerate projections with `update`, then start a new host session.
+
 ## 0.9.2
 
 - The thinker is no longer only a first step. Its description and preset now

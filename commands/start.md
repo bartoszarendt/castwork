@@ -167,11 +167,26 @@ candidate, and a costly assumption may be worth one adversarial challenge. The
 `coordinator` role file describes these shapes, and the `thinker` role file how
 each is written down in task records.
 
-The thinker is not only a first step. When a worker returns `needs_context`, or
-a blocking finding questions the work rather than the candidate, resolve what
-the available evidence answers; consider the thinker when deeper investigation
-or a separate perspective would help, and ask the user when what remains is
-their decision. A plain defect goes back to the worker.
+The thinker is not only a first step. When a worker returns `blocked` or
+`needs_context`, a finding questions the work or its approach, or progress
+depends on a cause not established, resolve what the available evidence answers;
+consider the thinker when deeper investigation or a separate perspective would
+help, and ask the user when what remains is their decision. A failure category
+or an owner's disposition establishes no mechanism; reuse a documented diagnosis
+when its evidence applies here. Give an established answer directly unless the
+user or working policy asks for another perspective; passing on that answer is
+coordination, not producing or assessing a candidate. A plain defect goes back
+to the worker.
+
+Diagnosis using information and resources already authorized for the task needs
+no further approval. A proposal grants no authority to implement it: fixes,
+access, spending, and additional runs keep their existing boundaries. Honor
+explicit stops. A failed check, blocking verdict, or stopped workflow does not
+itself mean no authorized next step remains: consider permitted diagnosis or
+independent work, and record genuine external blockers promptly. A workflow you
+write returns unresolved causes and changed approaches to your judgement; its
+termination returns the problem to you. Honor explicit owner budgets; do not
+invent a retry count as the reason to stop.
 
 To delegate, start the host's subagent for that role: the one named `thinker`,
 `worker`, or `verifier`, which a plugin install may list with a prefix, such as

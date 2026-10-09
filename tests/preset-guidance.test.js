@@ -175,6 +175,8 @@ for (const host of HOSTS) {
       'A name such as `HEAD` or a branch is not the candidate',
       'ask for the commit id or a snapshot',
       'Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each run as evidence under your actor, failures included.',
+      "Keep the project's declared working directory, paths, flags and selection; a scoped variant is a different check and leaves the declared one unmet.",
+      'Name an unclear or unavailable invocation.',
       'When the change alters something other parts rely on, check those parts, or name that gap as a limit.',
     ], 'verifier');
     assert.doesNotMatch(verifier, /not registered/);
@@ -247,6 +249,14 @@ for (const host of HOSTS) {
       'Never rewrite an assessment. Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own.',
       'Asked for an audit, audit the work, not a candidate',
       'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
+      'Trace consequential stop claims to the contract, decisions and permitted supporting evidence',
+      'Identify what current authority permits and what only the user can decide.',
+      'choose a cheap, authorized probe whose outcomes distinguish plausible explanations',
+      'do not investigate a clear blocker merely to complete a checklist',
+      'Distinguish a contradictory requirement from an unavailable prerequisite or an action not currently authorized',
+      'actual recorded attempts, not candidate counts or a new retry limit',
+      'Conflicting verdicts alone do not establish an ambiguous criterion',
+      'Name what can proceed independently and the precise owner decision, if any.',
       "Judging the approach is yours; assessing the candidate is the verifier's.",
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('or judge it'), 'judging the approach is not forbidden');
@@ -254,14 +264,34 @@ for (const host of HOSTS) {
       'A blocking finding that questions the work rather than the candidate',
       'is a sign of a stall the first time;',
       'ask it rather than thinking alone when fresh context, its own model or route, or reasoning kept in the record would help.',
+      'When progress depends on a cause not established, investigate it.',
+      "A category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
+      'A workflow you write returns unresolved causes and changed approaches to your judgement.',
+      'Its termination returns the problem to you, not a decision to end the work.',
+      'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
     const start = entry(host);
     all(start, [
       'The thinker is not only a first step.',
       'resolve what the available evidence answers; consider the thinker when deeper investigation or a separate perspective would help, and ask the user when what remains is their decision.',
+      "A failure category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
+      'A workflow you write returns unresolved causes and changed approaches to your judgement; its termination returns the problem to you.',
     ], 'entry');
+    for (const content of [role(host, 'coordinator'), start]) {
+      all(content, [
+        'Diagnosis using information and resources already authorized for the task needs no further approval.',
+        'A proposal grants no authority to implement it: fixes, access, spending, and additional runs keep their existing boundaries.',
+        'Honor explicit stops.',
+        'Give an established answer directly unless the user or working policy asks for another perspective; passing on that answer is coordination, not producing or assessing a candidate.',
+        'A failed check, blocking verdict, or stopped workflow does not itself mean no authorized next step remains: consider permitted diagnosis or independent work',
+      ], 'diagnosis boundaries');
+    }
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
+    all(role(host, 'coordinator'), [
+      'At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns.',
+      'Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.',
+    ], 'stop report');
   });
 
   test(`${host} roles choose a shape before work starts, where the choice is made`, () => {
@@ -347,6 +377,15 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
   all(skill('blocked-state'), [
     'tear down what you started, such as a server or a container; if something must keep running, say what and why.',
     'working alone, you set it yourself',
+    'A failed check, blocking verdict, or stopped workflow does not itself mean no authorized next step remains.',
+    'Record genuine external blockers promptly; consider permitted diagnosis or independent work while execution is blocked, and honor explicit stops.',
+    "A workflow's termination returns the problem to the agent running it, like a role's return; it does not decide that all work must end.",
+    'pursue diagnosis within existing authority',
+    'Diagnosis using information and resources already authorized for the task needs no further approval.',
+    'A proposal grants no authority to implement it: fixes, access, spending, and additional runs keep their existing boundaries.',
+    'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
+    'Prepare what existing authority permits before asking',
+    'Keep temporary proposals in the task body; use a separate decision record only when the choice outlives the task, and distinguish a proposal from an accepted owner decision.',
   ], 'blocked-state');
   const assessment = skill('assessment');
   all(assessment, [
@@ -358,7 +397,14 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
   assert.match(assessment, /GIT_INDEX_FILE=<tmp>\/index git read-tree <sha>/);
   assert.match(assessment, /GIT_INDEX_FILE=<tmp>\/index git --work-tree=<tmp>\/tree checkout-index -a/);
   assert.doesNotMatch(assessment, /\(`read-tree`, then/, 'no recipe that writes the real index');
-  all(skill('verification-evidence'), ['A snapshot exists only in the clone that took it', '`candidate.moving_ref`'], 'verification-evidence');
+  all(skill('verification-evidence'), [
+    'A snapshot exists only in the clone that took it',
+    '`candidate.moving_ref`',
+    "Resolve a declared check to the project's actual invocation: working directory, paths, flags and selection.",
+    'a narrower or modified command is a different check and leaves the declared one unmet.',
+    'Matching baseline failures may establish non-introduction; they do not establish the cause.',
+    'Do not require a fresh baseline run for every check or silently spend another run allowance.',
+  ], 'verification-evidence');
 });
 
 test('the skill description keeps a role started by name from loading the entry skill', () => {

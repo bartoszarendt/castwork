@@ -5,7 +5,7 @@ work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.9.2 is current.
+**Status:** version 0.9.3 is current.
 
 ## Layout
 

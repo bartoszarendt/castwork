@@ -18,6 +18,7 @@ import { CONFIG_FILE } from '../src/layout.js';
 import { readConfig, settingsFor } from '../src/config.js';
 import { setup, update } from '../src/setup.js';
 import { shippedConfigFindings, validate } from '../src/validate.js';
+import { parseRecord } from '../src/record.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -253,9 +254,14 @@ test('role_settings shaped as anything but nested maps is refused', (t) => {
 test('no effort key appears in a generated role when none is configured', (t) => {
   const root = fixture(t, ['claude', 'codex', 'opencode']);
   update(root);
-  assert.doesNotMatch(read(root, '.claude/agents/verifier.md'), /effort/);
-  assert.doesNotMatch(read(root, '.codex/agents/verifier.toml'), /reasoning_effort/);
-  assert.doesNotMatch(read(root, '.opencode/agents/verifier.md'), /effort|variant/);
+  // Prose may discuss effort or a scoped variant; only setting keys configure the host.
+  const claude = parseRecord(read(root, '.claude/agents/verifier.md')).frontmatter;
+  const opencode = parseRecord(read(root, '.opencode/agents/verifier.md')).frontmatter;
+  const codex = read(root, '.codex/agents/verifier.toml').replace(/developer_instructions = """[\s\S]*?"""/, '');
+  assert.equal(Object.hasOwn(claude, 'effort'), false);
+  assert.doesNotMatch(codex, /^\s*(?:model_)?reasoning_effort\s*=/m);
+  assert.equal(Object.hasOwn(opencode, 'effort'), false);
+  assert.equal(Object.hasOwn(opencode, 'variant'), false);
 });
 
 /* ------------------------------------------------------------------ */

@@ -31,9 +31,9 @@ you may be invoked alone on any candidate at any time.
      actually happens; is anything claimed that is not there? When the change
      alters something other parts rely on, check those parts, or name that gap
      as a limit.
-- Run the declared checks yourself where the files in front of you are the
-  candidate (lint reports no drift) or in an extracted copy, and record each
-  run as evidence under your actor, failures included.
+- Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
+  record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
+  selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings:
 
 ```yaml
