@@ -64,6 +64,12 @@ a bare `/castwork` in the same session, you have oriented already.
    criteria, and cited decisions using section-only reads on large files, not
    unrestricted reads of their entry lists. A report never replaces the contract or assessment of the current
    candidate; earlier verdicts carry nothing over.
+   After orientation, for a task you will work on over 100 KB run `task archive <id>`; whenever
+   you archive a task or resume an archived one, review `## Current state` against the record
+   and its archive and refresh it before substantive work; propose separate tasks linked by
+   `depends_on` for independently finishable parts, never a mechanical split or by size alone.
+   When roles are coordinated, the coordinator rewrites Current state from their reports;
+   an agent working alone writes its own, about fifteen lines, not another appended round.
 4. After the records, read the handoff the user gives you or the project's
    documents name; otherwise `.castwork/local/handoff.md`, if it exists. It
    describes a moment that has passed: check what you act on against the

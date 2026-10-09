@@ -22,6 +22,8 @@ export const GENERATED_MANIFEST = `${STATE_DIRECTORY}/generated.json`;
 export const LOCAL_DIRECTORY = `${STATE_DIRECTORY}/local`;
 
 export const TASKS_DIRECTORY = `${STATE_DIRECTORY}/tasks`;
+/** An archive pairs with the same basename's task; never a task itself. */
+export const ARCHIVE_SUFFIX = '.archive.md';
 export const DECISIONS_DIRECTORY = `${STATE_DIRECTORY}/decisions`;
 export const PROJECT_FILE = `${STATE_DIRECTORY}/project.md`;
 

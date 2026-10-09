@@ -160,7 +160,11 @@ for (const host of HOSTS) {
       'If the CLI is not available, say so and record the candidate as a mutable label; never invent a reference.',
       'An authorization covers only the named action.',
       'A prerequisite that changes shared state or widens the scope is a new request: record `needs_context`',
-      'After a step that costs minutes, append what you observed to the record',
+      'After a step that costs minutes, append a short observation: what was seen, what it means, what is next',
+      'A routine successful probe is a sentence in the body, or nothing',
+      'an observation supporting acceptance or a finding stays candidate-bound evidence',
+      'not a new narrative section per run or a long paragraph on one line',
+      "its one writer is the coordinator from the roles' reports",
       'propose a `## Setup facts` line for `.castwork/project.md` in the record',
     ], 'worker');
   });
@@ -405,6 +409,22 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     'Matching baseline failures may establish non-introduction; they do not establish the cause.',
     'Do not require a fresh baseline run for every check or silently spend another run allowance.',
   ], 'verification-evidence');
+});
+
+test('Phase 43 generated guidance keeps archives explicit, Current state single-writer and findings bounded', () => {
+  for (const host of HOSTS) {
+    for (const content of [entry(host), role(host, 'coordinator')]) all(content, [
+      'After orientation, for a task you will work on over 100 KB run `task archive <id>`',
+      'review `## Current state` against the record and its archive and refresh it before substantive work',
+      'propose separate tasks linked by `depends_on` for independently finishable parts',
+      'never a mechanical split or by size alone',
+    ]);
+    all(role(host, 'verifier'), ['the contract item, observation and location, and why it blocks or accepts', 'not every file read or a restatement of earlier rounds']);
+    all(role(host, 'coordinator'), ["you are Current state's one writer", "from the roles' reports", 'it grants nothing']);
+  }
+  all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
+  all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'write it before taking that snapshot']);
+  all(skill('task-record-contract'), ["One writer: the coordinator from the roles' reports when roles are coordinated", '`task archive [<id>] [--check]`']);
 });
 
 test('the skill description keeps a role started by name from loading the entry skill', () => {

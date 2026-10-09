@@ -51,6 +51,74 @@ function capture(fn) {
   }
 }
 
+test('D43 navigation prefers canonical headings, ignores fences and list headings, and bounds latest sections', () => {
+  const body = '# Intent\nshallow\n## Intent ##\ncanonical\n## Scope\nscope\n## Current state\n<!-- template -->\n\n## Old\nold\n## One\n1\n## Two\n2\n## Three\n3\n## Four\n4\n## Five\n5\n```md\n## Not a section\n```\n- item\n  ## Not a section either\n  child\n';
+  const report = derive(input({}, body));
+  const task = report.records[0].task;
+  assert.deepEqual(task.contract.intent, {line: 12, pointer: '.castwork/tasks/A.md:12'});
+  assert.equal(task.contract.acceptance_criteria, null);
+  assert.deepEqual(Object.keys(task.contract), ['intent', 'scope', 'out_of_scope', 'acceptance_criteria', 'current_state']);
+  assert.equal(task.current_state.empty, true);
+  assert.equal(task.current_state.omitted_lines, 0);
+  assert.match(renderReport(report, report.records[0]), /Current state  empty/);
+  assert.deepEqual(task.latest_sections.sections.map(section => section.title), ['One', 'Two', 'Three', 'Four', 'Five']);
+  assert.equal(task.latest_sections.omitted_count, 1);
+  assert.equal(task.latest_sections.sections.at(-1).end_line, 36);
+});
+
+test('D43 Current state preserves full JSON text and bounds source lines and characters independently', () => {
+  for (const [text, shown, omitted] of [
+    ['short', 'short', 0],
+    [Array.from({length: 30}, (_, i) => `line ${i}`).join('\n'), Array.from({length: 25}, (_, i) => `line ${i}`).join('\n'), 5],
+    ['x'.repeat(2001), 'x'.repeat(2000), 1],
+    ['x'.repeat(1999) + '\ny\nz', 'x'.repeat(1999) + '\n', 2],
+  ]) {
+    const report = derive(input({}, '## Current state\n' + text));
+    const state = report.records[0].task.current_state;
+    assert.equal(state.text, text);
+    assert.equal(state.text_excerpt, shown);
+    assert.equal(state.omitted_lines, omitted);
+    assert.equal(state.empty, false);
+    if (omitted) assert.match(renderReport(report, report.records[0]), new RegExp(`${omitted} lines omitted, \\.castwork/tasks/A\\.md:`));
+  }
+});
+
+test('review F1: HTML-comment headings do not truncate Current state or displace real sections', () => {
+  const comment = '<!--\n## Example\nSome authoring help.\n-->\n';
+  for (const restriction of ['', 'D-024: do not release.\n']) {
+    const report = derive(input({}, `## Current state\n${comment}${restriction}## Actual\nHistory.\n`));
+    const state = report.records[0].task.current_state;
+    assert.equal(state.text, `${comment}${restriction}`.trimEnd());
+    assert.equal(state.empty, restriction === '');
+    assert.equal(state.omitted_lines, 0);
+    assert.deepEqual(report.records[0].task.latest_sections.sections.map(section => section.title), ['Actual']);
+    if (restriction) assert.match(renderReport(report, report.records[0]), /D-024: do not release\./);
+  }
+  for (const code of ['```md\n<!--\n```', '```md <!--\nexample\n```', 'Use `<!--` for comments.']) {
+    const report = derive(input({}, `## Current state\n${code}\n## Actual\nReal section.\n`));
+    assert.deepEqual(report.records[0].task.latest_sections.sections.map(section => section.title), ['Actual']);
+  }
+  const inline = derive(input({}, '## Current state\n<!-- help -->\n<!--\n## Hidden\n-->\nNow.\n## Actual\nHistory.\n'));
+  assert.equal(inline.records[0].task.current_state.text, '<!-- help -->\n<!--\n## Hidden\n-->\nNow.');
+  assert.deepEqual(inline.records[0].task.latest_sections.sections.map(section => section.title), ['Actual']);
+});
+
+test('review F2: Latest sections excludes contract headings with the same case-insensitive identity', () => {
+  const report = derive(input({}, '## intent\nI\n## scope\nS\n## out of scope\nO\n## acceptance criteria\nA\n## current state\nNow\n## Old\nHistory\n'));
+  const task = report.records[0].task;
+  assert.ok(Object.values(task.contract).every(Boolean));
+  assert.equal(task.current_state.text, 'Now');
+  assert.deepEqual(task.latest_sections.sections.map(section => section.title), ['Old']);
+  assert.equal(task.latest_sections.omitted_count, 0);
+});
+
+test('task template Current state is exactly one empty recorded section', () => {
+  const text = fs.readFileSync(path.resolve('memory/task-record.md'), 'utf8');
+  const report = derive({kind: 'task', record: parseRecord(text)});
+  assert.equal(report.records[0].task.current_state.empty, true);
+  assert.equal(report.records[0].task.current_state.text_excerpt, '');
+});
+
 const history = {
   requirements:{checks:['test','lint'],independent_review:true,assessment_roles:['verifier']},
   candidates:[{ref:'aaaaaaa',producers:['worker@pi']},{ref:'bbbbbbb'},{ref:'aaaaaaa',producers:['worker@pi'],host:'pi',model:'reported/model',at:'2026-10-07T09:00:00Z'}],
@@ -477,6 +545,14 @@ test('golden task text: empty history, missing requirement and no prose section'
   const r=derive(input({requirements:{checks:['test']}}));
   assert.equal(renderReport(r,r.records[0]),`A  Example  in_review
 Requires  checks ["test"]
+
+Contract  Intent: absent · Scope: absent · Out of scope: absent · Acceptance criteria: absent ·
+          Current state: absent
+Current state  absent
+Latest sections
+  none
+  0 other sections
+Archive  none
 
 Current candidate  none recorded
 

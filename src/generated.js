@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { GENERATED_MANIFEST, LAYOUT_VERSION, STATE_DIRECTORY, USER_OWNED } from './layout.js';
+import { ARCHIVE_SUFFIX, GENERATED_MANIFEST, LAYOUT_VERSION, STATE_DIRECTORY, TASKS_DIRECTORY, USER_OWNED } from './layout.js';
 import { PublicError } from './public-error.js';
 
 /**
@@ -90,10 +90,11 @@ export function recordDirectory(root, relative, options = {}) {
  */
 export function recordFiles(root, relative) {
   const directory = recordDirectory(root, relative);
+  const tasks = path.posix.normalize(relative.replace(/\\/g, '/')).replace(/\/+$/, '').toLowerCase() === TASKS_DIRECTORY;
   if (!fs.existsSync(directory)) return [];
   return fs
     .readdirSync(directory)
-    .filter((name) => name.endsWith('.md'))
+    .filter((name) => name.endsWith('.md') && (!tasks || !name.endsWith(ARCHIVE_SUFFIX)))
     .sort()
     .map((name) => installPath(root, `${relative}/${name}`))
     .filter((file) => fs.lstatSync(file).isFile());

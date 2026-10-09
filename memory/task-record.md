@@ -53,6 +53,15 @@ Name nearby work that must not be bundled in.
 
 - One observable outcome per bullet.
 
+## Current state
+
+<!-- What holds now: current candidate, unresolved issues, restrictions with
+     decision ids and source line pointers, and the next step. Rewrite in place,
+     about fifteen lines. The coordinator writes it from the roles' reports
+     when roles are coordinated; otherwise the agent working alone writes it.
+     This is recorded prose, grants nothing, and yields to cited decisions
+     and the user's current instructions. -->
+
 ## Blockers and decisions
 
 Record what blocked the work and what was decided, as it happens.

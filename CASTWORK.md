@@ -10,7 +10,7 @@ adapters. **Agents choose the workflow. Hosts execute it.**
 Castwork interprets what was recorded. It does not prove who recorded it.
 `report [<id>]` reads task and decision records and local Git; it decides nothing.
 
-**Status:** version 0.9.3 is current.
+**Status:** version 0.9.4 is current.
 
 ## What the toolkit provides, and what it does not
 
@@ -172,7 +172,8 @@ castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
-Nothing else is written under `.castwork/`.
+A task can have a paired `<record>.archive.md` beside it in `tasks/`; both
+files are one logical record. Nothing archives implicitly.
 
 ## Getting started
 

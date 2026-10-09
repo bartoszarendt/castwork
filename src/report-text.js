@@ -74,6 +74,20 @@ function taskText(report, row) {
     ? Object.entries(requires).map(([kind, value]) => `${kind} ${str(value)}`).join(' · ') || 'none declared'
     : requires === undefined ? 'none declared' : `${str(requires)} (raw value)`;
   lines.push(`Requires  ${requirementText}`, '');
+  const contractTitles = ['Intent', 'Scope', 'Out of scope', 'Acceptance criteria', 'Current state'];
+  lines.push(`Contract  ${contractTitles.map(title => `${title}: ${task.contract[title.toLowerCase().replaceAll(' ', '_')]?.pointer ?? 'absent'}`).join(' · ')}`);
+  const state = task.current_state;
+  lines.push(`Current state  ${!state ? 'absent' : state.empty ? `empty · ${state.pointer}` : `recorded prose · ${state.pointer}`}`);
+  if (state && !state.empty) {
+    lines.push(...state.text_excerpt.split('\n').map(line => `  ${line}`));
+    if (state.omitted_lines) lines.push(`  … ${state.omitted_lines} lines omitted, ${state.omission_pointer}`);
+  }
+  lines.push('Latest sections');
+  if (!task.latest_sections.sections.length) lines.push('  none');
+  for (const section of task.latest_sections.sections) lines.push(`  ${excerpt(section.title)} · ${row.path}:${section.start_line}-${section.end_line}`);
+  lines.push(`  ${task.latest_sections.omitted_count} other sections`);
+  const archive = task.archive;
+  lines.push(archive ? `Archive  ${archive.path} · ${Object.entries(archive.entries).map(([field, count]) => `${count} ${field}`).join(' · ')} · ${archive.sections} sections` : 'Archive  none', '');
   const current = task.current;
   if (!current) lines.push(task.counts.candidates ? 'Current candidate  no mapping entry to evaluate' : 'Current candidate  none recorded');
   else {

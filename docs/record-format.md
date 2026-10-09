@@ -19,8 +19,9 @@ castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
-Nothing else is written under `.castwork/`. Project configuration lives in
-`castwork.json` and nowhere else; `project.md` owns prose only.
+A task can also have `<record>.archive.md` beside it in `tasks/`, carrying its
+earlier rounds as part of the same logical record. Project configuration lives
+in `castwork.json` and nowhere else; `project.md` owns prose only.
 
 ## The four concepts
 
@@ -227,10 +228,20 @@ whatever machine runs the checks, which is not evidence about the work.
 ## Body
 
 **Recognized headings:** Intent, Scope, Out of scope, Acceptance criteria,
-Blockers and decisions.
+Current state, Blockers and decisions.
 
 Any additional heading is permitted and raises no diagnostic. A duplicate
-recognized heading is a structural error.
+recognized heading is a structural error at any level. A closing run of `#`
+preceded by whitespace is stripped: `## Current state ##` is Current state,
+but `## Decision#` is Decision#.
+
+`## Current state` is optional recorded prose: what holds now (current
+candidate, unresolved issues, restrictions with decision ids and source line
+pointers, next step). Rewrite it in place, about fifteen lines, rather than
+appending another round. It has one writer: the coordinator from the roles'
+reports when roles are coordinated, otherwise the agent working alone. It
+grants nothing; cited decisions and the user's current instructions govern
+where they disagree. A section with only HTML comments and whitespace is empty.
 
 ## Requirements
 
@@ -369,7 +380,10 @@ independent consumer uses the same interface.
   declared requirement is `not_satisfied` or `unknown`. **It never writes.**
   It prints the current candidate's availability in full and summarises the
   earlier ones in one line (`N earlier candidates, M unavailable`); `--json`
-  keeps every reference.
+  keeps every reference. Text folds undeclared check names found only on earlier
+  candidates and earlier `task lint` evidence into summaries; mixed names show
+  their current entries. Credential-like commands are always noted. JSON
+  retains every informational note.
 - **`task list`** marks a record that is not `done` or `cancelled`, is
   structurally valid, and declares at least one requirement, all satisfied, as
   `ready to close`: `task set <id> status done` would accept it. A record that
@@ -402,11 +416,69 @@ error; the rest are informational and change no outcome.
 | `requirement.misplaced` | error | `checks`, `independent_review`, or `assessment_roles` is at the top level of the frontmatter | move it under `requirements:`; until then lint fails and `task set <id> status done` refuses |
 | `entries.in_body` | info | an unlabeled or YAML fenced block in the body, a list item's included, has `candidates:`, `evidence:`, or `assessments:` among its top-level keys | move the entries into the frontmatter lists; the checks never read the body, so a record kept this way has no candidate, evidence, or assessment |
 | `candidate.moving_ref` | info | the current candidate's `ref` is a name, such as `HEAD`, a branch, or `worktree-T005`, not a hex object id or `tree:` followed by one | record the commit id, or take a snapshot and record its `tree:<sha>`, as a new candidate |
-| `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
-| `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint` | lint reports on the record, not the candidate; record the project's own checks instead |
+| `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it; text counts current entries for mixed names and summarizes names found only on earlier candidates; JSON retains all | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
+| `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint`; text summarizes earlier-candidate entries, JSON retains all | lint reports on the record, not the candidate; record the project's own checks instead |
 | `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
-| `record.large` | info | the record is larger than 100 KB | move run logs and transcripts to linked files and keep the record to what was decided and observed |
+| `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | run `task archive <id> --check` for exact proposed moves; a named refusal writes nothing; keep run logs in durable linked files |
 | `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
+
+## Archive
+
+`X.md` pairs with `X.archive.md` in the same task folder. The archive is never
+a task, never numbered, and never a duplicate id. An orphan is a problem.
+Decision records are unchanged. The archive's frontmatter contains only
+`schema: 1`, `archive_of: <task id>` and optional block lists `candidates`,
+`evidence`, `assessments`; its body is ordinary Markdown in dated parts.
+An unreadable or invalid archive makes lint fail, prevents `task set ... done`,
+and makes the report incomplete rather than silently dropping earlier entries.
+
+Every task evaluator loads both files: each list is the archive's entries
+followed by the record's. Validation runs once on that merged list, so old
+malformed entries still count. Entry diagnostics name their physical file and
+index; `logical_index` retains the diagnostic's pre-split position. Recognized
+heading validation applies only to the task body. Body-entry notes and findings
+anchors read both bodies; relative links still point to the same folder.
+
+Independent consumers use the pure `castwork/record` API:
+
+```js
+parseRecord(taskText, {path: taskPath, archive: {text: archiveText, path: archivePath}})
+```
+
+The archive argument is optional. The parsed `archive` gives its physical path,
+frontmatter, full body, body line and format/archived-entry errors; `entry_locations` maps
+merged raw entries to physical positions. No reads happen in the parser or checks.
+`task show` text is the unchanged task file on stdout and its archive's name on
+stderr; JSON carries merged frontmatter and check outputs.
+
+`task archive [<id>] [--check] [--json]` runs only explicitly. No id selects task
+files over 100 KB. It proposes each block-list prefix before the first entry
+for the current candidate ref; everything from that boundary stays, even an
+older entry. Flow-style or unsplittable lists stay whole. Raw comments travel
+with the following item, and source line endings and moved bytes are preserved.
+It proposes complete Blockers entries before the last ten, stopping at a heading
+anchored by a kept entry; and older top-level sections outside the contract,
+Current state and Blockers, keeping the last three and anchored sections.
+Each run appends a dated `Blockers and decisions, moved YYYY-MM-DD` part and
+gives the task one first-line archive pointer. Nothing to move is a no-op.
+
+Before any write, the pair is reparsed and checked: list values/order, structural
+error codes/counts, requirements/reasons, done decision and task report must
+match, except physical pointers, diagnostic locations and archive navigation.
+Existing archive prose stays byte-identical; a successful list-only move adds
+only its dated heading. CLI verification also compares the corpus with actual
+and projected local Git observations: making a clean tracked record uncommitted
+is a named refusal, not an implicit exception. No original body order is guessed. A lossy prose move, or any other difference,
+is a **named refusal**, not permission to weaken the comparison. `--check`
+reports exact proposed moves and bytes; a refused proposal leaves actual sizes
+unchanged and exits non-zero.
+
+Writes refuse symbolic links, junctions and redirects, and re-read both inputs
+before staging; changed bytes refuse with nothing written. Temporary files are
+in the same folder and do not end in `.md`. The archive is replaced first, then
+the task. Failure replacing the task restores the previous archive bytes or
+removes an archive created by the run, and says exactly what was restored.
+These checks detect changes before writing, not changes made afterwards.
 
 ## Canonical example
 
@@ -452,6 +524,8 @@ assessments:
 ...
 ## Acceptance criteria
 ...
+## Current state
+<!-- Rewrite what holds now, with decision ids and source line pointers. -->
 ## Design notes
 Any extra heading is fine.
 ```

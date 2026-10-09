@@ -1,13 +1,13 @@
 /** Pure report derivation. File identity, not id or ref, is the counting unit.
  * No I/O; recorded prose and dates never alter the existing checks' results.
  */
-import { declaredRequirements, isObjectId, recordEntries, recordValueText, RESULTS, VERDICTS } from './record.js';
+import { declaredRequirements, isObjectId, recordEntries, recordValueText, relocateEntryLabel, RESULTS, VERDICTS } from './record.js';
 import { currentCandidate, duplicateIdErrors, effectiveEvidence, effectiveAssessments, requirementEvaluation, readyToClose, structuralValidity } from './checks.js';
 import { HOSTS } from './layout.js';
 
 /** @typedef {import('./record.js').ParsedRecord} ParsedRecord */
 /** @typedef {{record: ParsedRecord, kind: 'task'|'decision', body_line?: number}} ReportInput */
-/** @typedef {{code: string, path?: string, message: string, incomplete?: boolean, aggregates?: string[]}} Problem */
+/** @typedef {{code: string, path?: string, message: string, incomplete?: boolean, aggregates?: string[], field?: string, index?: number, logical_index?: number, record_path?: string, locations?: {path: string|null, index: number}[]}} Problem */
 /** @typedef {{first_commit?: string, last_commit?: string, uncommitted?: boolean}} GitRecord */
 /** @typedef {{records?: Record<string, GitRecord>, omitted?: string}} GitObservation */
 /** @param {unknown} value */
@@ -71,24 +71,50 @@ function compareInstants(a, b) {
 /** Prepare headings, fences and logical prose entries once per body.
  * @param {string} body
  */
-function prepareBody(body) {
+export function prepareBody(body) {
   const lines = body.split(/\r?\n/);
   if (lines.at(-1) === '') lines.pop();
   const headings = [];
   let fence = '';
+  let inComment = false;
   const fenced = new Set();
+  const commented = new Set();
   // Content column of the outermost open list item. A heading indented to it
   // belongs to that item, so it neither ends a section nor splits the item.
   let itemContent = null;
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const indent = line.match(/^\s*/)?.[0].length ?? 0;
-    const marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    let line = lines[index];
+    let marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
       fenced.add(index);
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === '') fence = '';
       continue;
     }
+    // Mask comments only for scanning; retain every original source line for
+    // section text and pointers. Fenced and inline code cannot open a comment.
+    const opensFence = !inComment && marker && !(marker[1][0] === '`' && marker[2].includes('`'));
+    let visible = opensFence ? line : '', cursor = 0;
+    if (inComment) commented.add(index);
+    while (!opensFence && cursor < line.length) {
+      if (inComment) {
+        commented.add(index);
+        const close = line.indexOf('-->', cursor);
+        const end = close < 0 ? line.length : close + 3;
+        visible += ' '.repeat(end - cursor);
+        cursor = end;
+        inComment = close < 0;
+      } else {
+        const token = /<!--|(`+).*?\1/.exec(line.slice(cursor));
+        if (!token) { visible += line.slice(cursor); break; }
+        visible += line.slice(cursor, cursor + token.index);
+        cursor += token.index;
+        if (token[0] === '<!--') { inComment = true; commented.add(index); }
+        else { visible += token[0]; cursor += token[0].length; }
+      }
+    }
+    line = visible;
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
     if (line.trim() === '') continue;
     const item = /^(\s*)([-+*]|\d+[.)])([ \t]+)\S/.exec(line);
     if (item) {
@@ -119,7 +145,7 @@ function prepareBody(body) {
   };
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    if (fenced.has(index)) {
+    if (fenced.has(index) || commented.has(index)) {
       if (start < 0) start = index;
       continue;
     }
@@ -165,6 +191,44 @@ function preparedSection(prepared, title, path, bodyLine = 1) {
     first: entries[0] ?? '', last: entries.at(-1) ?? '', entries, text: content.join('\n') };
 }
 
+/** Physical navigation only; recorded prose never selects effective entries.
+ * @param {ReturnType<typeof prepareBody>} prepared @param {string} path
+ * @param {number} [bodyLine]
+ */
+function taskNavigation(prepared, path, bodyLine = 1) {
+  const titles = ['Intent', 'Scope', 'Out of scope', 'Acceptance criteria', 'Current state'];
+  const sections = titles.map(title => preparedSection(prepared, title, path, bodyLine));
+  const contract = Object.fromEntries(titles.map((title, index) => [title.toLowerCase().replaceAll(' ', '_'), sections[index] ?
+    {line: sections[index].line, pointer: sections[index].pointer} : null]));
+  const state = sections.at(-1);
+  let currentState = null;
+  if (state) {
+    const empty = state.text.replace(/<!--[\s\S]*?-->/g, '').trim() === '';
+    const lines = state.text === '' ? [] : state.text.split('\n');
+    const bounded = lines.slice(0, 25).join('\n').slice(0, 2000);
+    // A partially printed source line is itself omitted in part. Its pointer
+    // is the first place a reader needs to resume, not the following line.
+    const shownLines = bounded === '' ? 0 : bounded.split('\n').length;
+    const completeLines = shownLines - (shownLines && bounded.split('\n').at(-1) !== lines[shownLines - 1] ? 1 : 0);
+    const omitted = empty ? 0 : lines.length - completeLines;
+    currentState = {line: state.line, pointer: state.pointer, text: state.text, empty,
+      text_excerpt: empty ? '' : bounded, omitted_lines: omitted,
+      omission_pointer: omitted ? `${path}:${state.line + 1 + completeLines}` : null};
+  }
+  const excluded = new Set(titles.map(title => title.toLowerCase()));
+  const others = prepared.headings.filter(heading => heading.level === 2 && !excluded.has(heading.title.toLowerCase()));
+  const latestSections = others.slice(-5).map(heading => ({title: heading.title,
+    start_line: bodyLine + heading.index,
+    end_line: bodyLine + (prepared.headings.find(next => next.index > heading.index && next.level <= 2)?.index ?? prepared.lines.length) - 1}));
+  return {contract, current_state: currentState,
+    latest_sections: {sections: latestSections, omitted_count: Math.max(0, others.length - 5)}, archive: null};
+}
+
+/** The heading-anchor spelling, shared with the pure archive splitter.
+ * @param {string} title
+ */
+export const headingAnchor = title => `#${title.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-')}`;
+
 /** Match only ids declared in the supplied corpus; never prefix match a check name.
  * @param {string} body @param {string[]} ids
  */
@@ -188,6 +252,24 @@ function addOutcome(counts, outcome) {
   else if (outcome === 'no_evidence') counts.no_evidence += 1;
   else counts.unrecognized += 1;
 }
+/** Physical attribution is projection metadata; diagnostic content and counts stay intact.
+ * @param {ParsedRecord} record @param {string} field @param {number[]} indexes
+ * @param {Problem} problem @param {number} [logicalIndex]
+ */
+function locatedProblem(record, field, indexes, problem, logicalIndex) {
+  const locations = indexes.flatMap(index => record.entry_locations?.[field]?.[index] ? [record.entry_locations[field][index]] : []);
+  if (!locations.length) return problem;
+  const first = locations[0];
+  const file = (/** @type {string|null} */ path) => path?.replace(/\\/g, '/').split('/').at(-1) ?? '<unknown>';
+  if (logicalIndex !== undefined) {
+    let message = relocateEntryLabel(problem.message, field, logicalIndex, first.index, problem.code);
+    if (!message.includes(`${field}[${first.index}]`)) message = `${field}[${first.index}] ${message}`;
+    return {...problem, path: first.path ?? problem.path, message: `${file(first.path)} ${message}`, field, index: first.index, logical_index: logicalIndex, record_path: problem.path};
+  }
+  return {...problem, path: first.path ?? problem.path, field, record_path: problem.path, locations,
+    message: `${problem.message}; sources: ${locations.map(location => `${file(location.path)} ${field}[${location.index}]`).join(', ')}`};
+}
+
 /** @param {ParsedRecord} record @param {Problem[]} problems
  * @param {import('./record.js').Diagnostic|undefined} duplicate
  */
@@ -199,8 +281,8 @@ function taskDerivation(record, problems, duplicate) {
   const refKey = (/** @type {unknown} */ ref) => ref == null ? '' : recordValueText(ref);
   const refs = [...new Set(entries.candidates.map(entry => refKey(entry.ref)).filter(Boolean))];
   const malformed = candidateEntries.flatMap((entry, index) => mapping(entry) ? [] : [{number: index + 1, entry}]);
-  if (malformed.length) problems.push({code: 'report.candidate_malformed', path,
-    message: `malformed candidate entries ${malformed.map(entry => `#${entry.number}`).join(', ')} retained; lint evaluates the last mapping, not a scalar tail`, incomplete: true, aggregates: ['candidates', 'rework']});
+  if (malformed.length) problems.push(locatedProblem(record, 'candidates', malformed.map(entry => entry.number - 1), {code: 'report.candidate_malformed', path,
+    message: `malformed candidate entries ${malformed.map(entry => `#${entry.number}`).join(', ')} retained; lint evaluates the last mapping, not a scalar tail`, incomplete: true, aggregates: ['candidates', 'rework']}));
   const totals = outcomes();
   const failNames = new Map();
   for (const entry of entries.evidence) {
@@ -212,22 +294,23 @@ function taskDerivation(record, problems, duplicate) {
   for (const field of ['candidates', 'evidence', 'assessments']) {
     const raw = record.frontmatter[field];
     if (raw != null && (!Array.isArray(raw) || raw.some((entry) => !mapping(entry)))) {
-      problems.push({ code: 'report.entry_shape', path, message: `${field} contains entries that cannot be interpreted; preserved in frontmatter`, incomplete: true, aggregates: [field, 'rework'] });
+      problems.push(locatedProblem(record, field, Array.isArray(raw) ? raw.flatMap((entry, index) => mapping(entry) ? [] : [index]) : [],
+        { code: 'report.entry_shape', path, message: `${field} contains entries that cannot be interpreted; preserved in frontmatter`, incomplete: true, aggregates: [field, 'rework'] }));
     }
   }
-  entries.candidates.forEach((entry) => {
+  entries.candidates.forEach((entry, index) => {
     if (!refKey(entry.ref)) {
-      problems.push({ code: 'report.ref_missing', path, message: 'candidate without an interpretable ref; distinct refs, repeated entries and current/outcome triples incomplete', incomplete: true, aggregates: ['distinct_refs', 'repeated_entries', 'outcome_triples', 'failing_now'] });
+      problems.push(locatedProblem(record, 'candidates', [candidateEntries.indexOf(entry)], { code: 'report.ref_missing', path, message: 'candidate without an interpretable ref; distinct refs, repeated entries and current/outcome triples incomplete', incomplete: true, aggregates: ['distinct_refs', 'repeated_entries', 'outcome_triples', 'failing_now'] }, index));
     }
   });
   entries.evidence.forEach((entry, index) => {
-    if (typeof entry.result !== 'string' || !RESULTS.includes(entry.result)) problems.push({ code: 'report.result_unrecognized', path,
+    if (typeof entry.result !== 'string' || !RESULTS.includes(entry.result)) problems.push(locatedProblem(record, 'evidence', [list(record.frontmatter.evidence).indexOf(entry)], { code: 'report.result_unrecognized', path,
       message: `evidence[${index}] result ${recordedText(entry.result)} is unrecognized; recorded fails, outcome triples, current results and other-check outcomes may be incomplete`, incomplete: true,
-      aggregates: ['declared_fails_recorded', 'outcome_triples', 'failing_now', 'other_checks'] });
+      aggregates: ['declared_fails_recorded', 'outcome_triples', 'failing_now', 'other_checks'] }, index));
   });
   entries.assessments.forEach((entry, index) => {
-    if (typeof entry.verdict !== 'string' || !VERDICTS.includes(entry.verdict)) problems.push({ code: 'report.verdict_unrecognized', path,
-      message: `assessments[${index}] verdict ${recordedText(entry.verdict)} is unrecognized; blocking-verdict counts incomplete`, incomplete: true, aggregates: ['blocking_verdicts', 'assessments'] });
+    if (typeof entry.verdict !== 'string' || !VERDICTS.includes(entry.verdict)) problems.push(locatedProblem(record, 'assessments', [list(record.frontmatter.assessments).indexOf(entry)], { code: 'report.verdict_unrecognized', path,
+      message: `assessments[${index}] verdict ${recordedText(entry.verdict)} is unrecognized; blocking-verdict counts incomplete`, incomplete: true, aggregates: ['blocking_verdicts', 'assessments'] }, index));
   });
   const rounds = refs.map((ref) => {
     // Restrict evidence once per round. Selection still belongs to the check;
@@ -288,19 +371,26 @@ export function deriveReport(inputs, options = {}) {
   const records = readable.map(({record, kind, body_line}) => {
     const path = record.path ?? '<unknown>';
     const id = idKey(record.frontmatter.id);
+    body_line = (body_line ?? 1) + (record.body_pointer_lines ?? 0);
     const prepared = prepareBody(record.body);
+    const archived = record.archive ? prepareBody(record.archive.body) : null;
+    if (record.archive?.errors.length) problems.push({code: 'report.archive_invalid', path: record.archive.path ?? path, message: record.archive.errors.map(error => error.message).join('; '), incomplete: true});
     const base = { kind, path, id, title: recordedText(record.frontmatter.title), status: recordedText(record.frontmatter.status),
       date: record.frontmatter.date, frontmatter: record.frontmatter, body: record.body,
-      mentions: mentionedIds(record.body, ids).filter((other) => other !== id),
+      mentions: mentionedIds(record.body + '\n' + (record.archive?.body ?? ''), ids).filter((other) => other !== id),
       sections: Object.fromEntries(['Intent','Blockers and decisions','Context','Decision','Consequences','Revisit if'].map((title) => [title, preparedSection(prepared, title, path, body_line)])),
       first_paragraph: prepared.entries[0]?.text ?? '', git: options.git?.records?.[path] ?? null };
-    const task = kind === 'task' ? taskDerivation(record, problems, duplicates.get(path)) : null;
+    const task = kind === 'task' ? {...taskDerivation(record, problems, duplicates.get(path)),
+      ...taskNavigation(prepared, path, body_line),
+      archive: record.archive ? {path: record.archive.path, entries: Object.fromEntries(['candidates', 'evidence', 'assessments'].map(field => [field, list(record.archive?.frontmatter[field]).length])),
+        sections: archived?.headings.filter(heading => heading.level === 2).length ?? 0, body: record.archive.body} : null} : null;
     const references = [...new Set((task?.current?.assessments ?? []).map(entry => entry.findings)
       .filter((value) => typeof value === 'string' && (/^#[^\s]+$/.test(value) || /^[^\s]+(?:\/|\.)[^\s]+$/.test(value))))];
     const findingsReferences = references.map(reference => {
-      const matches = reference.startsWith('#') ? prepared.headings.filter(heading =>
-        `#${heading.title.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-')}` === reference) : [];
-      const section = matches.length === 1 ? preparedSection(prepared, matches[0].title, path, body_line) : null;
+      const sources = [{prepared, path, body_line}, ...(archived ? [{prepared: archived, path: record.archive?.path ?? path, body_line: record.archive?.body_line ?? 1}] : [])];
+      const matches = reference.startsWith('#') ? sources.flatMap(source => source.prepared.headings.filter(heading => headingAnchor(heading.title) === reference).map(heading => ({...source, heading}))) : [];
+      const found = matches[0];
+      const section = matches.length === 1 ? preparedSection(found.prepared, found.heading.title, found.path, found.body_line) : null;
       return {reference, section: section ? {pointer: section.pointer, first: section.first} : null};
     });
     return {...base, task, findings_references: findingsReferences};

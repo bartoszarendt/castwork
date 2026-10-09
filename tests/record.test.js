@@ -34,6 +34,15 @@ test('parses the canonical example with no structural errors', () => {
   assert.deepEqual(declaredRequirements(record), { checks: ['test', 'lint'], independent_review: true });
 });
 
+test('Current state is recognized once; closing hashes normalize duplicates at any level', () => {
+  const single = parseRecord(`${canonical}\n## Current state ##\n<!-- authoring instruction -->\n## Decision#\nx\n`);
+  assert.deepEqual(single.errors, []);
+  assert.ok(single.headings.some(entry => entry.heading === 'Current state'));
+  assert.ok(single.headings.some(entry => entry.heading === 'Decision#'));
+  const duplicate = parseRecord(`${canonical}\n## Current state ##\nx\n### Current state\ny\n`);
+  assert.deepEqual(duplicate.errors.map(error => error.code), ['heading.duplicate']);
+});
+
 test('an extra prose heading raises no diagnostic', () => {
   const record = parseRecord(canonical);
   assert.ok(record.headings.some((entry) => entry.heading === 'Design notes'));

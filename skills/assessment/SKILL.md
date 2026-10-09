@@ -34,7 +34,10 @@ informational metadata.
 root, or an anchor to a heading in the body. Long findings go under a heading,
 where they can be read and revised, not inline in the frontmatter. Do not
 reproduce tool transcripts or a full audit report in the record: say what you
-found and link what you read.
+found: the contract item, observation and location, and why it blocks or accepts.
+Not a walk through every file read or a restatement of earlier rounds. Link only
+support that lasts, not ignored scratch; write tracked support outside
+`.castwork/tasks/` before taking the snapshot, or keep the findings short.
 
 ## Three lenses, in order
 

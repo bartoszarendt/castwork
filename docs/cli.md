@@ -1,6 +1,6 @@
 # CLI
 
-Sixteen command paths. Installation, diagnostics, and minimal record
+Seventeen command paths. Installation, diagnostics, and minimal record
 operations. A dedicated command exists only where it does something materially
 better than editing a record by hand.
 
@@ -13,8 +13,9 @@ better than editing a record by hand.
 | `validate` | Check skills, config, links, and generated adapter output. |
 | `task new <title>` | Create a task record from the template with the next id. |
 | `task list [--json]` | List task records with their ids, titles, and statuses. A record that is not `done` or `cancelled`, is structurally valid, and declares at least one requirement, all satisfied, is marked `ready to close`: `task set <id> status done` would accept it. A record that declares none is never marked, although `task set` accepts it. `--json` gives each row `requirements_satisfied`, from requirement evaluation alone (`null` when none are declared); structural validity is `task lint`'s to report. |
-| `task show <id> [--json]` | Print one record. `--json` adds the three check outputs. The id is required; without it, a usage error. |
-| `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line; `--json` keeps every reference. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
+| `task show <id> [--json]` | Print the task file unchanged on stdout, naming its paired archive on stderr when present. `--json` gives merged frontmatter and the three check outputs. The id is required; without it, a usage error. |
+| `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line. Text folds undeclared check names found only on earlier candidates and earlier lint-as-evidence notes; mixed names show their current entries. Every credential note remains visible. `--json` keeps every reference and note. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
+| `task archive [<id>] [--check] [--json]` | Explicitly separate earlier rounds into `<record>.archive.md` beside the task. No id selects records over 100 KB. Reports exact proposed list/section/Blockers moves and bytes; `--check` writes nothing. Strict in-memory verification refuses any outcome or report-content difference, with a named reason and no writes. Records are processed independently; exit 1 if any failed/refused, 2 for usage. JSON is exactly one document. |
 | `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
@@ -32,6 +33,7 @@ accepted by every command.
 |---|---|
 | `setup` | `--host <name>` (repeatable), `--force-generated <path>` (repeatable), `--json` |
 | `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
+| `task archive` | `--check`, `--json` |
 | `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `report`, `snapshot` | `--json` |
 | `task new`, `task set`, `decision new`, `version`, `help` | none |
 
@@ -55,8 +57,10 @@ so in its hint.
 `npx --no castwork help`, not `--help`: npm reads `--help` itself.
 
 That is the whole command set. A dedicated command exists only where it does
-something materially better than editing the record: adding a candidate,
-recording evidence, or writing an assessment is an edit to the file.
+something materially better than editing the record: archive performs verified
+raw-text separation and staged paired writes. Adding a candidate, recording
+evidence, or writing an assessment remains an edit to the file; no other
+command archives as a side effect.
 
 ## Report
 
@@ -147,12 +151,25 @@ counts use original array positions. When malformed entries occur, History
 excludes only the evaluated entry, including any malformed tail in the omissions.
 Affected counts retain incomplete-coverage diagnostics.
 
+Task views add physical navigation: Contract pointers for Intent, Scope, Out of
+scope, Acceptance criteria and Current state (or `absent`); Current state as
+recorded prose, at most 25 source lines and 2,000 characters with an omission
+count and source pointer (`empty` for only HTML comments and whitespace); and
+the last five top-level `##` sections outside those headings, with line ranges
+and the count of other sections. JSON retains the full Current state text.
+The Archive line names the paired file and its entry/section counts; JSON
+retains its full body. Archived entries count in all task totals, effective
+results, requirements and completion checks. An invalid/unreadable archive or
+orphan is a named problem and makes coverage incomplete. These blocks do not
+cut any of D42's unbounded current facts or decide which instruction governs.
+
 Named sections prefer the canonical `##` heading; absent that, the shallowest
 matching heading wins, with document order breaking ties. Duplicate-heading
 lint diagnostics are unchanged. Blockers and decisions is **recorded prose**:
 section length and file:line pointer, first and last positional entries, each
 at most two lines. Nested subsections count until the next same-or-higher
-heading; headings inside code fences or indented into a list item do not count.
+heading; headings inside HTML comments or code fences, or indented into a list
+item, do not count.
 A closing run of `#` needs whitespace before it, so `## Decision#` is not
 `## Decision`. Paragraphs and list items are logical entries: children,
 child headings and continuation lines stay with their parent, including

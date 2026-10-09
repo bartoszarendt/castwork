@@ -9,15 +9,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { checkRecord, duplicateIdErrors, mayBeDone, readyToClose, requirementEvaluation, structuralValidity } from './checks.js';
-import { heading, json, out, table } from './cli-io.js';
+import { checkRecord, currentCandidate, duplicateIdErrors, mayBeDone, readyToClose, requirementEvaluation, structuralValidity } from './checks.js';
+import { err, heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { recordDirectory, recordFiles } from './generated.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
 import { observationContext, observe, prefetchObjects } from './observations.js';
-import { parseRecord, STATUS_VALUES } from './record.js';
+import { declaredRequirements, parseRecord, recordEntries, recordValueText, STATUS_VALUES } from './record.js';
 import { formatScalar } from './yaml.js';
 import { PublicError } from './public-error.js';
+import {orphanArchives, readTask} from './task-record-io.js';
 
 /** @param {string} root */
 export function listRecordFiles(root) {
@@ -28,7 +29,7 @@ export function listRecordFiles(root) {
 export function findRecord(root, id) {
   const matches = [];
   for (const file of listRecordFiles(root)) {
-    const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    const {record} = readTask(root, file);
     if (String(record.frontmatter.id ?? '') === id) matches.push({ file, record });
   }
   if (matches.length === 0) {
@@ -47,7 +48,7 @@ export function findRecord(root, id) {
 function nextId(root) {
   let highest = 0;
   for (const file of listRecordFiles(root)) {
-    const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    const {record} = readTask(root, file);
     const match = String(record.frontmatter.id ?? '').match(/(\d+)\s*$/);
     if (match) highest = Math.max(highest, Number(match[1]));
   }
@@ -80,8 +81,9 @@ export function taskList(root, options = {}) {
    * @type {Map<object, boolean>}
    */
   const valid = new Map();
+  for (const problem of orphanArchives(root)) err(`${problem.code} ${problem.path}: ${problem.message}`);
   for (const file of listRecordFiles(root)) {
-    const record = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+    const {record} = readTask(root, file);
     rows.push({
       id: String(record.frontmatter.id ?? path.basename(file, '.md')),
       status: String(record.frontmatter.status ?? 'unknown'),
@@ -144,17 +146,54 @@ export function taskShow(root, id, options = {}) {
     });
     return report;
   }
-  out(fs.readFileSync(file, 'utf8').trimEnd());
-  printReport(report);
+  process.stdout.write(fs.readFileSync(file, 'utf8'));
+  if (record.archive) err(`archive: ${path.relative(root, record.archive.path ?? '')}`);
   return report;
 }
 
-/** @param {ReturnType<typeof checkRecord>} report */
-function printReport(report) {
+/** Text-only projection; parser notes and JSON remain complete.
+ * @param {import('./record.js').ParsedRecord} record
+ * @param {import('./record.js').Diagnostic[]} notes
+ */
+function lintNotes(record, notes) {
+  const evidence = recordEntries(record).evidence;
+  const current = currentCandidate(record);
+  const onCurrent = (/** @type {Record<string, unknown>|undefined} */ entry) =>
+    current !== null && entry !== undefined && recordValueText(entry.candidate) === recordValueText(current.ref);
+  const declared = declaredRequirements(record).checks;
+  /** @type {Map<string, number[]>} */
+  const groups = new Map();
+  if (declared) evidence.forEach((entry, index) => {
+    const name = entry.check == null ? '' : recordValueText(entry.check);
+    if (name && !declared.includes(name)) groups.set(name, [...(groups.get(name) ?? []), index]);
+  });
+  const rendered = notes.filter(note => note.code !== 'evidence.undeclared_check' &&
+    (note.code !== 'evidence.lint_as_evidence' || onCurrent(evidence[note.logical_index ?? note.index ?? -1])));
+  let earlierNames = 0, earlierEntries = 0;
+  for (const [name, indexes] of groups) {
+    const currentIndexes = indexes.filter(index => onCurrent(evidence[index]));
+    if (!currentIndexes.length) { earlierNames += 1; earlierEntries += indexes.length; continue; }
+    const index = currentIndexes[0];
+    const raw = record.frontmatter.evidence;
+    const location = record.entry_locations?.evidence?.[Array.isArray(raw) ? raw.indexOf(evidence[index]) : index];
+    const first = location ? `${location.path?.replace(/\\/g, '/').split('/').at(-1)} evidence[${location.index}]` : `evidence[${index}]`;
+    const count = currentIndexes.length === 1 ? first : `${currentIndexes.length} evidence entries, from ${first}`;
+    rendered.push({code: 'evidence.undeclared_check', message: `check ${name} (${count}) is not among requirements.checks (${declared?.join(', ')}); a subset of a declared check goes under its own name, and only a declared name counts`});
+  }
+  if (earlierNames) rendered.push({code: 'evidence.undeclared_check', message: `${earlierNames} undeclared check names, ${earlierEntries} entries on earlier candidates; --json lists them`});
+  const earlierLint = notes.filter(note => note.code === 'evidence.lint_as_evidence' && !onCurrent(evidence[note.logical_index ?? note.index ?? -1])).length;
+  if (earlierLint) rendered.push({code: 'evidence.lint_as_evidence', message: `${earlierLint} entries on earlier candidates record task lint; --json lists them`});
+  return rendered;
+}
+
+/** @param {ReturnType<typeof checkRecord>} report
+ * @param {import('./record.js').ParsedRecord} [lintRecord]
+ */
+function printReport(report, lintRecord) {
   heading('Structural validity');
   if (report.structural.valid) out('valid');
   for (const error of report.structural.errors) out(`error  ${error.code}: ${error.message}`);
-  for (const note of report.structural.info) out(`info   ${note.code}: ${note.message}`);
+  for (const note of lintRecord ? lintNotes(lintRecord, report.structural.info) : report.structural.info) out(`info   ${note.code}: ${note.message}${note.code === 'record.large' ? '; task archive can move earlier rounds after exact verification' : ''}`);
 
   heading('Reference availability');
   if (report.references.length === 0) out('no references recorded');
@@ -194,7 +233,8 @@ function printReport(report) {
  * @param {{json?: boolean}} [options]
  */
 export function taskLint(root, id, options = {}) {
-  const all = listRecordFiles(root).map((file) => ({ file, record: parseRecord(fs.readFileSync(file, 'utf8'), { path: file }) }));
+  const all = listRecordFiles(root).map((file) => readTask(root, file));
+  const problems = orphanArchives(root);
 
   // Lint diagnoses rather than refuses, so an ambiguous id reports every record
   // that claims it instead of erroring the way a write would.
@@ -210,7 +250,8 @@ export function taskLint(root, id, options = {}) {
   prefetchObjects(context, targets.map((entry) => entry.record));
 
   const reports = [];
-  let failed = false;
+  let failed = problems.length > 0;
+  if (!options.json) for (const problem of problems) err(`${problem.code} ${problem.path}: ${problem.message}`);
 
   for (const { file, record } of targets) {
     const report = reportFor(record, root, context);
@@ -238,7 +279,7 @@ export function taskLint(root, id, options = {}) {
 
     if (!options.json) {
       heading(`${String(record.frontmatter.id ?? path.basename(file, '.md'))}  ${path.relative(root, file)}`);
-      printReport(report);
+      printReport(report, record);
       if (claimsDone) {
         out('');
         out(`error  status.done_unsatisfied: status is done but ${unsatisfied.length} requirement(s) are not satisfied`);
@@ -246,7 +287,7 @@ export function taskLint(root, id, options = {}) {
     }
   }
 
-  if (options.json) json({ ok: !failed, records: reports });
+  if (options.json) json({ ok: !failed, records: reports, ...(problems.length ? {problems} : {}) });
   return { ok: !failed, reports };
 }
 

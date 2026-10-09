@@ -36,6 +36,11 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
   most useful heading in the record and the most often skipped.
 - **Acceptance criteria** — observable outcomes, one per bullet. If you cannot
   say how you would see it, it is not a criterion yet.
+- **Current state** — what holds now: current candidate, unresolved issues,
+  restrictions with decision ids and source line pointers, next step. Rewrite
+  in place, about fifteen lines. One writer: the coordinator from the roles'
+  reports when roles are coordinated, otherwise the agent working alone. It
+  grants nothing; cited decisions and the user's current instructions govern.
 - **Blockers and decisions** — what got in the way and what was decided, written
   as it happens rather than reconstructed later.
 
@@ -50,7 +55,15 @@ output does not need to be retained; link a file under `output` only when its
 contents materially support a failure, reproduction, or review finding. A
 milestone narrative belongs in the milestone document, not repeated in every
 task that contributed to it. Run logs go in linked files: a record past 100 KB
-is reported as `record.large`.
+is reported as `record.large`. A routine successful probe is a sentence in the
+body, or nothing; material observations stay candidate-bound evidence. Link
+only durable support, not ignored scratch; write tracked support outside
+`.castwork/tasks/` before taking the snapshot, or keep it short.
+
+`task archive [<id>] [--check]` explicitly separates earlier rounds into a paired
+`<record>.archive.md`; the two files remain one logical record. It never weakens
+requirements, and a named verification refusal writes nothing. After archiving
+or resuming an archived task, read both files when refreshing Current state.
 
 ## Candidate attributes
 

@@ -1,5 +1,5 @@
 /**
- * The CLI: sixteen command paths.
+ * The CLI: seventeen command paths.
  *
  * Installation, diagnostics, and minimal record operations. A dedicated command
  * exists only where it does something materially better than editing a record
@@ -16,6 +16,7 @@ import { CONFIG_FILE, GENERATED_MANIFEST, HOSTS } from './layout.js';
 import { PublicError } from './public-error.js';
 import { doctor, remove, setup, update } from './setup.js';
 import { taskLint, taskList, taskNew, taskSet, taskShow } from './task-cli.js';
+import {taskArchive} from './archive-cli.js';
 import { takeSnapshot } from './snapshot.js';
 import { validate } from './validate.js';
 import { reportCommand } from './report-cli.js';
@@ -28,7 +29,7 @@ export const FLAGS = Object.freeze({
   json: { value: false, summary: 'Machine-readable output.' },
   host: { value: '<name>', summary: 'Add a project-supported host. Repeatable.' },
   'force-generated': { value: '<path>', summary: 'Replace or delete one generated file that would otherwise be refused. Repeatable.' },
-  check: { value: false, summary: 'With update: list what would change, write nothing, exit 1 unless current.' },
+  check: { value: false, summary: 'Write nothing: update checks generated output; task archive checks exact proposed moves.' },
   debug: { value: false, summary: 'Print internal stack details.' },
   help: { value: false, summary: 'Print this list.' },
 });
@@ -51,6 +52,7 @@ export const COMMAND_PATHS = Object.freeze([
   { path: 'task list', flags: ['json'], args: 0, summary: 'List task records with their ids, titles, and statuses.' },
   { path: 'task show', flags: ['json'], args: 1, summary: 'Print one record. --json adds the three check outputs.' },
   { path: 'task lint', flags: ['json'], args: 1, summary: 'Report structural validity, references, and requirements. Never writes.' },
+  { path: 'task archive', flags: ['check', 'json'], args: 1, summary: 'Separate earlier rounds into a paired archive after strict verification: task archive [<id>]. --check writes nothing.' },
   { path: 'task set', flags: [], args: Infinity, summary: 'One safe frontmatter write.' },
   { path: 'decision new', flags: [], args: Infinity, summary: 'Create a decision record from the template.' },
   { path: 'decision list', flags: ['json'], args: 0, summary: 'List decision records with their ids, statuses, dates, and titles.' },
@@ -344,12 +346,14 @@ export function run(argv, options = {}) {
           const result = taskLint(root, positionals[2] ?? null, { json: asJson });
           return result.ok ? 0 : 1;
         }
+        case 'archive':
+          return taskArchive(root, positionals[2] ?? null, {check: flags.check === true, json: asJson}).ok ? 0 : 1;
         case 'set':
           taskSet(root, positionals[2], positionals[3], positionals.slice(4).join(' '));
           return 0;
         default:
           throw new PublicError(`unknown command: task ${sub ?? ''}`.trim(), {
-            hint: 'Known: task new, task list, task show, task lint, task set.',
+            hint: 'Known: task new, task list, task show, task lint, task archive, task set.',
           });
       }
     }
@@ -410,7 +414,10 @@ export function main(argv) {
   try {
     return run([...options.filter((token) => token !== '--debug'), ...(end < 0 ? [] : argv.slice(end))]);
   } catch (error) {
-    // Report promises one JSON document even when argument parsing refuses it.
+    // Reports and archive checks promise one document on operational/usage errors.
+    const taskIndex = argv.indexOf('task');
+    const archiveRequest = taskIndex >= 0 && argv.slice(taskIndex + 1).find(token => !token.startsWith('-')) === 'archive';
+    if (archiveRequest && options.some(token => /^--json(?:=|$)/.test(token))) json({ok: false, records: [], problems: [{code: error instanceof PublicError && error.exitCode === 2 ? 'archive.usage' : 'archive.operation_failed', message: error instanceof Error ? error.message : String(error)}]});
     if (requestCommand === 'report' && options.some((token) => /^--json(?:=|$)/.test(token))) {
       json({complete: false, problems: [{code: error instanceof PublicError && error.exitCode === 2 ? 'report.usage' : 'report.operation_failed', message: error instanceof Error ? error.message : String(error), incomplete: true}]});
     }

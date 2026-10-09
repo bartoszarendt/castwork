@@ -38,6 +38,7 @@ export const RECOGNIZED_HEADINGS = Object.freeze([
   'Scope',
   'Out of scope',
   'Acceptance criteria',
+  'Current state',
   'Blockers and decisions',
 ]);
 
@@ -72,8 +73,22 @@ export function recordValueText(value) {
   return String(value);
 }
 
+/** Change only a generated location label, never index-shaped recorded data.
+ * Grouped notes put their recorded check name before the parenthesized label.
+ * @param {string} message @param {string} field @param {number} from @param {number} to
+ * @param {string} code @param {unknown} [check]
+ */
+export function relocateEntryLabel(message, field, from, to, code, check) {
+  const oldLabel = `${field}[${from}]`, newLabel = `${field}[${to}]`;
+  if (code === 'evidence.undeclared_check') {
+    const prefix = `check ${recordValueText(check)} (`;
+    return message.startsWith(prefix) ? prefix + message.slice(prefix.length).replace(oldLabel, newLabel) : message;
+  }
+  return message.startsWith(oldLabel) ? newLabel + message.slice(oldLabel.length) : message;
+}
+
 /**
- * @typedef {{code: string, message: string, field?: string, index?: number}} Diagnostic
+ * @typedef {{code: string, message: string, field?: string, index?: number, path?: string|null, logical_index?: number}} Diagnostic
  */
 
 /**
@@ -84,6 +99,10 @@ export function recordValueText(value) {
  * @property {Diagnostic[]} errors      structural errors
  * @property {Diagnostic[]} info        informational notes
  * @property {string|null} path
+ * @property {{path: string|null, frontmatter: Record<string, unknown>, body: string, body_line: number, errors: Diagnostic[]}|null} [archive]
+ * @property {string} [physical_body]
+ * @property {number} [body_pointer_lines]
+ * @property {Record<string, {path: string|null, index: number}[]>} [entry_locations]
  */
 
 /**
@@ -114,7 +133,7 @@ function collectHeadings(body) {
     }
     if (inFence) continue;
     const match = line.match(/^(#{1,6})\s+(.*?)\s*$/);
-    if (match) headings.push({ heading: match[2], level: match[1].length });
+    if (match) headings.push({ heading: /^#+$/.test(match[2]) ? '' : match[2].replace(/[ \t]+#+$/, ''), level: match[1].length });
   }
   return headings;
 }
@@ -333,10 +352,41 @@ function entryNotes(frontmatter, evidence) {
   return notes;
 }
 
+/** @param {string|null} path */
+const fileLabel = path => path?.replace(/\\/g, '/').split('/').at(-1) ?? '<unknown>';
+
+/** Archive format only. Entry validation belongs to the merged record.
+ * @param {string} text @param {unknown} id @param {string|null} path
+ */
+function readArchive(text, id, path) {
+  const {yaml, body} = splitFrontmatter(text);
+  /** @type {Diagnostic[]} */
+  const errors = [];
+  /** @type {Record<string, unknown>} */
+  let frontmatter = {};
+  try {
+    if (yaml === null) throw new Error('no --- delimited frontmatter');
+    const parsed = parseYaml(yaml);
+    if (!isPlainObject(parsed)) throw new Error('frontmatter must be a mapping');
+    frontmatter = parsed;
+    const rootIndent = yaml.split(/\r?\n/).find(line => line.trim() && !line.trimStart().startsWith('#'))?.match(/^ */)?.[0] ?? '';
+    if (frontmatter.schema !== 1) push(errors, 'archive.schema', 'archive schema must be 1');
+    if (frontmatter.archive_of == null || recordValueText(frontmatter.archive_of) !== recordValueText(id)) push(errors, 'archive.id_mismatch', 'archive_of must equal the task id');
+    for (const field of Object.keys(frontmatter)) {
+      if (!['schema', 'archive_of', ...ENTRY_LISTS].includes(field)) push(errors, 'archive.field_unrecognized', `archive cannot contain field ${field}`, {field});
+      if (ENTRY_LISTS.includes(field) && !new RegExp(`^${rootIndent}${field}:[ \\t]*(?:#.*)?$`, 'm').test(yaml)) push(errors, 'archive.list_format', `${field} must be a block list`, {field});
+    }
+  } catch (error) {
+    push(errors, 'archive.frontmatter_unreadable', `archive frontmatter could not be parsed: ${error instanceof Error ? error.message : recordValueText(error)}`);
+  }
+  for (const error of errors) { error.path = path; error.message = `${fileLabel(path)} ${error.message}`; }
+  return {path, frontmatter, body, body_line: text.slice(0, text.length - body.length).split('\n').length, errors};
+}
+
 /**
  * Parse one task record.
  * @param {string} text
- * @param {{path?: string}} [options]
+ * @param {{path?: string, archive?: {text: string, path?: string}}} [options]
  * @returns {ParsedRecord}
  */
 export function parseRecord(text, options = {}) {
@@ -344,7 +394,8 @@ export function parseRecord(text, options = {}) {
   const errors = [];
   /** @type {Diagnostic[]} */
   const info = [];
-  const { yaml, body } = splitFrontmatter(text);
+  const { yaml, body: physicalBody } = splitFrontmatter(text);
+  let body = physicalBody;
 
   /** @type {Record<string, unknown>} */
   let frontmatter = {};
@@ -363,6 +414,29 @@ export function parseRecord(text, options = {}) {
     } catch (error) {
       const message = error instanceof YamlError ? error.message : recordValueText(error);
       push(errors, 'frontmatter.unparseable', `frontmatter could not be parsed: ${message}`);
+    }
+  }
+
+  const archive = options.archive ? readArchive(options.archive.text, frontmatter.id, options.archive.path ?? null) : null;
+  /** @type {Record<string, {path: string|null, index: number}[]>} */
+  const locations = {};
+  if (archive) {
+    for (const field of ENTRY_LISTS) {
+      const older = archive.frontmatter[field], newer = frontmatter[field];
+      const a = Array.isArray(older) ? older : [];
+      const b = Array.isArray(newer) ? newer : [];
+      locations[field] = [...a.map((_, index) => ({path: archive.path, index})), ...b.map((_, index) => ({path: options.path ?? null, index}))];
+      if (Object.hasOwn(archive.frontmatter, field) && !Array.isArray(older)) archive.errors.push({code: 'field.not_a_list', message: `${fileLabel(archive.path)} ${field} must be a list`, field, path: archive.path});
+      if (a.length && (newer == null || Array.isArray(newer))) frontmatter[field] = [...a, ...b];
+    }
+    errors.push(...archive.errors);
+    // The generated pointer is physical navigation, not task prose. Preserve
+    // all other body bytes; lost body order is never guessed by the parser.
+    if (archive.path) {
+      const name = fileLabel(archive.path);
+      const pointer = `Earlier rounds: [${name}](${name}), moved by \`task archive\`.`;
+      const first = body.match(/^[^\r\n]*(?:\r?\n|$)/)?.[0] ?? '';
+      if (first.replace(/\r?\n$/, '') === pointer) body = body.slice(first.length);
     }
   }
 
@@ -473,11 +547,12 @@ export function parseRecord(text, options = {}) {
       index: /** @type {unknown[]} */ (frontmatter.candidates).lastIndexOf(current),
     });
   }
-  const inBody = bodyEntryKeys(body);
-  if (inBody.length > 0) {
-    info.push({
+  for (const source of [{body, path: options.path ?? null}, ...(archive ? [{body: archive.body, path: archive.path}] : [])]) {
+    const inBody = bodyEntryKeys(source.body);
+    if (inBody.length > 0) info.push({
       code: 'entries.in_body',
       message: `a fenced block in the body holds ${inBody.join(', ')}; these are not read by checks; move them into the frontmatter lists`,
+      ...(archive ? {path: source.path} : {}),
     });
   }
   const size = new TextEncoder().encode(text).length;
@@ -495,7 +570,36 @@ export function parseRecord(text, options = {}) {
     seen.add(heading);
   }
 
-  return { frontmatter, body, headings, errors, info, path: options.path ?? null };
+  if (archive) {
+    const archivedEntryErrors = new Set();
+    const locate = (/** @type {Diagnostic} */ note) => {
+      if (archive.errors.includes(note)) return;
+      let where = {path: note.path ?? options.path ?? null, index: note.index};
+      if (note.field && note.index !== undefined) {
+        const values = frontmatter[note.field];
+        const filtered = note.code.startsWith('evidence.') || note.code === 'identity.blank' || note.code === 'entry.not_a_list';
+        const index = filtered && Array.isArray(values) ? values.map((entry, index) => ({entry, index})).filter(item => isPlainObject(item.entry))[note.index]?.index : note.index;
+        const location = locations[note.field]?.[index ?? -1];
+        if (location) {
+          where = location;
+          const older = archive.frontmatter[note.field];
+          if (errors.includes(note) && Array.isArray(older) && index !== undefined && index < older.length) archivedEntryErrors.add(note);
+        }
+      }
+      const logicalIndex = note.index;
+      if (where.index !== undefined && logicalIndex !== undefined && note.field) {
+        note.message = note.code === 'candidate.moving_ref' ? `${note.field}[${where.index}] ${note.message}` :
+          relocateEntryLabel(note.message, note.field, logicalIndex, where.index, note.code, evidenceEntries[logicalIndex]?.check);
+      }
+      Object.assign(note, {path: where.path, ...(where.index === undefined ? {} : {index: where.index, logical_index: logicalIndex})});
+      note.message = `${fileLabel(where.path)} ${note.message}`;
+    };
+    errors.forEach(locate); info.forEach(locate);
+    // Same error objects, not a second validation or extra structural errors.
+    archive.errors.push(...archivedEntryErrors);
+  }
+  return { frontmatter, body, headings, errors, info, path: options.path ?? null,
+    ...(archive ? {archive, physical_body: physicalBody, body_pointer_lines: physicalBody === body ? 0 : 1, entry_locations: locations} : {}) };
 }
 
 /**

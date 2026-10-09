@@ -35,6 +35,8 @@ you may be invoked alone on any candidate at any time.
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings:
+  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Link only durable support, not ignored scratch; tracked support outside `.castwork/tasks/` belongs before the snapshot, otherwise keep it short.
+  When roles are coordinated, report current facts to the coordinator, the one Current state writer; working alone, maintain that section in place, about fifteen lines.
 
 ```yaml
 assessments:
@@ -51,9 +53,8 @@ assessments:
 Your actor is `<name>@<host>`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two
 reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
-If yours is among the producers, you are not independent. A session that produced a candidate never
-accepts it under any actor; taking this role creates no independence. Record `model` only when the
-host reports it; otherwise leave it out.
+If yours is among the producers, you are not independent. A session that produced a candidate never accepts it under any actor; taking this role creates no independence.
+Record `model` only when the host reports it; otherwise leave it out.
 
 ## Boundaries
 

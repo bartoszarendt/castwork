@@ -7,6 +7,8 @@ import { parseRecord } from './record.js';
 import { deriveReport } from './report.js';
 import { renderReport } from './report-text.js';
 import { out, json, err } from './cli-io.js';
+import {ARCHIVE_SUFFIX} from './layout.js';
+import {orphanArchives, readTask} from './task-record-io.js';
 
 /** @param {unknown} error */
 const message = (error) => error instanceof Error ? error.message : String(error);
@@ -71,7 +73,9 @@ export function readReportInputs(root) {
     let resolved;
     try {
       resolved = recordDirectory(root, directory);
-      names = fs.existsSync(resolved) ? fs.readdirSync(resolved).filter((name) => name.endsWith('.md')).sort() : [];
+      const allNames = fs.existsSync(resolved) ? fs.readdirSync(resolved) : [];
+      if (kind === 'task') for (const problem of orphanArchives(root, {directory: resolved, names: allNames})) problems.push({...problem, incomplete: true});
+      names = allNames.filter((name) => name.endsWith('.md') && (kind !== 'task' || !name.endsWith(ARCHIVE_SUFFIX))).sort();
     } catch (error) {
       fail(directory, error);
       continue;
@@ -97,8 +101,10 @@ export function readReportInputs(root) {
       }
       // Parsing/check defects are not filesystem failures. Expected YAML
       // diagnostics are returned by parseRecord and handled by derivation.
-      const record = parseRecord(text, {path: relative});
-      const bodyLine = text.slice(0, text.length - record.body.length).split('\n').length;
+      let record;
+      try { record = kind === 'task' ? readTask(root, path.join(resolved, name), {path: relative, text, checked_directory: resolved}).record : parseRecord(text, {path: relative}); }
+      catch (error) { fail(relative, error); continue; }
+      const bodyLine = text.slice(0, text.length - (record.physical_body ?? record.body).length).split('\n').length;
       inputs.push({record, kind, body_line: bodyLine});
     }
   }
@@ -109,7 +115,7 @@ export function reportCommand(root, id, options = {}) {
   const {inputs, problems} = readReportInputs(root);
   const git = reportGit(root);
   const report = deriveReport(inputs, {git, problems, project: path.basename(path.resolve(root))});
-  let code = problems.length ? 1 : 0;
+  let code = problems.length || report.problems.some(problem => problem.code === 'report.archive_invalid') ? 1 : 0;
   let selected = null;
   if (id !== null) {
     const matches = report.records.filter((record) => record.id !== '' && record.id === id);

@@ -99,7 +99,15 @@ reported.
 Do not retain routine successful output. The entry's command, exit code and a
 short observed result are normally enough. When long output materially supports
 a failure, reproduction, or review finding, put it in a linked file named under
-`output` rather than pasting a transcript into the record.
+`output` rather than pasting a transcript into the record. Link only where it
+lasts, not ignored scratch. A tracked supporting file outside `.castwork/tasks/`
+is part of the next snapshot: write it before taking that snapshot, or not at all.
+Without such a place, write it short.
+
+A routine successful probe is a sentence in the body, or nothing. An observation
+supporting acceptance or a finding stays a candidate-bound evidence entry, under
+its own name when undeclared. After a costly step, write a short observation:
+what was seen, what it means, what is next; not a new narrative section per run.
 
 ## Rules that matter
 

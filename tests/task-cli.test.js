@@ -35,6 +35,7 @@ test('task new creates a record with the next id', (t) => {
   assert.deepEqual(ids, ['T-001.md', 'T-002.md']);
   const record = parseRecord(fs.readFileSync(path.join(root, TASKS_DIRECTORY, 'T-002.md'), 'utf8'));
   assert.equal(record.frontmatter.title, 'Second task');
+  assert.equal(record.headings.filter(entry => entry.heading === 'Current state').length, 1);
   assert.deepEqual(record.errors, []);
 });
 
@@ -143,6 +144,34 @@ test('bookkeeping edits change no evaluation', (t) => {
 test('findRecord reports a helpful error for an unknown id', (t) => {
   const root = fixture(t);
   assert.throws(() => findRecord(root, 'T-999'), /no task record with id T-999/);
+});
+
+test('lint folds only earlier evidence, regrouping mixed names and retaining every credential note', (t) => {
+  const root = fixture(t);
+  const file = writeTask(root, 'T-001', `requirements:
+  checks: [test]
+candidates:
+  - ref: 1111111
+  - ref: 2222222
+evidence:
+  - {check: mixed, candidate: 1111111, result: pass, command: 'castwork task lint T-001 PASSWORD=secret'}
+  - {check: old, candidate: 1111111, result: pass}
+  - {check: mixed, candidate: 2222222, result: pass, command: 'castwork task lint T-001 TOKEN=secret'}
+  - {check: mixed, candidate: 2222222, result: pass}
+`);
+  const before = capture(['task', 'lint', 'T-001', '--json'], root);
+  const notes = parseRecord(fs.readFileSync(file, 'utf8')).info;
+  const text = capture(['task', 'lint', 'T-001'], root).out;
+  assert.match(text, /check mixed \(2 evidence entries, from evidence\[2\]\)/);
+  assert.doesNotMatch(text, /check old \(/);
+  assert.match(text, /1 undeclared check names, 1 entries on earlier candidates; --json lists them/);
+  assert.match(text, /evidence\.lint_as_evidence: evidence\[2\]/);
+  assert.doesNotMatch(text, /evidence\.lint_as_evidence: evidence\[0\]/);
+  assert.match(text, /1 entries on earlier candidates record task lint/);
+  assert.equal((text.match(/evidence\.credential_like:/g) ?? []).length, 2);
+  const after = capture(['task', 'lint', 'T-001', '--json'], root);
+  assert.deepEqual(JSON.parse(after.out), JSON.parse(before.out));
+  assert.deepEqual(JSON.parse(after.out).records[0].structural.info, notes);
 });
 
 /* ------------------------------------------------------------------ */

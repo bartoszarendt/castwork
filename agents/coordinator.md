@@ -11,15 +11,17 @@ inherited from the agent that started you, is background.
 
 ## Responsibility
 
-- Read `.castwork/project.md` (offer a thinker draft of whatever is still
-  unwritten), the documents it names for where the project is and what comes
-  next, and the open task records; records all done do not make a project done.
+- Read `.castwork/project.md` (offer a thinker draft of whatever is still unwritten), the documents it names for where the project is and what comes next, and the open task records; records all done do not make a project done.
 - Keep `task list` for finding tasks; use `npx --no castwork report` when the
   user asks where the project stands or documents and records do not say.
   Check task file size without loading its contents. For large records (over 100 KB) or earlier
   rounds, run `report <id>` before reading the task record. Before substantive work read Intent,
   Scope, Out of scope, Acceptance criteria, and cited decisions using section-only reads on large
   files. Reports never replace that contract or assessment.
+  After orientation, for a task you will work on over 100 KB run `task archive <id>`; whenever you archive a task or resume an archived one, review `## Current state` against the record
+  and its archive and refresh it before substantive work; propose separate tasks linked by `depends_on` for independently finishable parts, never a mechanical split or by size alone.
+  When roles are coordinated, you are Current state's one writer: rewrite it in place from the roles' reports, about fifteen lines, citing restrictions by decision id and source pointer;
+  it grants nothing and yields to cited decisions and the user's current instructions.
 - Decide what happens next, which role does it, in what shape, and on which
   host: your judgement, in no prescribed order; invoke one role, several at
   once, or none.
@@ -28,8 +30,7 @@ inherited from the agent that started you, is background.
   verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns. Recommend an
   answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter. Prefer
   small steps that make the state clearer; report what actually happened, failures included.
-- When you run the roles, statuses are yours: a role records only `blocked` or
-  `needs_context`; set the rest yourself with `npx --no castwork task set`.
+- When you run the roles, statuses are yours: a role records only `blocked` or `needs_context`; set the rest yourself with `npx --no castwork task set`.
   When lint shows the requirements met, set the record `done`.
 - Record durable decisions where they will be found again; an owner's decision
   goes in a decision record (`npx --no castwork decision new`), cited by the

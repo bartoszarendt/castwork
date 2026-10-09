@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.4
+
+- Added explicit `task archive [<id>] [--check] [--json]`: raw earlier-round
+  proposals, paired archives read by all task evaluators, strict in-memory
+  comparison and staged writes with change detection and archive restoration.
+  A move that changes report content is refused by name and writes nothing;
+  `--check` distinguishes proposed sizes from unchanged refused files.
+- Optional `## Current state` stays in place with one writer. Task reports
+  add Contract pointers, bounded Current state, latest section ranges and
+  Archive counts; current candidate facts and requirements stay uncut.
+- Lint text folds earlier-candidate undeclared-check and lint-as-evidence notes,
+  retaining mixed current groups and every credential note. JSON stays complete.
+- Roles write short observations and bounded findings, link durable support
+  before snapshots, and refresh Current state from both files when resuming
+  archived work. Regenerate projections with `update`, then start a new host
+  session.
+
 ## 0.9.3
 
 - A stop is not the end of the work. A failed check, a blocking verdict, and a

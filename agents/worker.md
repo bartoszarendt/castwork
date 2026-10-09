@@ -64,10 +64,14 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   `task lint` is not evidence about the candidate; environment variable names, never their values
   (records are repository files, which its own checks read); a subset of a check under its own name,
   never the declared check's. A failed check is a `fail`: information, not something to tidy away.
+  A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound evidence, under its own name when undeclared.
+  Link supporting files only where they last, not ignored scratch; write tracked support outside
+  `.castwork/tasks/` before the snapshot, or keep it short.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as
-  `pass`. After a step that costs minutes, append what you observed to the record, so the result
-  survives if the session does not.
+  `pass`. After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
+  Working alone, rewrite `## Current state` in place, about fifteen lines; when roles are
+  coordinated, its one writer is the coordinator from the roles' reports.
 
 ## Boundaries
 
