@@ -103,8 +103,10 @@ says the record is authoritative and an inherited conversation is background.
 No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
 
 Pi has no built-in subagents or `--agent` option. The `/castwork` session is the
-coordinator; do not start it as a child. Castwork recommends the optional
-`pi-subagents` extension, without installing or requiring it. The thinker,
+coordinator; do not start it as a child. Castwork expects the `pi-subagents`
+extension, which the operator installs and narrows as described in
+[Pi setup](pi-setup.md#install-pi-subagents): without its skills, prompt
+templates, builtin agents, and default tool guideline. The thinker,
 worker, and verifier carry `systemPromptMode: append`,
 `inheritProjectContext: true`, `inheritGlobalContext: true`, and
 `inheritSkills: true`; the coordinator carries none of those keys. The upstream

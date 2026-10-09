@@ -38,9 +38,10 @@ everyone who clones the repository — a contributor does not run `setup` to pic
 a host of their own, because `hosts` says which hosts the project supports.
 
 For Pi, use `npx castwork setup --host pi`, trust the project with `/trust`,
-then invoke `/castwork`. Pi needs an optional subagent extension to start other
-agents; without one the session announces taking the needed role itself, and
-cannot independently accept its own candidate. See [Pi setup](pi-setup.md).
+then invoke `/castwork`. Pi needs the pi-subagents extension, configured as in
+[Pi setup](pi-setup.md#install-pi-subagents), to start other agents; without it
+the session announces taking the needed role itself, and cannot independently
+accept its own candidate.
 
 ## 2. Write the working policy
 

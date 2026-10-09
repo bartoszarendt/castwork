@@ -20,6 +20,50 @@ does not expose this prompt template. For a disposable automated check,
 `--approve` trusts the project for that invocation, without changing global
 instructions. Trust controls loading, not tool access or confinement.
 
+## Install pi-subagents
+
+Pi has no built-in subagents. For the coordinator to start the thinker, worker
+and verifier, install **pi-subagents** yourself; Castwork does not
+install it. Without it, the session takes each role itself and cannot
+independently review its own work (see [Delegation inside Pi](#delegation-inside-pi)).
+
+```sh
+pi install npm:pi-subagents
+```
+
+Then narrow what it loads. In `~/.pi/agent/settings.json`, add `skills` and
+`prompts` to the pi-subagents entry `pi install` added, and add `subagents`:
+
+```json
+{
+  "packages": [
+    { "source": "npm:pi-subagents", "skills": [], "prompts": [] }
+  ],
+  "subagents": { "disableBuiltins": true }
+}
+```
+
+In `~/.pi/agent/extensions/subagent/config.json`:
+
+```json
+{ "toolDescriptionMode": "compact" }
+```
+
+Restart Pi. The extension and its `subagent` tool still load. These settings
+remove what competes with Castwork:
+
+- its `pi-subagents` skill, which tells the session to work directly unless
+  delegation was requested, and which the generated roles would also see
+  through `inheritSkills: true`;
+- its `council-mode` skill and prompt templates such as `/review-loop` and
+  `/parallel-review`, workflows that leave no task record or verifier evidence;
+- its builtin agents, such as `reviewer`, `oracle` and `scout`, which the
+  coordinator would otherwise start in place of Castwork's verifier and thinker;
+- the tool guideline, added when `toolDescriptionMode` is unset, that says not
+  to invoke subagents unless the operator asked.
+
+These are global Pi settings and apply in every project.
+
 ## What is generated
 
 ```text
@@ -73,22 +117,11 @@ dollar sign in the generated prompt, identifying its canonical source or route
 setting. This prevents a route model such as `custom-$1` from becoming task
 input. Other hosts keep their existing argument handling.
 
-## Optional delegation inside Pi
-
-Pi itself has no built-in subagents. Castwork neither installs nor requires a
-delegation extension. If you want delegation, review and deliberately install
-one yourself. The recommended packaged option is **pi-subagents 0.76.1**:
-
-```sh
-pi install npm:pi-subagents@0.76.1
-```
-
-Restart Pi after installing or refreshing resources. This is an operator setup
-choice, not something Castwork runs. The pin is the version Castwork was
-checked against; later releases may behave differently.
+## Delegation inside Pi
 
 `pi-subagents` discovers `.pi/agents/` by default (`agentScope: both`); project
-roles win collisions, including its builtin worker. The generated thinker,
+roles win name collisions, and with builtins disabled none remain to collide
+with. Restart Pi after installing or refreshing resources. The generated thinker,
 worker and verifier opt into:
 
 ```yaml
