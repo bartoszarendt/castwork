@@ -12,6 +12,7 @@ import {renderReport} from '../src/report-text.js';
 import {readReportInputs, reportCommand, reportGit} from '../src/report-cli.js';
 import {main} from '../src/cli-main.js';
 import {taskLint} from '../src/task-cli.js';
+import {runCli} from './cli-in-process.js';
 
 const bin = path.resolve('bin/castwork.js');
 const front = (data) => Object.entries(data).map(([k,v]) => `${k}: ${JSON.stringify(v)}`).join('\n');
@@ -30,7 +31,12 @@ function put(dir,file,data,body='') {
   fs.writeFileSync(path.join(dir,'.castwork',file),`---\n${front(data)}\n---\n${body}`);
 }
 function cli(dir, ...args) {
-  return spawnSync(process.execPath, [bin, 'report', ...args], {cwd: dir, encoding: 'utf8'});
+  return inProcess(dir, 'report', ...args);
+}
+/** The CLI in this process, in spawnSync's shape. */
+function inProcess(dir, ...args) {
+  const {code, out, err} = runCli(dir, ...args);
+  return {status: code, stdout: out, stderr: err};
 }
 function capture(fn) {
   let stdout = '', stderr = '';
@@ -707,7 +713,7 @@ test('ids are keyed as task show and lint key them; raw YAML stays in frontmatte
   r=JSON.parse(run.stdout);
   assert.equal(r.problems.at(-1).code,'report.id_ambiguous');
   assert.deepEqual(r.problems.filter((p)=>p.code==='id.duplicate').map((p)=>p.path).sort(),['.castwork/tasks/A.md','.castwork/tasks/C.md']);
-  assert.equal(spawnSync(process.execPath,[bin,'task','show','T-1'],{cwd:dir,encoding:'utf8'}).status,1);
+  assert.equal(inProcess(dir,'task','show','T-1').status,1);
 });
 test('a task title containing report does not change task usage/error output',()=>{
   const c=capture(()=>main(['task','new','report','--json']));
@@ -726,7 +732,7 @@ test('CLI every report usage refusal emits exactly one JSON document and exit 2'
     ['report', '--json', '--', 'A', 'B'],
     ['--json', '--host', 'pi', '--', 'report'],
   ]) {
-    const run = spawnSync(process.execPath, [bin, ...argv], {cwd: dir, encoding: 'utf8'});
+    const run = inProcess(dir, ...argv);
     assert.equal(run.status, 2);
     assert.equal(JSON.parse(run.stdout).problems[0].code, 'report.usage');
   }

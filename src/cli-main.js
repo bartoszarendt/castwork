@@ -392,8 +392,12 @@ export function run(argv, options = {}) {
   }
 }
 
-/** @param {string[]} argv */
-export function main(argv) {
+/**
+ * @param {string[]} argv
+ * @param {{cwd?: string}} [runOptions] the project root, when not the working directory
+ * @returns {number} exit code
+ */
+export function main(argv, runOptions = {}) {
   // `--debug` is a flag only before a bare `--`; after it, it is an argument.
   const end = argv.indexOf('--');
   const options = end < 0 ? argv : argv.slice(0, end);
@@ -417,7 +421,7 @@ export function main(argv) {
     }
   }
   try {
-    return run([...options.filter((token) => token !== '--debug'), ...(end < 0 ? [] : argv.slice(end))]);
+    return run([...options.filter((token) => token !== '--debug'), ...(end < 0 ? [] : argv.slice(end))], runOptions);
   } catch (error) {
     // Reports and archive checks promise one document on operational/usage errors.
     const taskIndex = argv.indexOf('task');

@@ -17,6 +17,7 @@ import { compareVersions, packageVersion, sourceDigest, toolkitRoot } from '../s
 import { COMMAND_PATHS, FLAGS, GLOBAL_FLAGS, checkUsage, parseArgs } from '../src/cli-main.js';
 import { GENERATED_MANIFEST, PROJECT_FILE } from '../src/layout.js';
 import { doctor, setup, update } from '../src/setup.js';
+import { runCli as cli } from './cli-in-process.js';
 
 const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'castwork.js');
 
@@ -26,8 +27,8 @@ function fixture(t) {
   return root;
 }
 
-/** Run the real entry point in `cwd`, as an agent would. */
-function cli(cwd, ...args) {
+/** Run the real entry point in `cwd`, as an agent would; the other tests run the CLI in process. */
+function entryPoint(cwd, ...args) {
   const result = spawnSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8' });
   return { code: result.status, out: result.stdout, err: result.stderr };
 }
@@ -63,7 +64,7 @@ test('update --chek is refused with the usage exit code and changes no file', (t
   fs.rmSync(stale);
   const before = tree(root);
 
-  const result = cli(root, 'update', '--chek');
+  const result = entryPoint(root, 'update', '--chek');
   assert.equal(result.code, 2);
   assert.match(result.err, /unknown flag --chek/);
   assert.match(result.err, /--check/, 'the accepted flags are listed');

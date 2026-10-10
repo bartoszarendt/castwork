@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `main(argv, { cwd })`, exported from the package root, takes an optional
+  project root, as `run` already did; without it the command still reads the
+  working directory.
+
 ## 0.9.5
 
 **Record integrity**

@@ -115,9 +115,15 @@ test('a lock left behind is named, and nothing is written', (t) => {
   const file = write(root, '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n\nbody\n');
   fs.writeFileSync(`${file}.lock`, '');
   const before = fs.readFileSync(file, 'utf8');
+  // A clock that moves a second each time it is read, so the real wait passes
+  // without the test spending it.
   const started = Date.now();
+  let reads = 0;
+  t.mock.method(Date, 'now', () => started + 1000 * reads++);
   assert.throws(() => taskAdd(root, 'T-001', 'candidate', ['ref=abc1234']), (error) => /being written by another castwork command/.test(error.message) && /T-001\.md\.lock/.test(error.hint));
-  assert.ok(Date.now() - started >= 9000, 'it waited before giving up');
+  const waited = 1000 * (reads - 1);
+  t.mock.restoreAll();
+  assert.ok(waited >= 10000 && waited <= 11000, `it waited about ten seconds before giving up, not ${waited} ms`);
   assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
 
