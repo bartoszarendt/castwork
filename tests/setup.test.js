@@ -84,7 +84,7 @@ test('Pi dollar-sign refusal uses real route settings before setup, update or va
   }));
   setup(root);
   assert.equal(validate(root).ok, true, 'hosts without argument expansion are unaffected');
-  assert.match(fs.readFileSync(path.join(root, '.claude/commands/castwork.md'), 'utf8'), /custom-\$1/);
+  assert.match(fs.readFileSync(path.join(root, '.claude/skills/castwork/SKILL.md'), 'utf8'), /custom-\$1/);
 });
 
 test('setup creates the state directories and records what it generated', (t) => {

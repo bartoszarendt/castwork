@@ -16,7 +16,7 @@ Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.3 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.5 is
 > current.
 
 ## When it helps
@@ -195,6 +195,8 @@ structure. They can be used together, and each is independently usable.
 ```sh
 npx castwork task list          # task records and statuses
 npx castwork task lint T-011    # what one record satisfies
+npx castwork task add T-011 evidence check=test candidate=8c1d004 result=pass
+                                # append one entry; a hand edit is equally valid
 npx castwork decision list      # decisions recorded so far
 npx castwork doctor             # installation health, including generated files
 npx castwork update             # refresh generated files after upgrading

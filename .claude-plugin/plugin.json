@@ -1,7 +1,7 @@
 {
   "name": "castwork",
   "description": "Shared task records and roles for agent work: Markdown records of work, candidates, evidence, and assessments, with four role presets, reusable skills, and checks against each task's declared requirements.",
-  "version": "0.9.3",
+  "version": "0.9.5",
   "author": {
     "name": "Bartosz Arendt"
   },

@@ -50,7 +50,7 @@ reference.
 A snapshot exists only in the clone that took it: it can be reviewed there,
 including by an agent CLI working in the same checkout, but not from another
 clone. For a reviewer elsewhere, use a commit the project authorizes, or send
-the base commit and `git diff <base> <sha>`; the reviewer applies it to a clean
+the base commit and `git diff --binary --no-textconv <base> <sha>`; the reviewer applies it to a clean
 checkout of the base and runs `snapshot`, and identical content gives the
 identical `tree:` sha.
 
@@ -86,6 +86,12 @@ evidence:
 - `result` is `pass` or `fail`.
 - `command`, `exit_code`, `output`, `actor`, `host`, `model`, `at` are optional.
   Record them when they help someone reproduce what you did.
+
+`npx --no castwork task add <id> evidence check=test candidate=007c7f8 result=pass
+command="npm test" exit_code=0 at=now` writes the same entry, and
+`task add <id> candidate ref=... producers=...` the candidate. It takes only
+these fields, refuses a `candidate` that is not a recorded `ref`, and fills in
+nothing you did not give: `at=now` is the CLI's clock when it records.
 
 Record `host`, the exact host-reported `model`, and an RFC 3339 `at` timestamp
 when the record must remain self-contained or comparable without host-local

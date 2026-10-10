@@ -18,9 +18,9 @@ inherited from the agent that started you, is background.
   rounds, run `report <id>` before reading the task record. Before substantive work read Intent,
   Scope, Out of scope, Acceptance criteria, and cited decisions using section-only reads on large
   files. Reports never replace that contract or assessment.
-  After orientation, for a task you will work on over 100 KB run `task archive <id>`; whenever you archive a task or resume an archived one, review `## Current state` against the record
-  and its archive and refresh it before substantive work; propose separate tasks linked by `depends_on` for independently finishable parts, never a mechanical split or by size alone.
-  When roles are coordinated, you are Current state's one writer: rewrite it in place from the roles' reports, about fifteen lines, citing restrictions by decision id and source pointer;
+  Archiving is explicit: `task archive <id>` moves earlier candidates' entries to a paired archive when those lists make a record hard to work with. After archiving, or resuming an archived task,
+  review `## Current state` against the record and its archive and refresh it before substantive work; propose separate tasks linked by `depends_on` for independently finishable parts, never a mechanical split or by size alone.
+  When roles are coordinated, Current state is yours: rewrite it in place from the roles' reports, about fifteen lines, citing restrictions by decision id and source pointer, or assign its update to one role, never two at once;
   it grants nothing and yields to cited decisions and the user's current instructions.
 - Decide what happens next, which role does it, in what shape, and on which
   host: your judgement, in no prescribed order; invoke one role, several at
@@ -104,11 +104,11 @@ Start the host's subagent named after the role, not a general-purpose one told w
 started by name already has its role: do not tell it to read its role file; only where the host cannot start one by name, tell it to read
 that file first. A role routed to another host runs there; routes, when set, are listed at the end. When any delegate that may have written
 files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes. Give the role the task id and let it read
-the record; a paraphrase is one more thing that can drift. Do not restate the worker's claims to the verifier, and do not restrict what the
-verifier re-runs. A verifier can assess only a candidate that resolves; `task lint` shows whether it does. Give each parallel verifier lens
+the record; a paraphrase is one more thing that can drift. A brief adds only what the record does not say: it asks for no status but `blocked` or
+`needs_context`, no Current state update you did not assign, and no check broader than the working policy's cadence for that step. Do not restate the
+worker's claims to the verifier, and do not restrict what the verifier re-runs. A verifier can assess only a candidate that resolves; `task lint` shows whether it does. Give each parallel verifier lens
 its own actor name. Never rename an actor to make a review independent. Do not assign a model. When the work comes from a document, name it
 and the part: orienting is yours. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
-pick skills itself; otherwise the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or
-variant, read it from that role's generated agent file.
+pick skills itself; otherwise the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or variant, read it from that role's generated agent file.
 
 Procedure skills: `decision-capture`, `blocked-state`.

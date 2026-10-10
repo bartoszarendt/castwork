@@ -1,12 +1,17 @@
-/** Pure raw-text archive preparation and strict, in-memory verification. */
+/**
+ * Pure raw-text archive preparation and strict, in-memory verification.
+ *
+ * Archiving moves list entries only: the prefix of each entry list before the
+ * first entry for the current candidate. The body stays in the record, since
+ * moving prose would need its original order guessed back.
+ */
 import {isDeepStrictEqual} from 'node:util';
-import {parseRecord, recordValueText, relocateEntryLabel, splitFrontmatter, LARGE_RECORD_BYTES} from './record.js';
+import {parseRecord, recordValueText, relocateEntryLabel, splitFrontmatter, LARGE_RECORD_BYTES, RECORD_YAML} from './record.js';
 import {currentCandidate, mayBeDone, requirementEvaluation, structuralValidity} from './checks.js';
-import {deriveReport, headingAnchor, prepareBody} from './report.js';
+import {deriveReport} from './report.js';
 import {parseYaml, formatScalar} from './yaml.js';
 
 const fields = ['candidates', 'evidence', 'assessments'];
-const retained = new Set(['intent', 'scope', 'out of scope', 'acceptance criteria', 'current state', 'blockers and decisions']);
 const bytes = text => new TextEncoder().encode(text).length;
 const label = file => file?.replace(/\\/g, '/').split('/').at(-1) ?? '<unknown>';
 
@@ -45,7 +50,7 @@ function rawList(yaml, field, expected) {
   const blockEnd = last < rows.length ? rows[last].start : yaml.length;
   try {
     for (let i = 0; i < starts.length; i++) {
-      const parsed = parseYaml(`${field}:\n${yaml.slice(starts[i], starts[i + 1] ?? blockEnd)}`);
+      const parsed = parseYaml(`${field}:\n${yaml.slice(starts[i], starts[i + 1] ?? blockEnd)}`, RECORD_YAML);
       if (!isDeepStrictEqual(parsed[field], [expected[i]])) return null;
     }
   } catch { return null; }
@@ -54,13 +59,6 @@ function rawList(yaml, field, expected) {
 function replaceRanges(text, ranges) {
   for (const range of [...ranges].sort((a, b) => b.start - a.start)) text = text.slice(0, range.start) + (range.text ?? '') + text.slice(range.end);
   return text;
-}
-function bodySection(prepared, title) {
-  const matches = prepared.headings.filter(h => h.title.toLowerCase() === title.toLowerCase());
-  const head = matches.find(h => h.level === 2) ?? matches.reduce((a, b) => !a || b.level < a.level ? b : a, matches[0]);
-  if (!head) return null;
-  const end = prepared.headings.find(h => h.index > head.index && h.level <= head.level)?.index ?? prepared.lines.length;
-  return {...head, end};
 }
 
 /** Propose the specified moves, without guessing lost original body order.
@@ -78,7 +76,7 @@ export function splitArchive(recordText, archiveText, record, options) {
   if (!parts(archive)) return {refused: 'existing archive frontmatter cannot be split'};
   const primary = parseRecord(recordText);
   const ref = currentCandidate(record)?.ref;
-  const moves = [], listCounts = {}, kept = [], reasons = [];
+  const moves = [], listCounts = {}, reasons = [];
   for (const field of fields) {
     const values = primary.frontmatter[field];
     const raw = rawList(original.yaml, field, values);
@@ -94,7 +92,6 @@ export function splitArchive(recordText, archiveText, record, options) {
       reasons.push(`${field}: existing archive list formatting prevents raw append`); count = 0;
     }
     listCounts[field] = count;
-    if (Array.isArray(values)) kept.push(...values.slice(count));
     if (!count) continue;
     const start = raw.starts[0], end = raw.starts[count] ?? raw.end;
     const chunk = original.yaml.slice(start, end);
@@ -103,49 +100,18 @@ export function splitArchive(recordText, archiveText, record, options) {
     const header = existingRaw ? '' : `${field}:${eol}`;
     archive = archive.slice(0, insertion) + header + chunk + archive.slice(insertion);
   }
-  const prepared = prepareBody(original.body), bodyRows = sourceLines(original.body);
-  const oldPrepared = prepareBody(record.archive?.body ?? '');
-  const anchored = new Set(kept.flatMap(entry => entry && typeof entry === 'object' && typeof entry.findings === 'string' && entry.findings.startsWith('#') ? [entry.findings] : []));
-  const anchoredHeadings = prepared.headings.filter(h => anchored.has(headingAnchor(h.title)) &&
-    [...prepared.headings, ...oldPrepared.headings].filter(other => headingAnchor(other.title) === headingAnchor(h.title)).length === 1);
-  const bodyMoves = [];
-  let blockersCount = 0, blockersText = '';
-  const blockers = bodySection(prepared, 'Blockers and decisions');
-  if (blockers) {
-    const entries = prepared.entries.filter(entry => entry.index > blockers.index && entry.index < blockers.end);
-    let count = Math.max(0, entries.length - 10);
-    for (let i = 0; i < count; i++) if (anchoredHeadings.some(h => h.index >= entries[i].index && h.index < (entries[i + 1]?.index ?? blockers.end))) {
-      count = i; reasons.push(`Blockers: anchored heading retains entry ${i + 1} and following entries`); break;
-    }
-    if (count) {
-      const start = bodyRows[blockers.index].end, end = bodyRows[entries[count].index].start;
-      blockersText = original.body.slice(start, end); blockersCount = count;
-      bodyMoves.push({start: original.body_start + start, end: original.body_start + end, kind: 'blockers'});
-    }
-  }
-  const others = prepared.headings.filter(h => h.level === 2 && !retained.has(h.title.toLowerCase()));
-  const sections = [];
-  for (const h of others.slice(0, -3)) {
-    const endLine = prepared.headings.find(next => next.index > h.index && next.level <= 2)?.index ?? bodyRows.length;
-    if (anchoredHeadings.some(anchor => anchor.index >= h.index && anchor.index < endLine)) { reasons.push(`section ${h.title}: anchored heading retained`); continue; }
-    const start = bodyRows[h.index].start, end = bodyRows[endLine]?.start ?? original.body.length;
-    sections.push(h.title);
-    bodyMoves.push({start: original.body_start + start, end: original.body_start + end, kind: 'section'});
-  }
-  const movedSections = bodyMoves.filter(move => move.kind === 'section')
-    .map(move => recordText.slice(move.start, move.end)).join('');
-  const moving = Object.values(listCounts).some(Boolean) || bodyMoves.length > 0;
-  if (!moving) return {record_text: recordText, archive_text: archiveText, summary: {moved: false, lists: listCounts, sections, blockers: blockersCount,
+  const moving = Object.values(listCounts).some(Boolean);
+  if (!moving) return {record_text: recordText, archive_text: archiveText, summary: {moved: false, lists: listCounts,
     bytes_before: bytes(recordText), bytes_after: bytes(recordText), raw_moves: [], retained: reasons}};
-  let nextRecord = replaceRanges(recordText, [...moves, ...bodyMoves]);
+  let nextRecord = replaceRanges(recordText, moves);
   const next = parts(nextRecord);
   const pointer = `Earlier rounds: [${label(options.archive_path)}](${label(options.archive_path)}), moved by \`task archive\`.${eol}`;
   if (!next.body.startsWith(pointer)) nextRecord = nextRecord.slice(0, next.body_start) + pointer + nextRecord.slice(next.body_start);
-  // Always one dated part per run, even when only structured entries moved.
-  archive += `${/\r?\n$/.test(archive) ? '' : eol}## Blockers and decisions, moved ${options.date}${eol}${blockersText}${movedSections}`;
-  return {record_text: nextRecord, archive_text: archive, summary: {moved: true, lists: listCounts, sections, blockers: blockersCount,
+  // One dated part per run, saying when these entries moved.
+  archive += `${/\r?\n$/.test(archive) ? '' : eol}## Entries moved ${options.date}${eol}`;
+  return {record_text: nextRecord, archive_text: archive, summary: {moved: true, lists: listCounts,
     bytes_before: bytes(recordText), bytes_after: bytes(nextRecord),
-    raw_moves: [...moves, ...bodyMoves].sort((a, b) => a.start - b.start).map(move => ({kind: move.kind, start_byte: bytes(recordText.slice(0, move.start)), end_byte: bytes(recordText.slice(0, move.end))})), retained: [...reasons, ...(bytes(nextRecord) > LARGE_RECORD_BYTES ? ['retained contract, current-prefix lists, last ten Blockers entries, last three sections or anchored content keep the record over 100 KB'] : [])]}};
+    raw_moves: [...moves].sort((a, b) => a.start - b.start).map(move => ({kind: move.kind, start_byte: bytes(recordText.slice(0, move.start)), end_byte: bytes(recordText.slice(0, move.end))})), retained: [...reasons, ...(bytes(nextRecord) > LARGE_RECORD_BYTES ? ['the body and the entries from the current candidate on keep the record over 100 KB; the body is never moved'] : [])]}};
 }
 
 /** Strip ONLY physical navigation/diagnostic locations, not prose or outcomes. */
@@ -171,6 +137,8 @@ function comparison(value, at = '', root = value) {
     const navigation = /^\.records\.\d+\.task\.(contract\.[^.]+|current_state|latest_sections\.sections\.\d+)$/.test(at) || /^\.records\.\d+\.sections\.[^.]+$/.test(at) || /^\.records\.\d+\.findings_references\.\d+\.section$/.test(at);
     if (/^\.records\.\d+\.task$/.test(at) && key === 'archive') continue;
     if (navigation && ['line', 'pointer', 'start_line', 'end_line', 'omission_pointer'].includes(key)) continue;
+    // The attention row repeats the Blockers section's file:line pointer.
+    if (/^\.attention\.\d+$/.test(at) && key === 'blockers_pointer') continue;
     if (diagnostic && ['path', 'logical_index'].includes(key)) continue;
     if (diagnostic && key === 'index') { copy.index = value.logical_index ?? child; continue; }
     if (diagnostic && key === 'message' && Object.hasOwn(value, 'path')) {
@@ -196,6 +164,26 @@ function firstDifference(a, b, at = 'report') {
   return at;
 }
 
+/**
+ * Writing the pair is expected to change two things about the selected record
+ * and nothing else: Git sees it uncommitted, and its size note may change or
+ * go. Those two are taken out of the comparison for that record only; the same
+ * difference in another record, or any other Git difference, still refuses.
+ * @param {ReturnType<typeof deriveReport>} before @param {ReturnType<typeof deriveReport>} after @param {string|null} selected
+ */
+function expectedPhysicalChanges(before, after, selected) {
+  const row = (/** @type {ReturnType<typeof deriveReport>} */ report) => report.records.find(record => record.kind === 'task' && record.path === selected);
+  const a = row(before), b = row(after);
+  if (!a || !b) return;
+  if (b.git?.uncommitted === true && a.git?.uncommitted !== true) {
+    const {uncommitted, ...rest} = b.git;
+    b.git = a.git === null && Object.keys(rest).length === 0 ? null : rest;
+  }
+  for (const record of [a, b]) {
+    if (record.task) record.task.structural = {...record.task.structural, info: record.task.structural.info.filter(note => note.code !== 'record.large')};
+  }
+}
+
 /** Verify proposed pair; no I/O and no relaxed semantic comparison. */
 export function verifyArchive(original, proposed, options) {
   if (options.corpus && options.corpus.filter(input => input.kind === 'task' && input.record.path === original.path).length !== 1) return 'selected task missing or ambiguous in report corpus';
@@ -212,6 +200,7 @@ export function verifyArchive(original, proposed, options) {
   const before = deriveReport(inputs, {git: options.git_before, problems: options.problems});
   const bodyLine = proposed.record_text.slice(0, proposed.record_text.length - (next.physical_body ?? next.body).length).split('\n').length;
   const after = deriveReport(inputs.map(input => input.record.path === original.path ? {record: next, kind: 'task', body_line: bodyLine} : input), {git: options.git_after, problems: options.problems});
+  expectedPhysicalChanges(before, after, original.path);
   const difference = firstDifference(comparison(before), comparison(after));
   if (difference) return `${difference} changed; exact report preservation cannot be verified`;
   // Archive navigation can grow, but it is not an exemption for altering old
@@ -220,6 +209,6 @@ export function verifyArchive(original, proposed, options) {
   if (!next.archive.body.startsWith(priorBody)) return 'existing archive body changed';
   const appended = next.archive.body.slice(priorBody.length);
   if (appended === '' && !proposed.summary?.moved) return null;
-  if (!/^(?:\r?\n)?## Blockers and decisions, moved \d{4}-\d{2}-\d{2}(?:\r?\n|$)$/.test(appended)) return 'archive body gained unverified text';
+  if (!/^(?:\r?\n)?## Entries moved \d{4}-\d{2}-\d{2}(?:\r?\n|$)$/.test(appended)) return 'archive body gained unverified text';
   return null;
 }

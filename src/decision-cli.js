@@ -31,10 +31,11 @@ export function decisionNew(root, title) {
   const id = `D-${String(highest + 1).padStart(3, '0')}`;
 
   const template = fs.readFileSync(path.join(toolkitRoot(), 'memory', 'decision-record.md'), 'utf8');
+  // Replacement functions, so `$&` or `$\`` in a title stays text.
   const content = template
-    .replace(/^id: .*$/m, `id: ${formatScalar(id)}`)
-    .replace(/^title: .*$/m, `title: ${formatScalar(title.trim())}`)
-    .replace(/^date: .*$/m, `date: ${new Date().toISOString().slice(0, 10)}`);
+    .replace(/^id: .*$/m, () => `id: ${formatScalar(id)}`)
+    .replace(/^title: .*$/m, () => `title: ${formatScalar(title.trim())}`)
+    .replace(/^date: .*$/m, () => `date: ${new Date().toISOString().slice(0, 10)}`);
 
   const file = path.join(directory, `${id}.md`);
   if (fs.existsSync(file)) throw new PublicError(`${file} already exists`);

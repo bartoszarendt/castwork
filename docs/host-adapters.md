@@ -9,7 +9,7 @@ special machinery.
 | Host | Generated into |
 |---|---|
 | `codex` | `.codex/agents/` (TOML) and `.agents/skills/castwork/`, including its `agents/openai.yaml` invocation policy |
-| `claude` | `.claude/agents/`, `.claude/commands/`, `.claude/skills/castwork/` |
+| `claude` | `.claude/agents/` and `.claude/skills/castwork/`, whose `SKILL.md` is the `/castwork` entry |
 | `opencode` | `.opencode/agents/`, `.opencode/commands/`, `.opencode/skills/castwork/` |
 | `pi` | `.pi/agents/`, `.pi/prompts/castwork.md`, `.pi/skills/castwork/references/` (no skill index) |
 

@@ -189,7 +189,9 @@ export function effectiveAssessments(record, candidateRef) {
   const byKey = new Map();
   for (const entry of assessments) {
     if (recordValueText(entry.candidate) !== candidateRef) continue;
-    const actor = entry.actor === undefined || entry.actor === null ? '' : recordValueText(entry.actor);
+    // Trimmed, as independence compares actors, so `v@c` and `v@c ` are one
+    // actor here too; a blank one is no actor.
+    const actor = entry.actor === undefined || entry.actor === null ? '' : recordValueText(entry.actor).trim();
     const key = actor === '' ? `role:${recordValueText(entry.role)}` : `actor:${actor}`;
     byKey.set(key, entry);
   }
@@ -350,8 +352,26 @@ function evaluateIndependentReview(record, candidate, candidateRef) {
     };
   }
 
+  // A blocking verdict whose actor was not recorded may have come from an
+  // independent reviewer, so it is not known that none blocks. The effective
+  // entry rules still apply: a later actorless assessment by the same role
+  // replaces it; one with an actor may be someone else, so it does not.
+  const unnamed = effective.filter((entry) => isBlockingVerdict(entry.verdict) && !isIdentity(entry.actor));
+
   for (const entry of withActor) {
     const actor = recordValueText(entry.actor).trim();
+    if (!producers.includes(actor) && unnamed.length > 0) {
+      return {
+        requirement: name,
+        status: 'unknown',
+        reason: 'assessment.blocking_without_actor',
+        facts: [
+          { fact: `accepting actor ${actor}`, trust: ASSERTED },
+          { fact: `blocking verdicts without an actor: ${unnamed.map(assessorName).join(', ')}`, trust: ASSERTED },
+          { fact: 'a blocking verdict with no actor may be independent, so independence cannot be established', trust: CHECKED },
+        ],
+      };
+    }
     if (!producers.includes(actor)) {
       return {
         requirement: name,

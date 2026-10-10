@@ -23,7 +23,7 @@ status: draft
 #     # Optional: use the exact host-reported model and an RFC 3339 timestamp
 #     # when the record must stay self-contained without host-local telemetry.
 #     # The host, here and after the @ in an actor string, is the agent host
-#     # id (claude, codex or opencode), never the machine's name.
+#     # id (claude, codex, opencode or pi), never the machine's name.
 #     host: <host>
 #     model: <model>
 #     at: "<timestamp>"
@@ -57,8 +57,8 @@ Name nearby work that must not be bundled in.
 
 <!-- What holds now: current candidate, unresolved issues, restrictions with
      decision ids and source line pointers, and the next step. Rewrite in place,
-     about fifteen lines. The coordinator writes it from the roles' reports
-     when roles are coordinated; otherwise the agent working alone writes it.
+     about fifteen lines. When roles are coordinated the coordinator keeps it,
+     or assigns its update to one role; otherwise the agent working alone does.
      This is recorded prose, grants nothing, and yields to cited decisions
      and the user's current instructions. -->
 

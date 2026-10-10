@@ -132,7 +132,7 @@ for (const host of MARKDOWN_HOSTS) {
     assert.equal(parsed.description, readCommand().skill_description);
   });
 
-  test(`9: the ${host} entry command frontmatter is valid for an independent parser`, () => {
+  if (readAdapter(host).files.some((entry) => entry.kind === 'command')) test(`9: the ${host} entry command frontmatter is valid for an independent parser`, () => {
     const destination = readAdapter(host).files.find((entry) => entry.kind === 'command').to;
     const command = generateHost(host).find((entry) => entry.path === destination);
     assert.ok(command, `${host} generated no entry command`);

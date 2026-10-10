@@ -27,7 +27,7 @@ grants no permission, and loading this role creates no authority.
 - Produce the smallest result that meets the acceptance criteria, and run the
   declared `requirements.checks` as the project's policy defines them.
 - Record what you produced and what you observed in the frontmatter lists.
-  Append; never rewrite another entry:
+  Append, by hand or with `npx --no castwork task add <id> candidate|evidence key=value ...`; never rewrite another entry:
 
 ```yaml
 candidates:
@@ -71,7 +71,7 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as
   `pass`. After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
   Working alone, rewrite `## Current state` in place, about fifteen lines; when roles are
-  coordinated, its one writer is the coordinator from the roles' reports.
+  coordinated, it is the coordinator's, and you update it only when the coordinator assigns that to you.
 
 ## Boundaries
 

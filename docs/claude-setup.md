@@ -26,12 +26,13 @@ is written, with the known ids listed in the error.
 
 ```
 .claude/agents/<role>.md                the four role presets, as subagents
-.claude/commands/castwork.md         the entry command
-.claude/skills/castwork/SKILL.md     an index of the procedures
+.claude/skills/castwork/SKILL.md     the entry skill, /castwork, with an index of the procedures
 .claude/skills/castwork/references/  one file per reusable procedure
 ```
 
-All of it is tracked and contains no absolute paths. The files are listed in
+Claude Code runs a skill rather than a command of the same name, so no
+`.claude/commands/castwork.md` is generated; `update` removes one an earlier
+version wrote, unless you edited it. All of it is tracked and contains no absolute paths. The files are listed in
 `.castwork/generated.json`; edit one and `update` writes nothing until you
 restore it or name it with `--force-generated`. Your change is never
 overwritten, and a conflict never leaves some files updated and others not.
@@ -66,6 +67,14 @@ default, since both are expected to write files: the thinker writes task
 records, the worker the result. It is emitted into the
 generated file as the host's own `permissionMode` key. Override it per role
 under `role_settings` below, or set it to `null` to leave the key out entirely.
+The `verifier` has no default, so it inherits the parent session's mode: in a
+`default` session, its edits to the task record and the checks it runs follow
+that session's permission rules. `acceptEdits` covers file edits, not every
+shell command.
+
+Claude Code reloads role files in an existing `.claude/agents/` during a
+session, so a regenerated role applies to the next subagent started; the
+session's own instructions, from `/castwork`, stay as they were until a new one.
 
 That configures what is written into the subagent file; what Claude Code then
 does with it is the host's call. A parent session running in `acceptEdits`,
@@ -119,5 +128,5 @@ comparing that string against the candidate's producers.
 
 `npx castwork doctor` reports the installation state read-only, and
 `npx castwork validate` checks the generated output. If the command does not
-appear, confirm `.claude/commands/castwork.md` exists and that
+appear, confirm `.claude/skills/castwork/SKILL.md` exists and that
 `castwork.json` lists `claude` in `hosts`.

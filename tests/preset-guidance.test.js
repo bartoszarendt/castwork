@@ -146,7 +146,7 @@ for (const host of HOSTS) {
 
   test(`${host} worker reports criterion by criterion and follows the evidence rules`, () => {
     all(role(host, 'worker'), [
-      'Append; never rewrite another entry',
+      'Append, by hand or with `npx --no castwork task add <id> candidate|evidence key=value ...`; never rewrite another entry',
       'go through the acceptance criteria one by one: shown or not shown, with the observation',
       'A partial showing is not shown: it goes under `## Blockers and decisions`, never as `pass`.',
       'one command per entry',
@@ -164,7 +164,7 @@ for (const host of HOSTS) {
       'A routine successful probe is a sentence in the body, or nothing',
       'an observation supporting acceptance or a finding stays candidate-bound evidence',
       'not a new narrative section per run or a long paragraph on one line',
-      "its one writer is the coordinator from the roles' reports",
+      "it is the coordinator's, and you update it only when the coordinator assigns that to you",
       'propose a `## Setup facts` line for `.castwork/project.md` in the record',
     ], 'worker');
   });
@@ -333,7 +333,9 @@ for (const host of HOSTS) {
       "When lint shows a record's requirements met, set it `done`; work that went straight through needs no verifier unless the requirements, the working policy, or the user ask for one.",
       'A role working alone sets its own status.',
       'Give each parallel verifier lens its own actor name',
-      'they take effect only in a new session',
+      'count on them only in a new session',
+      'Claude Code reloads role files in an existing `.claude/agents/` for the next role it starts',
+      'A brief adds only what the record does not say',
       'Never hand-edit a generated file',
       'Do not infer your own model from `role_settings`',
       '## Pausing',
@@ -360,7 +362,7 @@ for (const host of HOSTS) {
       'No other role writes to the same checkout during a routed write.',
       'Take a snapshot before it starts',
       'A snapshot stays in its clone.',
-      'send the base commit and `git diff <base> <sha>`',
+      'send the base commit and `git diff --binary --no-textconv <base> <sha>`',
       'identical content gives the identical `tree:` sha',
       'A snapshot is not a general way to hand work between hosts.',
       'Read and lint what the delegate wrote, and relay its open questions',
@@ -411,20 +413,21 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
   ], 'verification-evidence');
 });
 
-test('Phase 43 generated guidance keeps archives explicit, Current state single-writer and findings bounded', () => {
+test('generated guidance keeps archives explicit, Current state with the coordinator and findings bounded', () => {
   for (const host of HOSTS) {
     for (const content of [entry(host), role(host, 'coordinator')]) all(content, [
-      'After orientation, for a task you will work on over 100 KB run `task archive <id>`',
+      "Archiving is explicit: `task archive <id>` moves earlier candidates' entries to a paired archive when those lists make a record hard to work with.",
       'review `## Current state` against the record and its archive and refresh it before substantive work',
       'propose separate tasks linked by `depends_on` for independently finishable parts',
       'never a mechanical split or by size alone',
     ]);
     all(role(host, 'verifier'), ['the contract item, observation and location, and why it blocks or accepts', 'not every file read or a restatement of earlier rounds']);
-    all(role(host, 'coordinator'), ["you are Current state's one writer", "from the roles' reports", 'it grants nothing']);
+    all(role(host, 'coordinator'), ['Current state is yours', "from the roles' reports", 'or assign its update to one role, never two at once', 'it grants nothing', 'A brief adds only what the record does not say', "no check broader than the working policy's cadence for that step"]);
+    for (const content of [entry(host), role(host, 'coordinator')]) assert.ok(!phrase('for a task you will work on over 100 KB run').test(content), `${host} still asks to archive every large record`);
   }
   all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
   all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'write it before taking that snapshot']);
-  all(skill('task-record-contract'), ["One writer: the coordinator from the roles' reports when roles are coordinated", '`task archive [<id>] [--check]`']);
+  all(skill('task-record-contract'), ["written from the roles' reports or assigned to one role at a time", '`task archive [<id>] [--check]`']);
 });
 
 test('the skill description keeps a role started by name from loading the entry skill', () => {
@@ -434,7 +437,7 @@ test('the skill description keeps a role started by name from loading the entry 
 test('a routed role is listed with the actor it records', () => {
   const [routed] = generateHost('claude', {
     routes: [{ role: 'thinker', host: 'codex', label: 'Codex', role_file: '.codex/agents/thinker.toml', settings: {} }],
-  }).filter((file) => file.path === '.claude/commands/castwork.md');
+  }).filter((file) => file.path === '.claude/skills/castwork/SKILL.md');
   assert.match(routed.content, /`thinker` runs in Codex \(`codex`\)\. Role file: `\.codex\/agents\/thinker\.toml`\. Actor: `thinker@codex`\./);
 });
 

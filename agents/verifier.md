@@ -34,9 +34,9 @@ you may be invoked alone on any candidate at any time.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
-- Record a verdict, `accept`, `needs_revision`, or `reject`, with findings:
+- Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
   the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Link only durable support, not ignored scratch; tracked support outside `.castwork/tasks/` belongs before the snapshot, otherwise keep it short.
-  When roles are coordinated, report current facts to the coordinator, the one Current state writer; working alone, maintain that section in place, about fifteen lines.
+  When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working alone, maintain that section in place, about fifteen lines.
 
 ```yaml
 assessments:

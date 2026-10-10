@@ -38,7 +38,7 @@ One record carries all four. They are concepts, not files or subsystems.
 
 **Required:** `schema` (integer, initially `1`), `id`, `title`, `status`.
 
-**Optional:** `depends_on` (list of ids), `allowed_paths` (list of globs),
+**Optional:** `depends_on` (list of ids), `allowed_paths` (list of globs; its shape is checked, but it is not enforced as a write boundary),
 `requirements` (map), `candidates`, `evidence`, `assessments` (lists of entries).
 
 Unrecognized fields are permitted and reported as informational. They are never
@@ -69,6 +69,10 @@ findings: >-
 Inside a flow collection a colon separates a key from its value only when a
 space follows it, as in YAML: `checks: [test:api, lint:api]` is two check
 names.
+
+A candidate's `ref` and an entry's `candidate` keep the text written, even when
+it is all digits: a commit id can be, and `0123456` read as a number would name
+a different object. Every other integer is a number.
 
 **Refused:** anchors and aliases, tags, multiple documents in one frontmatter,
 and explicit indentation indicators (`|2`, `>1-`). Each refusal names the line.
@@ -108,7 +112,9 @@ A `ref` is one of three kinds, and they differ in what can be checked later:
    taken, and since nothing refers to it, `git gc` may prune it once it is
    older than `gc.pruneExpire` (two weeks by default). For the current
    candidate, lint also reports whether the working tree still matches the
-   snapshot, or in how many paths it differs; in a sparse checkout it reports
+   snapshot, or in how many paths it differs, except that a lint of the whole
+   project does not compare the snapshots of done or cancelled tasks, which
+   are history; `task lint <id>` still does. In a sparse checkout it reports
    that as not checked, and changes inside a submodule's own working tree do
    not count. When a later candidate is a commit with the same tree, lint says
    so.
@@ -147,7 +153,7 @@ GIT_INDEX_FILE=<tmp>/index git --work-tree=<tmp>/tree checkout-index -a
 that took it: another clone reports it `unavailable`. It can be reviewed in
 that clone, including by an agent CLI working in the same checkout. For a
 reviewer anywhere else, use a commit the project authorizes, or send the base
-commit and `git diff <base> <sha>`: the reviewer applies the diff to a clean
+commit and `git diff --binary --no-textconv <base> <sha>`: the reviewer applies the diff to a clean
 checkout of the base and runs `snapshot`, and identical content gives the
 identical `tree:` sha, which proves they hold the candidate. A snapshot is not
 a general way to hand work between hosts or clones.
@@ -238,10 +244,11 @@ but `## Decision#` is Decision#.
 `## Current state` is optional recorded prose: what holds now (current
 candidate, unresolved issues, restrictions with decision ids and source line
 pointers, next step). Rewrite it in place, about fifteen lines, rather than
-appending another round. It has one writer: the coordinator from the roles'
-reports when roles are coordinated, otherwise the agent working alone. It
-grants nothing; cited decisions and the user's current instructions govern
-where they disagree. A section with only HTML comments and whitespace is empty.
+appending another round. When roles are coordinated, the coordinator is
+responsible for it: it writes the section from the roles' reports, or assigns
+its update to one role, avoiding overlapping updates. An agent working alone
+keeps its own. It grants nothing; cited decisions and the user's current
+instructions govern where they disagree. A section with only HTML comments and whitespace is empty.
 
 ## Requirements
 
@@ -259,7 +266,7 @@ consumer.
 | Requirement | Satisfied when | Unknown when |
 |---|---|---|
 | `checks: [name, ...]` | every named check has an effective `pass` evidence entry for the current candidate | never; absent evidence is `not_satisfied` with reason `evidence.missing` |
-| `independent_review: true` | at least one effective assessment of the current candidate has verdict `accept` and an `actor` not listed in the candidate's `producers` | the candidate has no `producers`, or every accepting assessment lacks `actor` |
+| `independent_review: true` | at least one effective assessment of the current candidate has verdict `accept` and an `actor` not listed in the candidate's `producers`, and no effective blocking assessment lacks an `actor` | the candidate has no `producers`, every accepting assessment lacks `actor`, or an effective `reject` or `needs_revision` lacks `actor` (reason `assessment.blocking_without_actor`) |
 | `assessment_roles: [role, ...]` | for each role, the effective assessment of the current candidate by that role has verdict `accept` | never; absent assessment is `not_satisfied` with reason `assessment.missing` |
 
 `independent_review` and `assessment_roles` ask for different things.
@@ -276,6 +283,14 @@ from one and a reject from another is `not_satisfied` with reason
 `assessment.rejected`, and only a later effective assessment by the rejecting
 actor can clear it.
 
+A blocking verdict recorded without an `actor` may have come from an
+independent reviewer, so it leaves `independent_review` `unknown` rather than
+letting another actor's accept satisfy it. The effective-entry rules still
+apply: assessments without an actor are grouped by role, so only a later
+assessment by the same role, also without an actor, replaces it. One recorded
+with an actor does not, because that actor may be someone else; nor does it
+for `assessment_roles`. A new candidate has its own assessments.
+
 A new requirement kind needs a real consumer before it is added.
 
 ### Independence
@@ -284,6 +299,13 @@ Independence is evaluated against the recorded `producers` of the current
 candidate, **not against role names**. The same actor string appearing as
 producer and reviewer is not independent regardless of the roles it claimed.
 Missing identity on either side is `unknown`, and a blank one counts as missing.
+Actors are compared trimmed, here and when choosing effective assessments.
+
+The producers compared are the current entry's. A later entry for the same
+`ref` is how a wrong attribution is corrected, and it is also how a producer
+could drop out of the list. When an accepting actor is listed as a producer by
+an earlier entry for the same `ref` but not by the current one, lint notes
+`candidate.producers_changed`; the evaluation itself is unchanged.
 
 **Together, `independent_review` and `assessment_roles` do not guarantee an
 independent verifier.** The two are evaluated separately. A producer that
@@ -341,8 +363,8 @@ The checks produce three results and **never merge them**:
 
 **1. Structural validity.** Unparseable frontmatter, unknown status value,
 unknown requirement kind, a requirement kind at the top level, missing required entry field, duplicate task id,
-duplicate recognized heading, or a recognized structured list that is not a
-list. Unrecognized frontmatter fields are informational, not errors. Additional
+duplicate recognized heading, a recognized structured list that is not a
+list, or an archive pointer read without its archive. Unrecognized frontmatter fields are informational, not errors. Additional
 prose headings raise no diagnostic.
 
 **2. Reference availability.** For each candidate reference and linked file:
@@ -383,7 +405,9 @@ independent consumer uses the same interface.
   keeps every reference. Text folds undeclared check names found only on earlier
   candidates and earlier `task lint` evidence into summaries; mixed names show
   their current entries. Credential-like commands are always noted. JSON
-  retains every informational note.
+  retains every informational note. Without an id it does not compare the
+  working tree with the snapshot of a done or cancelled task, and says how many
+  it left uncompared; their drift reads `not_checked`.
 - **`task list`** marks a record that is not `done` or `cancelled`, is
   structurally valid, and declares at least one requirement, all satisfied, as
   `ready to close`: `task set <id> status done` would accept it. A record that
@@ -396,6 +420,27 @@ independent consumer uses the same interface.
   same three outputs under `--json`.
 - **`task set <id> status done`** refuses, without writing, when that record's
   structure is invalid or its requirement evaluation is not all `satisfied`.
+- **`task set <id> <field> <value>`** writes one top-level value. It refuses a
+  field name that is not plain, a field that holds a list or a mapping, and
+  frontmatter it cannot read. The new text is read back in memory before it is
+  written, and is refused unless only that field changed; the file's line
+  endings and every other byte are kept. A record with structural errors stays
+  editable.
+- **`task add <id> candidate|evidence|assessment key=value...`** appends one
+  entry to the record's own list, as an edit by hand would, keeping the list's
+  indentation and the file's line endings. It takes only the fields this page
+  defines for that kind, checks `result`, `verdict`, `role` and `exit_code`,
+  and refuses an evidence or assessment entry whose `candidate` is not a
+  recorded `ref`, spelled exactly. It fills in nothing that was not given:
+  no actor, host, or model, and `at` only as `at=now`, the CLI's clock at
+  recording. A list in flow style is left for a hand edit. The new text is read
+  back in memory before the record is replaced in one rename.
+- **The record lock.** `task set`, `task add` and `task archive` each hold
+  `<record>.lock` beside the record while they read and replace it, so
+  simultaneous commands on one record, such as parallel verifier lenses
+  recording their assessments, all land. A command that finds the lock waits up
+  to ten seconds, then refuses and names it; one left by a stopped command can
+  be removed. An edit made by hand, outside these commands, is not covered.
 
 The exported `mayBeDone` check makes the same record-level completion decision
 as the CLI. It returns `allowed`, the `structural` result, and `blocking`
@@ -408,18 +453,20 @@ always recordable, and every record stays readable and editable in every state.
 
 ### Lint diagnostics
 
-Beyond the structural errors above, lint reports these. Only the first is an
-error; the rest are informational and change no outcome.
+Beyond the structural errors above, lint reports these. The first two are
+errors; the rest are informational and change no outcome.
 
 | Code | Level | Meaning | What to do |
 |---|---|---|---|
 | `requirement.misplaced` | error | `checks`, `independent_review`, or `assessment_roles` is at the top level of the frontmatter | move it under `requirements:`; until then lint fails and `task set <id> status done` refuses |
+| `archive.missing` | error | the body starts with the pointer `task archive` writes, and the record was read without its archive | restore the archive; if its earlier rounds were discarded on purpose, remove the pointer line |
+| `candidate.producers_changed` | info | an actor accepts the current candidate and an earlier entry for the same `ref` lists it among the producers, while the current entry does not | if the earlier attribution was right, record the producers again; independence is compared with the current entry's producers only |
 | `entries.in_body` | info | an unlabeled or YAML fenced block in the body, a list item's included, has `candidates:`, `evidence:`, or `assessments:` among its top-level keys | move the entries into the frontmatter lists; the checks never read the body, so a record kept this way has no candidate, evidence, or assessment |
 | `candidate.moving_ref` | info | the current candidate's `ref` is a name, such as `HEAD`, a branch, or `worktree-T005`, not a hex object id or `tree:` followed by one | record the commit id, or take a snapshot and record its `tree:<sha>`, as a new candidate |
 | `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it; text counts current entries for mixed names and summarizes names found only on earlier candidates; JSON retains all | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
 | `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint`; text summarizes earlier-candidate entries, JSON retains all | lint reports on the record, not the candidate; record the project's own checks instead |
 | `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
-| `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | run `task archive <id> --check` for exact proposed moves; a named refusal writes nothing; keep run logs in durable linked files |
+| `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | `task archive <id> --check` shows what moving earlier candidates' entries would save; the body stays, so keep run logs in durable linked files and observations short |
 | `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
 
 ## Archive
@@ -431,6 +478,8 @@ Decision records are unchanged. The archive's frontmatter contains only
 `evidence`, `assessments`; its body is ordinary Markdown in dated parts.
 An unreadable or invalid archive makes lint fail, prevents `task set ... done`,
 and makes the report incomplete rather than silently dropping earlier entries.
+So does a missing one: a task whose body starts with the archive pointer, read
+without its archive, has the structural error `archive.missing`.
 
 Every task evaluator loads both files: each list is the archive's entries
 followed by the record's. Validation runs once on that merged list, so old
@@ -452,33 +501,37 @@ merged raw entries to physical positions. No reads happen in the parser or check
 stderr; JSON carries merged frontmatter and check outputs.
 
 `task archive [<id>] [--check] [--json]` runs only explicitly. No id selects task
-files over 100 KB. It proposes each block-list prefix before the first entry
-for the current candidate ref; everything from that boundary stays, even an
-older entry. Flow-style or unsplittable lists stay whole. Raw comments travel
-with the following item, and source line endings and moved bytes are preserved.
-It proposes complete Blockers entries before the last ten, stopping at a heading
-anchored by a kept entry; and older top-level sections outside the contract,
-Current state and Blockers, keeping the last three and anchored sections.
-Each run appends a dated `Blockers and decisions, moved YYYY-MM-DD` part and
-gives the task one first-line archive pointer. Nothing to move is a no-op.
+files over 100 KB. It moves list entries only: each block-list prefix before
+the first entry for the current candidate ref; everything from that boundary
+stays, even an older entry. Flow-style or unsplittable lists stay whole. Raw
+comments travel with the following item, and source line endings and moved
+bytes are preserved. **The body is never moved**: moving prose would need its
+original order guessed back when the two files are read as one, so Blockers
+entries and older sections stay in the record, and a record whose size is
+mostly prose stays large. Each run appends a dated `Entries moved YYYY-MM-DD`
+part and gives the task one first-line archive pointer. Nothing to move is a
+no-op.
 
 Before any write, the pair is reparsed and checked: list values/order, structural
 error codes/counts, requirements/reasons, done decision and task report must
 match, except physical pointers, diagnostic locations and archive navigation.
-Existing archive prose stays byte-identical; a successful list-only move adds
-only its dated heading. CLI verification also compares the corpus with actual
-and projected local Git observations: making a clean tracked record uncommitted
-is a named refusal, not an implicit exception. No original body order is guessed. A lossy prose move, or any other difference,
-is a **named refusal**, not permission to weaken the comparison. `--check`
-reports exact proposed moves and bytes; a refused proposal leaves actual sizes
-unchanged and exits non-zero.
+Existing archive prose stays byte-identical; a move adds only its dated heading.
+CLI verification also compares the corpus with actual and projected local Git
+observations. Two differences in the selected record are expected and exempt:
+writing it makes it uncommitted, and its `record.large` note may change or go.
+The same differences in any other record, and any other Git difference, refuse.
+Any other difference is a **named refusal**, not permission to weaken the
+comparison. `--check` reports exact proposed moves and bytes; a refused
+proposal leaves actual sizes unchanged and exits non-zero.
 
 Writes refuse symbolic links, junctions and redirects, and re-read both inputs
 before staging; changed bytes refuse with nothing written. Temporary files are
 in the same folder and do not end in `.md`. The archive is replaced first, then
 the task. Failure replacing the task restores the previous archive bytes or
 removes an archive created by the run, and says exactly what was restored.
-These checks detect changes before writing, not changes made afterwards.
+These checks detect changes before writing, not changes made afterwards. The
+write holds the record's lock, which `task set` and `task add` take too, so
+none of them interleaves with it; an edit made by hand meanwhile is not covered.
 
 ## Canonical example
 

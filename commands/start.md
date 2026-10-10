@@ -64,12 +64,14 @@ a bare `/castwork` in the same session, you have oriented already.
    criteria, and cited decisions using section-only reads on large files, not
    unrestricted reads of their entry lists. A report never replaces the contract or assessment of the current
    candidate; earlier verdicts carry nothing over.
-   After orientation, for a task you will work on over 100 KB run `task archive <id>`; whenever
-   you archive a task or resume an archived one, review `## Current state` against the record
-   and its archive and refresh it before substantive work; propose separate tasks linked by
-   `depends_on` for independently finishable parts, never a mechanical split or by size alone.
-   When roles are coordinated, the coordinator rewrites Current state from their reports;
-   an agent working alone writes its own, about fifteen lines, not another appended round.
+   Archiving is explicit: `task archive <id>` moves earlier candidates' entries to a paired
+   archive when those lists make a record hard to work with. Whenever you archive a task or
+   resume an archived one, review `## Current state` against the record and its archive and
+   refresh it before substantive work; propose separate tasks linked by `depends_on` for
+   independently finishable parts, never a mechanical split or by size alone.
+   When roles are coordinated, Current state is the coordinator's: it rewrites the section from
+   their reports, or assigns its update to one role, never two at once. An agent working alone
+   writes its own, about fifteen lines, not another appended round.
 4. After the records, read the handoff the user gives you or the project's
    documents name; otherwise `.castwork/local/handoff.md`, if it exists. It
    describes a moment that has passed: check what you act on against the
@@ -130,6 +132,10 @@ something better than an edit:
   records only `blocked` or `needs_context`
 - `npx --no castwork snapshot` — a `tree:<sha>` candidate reference for work
   that is not committed
+- `npx --no castwork task add <id> candidate|evidence|assessment key=value ...`
+  — appends one entry with the fields the record format defines, under the
+  record's lock, so parallel roles recording at once lose nothing. It fills in
+  only what you give, and `at=now`. An edit by hand is equally valid.
 
 The CLI is this project's installed copy of the `castwork` package. It is
 not on the PATH, so a bare `castwork` is not found; run it through `npx`.
@@ -149,10 +155,11 @@ says to commit. If it refuses, report the files it names; do not force them.
 Then tell the user that this session keeps the instructions it started with,
 and that a new session picks up the update.
 
-The same holds for every change to roles, models, and skills: a host reads
-them when a session starts, so they take effect only in a new session. Never
-hand-edit a generated file to change a role; `update` overwrites it, and the
-running session never reads it. Do not infer your own model from
+The same holds for every change to roles, models, and skills: most hosts read
+them when a session starts, so count on them only in a new session. Claude Code
+reloads role files in an existing `.claude/agents/` for the next role it
+starts; this session's own instructions stay as they were. Never hand-edit a
+generated file to change a role; `update` overwrites it. Do not infer your own model from
 `role_settings`: they describe the agent files, not the session you run in.
 
 Record the candidate you produced and the evidence for it. Record failures as
@@ -200,7 +207,10 @@ To delegate, start the host's subagent for that role: the one named `thinker`,
 tell it to read its role file. A general-purpose subagent told it is the
 thinker has only the word. Only if the host cannot start a subagent by name,
 tell the one you start to read its role file before anything else, and give it
-the path. Either way, give it the task id and let it read the record. When the
+the path. Either way, give it the task id and let it read the record. A brief
+adds only what the record does not say: it asks for no status but `blocked` or
+`needs_context`, no Current state update you did not assign, and no check
+broader than the working policy's cadence for that step. When the
 work comes from one of the project's documents, also name the document and the
 part it comes from: finding them is your job, not the role's. Name a skill,
 with what it is for, when the working policy asks for one or says the role's
@@ -300,7 +310,7 @@ process; it authorizes nothing else.
   that took it, so a routed CLI working in this same checkout can review it and
   a delegate in another clone cannot. There, use a commit the user or the
   working policy authorizes, or send the base commit and
-  `git diff <base> <sha>`: the reviewer applies the diff to a clean checkout of
+  `git diff --binary --no-textconv <base> <sha>`: the reviewer applies the diff to a clean checkout of
   the base and runs `snapshot`, and identical content gives the identical
   `tree:` sha, which proves it holds the candidate. A snapshot is not a general
   way to hand work between hosts.

@@ -1,6 +1,6 @@
 # CLI
 
-Seventeen command paths. Installation, diagnostics, and minimal record
+Eighteen command paths. Installation, diagnostics, and minimal record
 operations. A dedicated command exists only where it does something materially
 better than editing a record by hand.
 
@@ -15,8 +15,9 @@ better than editing a record by hand.
 | `task list [--json]` | List task records with their ids, titles, and statuses. A record that is not `done` or `cancelled`, is structurally valid, and declares at least one requirement, all satisfied, is marked `ready to close`: `task set <id> status done` would accept it. A record that declares none is never marked, although `task set` accepts it. `--json` gives each row `requirements_satisfied`, from requirement evaluation alone (`null` when none are declared); structural validity is `task lint`'s to report. |
 | `task show <id> [--json]` | Print the task file unchanged on stdout, naming its paired archive on stderr when present. `--json` gives merged frontmatter and the three check outputs. The id is required; without it, a usage error. |
 | `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line. Text folds undeclared check names found only on earlier candidates and earlier lint-as-evidence notes; mixed names show their current entries. Every credential note remains visible. `--json` keeps every reference and note. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
-| `task archive [<id>] [--check] [--json]` | Explicitly separate earlier rounds into `<record>.archive.md` beside the task. No id selects records over 100 KB. Reports exact proposed list/section/Blockers moves and bytes; `--check` writes nothing. Strict in-memory verification refuses any outcome or report-content difference, with a named reason and no writes. Records are processed independently; exit 1 if any failed/refused, 2 for usage. JSON is exactly one document. |
-| `task set <id> <field> <value>` | One safe frontmatter write. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. |
+| `task archive [<id>] [--check] [--json]` | Explicitly move the entries for earlier candidates into `<record>.archive.md` beside the task; the body is never moved. No id selects records over 100 KB. Reports exact proposed list moves and bytes; `--check` writes nothing. Strict in-memory verification refuses any outcome or report-content difference, with a named reason and no writes; the selected record becoming uncommitted, and its size note, are the only exempt differences. Records are processed independently; exit 1 if any failed/refused, 2 for usage. JSON is exactly one document. |
+| `task set <id> <field> <value>` | One safe frontmatter write of a top-level value. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. Refuses a field name that is not plain, a field holding a list or mapping, and any write that would change more than that field. |
+| `task add <id> <kind> <key=value>...` | Append one `candidate`, `evidence`, or `assessment` entry to the record's own list, with only the fields the record format defines for it. An evidence or assessment `candidate` must be a recorded `ref`; nothing is filled in that was not given, except `at=now`. See [record-format.md](record-format.md#command-behavior). |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
 | `report [<id>] [--json]` | Read-only project account, or task/decision view selected by declared id. See [Report](#report). |
@@ -35,7 +36,7 @@ accepted by every command.
 | `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
 | `task archive` | `--check`, `--json` |
 | `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `report`, `snapshot` | `--json` |
-| `task new`, `task set`, `decision new`, `version`, `help` | none |
+| `task new`, `task set`, `task add`, `decision new`, `version`, `help` | none |
 
 An unknown flag, a flag the command does not take, a switch given a value
 (`--check=yes`), a value-taking flag followed by another flag instead of a
@@ -58,9 +59,10 @@ so in its hint.
 
 That is the whole command set. A dedicated command exists only where it does
 something materially better than editing the record: archive performs verified
-raw-text separation and staged paired writes. Adding a candidate, recording
-evidence, or writing an assessment remains an edit to the file; no other
-command archives as a side effect.
+raw-text separation and staged paired writes, and `task add` writes a
+correctly formed entry under the record's lock, so simultaneous writers do not
+lose each other's entries. Adding a candidate, recording evidence, or writing an
+assessment by hand remains equally valid; no command archives as a side effect.
 
 ## Report
 

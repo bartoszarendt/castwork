@@ -59,6 +59,12 @@ export const RECOGNIZED_FIELDS = Object.freeze([
 const REQUIRED_FIELDS = Object.freeze(['schema', 'id', 'title', 'status']);
 
 /**
+ * How record frontmatter is read: a candidate reference is the text written,
+ * even when it is all digits, since a commit id can be.
+ */
+export const RECORD_YAML = Object.freeze({ textKeys: Object.freeze(['ref', 'candidate']) });
+
+/**
  * Safe conversion at the check/diagnostic boundary. Preserve the existing
  * scalar and array comparisons; YAML mappings have no primitive conversion.
  * This never changes the recorded frontmatter values.
@@ -366,7 +372,7 @@ function readArchive(text, id, path) {
   let frontmatter = {};
   try {
     if (yaml === null) throw new Error('no --- delimited frontmatter');
-    const parsed = parseYaml(yaml);
+    const parsed = parseYaml(yaml, RECORD_YAML);
     if (!isPlainObject(parsed)) throw new Error('frontmatter must be a mapping');
     frontmatter = parsed;
     const rootIndent = yaml.split(/\r?\n/).find(line => line.trim() && !line.trimStart().startsWith('#'))?.match(/^ */)?.[0] ?? '';
@@ -404,7 +410,7 @@ export function parseRecord(text, options = {}) {
     push(errors, 'frontmatter.missing', 'the record has no --- delimited frontmatter');
   } else {
     try {
-      const parsed = parseYaml(yaml);
+      const parsed = parseYaml(yaml, RECORD_YAML);
       if (!isPlainObject(parsed)) {
         push(errors, 'frontmatter.not_a_mapping', 'frontmatter must be a mapping');
       } else {
@@ -437,6 +443,14 @@ export function parseRecord(text, options = {}) {
       const pointer = `Earlier rounds: [${name}](${name}), moved by \`task archive\`.`;
       const first = body.match(/^[^\r\n]*(?:\r?\n|$)/)?.[0] ?? '';
       if (first.replace(/\r?\n$/, '') === pointer) body = body.slice(first.length);
+    }
+  } else {
+    // The pointer says earlier rounds were moved to a paired archive. Read
+    // without it, the record is incomplete rather than shorter: its earlier
+    // entries, and any errors among them, would stop counting in silence.
+    const pointer = /^Earlier rounds: \[([^\]\r\n]+\.archive\.md)\]\(\1\), moved by `task archive`\.\r?$/m.exec(body.match(/^[^\n]*/)?.[0] ?? '');
+    if (pointer) {
+      push(errors, 'archive.missing', `the record points to its archive ${pointer[1]}, which was not read; restore it, or remove the pointer line if the earlier rounds were discarded on purpose`);
     }
   }
 
@@ -546,6 +560,24 @@ export function parseRecord(text, options = {}) {
       field: 'candidates',
       index: /** @type {unknown[]} */ (frontmatter.candidates).lastIndexOf(current),
     });
+  }
+  // The last entry for a ref is how a wrong attribution is corrected, and also
+  // how a producer can drop out of the list independence is compared with. Say
+  // so when an accepting actor was a producer of this same ref earlier.
+  if (current !== undefined && currentRef !== '') {
+    const named = (/** @type {unknown} */ list) => Array.isArray(list) ? list.filter((item) => typeof item === 'string' && item.trim() !== '').map((item) => item.trim()) : [];
+    const now = new Set(named(current.producers));
+    const earlier = new Set(candidateEntries.slice(0, -1).filter((entry) => recordValueText(entry.ref) === currentRef).flatMap((entry) => named(entry.producers)));
+    const accepting = assessmentEntries.filter((entry) => recordValueText(entry.candidate) === currentRef && recordValueText(entry.verdict) === 'accept');
+    for (const actor of new Set(named(accepting.map((entry) => entry.actor)))) {
+      if (!earlier.has(actor) || now.has(actor)) continue;
+      info.push({
+        code: 'candidate.producers_changed',
+        message: `${actor} accepts ${currentRef}, and an earlier entry for the same ref lists ${actor} among its producers; independence is compared with the current entry's producers only`,
+        field: 'candidates',
+        index: /** @type {unknown[]} */ (frontmatter.candidates).lastIndexOf(current),
+      });
+    }
   }
   for (const source of [{body, path: options.path ?? null}, ...(archive ? [{body: archive.body, path: archive.path}] : [])]) {
     const inBody = bodyEntryKeys(source.body);

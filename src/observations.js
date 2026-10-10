@@ -157,9 +157,10 @@ function refResolves(context, ref) {
  * @param {import('./record.js').ParsedRecord} record
  * @param {string} root
  * @param {ObservationContext} [context] shared across the records of one run
+ * @param {{drift?: boolean}} [options] `drift: false` leaves the working tree uncompared
  * @returns {import('./checks.js').Observations}
  */
-export function observe(record, root, context = observationContext(root)) {
+export function observe(record, root, context = observationContext(root), options = {}) {
   const { candidates, evidence, assessments } = recordEntries(record);
   // Null prototypes, because every key here comes from a record. On a plain
   // object `refs['__proto__'] = false` is a silent no-op and the later read
@@ -190,7 +191,7 @@ export function observe(record, root, context = observationContext(root)) {
     // working tree with a temporary index and writes nothing into `.git`.
     const current = candidates.length > 0 ? String(candidates[candidates.length - 1].ref ?? '') : '';
     const currentTree = snapshotTree(current);
-    if (currentTree !== null && refs[current] === true) {
+    if (options.drift !== false && currentTree !== null && refs[current] === true) {
       if (!context.drift.has(currentTree)) context.drift.set(currentTree, snapshotDrift(root, currentTree));
       const paths = context.drift.get(currentTree);
       if (paths) drift[current] = paths;

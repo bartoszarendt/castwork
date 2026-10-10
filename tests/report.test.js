@@ -291,7 +291,8 @@ test('interpreted refs group like lint while raw numeric, array and mapping valu
     assert.deepEqual(task.current.entries, [1, 2]);
     assert.equal(r.totals.current_triples.fail, 1);
     assert.equal(r.totals.outcome_triples.fail, 1);
-    assert.deepEqual(JSON.parse(JSON.stringify(r.records[0].frontmatter.candidates[0].ref)), ref);
+    // A ref keeps the text written: an all-digit one reads back as that text.
+    assert.deepEqual(JSON.parse(JSON.stringify(r.records[0].frontmatter.candidates[0].ref)), ref === 1234567 ? '1234567' : ref);
     assert.deepEqual(r.attention[0].fail, ['test']);
     assert.ok(!r.problems.some(p => p.code === 'report.ref_missing'));
     // The same non-string value must also work as the effective current ref.

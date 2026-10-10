@@ -25,6 +25,10 @@ assessments:
     findings: "..."
 ```
 
+`npx --no castwork task add <id> assessment candidate=007c7f8 role=verifier
+actor=verifier@codex verdict=accept findings="..."` writes the same entry under
+the record's lock, so parallel lenses recording at once lose nothing.
+
 `verdict` is `accept`, `reject`, or `needs_revision`. Record `host`, the exact
 host-reported `model`, and an RFC 3339 `at` timestamp when the record must stay
 self-contained or comparable without host-local telemetry. They are asserted,
@@ -82,7 +86,7 @@ GIT_INDEX_FILE=<tmp>/index git --work-tree=<tmp>/tree checkout-index -a
 
 A snapshot exists only in the clone that took it. Reviewing from another clone,
 ask for a commit the project authorizes, or for the base commit and
-`git diff <base> <sha>`: apply the diff to a clean checkout of the base and run
+`git diff --binary --no-textconv <base> <sha>`: apply the diff to a clean checkout of the base and run
 `npx --no castwork snapshot` there. Identical content gives the identical
 `tree:` sha, which proves you hold the candidate.
 

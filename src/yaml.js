@@ -275,6 +275,23 @@ function parseScalar(text, line) {
   return value;
 }
 
+/**
+ * Keys whose plain integer-looking values keep the text that was written, for
+ * the duration of one `parseYaml` call.
+ *
+ * A commit id can be all digits. Read as a number, `0123456` became `123456`
+ * and a long one lost precision, so a candidate stopped naming its commit and
+ * evidence for it stopped matching. Only the named keys are affected; every
+ * other integer is still a number.
+ * @type {Set<string>}
+ */
+let textKeys = new Set();
+
+/** @param {string} key @param {unknown} value @param {string} raw the written spelling */
+function keepText(key, value, raw) {
+  return typeof value === 'number' && textKeys.has(key) ? raw : value;
+}
+
 /** Parse a flow scalar, sequence, or mapping. @param {string} text @param {number} line */
 function parseFlow(text, line) {
   const tokens = tokenizeFlow(text, line);
@@ -314,7 +331,8 @@ function parseFlow(text, line) {
         if (Object.hasOwn(map, flowKey)) {
           throw new YamlError(`duplicate key ${flowKey}`, line);
         }
-        map[flowKey] = parseValue();
+        const raw = tokens[index];
+        map[flowKey] = keepText(flowKey, parseValue(), raw);
         if (tokens[index] === ',') { index += 1; continue; }
         if (tokens[index] === '}') { index += 1; return map; }
         throw new YamlError('expected , or } in flow mapping', line);
@@ -546,7 +564,7 @@ function assignKey(map, key, rest, lines, cursor, childIndent, line) {
     return;
   }
   if (rest !== '') {
-    map[key] = parseScalar(rest, lineNumber);
+    map[key] = keepText(key, parseScalar(rest, lineNumber), rest.trim());
     return;
   }
   if (cursor.i < lines.length && lines[cursor.i].indent >= childIndent) {
@@ -622,15 +640,22 @@ export function formatScalar(value) {
 /**
  * Parse a YAML document in the supported subset.
  * @param {string} text
+ * @param {{textKeys?: readonly string[]}} [options] keys whose integer-looking values stay text
  * @returns {unknown}
  */
-export function parseYaml(text) {
-  const lines = splitLines(text);
-  if (lines.length === 0) return Object.create(null);
-  const cursor = { i: 0 };
-  const value = parseNode(lines, cursor, lines[0].indent);
-  if (cursor.i !== lines.length) {
-    throw new YamlError('unexpected content after document', lines[cursor.i].number);
+export function parseYaml(text, options = {}) {
+  const previous = textKeys;
+  textKeys = new Set(options.textKeys ?? []);
+  try {
+    const lines = splitLines(text);
+    if (lines.length === 0) return Object.create(null);
+    const cursor = { i: 0 };
+    const value = parseNode(lines, cursor, lines[0].indent);
+    if (cursor.i !== lines.length) {
+      throw new YamlError('unexpected content after document', lines[cursor.i].number);
+    }
+    return value;
+  } finally {
+    textKeys = previous;
   }
-  return value;
 }

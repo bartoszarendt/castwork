@@ -4,7 +4,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {recordDirectory} from './generated.js';
 import {ARCHIVE_SUFFIX, TASKS_DIRECTORY} from './layout.js';
-import {readTask, orphanArchives, safeTaskPath} from './task-record-io.js';
+import {readTask, orphanArchives, safeTaskPath, withRecordLock} from './task-record-io.js';
 import {duplicateIdErrors} from './checks.js';
 import {LARGE_RECORD_BYTES, recordValueText} from './record.js';
 import {splitArchive, verifyArchive} from './archive.js';
@@ -92,7 +92,8 @@ export function taskArchive(root, id = null, options = {}) {
       const refused = verifyArchive({...input.record, path: relative}, proposed, {archive_path: path.relative(root, input.archive_path).split(path.sep).join('/'), body_line: bodyLine,
         git_before: git, git_after: gitAfter, corpus: corpus.inputs, problems: corpus.problems});
       if (refused) { records.push({...result, status: 'refused', reason: refused, summary: proposed.summary}); continue; }
-      if (!options.check) writeArchivePair(root, input, proposed, options.io);
+      // The same lock task set and task add take, so none of them interleaves with this write.
+      if (!options.check) withRecordLock(input.file, () => writeArchivePair(root, input, proposed, options.io));
       records.push({...result, status: options.check ? 'checked' : 'archived', summary: proposed.summary});
     } catch (error) { records.push({...result, status: 'failed', reason: message(error)}); }
   }
@@ -103,7 +104,7 @@ export function taskArchive(root, id = null, options = {}) {
     for (const row of records) {
       out(`${row.id ?? '<unreadable>'} ${row.path}: ${row.status}${row.reason ? ` — ${row.reason}` : ''}`);
       if (row.summary) {
-        out(`  proposed: ${Object.entries(row.summary.lists).map(([field, count]) => `${count} ${field}`).join(', ')}; ${row.summary.blockers} Blockers entries; sections: ${row.summary.sections.join(', ') || 'none'}`);
+        out(`  proposed: ${Object.entries(row.summary.lists).map(([field, count]) => `${count} ${field}`).join(', ')}; the body stays in the record`);
         out(`  record bytes: ${row.summary.bytes_before} -> ${row.summary.bytes_after}${row.status === 'refused' ? ' (proposal refused; actual file unchanged)' : ''}`);
         for (const reason of row.summary.retained) out(`  retained: ${reason}`);
       }

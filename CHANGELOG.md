@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.9.5
+
+**Record integrity**
+
+- `task set` no longer damages records. It matched the field name as a pattern,
+  so `a.` replaced an unrelated `ab:` line; it read the value as a replacement
+  template, so `$&` or `` $` `` copied other text in, and `` $` `` could leave
+  the record unreadable; it cut a block-scalar value or a list in half; and it
+  added a field with a bare LF to a CRLF file. It now matches the key literally,
+  replaces a value's whole span, keeps the file's line endings, refuses a field
+  that is not a plain name or that holds a list or mapping, and checks the new
+  text in memory before writing: unless only that field changed, nothing is
+  written. A record with structural errors stays editable. `task new` and
+  `decision new` insert titles literally too.
+- A candidate's `ref` and an entry's `candidate` keep the text written. An
+  all-digit commit id such as `0123456` was read as the number `123456`, so it
+  named nothing and its evidence stopped matching; a long one lost precision.
+  Every other integer is still a number.
+- A record whose body starts with the archive pointer, read without its
+  archive, has the structural error `archive.missing`, so lint fails and `done`
+  refuses instead of earlier entries dropping out in silence.
+- Actors are trimmed when choosing the effective assessment, as they already
+  were when comparing independence.
+
+**Interpretation and guidance**
+
+- `independent_review` is `unknown`, reason
+  `assessment.blocking_without_actor`, when an effective `reject` or
+  `needs_revision` has no `actor`: it may have come from an independent
+  reviewer. As the effective-entry rules have it, only a later assessment by
+  the same role, also without an actor, replaces it; a new candidate starts
+  afresh.
+- Lint notes `candidate.producers_changed` when an accepting actor is listed as
+  a producer by an earlier entry for the same ref but not by the current one.
+  Evaluation is unchanged.
+- Lint without an id no longer compares the working tree with the snapshots of
+  done or cancelled tasks, which differ from today's tree as a matter of
+  course; it says how many it left uncompared. Their references and structure
+  are still checked, and `task lint <id>` still compares one.
+- Current state stays the coordinator's when roles are coordinated, and it may
+  now assign the update to one role, never two at once. A coordinator's brief
+  adds only what the record does not say: no status but `blocked` or
+  `needs_context`, no Current state update it did not assign, and no check
+  broader than the working policy's cadence for that step.
+- Archiving is no longer a step for every record over 100 KB; the presets use
+  it when the entry lists make a record hard to work with.
+- A snapshot handed to another clone travels as
+  `git diff --binary --no-textconv <base> <sha>`, so binary changes survive.
+- Claude Code: `.claude/commands/castwork.md` is no longer generated, since
+  the `castwork` skill of the same name takes precedence; `update` removes the
+  old file unless you edited it. The entry command now says that Claude Code
+  reloads role files during a session. `allowed_paths` is documented as
+  checked for shape, not enforced.
+
+**Measured conveniences**
+
+- Added `task add <id> candidate|evidence|assessment key=value...`. It appends
+  one entry with the fields the record format defines, typed and checked,
+  keeping the list's indentation and the file's line endings. An evidence or
+  assessment `candidate` must be a recorded ref. It fills in nothing that was
+  not given; `at=now` is the CLI's clock. Editing by hand stays equally valid.
+- `task set`, `task add` and `task archive` hold a lock beside the record while
+  they read and replace it, and replace it in one rename, so simultaneous
+  writers, such as parallel verifier lenses, all land. An edit by hand made
+  meanwhile is not covered.
+- `task archive` moves list entries only: the body is never moved, and the
+  archive gains an `Entries moved YYYY-MM-DD` part. Verification now exempts
+  exactly the two changes writing the pair makes to the selected record, its
+  uncommitted state and its size note, and the Blockers pointer, a line
+  number, in attention rows. On copies of the five projects using Castwork, it
+  archived 28 of the 29 records over 100 KB, which had all been refused, with
+  every lint outcome unchanged; 21 stay over 100 KB because their size is prose.
+- Regenerate projections with `update`, then start a new host session.
+
 ## 0.9.4
 
 - Added explicit `task archive [<id>] [--check] [--json]`: raw earlier-round

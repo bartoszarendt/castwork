@@ -105,7 +105,7 @@ test('the entry command carries two distinct descriptions', () => {
 });
 
 test('a generated command file is described by what it does', () => {
-  for (const host of ['claude', 'opencode', 'pi']) {
+  for (const host of ['opencode', 'pi']) {
     const destination = readAdapter(host).files.find((entry) => entry.kind === 'command').to;
     const file = generateHost(host).find((entry) => entry.path === destination);
     assert.ok(file, `${host} has no command file`);
@@ -114,6 +114,14 @@ test('a generated command file is described by what it does', () => {
       `${host} command does not carry the command description`,
     );
   }
+});
+
+test('claude generates no command its skill would shadow, and the skill carries the entry procedure', () => {
+  const files = generateHost('claude');
+  assert.ok(!files.some((file) => file.path.startsWith('.claude/commands/')), 'claude generates a command file');
+  const index = files.find((file) => file.path === '.claude/skills/castwork/SKILL.md');
+  assert.ok(index, 'claude generates no entry skill');
+  assert.ok(index.content.includes(readCommand().body), 'the entry skill does not carry the entry procedure');
 });
 
 test('codex declines implicit invocation of the Castwork skill', () => {
@@ -209,7 +217,7 @@ test('command arguments declarations are non-empty strings and all other dollar 
 
 test('the argument generator change alone preserves existing-host command bytes', () => {
   const command = readCommand();
-  for (const host of ['claude', 'opencode']) {
+  for (const host of ['opencode']) {
     const actual = generateHost(host).find((file) => file.path.endsWith('commands/castwork.md')).content;
     const previous = `---\ndescription: ${formatScalar(command.description)}\n---\n\n${command.body}\n\n### Routes from this host\n\nNone: every role runs in this host.\n`;
     assert.equal(actual, previous, host);
@@ -220,7 +228,7 @@ test('the argument generator change alone preserves existing-host command bytes 
   const command = readCommand();
   const hosts = ['claude', 'opencode', 'codex'];
   const settings = { codex: { verifier: { model: 'custom-$1', model_reasoning_effort: 'high' } } };
-  for (const host of ['claude', 'opencode']) {
+  for (const host of ['opencode']) {
     const routes = resolveRoutes(host, { verifier: 'codex' }, settings, hosts);
     const actual = generateHost(host, { routes }).find((file) => file.path.endsWith('commands/castwork.md')).content;
     const route = '- `verifier` runs in Codex (`codex`). Role file: `.codex/agents/verifier.toml`. Actor: `verifier@codex`. ' +

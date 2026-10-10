@@ -82,26 +82,23 @@ evidence:
   assert.equal(split(flow).summary.moved, false);
   assert.match(split(flow).summary.retained.join(' '), /flow-style/);
 });
-test('complete Blockers entries and older sections move raw, but an anchored child heading stops the prefix', () => {
+test('the body never moves: Blockers entries and older sections stay in the record, byte for byte', () => {
   const entries = Array.from({length: 14}, (_, i) => `- round ${i}\n  child\n`).join('\n');
   const sections = Array.from({length: 5}, (_, i) => `## Round ${i}\ntext ${i}\n\n`).join('');
-  const pair = split(text(lists, '## Intent\nOutcome\n## Blockers and decisions\n' + entries + sections));
-  assert.equal(pair.summary.blockers, 4); assert.deepEqual(pair.summary.sections, ['Round 0','Round 1']);
-  assert.ok(pair.archive_text.includes(entries.slice(0, entries.indexOf('- round 4'))));
-  assert.ok(pair.archive_text.includes('## Round 0\ntext 0\n\n## Round 1\ntext 1\n\n'));
-  const data = lists.replace('verdict: accept}', 'verdict: accept, findings: "#keep"}');
-  const body = '## Blockers and decisions\nfirst\n\n### Keep\nsecond\n\n' + entries;
-  const held = split(text(data, body));
-  assert.equal(held.summary.blockers, 0); assert.match(held.summary.retained.join(' '), /anchored heading/);
+  const body = '## Intent\nOutcome\n## Blockers and decisions\n' + entries + sections;
+  const pair = split(text(lists, body));
+  assert.deepEqual(pair.summary.lists, {candidates: 1, evidence: 1, assessments: 1});
+  assert.equal(pair.summary.blockers, undefined); assert.equal(pair.summary.sections, undefined);
+  assert.ok(pair.record_text.endsWith(body));
+  assert.ok(!pair.archive_text.includes('round 0'));
+  assert.match(pair.archive_text, /\n## Entries moved 2026-10-09\n$/);
+  assert.equal(verifyArchive(parse(text(lists, body)), pair, {archive_path: 'T-001.archive.md', body_line: 1}), null);
 });
-test('a section holding a kept findings heading stays; strict verification refuses lossy body movement and tampered outcomes', () => {
-  const data = lists.replace('verdict: accept}', 'verdict: accept, findings: "#keep"}');
-  const body = '## Old\n### Keep\nfinding\n## Other\nmove\n## One\na\n## Two\nb\n## Three\nc\n';
-  const source = text(data, body), pair = split(source);
-  assert.deepEqual(pair.summary.sections, ['Other']); assert.ok(pair.record_text.includes('### Keep\nfinding'));
-  assert.match(verifyArchive(parse(source), pair, {archive_path: 'T-001.archive.md'}), /report.*body.*changed/);
+test('strict verification refuses tampered outcomes and appended prose', () => {
   const safe = split(text()); safe.record_text = safe.record_text.replace('result: pass', 'result: fail');
   assert.match(verifyArchive(parse(text()), safe, {archive_path: 'T-001.archive.md'}), /evidence merged/);
+  const prose = split(text()); prose.archive_text += 'An added claim.\n';
+  assert.match(verifyArchive(parse(text()), prose, {archive_path: 'T-001.archive.md'}), /archive body gained unverified text/);
 });
 test('archived candidate later becomes current again with its old evidence, and malformed/credential entries remain visible', () => {
   const pair = split(text());
@@ -170,12 +167,17 @@ test('final review F3: missing fields in archived entries make coverage incomple
   assert.equal(result.report.records[0].task.structural.errors.filter(e => e.code === 'entry.missing_field').length, 1);
 });
 
-test('final review F4: strict verification includes supplied Git observations, never exempts uncommitted', () => {
+test('strict verification exempts only the selected record becoming uncommitted, not other Git differences', () => {
   const original = parse(text()), proposed = split(text());
   const before = {records: {'T-001.md': {first_commit: 'date', last_commit: 'date'}}};
   const after = {records: {'T-001.md': {...before.records['T-001.md'], uncommitted: true}}};
-  assert.match(verifyArchive(original, proposed, {archive_path: 'T-001.archive.md', git_before: before, git_after: after}), /git.uncommitted changed/);
-  assert.equal(verifyArchive(original, proposed, {archive_path: 'T-001.archive.md', git_before: after, git_after: after}), null);
+  assert.equal(verifyArchive(original, proposed, {archive_path: 'T-001.archive.md', git_before: before, git_after: after}), null);
+  const moved = {records: {'T-001.md': {first_commit: 'other', last_commit: 'date', uncommitted: true}}};
+  assert.match(verifyArchive(original, proposed, {archive_path: 'T-001.archive.md', git_before: before, git_after: moved}), /git.first_commit changed/);
+  const other = parseRecord(text().replace('id: T-001', 'id: T-002'), {path: 'T-002.md'});
+  const corpus = [{kind: 'task', record: original}, {kind: 'task', record: other}];
+  const both = {records: {...after.records, 'T-002.md': {uncommitted: true}}};
+  assert.match(verifyArchive(original, proposed, {archive_path: 'T-001.archive.md', corpus, git_before: before, git_after: both}), /records\.1\.git changed/);
 });
 
 test('final review F5: physical labels never rewrite index-shaped recorded results, verdicts or check names', t => {

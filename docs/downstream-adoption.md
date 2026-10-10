@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.9.3 is current.
+> **Status:** 0.9.5 is current.
 
 ## What you are adopting
 
@@ -36,7 +36,7 @@ npm install --save-dev github:bartoszarendt/castwork
 npx castwork setup --host codex
 ```
 
-`--host` is repeatable and takes `codex`, `claude`, or `opencode`. The
+`--host` is repeatable and takes `codex`, `claude`, `opencode`, or `pi`. The
 choice is recorded in `castwork.json`, so later runs need no flags.
 
 Commit everything it writes except `.castwork/local/`. Generated files carry

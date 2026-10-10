@@ -17,6 +17,7 @@ import { PublicError } from './public-error.js';
 import { doctor, remove, setup, update } from './setup.js';
 import { taskLint, taskList, taskNew, taskSet, taskShow } from './task-cli.js';
 import {taskArchive} from './archive-cli.js';
+import {taskAdd} from './task-add.js';
 import { takeSnapshot } from './snapshot.js';
 import { validate } from './validate.js';
 import { reportCommand } from './report-cli.js';
@@ -54,6 +55,7 @@ export const COMMAND_PATHS = Object.freeze([
   { path: 'task lint', flags: ['json'], args: 1, summary: 'Report structural validity, references, and requirements. Never writes.' },
   { path: 'task archive', flags: ['check', 'json'], args: 1, summary: 'Separate earlier rounds into a paired archive after strict verification: task archive [<id>]. --check writes nothing.' },
   { path: 'task set', flags: [], args: Infinity, summary: 'One safe frontmatter write.' },
+  { path: 'task add', flags: [], args: Infinity, summary: 'Append one entry: task add <id> candidate|evidence|assessment key=value...' },
   { path: 'decision new', flags: [], args: Infinity, summary: 'Create a decision record from the template.' },
   { path: 'decision list', flags: ['json'], args: 0, summary: 'List decision records with their ids, statuses, dates, and titles.' },
   { path: 'report', flags: ['json'], args: 1, summary: 'Read-only project, task or decision account: report [<id>].' },
@@ -351,9 +353,12 @@ export function run(argv, options = {}) {
         case 'set':
           taskSet(root, positionals[2], positionals[3], positionals.slice(4).join(' '));
           return 0;
+        case 'add':
+          taskAdd(root, positionals[2], positionals[3], positionals.slice(4));
+          return 0;
         default:
           throw new PublicError(`unknown command: task ${sub ?? ''}`.trim(), {
-            hint: 'Known: task new, task list, task show, task lint, task archive, task set.',
+            hint: 'Known: task new, task list, task show, task lint, task archive, task set, task add.',
           });
       }
     }

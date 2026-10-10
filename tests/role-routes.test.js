@@ -59,7 +59,7 @@ test('a route reaches the routing host with the role file and the target setting
     role_settings: { codex: { worker: { model: 'gpt-5.4', model_reasoning_effort: 'high' } } },
   });
   update(root);
-  for (const file of ['.claude/commands/castwork.md', '.claude/skills/castwork/SKILL.md']) {
+  for (const file of ['.claude/skills/castwork/SKILL.md']) {
     const section = routesSection(read(root, file));
     assert.match(section, /`worker` runs in Codex \(`codex`\)/, file);
     assert.match(section, /Role file: `\.codex\/agents\/worker\.toml`/, file);
@@ -74,7 +74,7 @@ test('a route to Pi lists its role file, actor and uninterpreted model suffix on
     role_settings: { pi: { verifier: { model: 'provider/id:high' } } },
   });
   update(root);
-  const section = routesSection(read(root, '.claude/commands/castwork.md'));
+  const section = routesSection(read(root, '.claude/skills/castwork/SKILL.md'));
   assert.match(section, /Role file: `\.pi\/agents\/verifier\.md`/);
   assert.match(section, /Actor: `verifier@pi`/);
   assert.match(section, /Settings: model `provider\/id:high`\./);
@@ -128,7 +128,7 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
     },
   });
   update(root);
-  assert.match(routesSection(read(root, '.claude/commands/castwork.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
+  assert.match(routesSection(read(root, '.claude/skills/castwork/SKILL.md')), /Settings: model `openai\/gpt-5\.6`, variant `high`\.$/m);
 
   // Claude's shipped thinker default is a permission mode, which the
   // delegation capability chooses for the run; the route leaves it out.
@@ -145,7 +145,7 @@ test('a route lists every non-permission setting its host declares', (t) => {
       role_settings: { [target]: { worker } },
     });
     update(root);
-    const entry = { claude: '.claude/commands/castwork.md', codex: '.agents/skills/castwork/SKILL.md' }[from];
+    const entry = { claude: '.claude/skills/castwork/SKILL.md', codex: '.agents/skills/castwork/SKILL.md' }[from];
     const section = routesSection(read(root, entry));
     for (const key of Object.keys(worker)) {
       if (key === 'permission_mode') assert.doesNotMatch(section, /permission_mode/, target);
@@ -185,18 +185,18 @@ test('validate accepts a routed repository as current', (t) => {
 
 test('a route to a host that is not generated is refused before anything is written', (t) => {
   const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
-  const before = read(root, '.claude/commands/castwork.md');
+  const before = read(root, '.claude/skills/castwork/SKILL.md');
   assert.throws(
     () => update(root),
     (error) => /role_routes\.worker names codex, which is not a host this repository generates for/.test(error.message) && /setup --host codex/.test(error.hint),
   );
-  assert.equal(read(root, '.claude/commands/castwork.md'), before);
+  assert.equal(read(root, '.claude/skills/castwork/SKILL.md'), before);
 });
 
 test('setup --host adds the host a route already names', (t) => {
   const root = fixture(t, ['claude'], { role_routes: { worker: 'codex' } });
   setup(root, { hosts: ['codex'] });
-  assert.match(routesSection(read(root, '.claude/commands/castwork.md')), /`worker` runs in Codex/);
+  assert.match(routesSection(read(root, '.claude/skills/castwork/SKILL.md')), /`worker` runs in Codex/);
 });
 
 /* ------------------------------------------------------------------ */

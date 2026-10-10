@@ -1,6 +1,6 @@
 {
   "name": "castwork",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Shared task records and roles for agent work: Markdown records of work, candidates, evidence, and assessments, with role presets, host adapters, and checks against each task's declared requirements",
   "type": "module",
   "license": "MIT",

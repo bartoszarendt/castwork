@@ -38,16 +38,17 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
   say how you would see it, it is not a criterion yet.
 - **Current state** — what holds now: current candidate, unresolved issues,
   restrictions with decision ids and source line pointers, next step. Rewrite
-  in place, about fifteen lines. One writer: the coordinator from the roles'
-  reports when roles are coordinated, otherwise the agent working alone. It
-  grants nothing; cited decisions and the user's current instructions govern.
+  in place, about fifteen lines. When roles are coordinated it is the
+  coordinator's, written from the roles' reports or assigned to one role at a
+  time; otherwise the agent working alone keeps it. It grants nothing; cited
+  decisions and the user's current instructions govern.
 - **Blockers and decisions** — what got in the way and what was decided, written
   as it happens rather than reconstructed later.
 
 Candidates, evidence, and assessments go in the frontmatter lists, never in a
 fenced block in the body: the checks read only the frontmatter, and lint reports
-body entries as `entries.in_body`. Append to the lists; do not rewrite someone
-else's entry.
+body entries as `entries.in_body`. Append to the lists, by hand or with
+`npx --no castwork task add`; do not rewrite someone else's entry.
 
 Record durable decisions and material failures. Do not paste command
 transcripts, lint output, or a table of every check you ran. Routine successful
@@ -60,9 +61,10 @@ body, or nothing; material observations stay candidate-bound evidence. Link
 only durable support, not ignored scratch; write tracked support outside
 `.castwork/tasks/` before taking the snapshot, or keep it short.
 
-`task archive [<id>] [--check]` explicitly separates earlier rounds into a paired
-`<record>.archive.md`; the two files remain one logical record. It never weakens
-requirements, and a named verification refusal writes nothing. After archiving
+`task archive [<id>] [--check]` explicitly moves the entries for earlier candidates
+into a paired `<record>.archive.md`; the two files remain one logical record, and
+the body never moves, so keep it short. It never weakens requirements, and a
+named verification refusal writes nothing. After archiving
 or resuming an archived task, read both files when refreshing Current state.
 
 ## Candidate attributes
