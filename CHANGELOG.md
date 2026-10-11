@@ -13,6 +13,25 @@
   return.
 - The thinker plans a check of a changed candidate against a runtime or
   real-data target it can move before the final declared checks.
+- A running role is no reason for the coordinator to end its turn: a new
+  `## While roles run` section says what it does meanwhile without waiting on
+  the role's result or touching its candidate, files, or the environment its
+  checks use, and that it lets the host wake it, or follows the delegation
+  capability's monitoring procedure where the host cannot.
+- Orientation judges where things stand from where the work is meant to
+  finish, such as a phase's acceptance, and a bare `/castwork` says when records
+  keep moving and that finish does not, proposing what would move it.
+- The coordinator treats rounds spent around an acceptance check that never
+  runs as a stall, has a costly failure reproduced cheaply where practical
+  before paying for another run, settles the cause before asking, and asks for the remaining path
+  in one request rather than a decision per failure.
+- The coordinator resumes the same worker or verifier for its next round where
+  the host can, starting a fresh one when its context is spent or a fresh view
+  is the point.
+- The verifier tries to break a candidate with inputs its evidence does not
+  cover where the risk warrants and authorization allows, and confirms in an
+  extracted copy that a test offered as evidence of a fix fails without it, or
+  names that as a limit.
 
 ## 0.9.5
 

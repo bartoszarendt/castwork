@@ -182,6 +182,8 @@ for (const host of HOSTS) {
       "Keep the project's declared working directory, paths, flags and selection; a scoped variant is a different check and leaves the declared one unmet.",
       'Name an unclear or unavailable invocation.',
       'When the change alters something other parts rely on, check those parts, or name that gap as a limit.',
+      'Try to break it with inputs and conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.',
+      'When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the previous candidate, or name that as a limit.',
     ], 'verifier');
     assert.doesNotMatch(verifier, /not registered/);
     assert.doesNotMatch(verifier, /signature changed/, 'the core criterion stays domain-neutral');
@@ -221,8 +223,14 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from that role's generated agent file.",
       'which role or shape, the host a routed role goes to, and why now',
+      'Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate; start a fresh one when its context is spent or a fresh view is the point.',
+      '## While roles run',
+      'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
+      "update records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the user's open decisions into one request.",
+      "When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than busy polling.",
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');
+    assert.doesNotMatch(coordinator, /do not poll/i, 'a routed run without completion notification is still collected');
   });
 
   test(`${host} coordinator states when each shape is worth it, not only its name`, () => {
@@ -273,6 +281,7 @@ for (const host of HOSTS) {
       'A workflow you write returns unresolved causes and changed approaches to your judgement.',
       'Its termination returns the problem to you, not a decision to end the work.',
       'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
+      'So is work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs: run it once it can tell you something and authorization allows, and where practical reproduce a costly failure cheaply, such as in an offline test, before paying for another run; otherwise say what the evidence shows and take the next authorized step.',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
     const start = entry(host);
@@ -295,6 +304,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       'At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns.',
       'Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.',
+      'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure.',
     ], 'stop report');
   });
 
@@ -322,6 +332,9 @@ for (const host of HOSTS) {
     all(entry(host), [
       'You already have this text; do not load the `castwork` skill again.',
       'Orient in proportion to the request, and only once',
+      "Judge it from where the work is meant to finish, such as a phase's acceptance: what still stands between here and there, what the rest waits on, and whether recent rounds and decisions moved that or only the work around it.",
+      "When records keep moving and the work's finish does not, say so and propose what would move it, such as running the acceptance check, or asking the user to close a task whose further rounds would not.",
+      'A running role is no reason to end your turn: until it returns, do what neither waits on its result nor touches its candidate, files, or shared environment, as the `coordinator` role file describes under `## While roles run`.',
       'enough to locate the work, not the whole document',
       'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
       "what is written there changes only with the user's say-so",

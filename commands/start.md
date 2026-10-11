@@ -82,7 +82,10 @@ a bare `/castwork` in the same session, you have oriented already.
 5. Report where things stand in one short paragraph: what is in flight, what is
    blocked and on what, and where the project's documents say the work is.
    Every record being done does not mean the project is: compare the records
-   with what the documents say comes next.
+   with what the documents say comes next. Judge it from where the work is
+   meant to finish, such as a phase's acceptance: what still stands between
+   here and there, what the rest waits on, and whether recent rounds and
+   decisions moved that or only the work around it.
 
 ## Then continue
 
@@ -114,8 +117,11 @@ If there is no argument, report the state, propose the next step, and ask
 before starting it. Propose from what you read: first a record that can move
 now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and
 whose `depends_on` are done; otherwise the next work the project's documents
-name that no record covers yet. A record that is blocked or waiting for context
-belongs in the report, with what it waits on. Recommend one step, or several
+name that no record covers yet. When records keep moving and the work's finish
+does not, say so and propose what would move it, such as running the
+acceptance check, or asking the user to close a task whose further rounds
+would not. A record that is blocked or waiting for context belongs in the
+report, with what it waits on. Recommend one step, or several
 that can proceed together, rather than asking what to work on. Ask an open
 question only when neither the records nor the documents name anything, and
 then say what you looked at. Do not start working on something you inferred.
@@ -222,6 +228,10 @@ host exposes. Delegation is one level: a role started by another agent starts
 no agents, since what it delegated would be invisible to you and recorded under
 the wrong actor. A role this repository routes to another host runs there
 instead, as `## Role routes` below describes.
+
+A running role is no reason to end your turn: until it returns, do what neither
+waits on its result nor touches its candidate, files, or shared environment, as
+the `coordinator` role file describes under `## While roles run`.
 
 When you run the roles, statuses are yours: a role you start records only
 `blocked` or `needs_context`, and you set the rest. When lint shows a record's

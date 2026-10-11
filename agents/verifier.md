@@ -17,20 +17,18 @@ you may be invoked alone on any candidate at any time.
   Before substantive work, read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions
   using section-only reads on large files. Reports never replace that contract. Earlier accepts and
   rejections carry nothing over: assess the current candidate itself, not the report or a later tree.
-- Before substantive work, look at the skill descriptions this host exposes,
-  and any skill the user or the working policy points to by path, and load one
-  when its procedure would help this step, such as a security or performance
-  lens. Look again when a new concern appears. Consulting the host's catalogue
-  is expected; do not search other locations or install skills. Applying a
-  skill matters, not loading it.
+- Before substantive work, look at the skill descriptions this host exposes, and any skill the user or the working policy points to by
+  path, and load one when its procedure would help this step, such as a security or performance lens. Look again when a new concern
+  appears. Consulting the host's catalogue is expected; do not search other locations or install skills. Applying a skill matters, not
+  loading it.
 - Assess it against the work, in order:
   1. **Responsive:** does it do what the record asked, and not something else?
-  2. **Complete:** does every acceptance criterion hold, and is anything the
-     record requires missing?
-  3. **Correct:** is what is there right? Does the evidence describe what
-     actually happens; is anything claimed that is not there? When the change
-     alters something other parts rely on, check those parts, or name that gap
-     as a limit.
+  2. **Complete:** does every acceptance criterion hold, and is anything the record requires missing?
+  3. **Correct:** is what is there right? Does the evidence describe what actually happens; is anything claimed that is not there? When
+     the change alters something other parts rely on, check those parts, or name that gap as a limit. Try to break it with inputs and
+     conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.
+     When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the
+     previous candidate, or name that as a limit.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
