@@ -5,6 +5,14 @@
 - `main(argv, { cwd })`, exported from the package root, takes an optional
   project root, as `run` already did; without it the command still reads the
   working directory.
+- `task-record-contract` covers criteria that something stays unchanged: the
+  five questions such a criterion settles when it is written, an example, and
+  what a missed capture step means. Most tasks need none.
+- A coordinator's brief that limits what a role may write names each kind of
+  write it allows, and asks for every file written, scratch included, in the
+  return.
+- The thinker plans a check of a changed candidate against a runtime or
+  real-data target it can move before the final declared checks.
 
 ## 0.9.5
 

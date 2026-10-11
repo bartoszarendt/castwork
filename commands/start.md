@@ -210,9 +210,12 @@ tell the one you start to read its role file before anything else, and give it
 the path. Either way, give it the task id and let it read the record. A brief
 adds only what the record does not say: it asks for no status but `blocked` or
 `needs_context`, no Current state update you did not assign, and no check
-broader than the working policy's cadence for that step. When the
-work comes from one of the project's documents, also name the document and the
-part it comes from: finding them is your job, not the role's. Name a skill,
+broader than the working policy's cadence for that step. When a brief limits
+what a role may write, name each kind it may touch: the candidate, the task
+record, a findings file, scratch; and ask for every file written, scratch
+included, in the return. When the work comes from one of the project's
+documents, also name the document and the part it comes from: finding them is
+your job, not the role's. Name a skill,
 with what it is for, when the working policy asks for one or says the role's
 model does not pick skills itself; otherwise the role chooses from what its
 host exposes. Delegation is one level: a role started by another agent starts

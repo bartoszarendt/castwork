@@ -67,6 +67,37 @@ the body never moves, so keep it short. It never weakens requirements, and a
 named verification refusal writes nothing. After archiving
 or resuming an archived task, read both files when refreshing Current state.
 
+## Criteria that something stays unchanged
+
+Most tasks need no such criterion. When one needs evidence that the work left
+something alone, the criterion is observable only if the record settles five
+questions before the work starts. Each one left open gets decided later, in an
+assessment, as a dispute:
+
+- **What is protected.** Name the smallest set of files or resources. Left
+  open, a change someone else made during the work, such as an update, counts
+  against it.
+- **What counts as an input.** Say whether task records, decisions, and the
+  skills a host loads are included. Left open, every unrecorded read is argued.
+- **When identities are captured.** Before an input's first read, including an
+  input found partway through. Left open, a late capture is argued as a pass
+  or a failure.
+- **Which permitted actions write anyway.** This record, which the work
+  updates, and `snapshot`, which writes Git objects. Left open, they count
+  against the work.
+- **What shows it.** The observation, recorded as evidence, and where its
+  capture steps sit in the plan. Left open, later evidence is offered to
+  repair an earlier gap.
+
+For example: "Files under `config/` and the decisions this task cites are
+unchanged by it: each is hashed before its first read, an input found partway
+through as soon as it is found, and all again at the candidate. This record
+and the Git objects `snapshot` writes are not inputs."
+
+A capture step the record asked for and the work missed stays missed, unless
+existing evidence shows the criterion met or the user changes the criterion;
+record that change as a decision.
+
 ## Candidate attributes
 
 ```yaml

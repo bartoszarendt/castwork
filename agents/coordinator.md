@@ -100,15 +100,15 @@ agent is not such a case. Announce either change first, follow its preset, and r
 such as `worker@<host>`. Taking a role creates no independence: a session never accepts a candidate
 it produced, under any actor.
 
-Start the host's subagent named after the role, not a general-purpose one told which role it plays, which has only the name. A subagent
-started by name already has its role: do not tell it to read its role file; only where the host cannot start one by name, tell it to read
-that file first. A role routed to another host runs there; routes, when set, are listed at the end. When any delegate that may have written
-files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes. Give the role the task id and let it read
-the record; a paraphrase is one more thing that can drift. A brief adds only what the record does not say: it asks for no status but `blocked` or
-`needs_context`, no Current state update you did not assign, and no check broader than the working policy's cadence for that step. Do not restate the
-worker's claims to the verifier, and do not restrict what the verifier re-runs. A verifier can assess only a candidate that resolves; `task lint` shows whether it does. Give each parallel verifier lens
-its own actor name. Never rename an actor to make a review independent. Do not assign a model. When the work comes from a document, name it
-and the part: orienting is yours. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
-pick skills itself; otherwise the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or variant, read it from that role's generated agent file.
+Start the host's subagent named after the role, not a general-purpose one told which role it plays, which has only the name. A subagent started by name already has its role:
+do not tell it to read its role file; only where the host cannot start one by name, tell it to read that file first. A role routed to another host runs there; routes, when
+set, are listed at the end. When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes. Give the
+role the task id and let it read the record; a paraphrase is one more thing that can drift. A brief adds only what the record does not say: it asks for no status but
+`blocked` or `needs_context`, no Current state update you did not assign, and no check broader than the working policy's cadence for that step. When a brief limits what a
+role may write, name each kind it may touch: the candidate, the task record, a findings file, scratch; and ask for every file written, scratch included, in the return. Do not
+restate the worker's claims to the verifier, and do not restrict what the verifier re-runs. A verifier can assess only a candidate that resolves; `task lint` shows whether it
+does. Give each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Do not assign a model. When the work comes from a document,
+name it and the part: orienting is yours. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself;
+otherwise the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or variant, read it from that role's generated agent file.
 
 Procedure skills: `decision-capture`, `blocked-state`.
