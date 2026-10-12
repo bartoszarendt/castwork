@@ -166,6 +166,7 @@ Checkable requirements are declared per task.
   project.md        prose: setup facts, working policy, pointers
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
+  findings/         what is written about the work: findings, notes, logs
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
 castwork.json    project configuration: hosts, per-host role settings,

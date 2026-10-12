@@ -37,7 +37,9 @@ a bare `/castwork` in the same session, you have oriented already.
    `thinker` draft it from the repository; what is written there changes only
    with the user's say-so. If a check or document it names that the work
    depends on does not match the repository, say so; ask only when the gap
-   affects the work.
+   affects the work. Then read `.castwork/local/setup.md`, if it exists:
+   facts about this machine, such as local paths, ports, and wrappers, kept
+   out of the repository.
 2. Read the documents it points to, such as a plan, a spec, or a roadmap, for
    where the project is and what comes next: enough to locate the work, not the
    whole document. If they do not say what comes next, look for such pointers
@@ -171,8 +173,11 @@ When the user asks, in whatever words or language, to stop the work for now:
 - A handoff goes where the user or the project says; otherwise to
   `.castwork/local/handoff.md`, which stays on this machine and outside
   snapshots. Keep in it only context the records do not already capture: the
-  next step across tasks, what is still running, environment observations, and
-  the limits of what the user authorized. Date it from the clock, name the
+  next step across tasks, what is still running, what the environment is like
+  now, and the limits of what the user authorized. A fact about this machine
+  that will still hold next time belongs in `.castwork/local/setup.md`, not in
+  the handoff: propose it with the other proposals for where a fact is kept,
+  and point to that file rather than repeating it. Date it from the clock, name the
   commit it starts from when there is one, and name task records by id rather
   than copying their state or evidence. Check what it says about a candidate
   against `task lint` before you write it. Replace an earlier handoff there,

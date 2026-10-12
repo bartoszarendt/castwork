@@ -524,6 +524,39 @@ test('populated text prioritizes action and bounds ties/notes, preserving wrappe
   assert.ok(indentedText.includes(indentedModel));
   assert.equal(indented.records[0].task.current.entry.model, indentedModel);
 });
+test('Attention names each record and shows its Current state before the order-dependent Blockers excerpt', () => {
+  const blockers = '## Blockers and decisions\nOld blocker, long since settled.\n\nNewer entry.\n';
+  const stated = input({...history, id: 'stated', title: 'Stated task', status: 'blocked'},
+    `## Current state\n<!-- kept in place -->\nWaiting on the owner's choice of\nbudget.\n\nNext: rerun.\n\n${blockers}`, 'stated.md');
+  const unstated = input({...history, id: 'unstated', title: 'Unstated task', status: 'needs_context'}, blockers, 'unstated.md');
+  const r = derive(stated, unstated);
+  const row = r.attention.find(entry => entry.id === 'stated');
+  assert.equal(row.title, 'Stated task');
+  assert.equal(row.current_state, "Waiting on the owner's choice of budget.");
+  assert.equal(row.current_state_pointer, 'stated.md:10');
+  assert.equal(row.blockers, 'Old blocker, long since settled.', 'JSON keeps the Blockers excerpt');
+  const text = renderReport(r);
+  assert.match(text, /  stated  blocked  Stated task\n(?: {4}[^\n]*\n)*? {4}current state \(recorded prose\): Waiting on the owner's choice of budget\. · stated\.md:10\n/);
+  assert.doesNotMatch(text, /blockers \(recorded prose\): Old blocker[^\n]* stated\.md/);
+  assert.match(text, /unstated  needs_context  Unstated task\n(?: {4}[^\n]*\n)*? {4}blockers \(recorded prose\): Old blocker/);
+});
+test('Recent shows one line per record and recorded day, with its title, keeping the entry counts', () => {
+  const a = input({id: 'A', title: 'First task', candidates: [{ref: 'abcdef0', at: '2026-10-07T10:00:00Z'}],
+    evidence: [{check: 'test', candidate: 'abcdef0', result: 'pass', at: '2026-10-07T10:05:00Z'},
+      {check: 'lint', candidate: 'abcdef0', result: 'pass', at: '2026-10-07T10:06:00Z'}]}, '', 'A.md');
+  const b = input({id: 'B', title: 'Second task', candidates: [{ref: '1234567', at: '2026-10-07T10:03:00Z'}]}, '', 'B.md');
+  const r = derive(a, b);
+  assert.equal(r.recent.length, 4, 'JSON keeps every entry');
+  const text = renderReport(r);
+  assert.match(text, /\n  2026-10-07  A  pass 2, candidate  First task\n  2026-10-07  B  candidate  Second task\n  0 dated entries not shown/);
+});
+test('the most failed declared checks are ranked by count, also for integer-like check names', () => {
+  const fails = (check, count) => Array.from({length: count}, () => ({check, candidate: 'abcdef0', result: 'fail'}));
+  const a = input({requirements: {checks: ['1', '2', '3', '4']}, candidates: [{ref: 'abcdef0'}],
+    evidence: [...fails('1', 1), ...fails('2', 2), ...fails('3', 3), ...fails('4', 20)]});
+  const text = renderReport(derive(a));
+  assert.match(text, /most: 4 20, 3 3, 2 2\n/);
+});
 test('findings anchors resolve only unambiguous loaded headings and preserve references', () => {
   const a = input({candidates: [{ref: 'abcdef0'}], assessments: [
     {candidate: 'abcdef0', role: 'verifier', actor: 'a', verdict: 'reject', findings: '#review-notes'},
@@ -592,7 +625,7 @@ Git  Git observations not supplied`);
   const fallback=derive(input({id:'D-2',status:'legacy',date:'yesterday'},'First paragraph.\n\nSecond paragraph.','D2.md','decision'));
   assert.match(renderReport(fallback,fallback.records[0]),/Recorded prose  First paragraph\./);
 });
-test('golden project text has count bases and fixed section order',()=>{
+test('golden project text has count bases and fixed section order: open work and recent records before counts',()=>{
   const r=derive();
   const expected = [
     'example  0 tasks  0 decisions',
@@ -604,29 +637,19 @@ test('golden project text has count bases and fixed section order',()=>{
     '  none recorded',
     '  Current nonterminal triples: 0 fail, 0 no evidence, 0 unrecognized / 0 triples',
     '',
-    'Rework  declared checks only, within each record',
-    '  recorded candidates 0 entries / 0 records; 0 distinct refs summed per record',
-    '  entries per record: 0: 0, 1: 0, 2: 0, 3-5: 0, 6+: 0',
-    '  max 0 entries:  (0 records; 0 omitted; --json retains all)',
-    '  blocking verdicts recorded 0 / 0 assessments, on 0 / 0 records',
-    '  records with blocking verdicts: 1: 0, 2: 0, 3+: 0',
-    '  declared-check fails recorded 0 / 0 evidence entries (reruns included)',
-    '  fail names: none',
-    '  outcome triples 0: pass 0, fail 0, no evidence 0, unrecognized 0',
-    '',
-    'Recent  by recorded calendar day; instants within a day, date-only entries last',
+    'Recent  by recorded calendar day, one line per record; instants within a day, date-only entries last',
     '  0 dated entries not shown; 0 / 0 entries have no at; not placed',
     '',
     'Decisions  0: ',
     '  most mentioned (tasks): none / 0 tasks',
     '',
-    'Record quality',
-    '  host not a host id: 0 / 0 entries (none)',
-    '    0 dated, latest recorded none; 0 undated or malformed',
-    '  without at 0 / 0; date-only at 0; malformed at 0',
-    '  malformed decision dates 0 / 0',
-    '  host and model 0 / 0; candidate model 0 / 0',
-    '  moving refs 0 / 0 candidate entries',
+    'Rework  declared checks only, within each record; --json has the distributions',
+    '  recorded candidates 0 entries / 0 records; most 0: none',
+    '  blocking verdicts 0 / 0 assessments, on 0 / 0 records',
+    '  declared-check fails 0 / 0 evidence entries (reruns included); most: none',
+    '  outcome triples 0: pass 0, fail 0, no evidence 0, unrecognized 0',
+    '',
+    'Record quality  nothing counted; --json has the detail',
     'Git  Git observations not supplied',
   ].join('\n');
   assert.equal(renderReport(r), expected);

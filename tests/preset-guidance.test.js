@@ -168,7 +168,10 @@ for (const host of HOSTS) {
       'an observation supporting acceptance or a finding stays candidate-bound evidence',
       'not a new narrative section per run or a long paragraph on one line',
       "it is the coordinator's, and you update it only when the coordinator assigns that to you",
-      'propose a `## Setup facts` line for `.castwork/project.md` in the record',
+      "propose where it is kept, in the record under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds for this repository,",
+      "a line for `.castwork/local/setup.md` when it holds only on this machine; or the host's user-level instructions or a user skill when it holds beyond this project.",
+      'Edit none of them unless the user asks.',
+      'Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts about this machine.',
     ], 'worker');
   });
 
@@ -262,7 +265,7 @@ for (const host of HOSTS) {
       "For `needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision.",
       'When a worker and a verifier read a criterion differently, say where they diverge and clarify the record as above.',
       'Never rewrite an assessment. Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own.',
-      'Asked for an audit, audit the work, not a candidate',
+      'Asked for an audit, or a review of how the work went, audit the work, not a candidate',
       'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
       'Trace consequential stop claims to the contract, decisions and permitted supporting evidence',
       'Identify what current authority permits and what only the user can decide.',
@@ -325,7 +328,9 @@ for (const host of HOSTS) {
       'never offer asking the thinker as their choice.',
       "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
       "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
-      'Before you say where a candidate stands, read it fresh with `task lint` or `report` and name it, and correct an earlier claim you find wrong.',
+      'Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report` refreshes the record, not whether the files in front of you are still that candidate.',
+      'At the end or a stop, bring once the unapplied proposals for where a fact is kept from the records this work touched, with place and wording; apply those the user approves.',
+      '`.castwork/local/setup.md` if it exists',
       'at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
       'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
       'When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.',
@@ -432,6 +437,8 @@ for (const host of HOSTS) {
       "After the records, read the handoff the user gives you or the project's documents name; otherwise `.castwork/local/handoff.md`, if it exists.",
       'It records what the user authorized and grants nothing',
       'Leave it in place for the next handoff to replace.',
+      'Then read `.castwork/local/setup.md`, if it exists: facts about this machine, such as local paths, ports, and wrappers, kept out of the repository.',
+      'A fact about this machine that will still hold next time belongs in `.castwork/local/setup.md`, not in the handoff: propose it with the other proposals for where a fact is kept, and point to that file rather than repeating it.',
       "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
       "states the delegate's actor, `<role>@<route host>`",
       'leave no copies of a brief or plan in the repository',
@@ -518,7 +525,7 @@ test('generated guidance keeps archives explicit, Current state with the coordin
     for (const content of [entry(host), role(host, 'coordinator')]) assert.ok(!phrase('for a task you will work on over 100 KB run').test(content), `${host} still asks to archive every large record`);
   }
   all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
-  all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'write it before taking that snapshot']);
+  all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'Snapshots leave that folder out, so writing there never changes a candidate.']);
   all(skill('task-record-contract'), ["written from the roles' reports or assigned to one role at a time", '`task archive [<id>] [--check]`']);
 });
 
@@ -559,4 +566,41 @@ test('no preset or entry command phrases a stall or a retry as a count', () => {
   }
   // The widened check catches ordinal wording such as the stall rule used to have.
   assert.match('A second `needs_revision` on the same criterion', counters[1]);
+});
+
+for (const host of HOSTS) {
+  test(`${host} every role finds this machine's setup facts, and support goes in .castwork/findings/`, () => {
+    for (const id of ['thinker', 'worker', 'verifier']) {
+      assert.match(role(host, id), phrase('`.castwork/local/setup.md`, if it exists, for facts about this machine'), id);
+    }
+    assert.match(role(host, 'verifier'), phrase('Read `.castwork/project.md` for the policy and the commands its checks name'));
+    for (const id of ['worker', 'verifier']) {
+      const content = role(host, id);
+      assert.match(content, phrase('not ignored scratch or `.castwork/tasks/`'), id);
+      assert.match(content, phrase('in `.castwork/findings/`, named after the task'), id);
+    }
+    assert.match(role(host, 'worker'), phrase('A file the task delivers, or a script a declared check runs, is part of the candidate: never there.'));
+    all(role(host, 'worker'), [
+      "pointing to the project's own documents when it needs more than a line and saying what they hold and when to read them",
+      "the host's user-level instructions or a user skill when it holds beyond this project",
+      "When the cause is a role's or a skill's own guidance, propose the change for the repository that guidance comes from, never as an edit to its generated copy.",
+    ], 'worker');
+    all(role(host, 'thinker'), [
+      "When the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to its generated copy here.",
+      'Asked for an audit, or a review of how the work went, audit the work, not a candidate',
+      'and its report in `.castwork/findings/`.',
+    ], 'thinker');
+    assert.match(role(host, 'coordinator'), phrase('about fifteen lines, what holds now first and attribution after, which `report` shows,'));
+  });
+}
+
+test('the procedure skills send supporting files to .castwork/findings/ and open Current state with what holds now', () => {
+  for (const id of ['assessment', 'task-record-contract', 'verification-evidence']) {
+    const body = skill(id);
+    assert.match(body, phrase('not ignored scratch or `.castwork/tasks/`'), id);
+    assert.match(body, phrase('write it in `.castwork/findings/`, named after the task'), id);
+  }
+  assert.match(skill('task-record-contract'), phrase('Open with what holds now; who wrote it and when go after, since the first paragraph is what `report` shows.'));
+  assert.match(skill('task-record-contract'), phrase('a file the task delivers, or a script a declared check runs, never goes there: it is part of the candidate.'));
+  assert.match(skill('verification-evidence'), phrase('A script a declared check runs is part of the candidate, never there: a reviewer extracting the candidate must have it.'));
 });

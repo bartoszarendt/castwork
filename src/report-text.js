@@ -180,11 +180,12 @@ function projectText(report) {
   const ordinary = attention.filter(row => !retained(row)).slice(0, 10);
   const shown = attention.filter(row => retained(row) || ordinary.includes(row));
   for (const row of shown) {
-    lines.push(`  ${row.id}  ${row.status}${row.ready_to_close ? ' · ready to close' : ''}${row.no_candidate ? ' · no candidate' : row.no_current_evidence ? ' · current candidate has no evidence' : ''}`);
+    lines.push(`  ${row.id}  ${row.status}${row.ready_to_close ? ' · ready to close' : ''}${row.no_candidate ? ' · no candidate' : row.no_current_evidence ? ' · current candidate has no evidence' : ''}  ${short(row.title)}`);
     if (row.fail.length) lines.push(`    failing now: ${row.fail.join(', ')}`);
     if (row.no_evidence.length) lines.push(`    no evidence now: ${row.no_evidence.join(', ')}`);
     if (row.unrecognized.length) lines.push(`    unrecognized: ${row.unrecognized.map((c) => `${c.check} ${str(c.result)}`).join(', ')}`);
-    if (row.blockers) lines.push(`    blockers (recorded prose): ${excerpt(row.blockers)}${row.blockers_continues ? ' … (paragraph continues)' : ''}${row.blockers_pointer ? ` · ${row.blockers_pointer}` : ''}`);
+    if (row.current_state) lines.push(`    current state (recorded prose): ${excerpt(row.current_state)} · ${row.current_state_pointer}`);
+    else if (row.blockers) lines.push(`    blockers (recorded prose): ${excerpt(row.blockers)}${row.blockers_continues ? ' … (paragraph continues)' : ''}${row.blockers_pointer ? ` · ${row.blockers_pointer}` : ''}`);
   }
   if (shown.length > 10) lines.push(`  Attention overflow: ${shown.length} records shown to retain all blocked/needs_context records; at most 10 ordinary rows`);
   if (drafts.length) lines.push(`  ${drafts.length} candidate-less drafts summarized; --json retains all`);
@@ -192,29 +193,58 @@ function projectText(report) {
   if (attention.length > shown.length) lines.push(`  ${attention.length - shown.length} attention records not shown; --json retains all`);
   const c = t.current_triples;
   lines.push(`  Current nonterminal triples: ${c.fail} fail, ${c.no_evidence} no evidence, ${c.unrecognized} unrecognized / ${c.base} triples`, '',
-    'Rework  declared checks only, within each record',
-    `  recorded candidates ${t.candidates} entries / ${t.tasks} records; ${t.distinct_refs} distinct refs summed per record`,
-    `  entries per record: 0: ${t.candidate_histogram.zero}, 1: ${t.candidate_histogram.one}, 2: ${t.candidate_histogram.two}, 3-5: ${t.candidate_histogram.three_to_five}, 6+: ${t.candidate_histogram.six_plus}`,
-    `  max ${t.max_candidates} entries: ${t.max_candidate_records.slice(0, 5).map((p) => label(report,p)).join(', ')} (${t.max_candidate_records.length} records; ${Math.max(0, t.max_candidate_records.length - 5)} omitted; --json retains all)`,
-    `  blocking verdicts recorded ${t.blocking_verdicts} / ${t.assessments} assessments, on ${t.blocking_records} / ${t.tasks} records`,
-    `  records with blocking verdicts: 1: ${t.blocking_histogram.one}, 2: ${t.blocking_histogram.two}, 3+: ${t.blocking_histogram.three_plus}`,
-    `  declared-check fails recorded ${t.declared_fails_recorded} / ${t.evidence} evidence entries (reruns included)`,
-    `  fail names: ${Object.entries(t.declared_fail_names).slice(0,5).map(([k,v]) => `${k} ${v}`).join(', ') || 'none'}${Object.keys(t.declared_fail_names).length > 5 ? `; ${Object.keys(t.declared_fail_names).length - 5} more names in --json` : ''}`,
-    `  outcome triples ${t.outcome_triples.base}: pass ${t.outcome_triples.pass}, fail ${t.outcome_triples.fail}, no evidence ${t.outcome_triples.no_evidence}, unrecognized ${t.outcome_triples.unrecognized}`,
-    '', 'Recent  by recorded calendar day; instants within a day, date-only entries last');
-  for (const row of report.recent.slice(0,10)) lines.push(`  ${row.date.day}  ${row.id}  ${row.kind === 'candidates' ? 'candidate' : row.kind === 'evidence' ? str(row.entry.result) : row.kind === 'assessments' ? str(row.entry.verdict) : str(row.entry.status)}  ${excerpt(row.entry.ref ?? row.entry.check ?? row.entry.actor ?? row.entry.title)}  ${row.date.kind === 'date_only' ? 'date only' : row.date.raw}`);
-  lines.push(`  ${Math.max(0,report.recent.length - 10)} dated entries not shown; ${q.without_at} / ${q.entries} entries have no at; not placed`, '',
+    'Recent  by recorded calendar day, one line per record; instants within a day, date-only entries last');
+  const days = recentByRecord(report);
+  for (const day of days.slice(0, 10)) {
+    lines.push(`  ${day.day}  ${day.id}  ${day.summary}${day.date_only ? ' · date only' : ''}  ${short(report.records.find((r) => r.path === day.path)?.title ?? '')}`);
+  }
+  const shownEntries = days.slice(0, 10).reduce((sum, day) => sum + day.entries, 0);
+  // An object lists integer-like keys first, in numeric order, whatever order
+  // derivation built it in: sort by count here.
+  const mostFailed = Object.entries(t.declared_fail_names).sort((a, b) => b[1] - a[1]);
+  lines.push(`  ${report.recent.length - shownEntries} dated entries not shown; ${q.without_at} / ${q.entries} entries have no at; not placed`, '',
     `Decisions  ${t.decisions}: ${Object.entries(t.decision_statuses).map(([k,v]) => `${k} ${v}`).join(' · ')}`,
-    `  most mentioned (tasks): ${report.mentioned_decisions.slice(0,5).map((d) => `${d.id} ${d.tasks}`).join(', ') || 'none'} / ${t.tasks} tasks`, '', 'Record quality',
-    `  host not a host id: ${q.legacy_host.count} / ${q.entries} entries (${q.legacy_host.names.slice(0,5).join(', ') || 'none'})`,
-    `    ${q.legacy_host.dated} dated, latest recorded ${q.legacy_host.latest_recorded || 'none'}; ${q.legacy_host.undated} undated or malformed`,
-    ...(q.legacy_host.latest_date_only ? [`    latest date-only observation ${q.legacy_host.latest_date_only}; no instant or exact ordering against timestamps`] : []),
-    `  without at ${q.without_at} / ${q.entries}; date-only at ${q.date_only_at}; malformed at ${q.malformed_at}`,
-    `  malformed decision dates ${q.malformed_decision_dates} / ${t.decisions}`,
-    `  host and model ${q.host_model} / ${q.entries}; candidate model ${q.candidate_model} / ${t.candidates}`,
-    `  moving refs ${q.moving_refs} / ${t.candidates} candidate entries`,
+    `  most mentioned (tasks): ${report.mentioned_decisions.slice(0,5).map((d) => `${d.id} ${d.tasks}`).join(', ') || 'none'} / ${t.tasks} tasks`, '',
+    'Rework  declared checks only, within each record; --json has the distributions',
+    `  recorded candidates ${t.candidates} entries / ${t.tasks} records; most ${t.max_candidates}: ${t.max_candidate_records.slice(0, 5).map((p) => label(report,p)).join(', ') || 'none'}${t.max_candidate_records.length > 5 ? ` (${t.max_candidate_records.length} records; ${t.max_candidate_records.length - 5} omitted; --json retains all)` : ''}`,
+    `  blocking verdicts ${t.blocking_verdicts} / ${t.assessments} assessments, on ${t.blocking_records} / ${t.tasks} records`,
+    `  declared-check fails ${t.declared_fails_recorded} / ${t.evidence} evidence entries (reruns included); most: ${mostFailed.slice(0,3).map(([k,v]) => `${k} ${v}`).join(', ') || 'none'}`,
+    `  outcome triples ${t.outcome_triples.base}: pass ${t.outcome_triples.pass}, fail ${t.outcome_triples.fail}, no evidence ${t.outcome_triples.no_evidence}, unrecognized ${t.outcome_triples.unrecognized}`, '');
+  const quality = [
+    q.legacy_host.count ? `host not a host id ${q.legacy_host.count} / ${q.entries} entries${q.legacy_host.latest_recorded ? `, latest recorded ${q.legacy_host.latest_recorded}` : ''}${q.legacy_host.latest_date_only ? `, latest date-only observation ${q.legacy_host.latest_date_only} (no instant or exact ordering against timestamps)` : ''}` : '',
+    q.without_at ? `without at ${q.without_at} / ${q.entries}` : '',
+    q.date_only_at ? `date-only at ${q.date_only_at}` : '',
+    q.malformed_at ? `malformed at ${q.malformed_at}` : '',
+    q.malformed_decision_dates ? `malformed decision dates ${q.malformed_decision_dates} / ${t.decisions}` : '',
+    q.moving_refs ? `moving refs ${q.moving_refs} / ${t.candidates} candidate entries` : '',
+  ].filter(Boolean);
+  lines.push(`Record quality  ${quality.length ? quality.join(' · ') : 'nothing counted'}; --json has the detail`,
     report.git_omitted ? `Git  ${report.git_omitted}` : `Git  first/last commits visible locally available in record views; ${report.records.filter((r) => r.git?.uncommitted).length} records have uncommitted changes`);
   return lines;
+}
+/** Recent entries as one line per record and recorded day, in the order Recent already has.
+ * @param {Report} report
+ */
+function recentByRecord(report) {
+  /** @type {Map<string, {day: string, id: string, path: string, entries: number, date_only: boolean, counts: Map<string, number>}>} */
+  const groups = new Map();
+  for (const row of report.recent) {
+    const day = row.date.day ?? '';
+    const key = `${day}\0${row.path}`;
+    const group = groups.get(key) ?? {day, id: row.id, path: row.path, entries: 0, date_only: true, counts: new Map()};
+    const what = row.kind === 'candidates' ? 'candidate' : row.kind === 'evidence' ? str(row.entry.result) : row.kind === 'assessments' ? str(row.entry.verdict) : str(row.entry.status);
+    group.counts.set(what, (group.counts.get(what) ?? 0) + 1);
+    group.entries += 1;
+    if (row.date.kind !== 'date_only') group.date_only = false;
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => ({...group,
+    summary: [...group.counts].map(([what, count]) => count > 1 ? `${what} ${count}` : what).join(', ')}));
+}
+/** @param {string} title */
+function short(title) {
+  const flat = title.replace(/\s+/g, ' ').trim();
+  return flat.length > 60 ? `${flat.slice(0, 59)}…` : flat;
 }
 /** @param {Report} report @param {Row|null} [selected] */
 export function renderReport(report, selected = null) {

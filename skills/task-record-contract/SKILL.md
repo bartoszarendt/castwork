@@ -38,7 +38,8 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
   say how you would see it, it is not a criterion yet.
 - **Current state** — what holds now: current candidate, unresolved issues,
   restrictions with decision ids and source line pointers, next step. Rewrite
-  in place, about fifteen lines. When roles are coordinated it is the
+  in place, about fifteen lines. Open with what holds now; who wrote it and
+  when go after, since the first paragraph is what `report` shows. When roles are coordinated it is the
   coordinator's, written from the roles' reports or assigned to one role at a
   time; otherwise the agent working alone keeps it. It grants nothing; cited
   decisions and the user's current instructions govern.
@@ -58,8 +59,11 @@ milestone narrative belongs in the milestone document, not repeated in every
 task that contributed to it. Run logs go in linked files: a record past 100 KB
 is reported as `record.large`. A routine successful probe is a sentence in the
 body, or nothing; material observations stay candidate-bound evidence. Link
-only durable support, not ignored scratch; write tracked support outside
-`.castwork/tasks/` before taking the snapshot, or keep it short.
+only durable support, not ignored scratch or `.castwork/tasks/`: write it in
+`.castwork/findings/`, named after the task, such as `T-012-review.md`. Snapshots
+leave that folder out, as they leave out the records, so a file the task
+delivers, or a script a declared check runs, never goes there: it is part of
+the candidate.
 
 `task archive [<id>] [--check]` explicitly moves the entries for earlier candidates
 into a paired `<record>.archive.md`; the two files remain one logical record, and

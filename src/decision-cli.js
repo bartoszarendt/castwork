@@ -52,7 +52,7 @@ export function decisionNew(root, title) {
  */
 function decisionFrontmatter(text) {
   const { yaml } = splitFrontmatter(text);
-  if (yaml === null) return { frontmatter: {}, error: 'the record has no --- delimited frontmatter' };
+  if (yaml === null) return { frontmatter: {}, error: 'the record has no --- delimited frontmatter; a file here that is not a record, such as findings or a log, belongs in .castwork/findings/' };
   try {
     const parsed = parseYaml(yaml);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

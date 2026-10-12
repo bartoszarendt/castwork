@@ -16,7 +16,8 @@ no authority.
 
 ## Responsibility
 
-- Read `.castwork/project.md` for the policy. Check a task's file size without loading its contents.
+- Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts
+  about this machine. Check a task's file size without loading its contents.
   For a large record (over 100 KB) or when earlier rounds matter, run
   `npx --no castwork report <id>` **before reading the task record**. Then, before substantive work,
   read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions; use section-only reads
@@ -67,8 +68,9 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   (records are repository files, which its own checks read); a subset of a check under its own name,
   never the declared check's. A failed check is a `fail`: information, not something to tidy away.
   A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound evidence, under its own name when undeclared.
-  Link supporting files only where they last, not ignored scratch; write tracked support outside
-  `.castwork/tasks/` before the snapshot, or keep it short.
+  Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: write them in
+  `.castwork/findings/`, named after the task, such as `T-012-run.log`; snapshots leave that folder out.
+  A file the task delivers, or a script a declared check runs, is part of the candidate: never there.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as
   `pass`. After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
@@ -96,8 +98,14 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   what is already there and match it; consistency beats your preferences.
 - When you are stuck, record `blocked` or `needs_context`, with what you tried under `## Blockers
   and decisions`, and say so: a durable pause beats a silent retry.
-- For a host or tool quirk others will hit, propose a `## Setup facts` line for
-  `.castwork/project.md` in the record, under `## Blockers and decisions`.
+- For a setup fact, or a host or tool quirk, others will hit, propose where it is kept, in the record
+  under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds
+  for this repository, pointing to the project's own documents when it needs more than a line and
+  saying what they hold and when to read them; a line for `.castwork/local/setup.md` when it holds only
+  on this machine; or the host's user-level instructions or a user skill when it holds beyond this
+  project. When the cause is a role's or a skill's own guidance, propose the change for the repository
+  that guidance comes from, never as an edit to its generated copy. Edit none of them unless the user
+  asks.
 - If a skill named to you is missing, say so; carry on where the work does not depend on it, and
   where it does, record `needs_context`. A skill supplies practice, not permission: the deliverable
   goes where the task asks, its plan, evidence, or decisions where the record conventions say, and

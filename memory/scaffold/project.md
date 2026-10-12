@@ -33,6 +33,11 @@ right check names.
 Anything an agent needs to know to start working here: how to run the app, where
 the interesting code is, what is generated, what is off-limits.
 
+Every role reads this file, so keep each fact to a line. When one needs more,
+put the detail in a document and point to it, saying what it holds and when to
+read it. Facts about one machine, such as local paths, ports, or wrappers, go
+in `.castwork/local/setup.md`, which stays on that machine.
+
 ## Documents
 
 Pointers to the project's own plan, spec, design, or architecture documents.

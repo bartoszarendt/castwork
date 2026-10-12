@@ -206,6 +206,7 @@ test('the scaffolded project.md says what the Documents pointers are for', (t) =
   const project = fs.readFileSync(path.join(root, PROJECT_FILE), 'utf8');
   assert.match(project, /## Documents\n[\s\S]*The coordinator reads them to report where the project is and to propose what\s+comes next/);
   assert.match(project, /## Working policy\n[\s\S]*replacing or removing a stale sentence is better than adding another[\s\S]*## Checks/);
+  assert.match(project, /## Setup facts\n[\s\S]*keep each fact to a line\.[\s\S]*saying what it holds and when to\s+read it[\s\S]*`\.castwork\/local\/setup\.md`, which stays on that machine[\s\S]*## Documents/);
 });
 
 for (const host of HOSTS) {
@@ -215,6 +216,10 @@ for (const host of HOSTS) {
     assert.match(thinker.content, /in\s+the\s+task\s+record,\s+under\s+`## Blockers and decisions`/);
     assert.match(thinker.content, /\(`## Working policy`,\s+`## Checks`,\s+or\s+`## Setup facts`\)/);
     assert.match(thinker.content, /Do\s+not\s+edit\s+`project\.md`\s+unless\s+the\s+user\s+asks/);
+    assert.match(thinker.content, /For\s+this\s+machine\s+only,\s+such\s+as\s+a\s+local\s+path,\s+port,\s+or\s+wrapper,\s+`\.castwork\/local\/setup\.md`,\s+never\s+`project\.md`/);
+    assert.match(thinker.content, /the\s+host's\s+user-level\s+instructions\s+or\s+a\s+user\s+skill,\s+which\s+Castwork\s+does\s+not\s+keep/);
+    assert.match(thinker.content, /the\s+line\s+points\s+to\s+them,\s+saying\s+what\s+they\s+hold\s+and\s+when\s+to\s+read\s+them/);
+    assert.match(thinker.content, /a\s+finding\s+about\s+one\s+candidate\s+stays\s+in\s+its\s+assessment/);
   });
 }
 

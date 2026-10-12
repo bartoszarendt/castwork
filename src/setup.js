@@ -17,6 +17,7 @@ import { containedPath, digest, diskDigest, installPath, ownership, readManifest
 import {
   CONFIG_FILE,
   DECISIONS_DIRECTORY,
+  FINDINGS_DIRECTORY,
   GENERATED_MANIFEST,
   HOSTS,
   LAYOUT_VERSION,
@@ -26,6 +27,25 @@ import {
   TASKS_DIRECTORY,
 } from './layout.js';
 import { PublicError } from './public-error.js';
+
+const STATE_DIRECTORIES = Object.freeze([STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, LOCAL_DIRECTORY]);
+
+/**
+ * A file where a state directory belongs would be kept and the directory never
+ * made, so refuse before anything is written.
+ * @param {string} root
+ */
+function refuseStateConflicts(root) {
+  const conflicts = STATE_DIRECTORIES.filter((directory) => {
+    const stat = fs.statSync(installPath(root, directory), { throwIfNoEntry: false });
+    return stat !== undefined && !stat.isDirectory();
+  });
+  if (conflicts.length) {
+    throw new PublicError(`nothing was written: ${conflicts.join(', ')} ${conflicts.length === 1 ? 'is' : 'are'} not a directory`, {
+      hint: 'Move or rename what is there, then run setup again.',
+    });
+  }
+}
 
 /**
  * Seed the target-owned state.
@@ -38,7 +58,7 @@ import { PublicError } from './public-error.js';
  */
 function seedState(root) {
   const created = [];
-  for (const directory of [STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, LOCAL_DIRECTORY]) {
+  for (const directory of STATE_DIRECTORIES) {
     const full = installPath(root, directory);
     if (!fs.existsSync(full)) {
       fs.mkdirSync(full, { recursive: true });
@@ -304,6 +324,7 @@ export function setup(root, options = {}) {
   const config = readConfig(root, { hosts });
   const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }), { force: options.force });
   refuseBlocked(plan);
+  refuseStateConflicts(root);
 
   const created = seedState(root);
   writeConfig(root, hosts);
@@ -507,12 +528,16 @@ function identityFindings(manifest) {
   return [];
 }
 
+/** Past this, every role pays for project.md at every start. */
+const LARGE_PROJECT_BYTES = 12 * 1024;
+
 /**
  * `project.md` missing, empty, or still holding what `setup` seeded. Agents
  * read it for the working policy, the checks, and the plan, and a scaffold
  * says none of that. Whether what it says is still true is the agents' call;
  * this only spots what is plainly unwritten. A section the project removed is
- * its choice, and a file with headings of its own is not compared.
+ * its choice, and a file with headings of its own is not compared. Every role
+ * reads it, so a written one that has grown large is a finding too.
  *
  * @param {string} root
  * @returns {{level: 'warn', message: string, next: string}|null}
@@ -537,7 +562,15 @@ function projectFinding(root) {
   const unwritten = [...sections(scaffold)]
     .filter(([heading, body]) => written.has(heading) && (written.get(heading) === '' || written.get(heading) === body))
     .map(([heading]) => heading);
-  if (unwritten.length === 0) return null;
+  if (unwritten.length === 0) {
+    const size = Buffer.byteLength(text);
+    if (size <= LARGE_PROJECT_BYTES) return null;
+    return {
+      level: 'warn',
+      message: `${PROJECT_FILE} is ${Math.round(size / 1024)} KB, and every role reads it`,
+      next: `Keep each fact to a line: move the detail into the documents it points to, saying what each holds and when to read it, and facts about this machine into ${LOCAL_DIRECTORY}/setup.md.`,
+    };
+  }
   return {
     level: 'warn',
     message: `${PROJECT_FILE} has sections still as setup wrote them, or empty: ${unwritten.join(', ')}`,

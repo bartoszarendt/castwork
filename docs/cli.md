@@ -8,8 +8,8 @@ better than editing a record by hand.
 |---|---|
 | `setup` | Install for the selected hosts: create `.castwork/`, write `castwork.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. |
 | `update` | Regenerate for the recorded hosts and report every path written, `.castwork/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. |
-| `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, or `decisions/`. |
-| `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it. Exits non-zero only on an error-level finding. |
+| `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, `decisions/`, or `findings/`. |
+| `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it, and whether `project.md` is unwritten or has grown past 12 KB, since every role reads it. Exits non-zero only on an error-level finding. |
 | `validate` | Check skills, config, links, and generated adapter output. |
 | `task new <title>` | Create a task record from the template with the next id. |
 | `task list [--json]` | List task records with their ids, titles, and statuses. A record that is not `done` or `cancelled`, is structurally valid, and declares at least one requirement, all satisfied, is marked `ready to close`: `task set <id> status done` would accept it. A record that declares none is never marked, although `task set` accepts it. `--json` gives each row `requirements_satisfied`, from requirement evaluation alone (`null` when none are declared); structural validity is `task lint`'s to report. |
@@ -21,7 +21,7 @@ better than editing a record by hand.
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
 | `report [<id>] [--json]` | Read-only project account, or task/decision view selected by declared id. See [Report](#report). |
-| `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.castwork/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.castwork/tasks/`, and `.castwork/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
+| `snapshot [--json]` | Name the working tree as a candidate reference, `tree:<sha>`, without committing: prints the reference, the base commit, and the paths that differ from it. The reference is the first line, so `snapshot | head -1` gives it alone. Runs from the project root, where `.castwork/` is, and refuses anywhere else, as the record commands do. Covers the working tree under the project root, which is normally the whole repository (where the project root is a subdirectory of a larger repository, the tree holds the base commit's files outside it), except ignored files, `.castwork/tasks/`, `.castwork/findings/`, and `.castwork/local/`. Writes no record, and never touches the index, HEAD, refs, or working tree; the only thing it writes into `.git` is the tree's objects. A snapshot exists only in the clone that took it. See [record-format.md](record-format.md#candidate-entry). |
 | `version` | Print the version number, and nothing else. `doctor` and `update --check` print where the running copy lives. |
 | `help` | Print the command list. |
 
@@ -83,6 +83,22 @@ There is no `task report` or extra report flag. Reports read records and local
 Git only: one read-only log over `.castwork/`, no fetch, write, cache or index.
 Every Git call uses `--no-optional-locks`. Output grants no permission.
 
+A fresh report refreshes what was recorded. It does not show that the files in
+front of you are still the recorded candidate, or that its checks still pass:
+`task lint` says whether the working tree has drifted from a snapshot.
+
+Text is the view to read. JSON carries every record in full, so on a large
+project it is large too: about 2 MB for one long task, and more than 20 MB for
+a project of a few hundred tasks. Take only the fields you need rather than
+reading it whole:
+
+```sh
+# open work: id, status, title
+npx --no castwork report --json | node -e "const r = JSON.parse(require('fs').readFileSync(0, 'utf8')); for (const a of r.attention) console.log(a.id, a.status, a.title)"
+# one task: its current candidate and requirement results
+npx --no castwork report T-011 --json | node -e "const {selected: s} = JSON.parse(require('fs').readFileSync(0, 'utf8')); console.log(s.task.current?.ref); for (const q of s.task.requirements) console.log(q.requirement, q.status)"
+```
+
 Readable frontmatter counts, including invalid records and legacy values;
 unreadable frontmatter is excluded and listed. Exit 0 means a report was
 produced, not that its records are valid or its work accepted. Ids are keyed as
@@ -130,7 +146,9 @@ comparisons. Raw YAML values remain unchanged in frontmatter and entries. Missin
 or unusable refs are diagnosed, not confused with a non-string type. Results for
 a ref appear once under its last mapping entry; repeated current refs name their
 earlier entries. Recent is grouped by the timestamp's own recorded calendar day, then
-ordered by instant, with date-only entries last and marked. Malformed dates are
+ordered by instant, with date-only entries last and marked. Project text shows one
+line per record and day, with its title and how many entries of each kind it had,
+placed by its latest entry that day; JSON keeps every entry. Malformed dates are
 excluded and counted under Record quality. Git dates mean first/last commits
 visible locally, never creation or closure; uncommitted changes are identified,
 including when the project is nested below the Git root. Latest recorded timestamps
@@ -182,10 +200,19 @@ Attention always retains every nonterminal blocked/needs_context record, plus
 at most ten ordinary rows. This may explicitly overflow ten total records;
 omissions count only ordinary rows left out. Current failures and unrecognized
 outcomes still have display priority. Candidate-less drafts are summarized by
-count; project JSON retains every Attention record. For retained statuses,
-Blockers shows its first physical line, bounded and attributed, with a continuation
-marker when the logical paragraph/item continues. Prose and display order never
-change selection, authority or a requirement result.
+count; project JSON retains every Attention record. Each row names the record's
+title. A record with a written `## Current state` shows its first paragraph,
+bounded and attributed, with its source pointer: that section is rewritten in
+place, so it is current by contract. Otherwise, for retained statuses, Blockers
+shows its first physical line, bounded and attributed, with a continuation
+marker when the logical paragraph/item continues; it is positional, not the
+latest, because records order that section differently. JSON keeps both. Prose
+and display order never change selection, authority or a requirement result.
+
+Project text puts what needs reading first: Attention, then Recent and
+Decisions, then Rework and Record quality condensed to their totals, with the
+distributions and every Record quality count in JSON. Record quality names only
+the counts that are not zero.
 
 Wrapped continuation lines are indented under their labels. A recorded scalar
 whose indentation already occupies 100 columns is kept intact, possibly wider,

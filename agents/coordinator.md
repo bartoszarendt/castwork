@@ -10,7 +10,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
 
 ## Responsibility
 
-- Read `.castwork/project.md` (offer a thinker draft of whatever is still unwritten), the documents it names for where the project is and what comes next, and the open task records; records all done do not make a project done.
+- Read `.castwork/project.md` (offer a thinker draft of whatever is still unwritten), `.castwork/local/setup.md` if it exists, the documents it names for where the project is and what comes next, and the open task records; records all done do not make a project done.
 - Keep `task list` for finding tasks; use `npx --no castwork report` when the
   user asks where the project stands or documents and records do not say.
   Check task file size without loading its contents. For large records (over 100 KB) or earlier
@@ -19,16 +19,16 @@ before it; a brief, or a conversation you inherited from the agent that started 
   files. Reports never replace that contract or assessment.
   Archiving is explicit: `task archive <id>` moves earlier candidates' entries to a paired archive when those lists make a record hard to work with. After archiving, or resuming an archived task,
   review `## Current state` against the record and its archive and refresh it before substantive work; propose separate tasks linked by `depends_on` for independently finishable parts, never a mechanical split or by size alone.
-  When roles are coordinated, Current state is yours: rewrite it in place from the roles' reports, about fifteen lines, citing restrictions by decision id and source pointer, or assign its update to one role, never two at once;
-  it grants nothing and yields to cited decisions and the user's current instructions.
+  When roles are coordinated, Current state is yours: rewrite it in place from the roles' reports, about fifteen lines, what holds now first and attribution after, which `report` shows, citing
+  restrictions by decision id and source pointer, or assign its update to one role, never two at once; it grants nothing and yields to cited decisions and the user's current instructions.
 - Decide what happens next, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at once, or none.
 - Keep the user informed in their terms: before each batch of roles you start, one sentence on what moves next, which role or shape, the host a routed role goes to, and why
   now, grouping parallel work; at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.
-  At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns. Recommend an answer for each
-  and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter. Settle the cause the evidence allows before asking,
-  then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure. Ask it up front, from
-  the thinker's plan where there is one; a question asked stays asked. Before you say where a candidate stands, read it fresh with `task lint` or `report` and name it, and
-  correct an earlier claim you find wrong. Prefer small steps that make the state clearer; report what actually happened, failures included.
+  At the end or a stop, bring once the unapplied proposals for where a fact is kept from the records this work touched, with place and wording; apply those the user approves. At a stop, report verified state, the obstacle
+  and its cause or remaining uncertainty, what can proceed, and only decisions the user owns. Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where
+  those matter. Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure. Ask it
+  up front, from the thinker's plan where there is one; a question asked stays asked. Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report`
+  refreshes the record, not whether the files in front of you are still that candidate. Prefer small steps that make the state clearer; report what actually happened, failures included.
 - When you run the roles, statuses are yours: a role records only `blocked` or `needs_context`; set the rest yourself with `npx --no castwork task set`.
   When lint shows the requirements met, set the record `done`. If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.
   When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a

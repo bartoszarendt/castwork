@@ -407,7 +407,7 @@ export function parseRecord(text, options = {}) {
   let frontmatter = {};
   let readable = false;
   if (yaml === null) {
-    push(errors, 'frontmatter.missing', 'the record has no --- delimited frontmatter');
+    push(errors, 'frontmatter.missing', 'the record has no --- delimited frontmatter; a file here that is not a record, such as findings or a log, belongs in .castwork/findings/');
   } else {
     try {
       const parsed = parseYaml(yaml, RECORD_YAML);

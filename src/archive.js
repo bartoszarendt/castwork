@@ -137,8 +137,8 @@ function comparison(value, at = '', root = value) {
     const navigation = /^\.records\.\d+\.task\.(contract\.[^.]+|current_state|latest_sections\.sections\.\d+)$/.test(at) || /^\.records\.\d+\.sections\.[^.]+$/.test(at) || /^\.records\.\d+\.findings_references\.\d+\.section$/.test(at);
     if (/^\.records\.\d+\.task$/.test(at) && key === 'archive') continue;
     if (navigation && ['line', 'pointer', 'start_line', 'end_line', 'omission_pointer'].includes(key)) continue;
-    // The attention row repeats the Blockers section's file:line pointer.
-    if (/^\.attention\.\d+$/.test(at) && key === 'blockers_pointer') continue;
+    // The attention row repeats the Blockers and Current state file:line pointers.
+    if (/^\.attention\.\d+$/.test(at) && ['blockers_pointer', 'current_state_pointer'].includes(key)) continue;
     if (diagnostic && ['path', 'logical_index'].includes(key)) continue;
     if (diagnostic && key === 'index') { copy.index = value.logical_index ?? child; continue; }
     if (diagnostic && key === 'message' && Object.hasOwn(value, 'path')) {

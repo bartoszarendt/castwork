@@ -14,7 +14,9 @@ be invoked alone on any candidate at any time.
 
 ## Responsibility
 
-- Check a task's file size without loading its contents. For a large record (over 100 KB) or
+- Read `.castwork/project.md` for the policy and the commands its checks name, and
+  `.castwork/local/setup.md`, if it exists, for facts about this machine, such as how its checks run here.
+  Check a task's file size without loading its contents. For a large record (over 100 KB) or
   earlier blocking rounds, run `npx --no castwork report <id>` **before reading the task record**.
   Before substantive work, read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions
   using section-only reads on large files. Reports never replace that contract. Earlier accepts and
@@ -35,7 +37,7 @@ be invoked alone on any candidate at any time.
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
-  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Link only durable support, not ignored scratch; tracked support outside `.castwork/tasks/` belongs before the snapshot, otherwise keep it short.
+  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Link only durable support, not ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`.
   When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working alone, maintain that section in place, about fifteen lines.
 
 ```yaml

@@ -248,6 +248,23 @@ test('doctor warns while project.md is still the scaffold, and stops once it is 
   assert.equal(scaffold(doctor(root)), undefined);
 });
 
+test('doctor warns when a written project.md has grown past what every role should read', (t) => {
+  const root = fixture(t);
+  setup(root, { hosts: ['codex'] });
+  const file = path.join(root, PROJECT_FILE);
+  const large = (report) => report.findings.find((finding) => /every role reads it/.test(finding.message));
+  fs.writeFileSync(file, `# Tea\n\nA tea shop.\n\n${'- A setup fact on its own line.\n'.repeat(300)}`, 'utf8');
+  assert.equal(large(doctor(root)), undefined, 'about 9 KB is not large');
+  fs.writeFileSync(file, `# Tea\n\nA tea shop.\n\n${'- A setup fact on its own line.\n'.repeat(500)}`, 'utf8');
+  const finding = large(doctor(root));
+  assert.ok(finding);
+  assert.equal(finding.level, 'warn');
+  assert.match(finding.message, /^\.castwork\/project\.md is 16 KB, and every role reads it$/);
+  assert.match(finding.next, /saying what each holds and when to read it/);
+  assert.match(finding.next, /\.castwork\/local\/setup\.md/);
+  assert.equal(doctor(root).ok, true, 'a warning, not an error');
+});
+
 test('doctor warns about a project.md that is missing, empty, or only partly written', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });

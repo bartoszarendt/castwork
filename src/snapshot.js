@@ -20,11 +20,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { LOCAL_DIRECTORY, STATE_DIRECTORY, TASKS_DIRECTORY } from './layout.js';
+import { FINDINGS_DIRECTORY, LOCAL_DIRECTORY, STATE_DIRECTORY, TASKS_DIRECTORY } from './layout.js';
 import { PublicError } from './public-error.js';
 
-/** Paths a snapshot leaves out: the records that describe it, and machine-local state. */
-export const SNAPSHOT_EXCLUDES = Object.freeze([TASKS_DIRECTORY, LOCAL_DIRECTORY]);
+/**
+ * Paths a snapshot leaves out: the records that describe it and the findings
+ * they link to, which a verifier writes after the candidate exists, and
+ * machine-local state.
+ */
+export const SNAPSHOT_EXCLUDES = Object.freeze([TASKS_DIRECTORY, FINDINGS_DIRECTORY, LOCAL_DIRECTORY]);
 
 /** The prefix a snapshot candidate reference carries. */
 export const TREE_PREFIX = 'tree:';

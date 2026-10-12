@@ -15,7 +15,8 @@ involved, and loading this role creates no authority.
 
 ## Responsibility
 
-Check a task's file size without loading its contents. For a large record (over 100 KB) or when
+Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts
+about this machine. Check a task's file size without loading its contents. For a large record (over 100 KB) or when
 earlier rounds matter, run `npx --no castwork report <id>` before reading the task record. Use
 `report` when project context helps. Before substantive work read Intent, Scope, Out of scope,
 Acceptance criteria, and cited decisions, using section-only reads on large files. A report never
@@ -82,10 +83,17 @@ unblock it and, if useful, which role should act next. Name what can proceed ind
 a criterion differently, say where they diverge and clarify the record as above. Never rewrite an assessment. Clarifying a criterion
 supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own. Name the cause
 in how the work was done, not only the check or verdict that reported it. If the cause will affect other tasks, such as a setup fact nobody
-wrote down, a check nobody named, or a quirk of this host or model, write a proposed edit to `.castwork/project.md` in the task record,
-under `## Blockers and decisions`: the section it belongs in (`## Working policy`, `## Checks`, or `## Setup facts`), the wording, and what
-it would prevent. Do not edit `project.md` unless the user asks. Asked for an audit, audit the work, not a candidate: records against the
-project's documents, and causes that recur across them.
+wrote down, a check nobody named, or a quirk of this host or model, propose where it is kept, in the task record, under
+`## Blockers and decisions`: where it goes, the wording, and what it would prevent. It goes where it holds. For this repository, a line in
+`.castwork/project.md`, in the section it belongs in (`## Working policy`, `## Checks`, or `## Setup facts`); when it needs more than a
+line, the detail goes in the project's own documents and the line points to them, saying what they hold and when to read them. For this
+machine only, such as a local path, port, or wrapper, `.castwork/local/setup.md`, never `project.md`. Beyond this project, such as a quirk
+of the host, the model, or the operating system, the host's user-level instructions or a user skill, which Castwork does not keep. When
+the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to
+its generated copy here. A choice that changes future work is a decision for the user, and a finding about one candidate stays in its
+assessment. Do not edit `project.md` unless the user asks, nor any of these other places. Asked for an audit, or a review of how the work
+went, audit the work, not a candidate: records against the project's documents, and causes that recur across them; place each proposal
+it makes as above, and its report in `.castwork/findings/`.
 
 Answer with the question, the evidence, your conclusion or what is uncertain, and the next step. Where the evidence allows, settle the
 steps that follow too, so they need no new question. Record durable decisions under `## Blockers and decisions`, or as a decision record

@@ -13,15 +13,54 @@ YAML frontmatter; the body is prose.
   project.md        prose: setup facts, working policy, pointers
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
+  findings/         what is written about the work and linked from records:
+                    review notes, findings, run logs, reports of how it went
   generated.json    tracked ownership manifest for generated files
-  local/            gitignored machine-specific state, such as a pause handoff
+  local/            gitignored machine-specific state: setup.md for facts
+                    about this machine, a pause handoff
 castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
 
 A task can also have `<record>.archive.md` beside it in `tasks/`, carrying its
 earlier rounds as part of the same logical record. Project configuration lives
-in `castwork.json` and nowhere else; `project.md` owns prose only.
+in `castwork.json` and nowhere else; `project.md` owns prose only. Every
+Markdown file in `tasks/` is read as a task record, so supporting files, such
+as findings or logs, go in `findings/`, named after the task they belong to,
+such as `T-012-review.md`. Nothing parses `findings/`, and a snapshot leaves it
+out as it leaves out `tasks/`, so a verifier writing there after the candidate
+exists does not change it.
+
+For the same reason, `findings/` holds what is written about the work, never
+the work. A file the task delivers, or a script a declared check runs, is part
+of the candidate: it goes where the project keeps such files, so the candidate
+reference covers it and a reviewer who extracts the candidate has it.
+
+### Facts that outlive a task
+
+A cause or fact that will affect other tasks is kept where it holds, and no
+new record kind holds it. The roles propose the place in the task record;
+the user decides, and the coordinator brings the open proposals at the end of
+the work or at a stop.
+
+| What it is | Where it is kept |
+|---|---|
+| a finding about one candidate | that candidate's assessment |
+| a fact for this repository's tasks | a line in `project.md` (`## Working policy`, `## Checks`, or `## Setup facts`); longer detail in the project's own documents, the line saying what they hold and when to read them |
+| a choice that changes future work | a decision record |
+| a fact about this machine, such as a local path, port, or wrapper | `.castwork/local/setup.md`, which stays on the machine; a handoff points to it |
+| a quirk of a host, model, or operating system beyond this project | the host's user-level instructions or a user skill; Castwork does not keep it |
+| a cause in a role's or a skill's own guidance | the repository that guidance comes from, never its generated copy |
+| a supporting file a record links to, such as review notes, findings, a run log, or a report of how the work went | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |
+| a file the task delivers, or a script a declared check runs | the candidate, where the project keeps such files; never `findings/`, which snapshots leave out |
+
+A review of how the work went, such as an audit or a retrospective, is a task
+whose result is findings: its report is a supporting file, and each change it
+proposes goes in the row above that fits. A report the user asked for as the
+deliverable itself is the work, and is part of the candidate.
+
+`project.md` is read by every role, so it stays short: `doctor` warns when it
+grows past 12 KB.
 
 ## The four concepts
 
@@ -244,7 +283,8 @@ but `## Decision#` is Decision#.
 `## Current state` is optional recorded prose: what holds now (current
 candidate, unresolved issues, restrictions with decision ids and source line
 pointers, next step). Rewrite it in place, about fifteen lines, rather than
-appending another round. When roles are coordinated, the coordinator is
+appending another round. Open with what holds now and put attribution after
+it: the project `report` shows the first paragraph in Attention. When roles are coordinated, the coordinator is
 responsible for it: it writes the section from the roles' reports, or assigns
 its update to one role, avoiding overlapping updates. An agent working alone
 keeps its own. It grants nothing; cited decisions and the user's current

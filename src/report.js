@@ -486,7 +486,15 @@ export function deriveReport(inputs, options = {}) {
   quality.legacy_host.names = [...new Set(quality.legacy_host.names)];
   recent.sort((a,b) => (b.date.day ?? '').localeCompare(a.date.day ?? '') ||
     (a.date.kind === 'date_only' ? 1 : 0) - (b.date.kind === 'date_only' ? 1 : 0) || compareInstants(b.date, a.date));
-  const attention = tasks.filter((r) => !['done','cancelled'].includes(r.status)).map((r) => ({path: r.path, id: r.id, status: r.status,
+  // Current state is rewritten in place, so its first line is current by
+  // contract; Blockers and decisions is ordered however the record orders it.
+  const stateLine = (/** @type {typeof tasks[number]} */ r) => {
+    const state = r.task?.current_state;
+    if (!state || state.empty) return '';
+    return state.text.replace(/<!--[\s\S]*?-->/g, '').trim().split(/\n[ \t]*\n/)[0].replace(/\s+/g, ' ');
+  };
+  const attention = tasks.filter((r) => !['done','cancelled'].includes(r.status)).map((r) => ({path: r.path, id: r.id, title: r.title, status: r.status,
+    current_state: stateLine(r), current_state_pointer: r.task?.current_state?.pointer ?? '',
     fail: r.task?.current?.checks.filter((c) => c.outcome === 'fail').map((c) => c.check) ?? [],
     no_evidence: r.task?.current?.checks.filter((c) => c.outcome === 'no_evidence').map((c) => c.check) ?? [],
     unrecognized: r.task?.current?.checks.filter((c) => c.outcome === 'unrecognized').map((c) => ({check: c.check, result: c.result})) ?? [],

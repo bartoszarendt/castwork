@@ -25,10 +25,12 @@ export const TASKS_DIRECTORY = `${STATE_DIRECTORY}/tasks`;
 /** An archive pairs with the same basename's task; never a task itself. */
 export const ARCHIVE_SUFFIX = '.archive.md';
 export const DECISIONS_DIRECTORY = `${STATE_DIRECTORY}/decisions`;
+/** What is written about the work and linked from records: never parsed, never the work itself. */
+export const FINDINGS_DIRECTORY = `${STATE_DIRECTORY}/findings`;
 export const PROJECT_FILE = `${STATE_DIRECTORY}/project.md`;
 
 /** Never deleted by `remove`. */
-export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY]);
+export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY]);
 
 /**
  * Supported host ids.

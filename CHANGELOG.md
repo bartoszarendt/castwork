@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.9.7
+
+- A fact that outlives its task is kept where it holds, with no new record
+  kind. The thinker and worker propose the place in the task record:
+  - a line in `project.md` for this repository, pointing to the project's own
+    documents for detail and saying what they hold and when to read them;
+  - `.castwork/local/setup.md` for this machine only, never `project.md`;
+  - the host's user-level instructions or a user skill for a quirk beyond the
+    project, which Castwork does not keep;
+  - the repository a role's or skill's guidance comes from, when that guidance
+    caused it, never the generated copy.
+
+  A choice that changes future work is a decision, and a finding about one
+  candidate stays in its assessment. `docs/record-format.md` has the table.
+- The coordinator brings the open proposals once, at the end of the work or
+  at a stop, and applies those the user approves. Before, they stayed in the
+  records they were written in.
+- `.castwork/findings/` sits beside `tasks/` and `decisions/` for what is
+  written about the work and linked from records, such as review notes,
+  findings, run logs, and reports of how the work went. Each file is named after
+  its task, such as `T-012-review.md`.
+  - `setup` creates the folder, `remove` never touches it, and nothing parses
+    it. `setup` refuses, writing nothing, when a file stands where it or any
+    other state directory belongs.
+  - A snapshot leaves it out, as it leaves out `tasks/`, so a verifier writing
+    its findings after the candidate exists does not change it.
+  - For the same reason it never holds the work. A file the task delivers, or
+    a script a declared check runs, is part of the candidate, so a reviewer who
+    extracts the candidate has it.
+  - Support never goes in ignored scratch or `.castwork/tasks/`.
+
+  Three projects had each improvised such a place: `.castwork/reports/`,
+  `.castwork/findings/`, and links into a gitignored `tmp/`. A review of how
+  the work went is a task whose result is findings, and its report goes in this
+  folder.
+- `/castwork` and every role read `.castwork/local/setup.md` when it exists. A
+  handoff points to it rather than repeating facts about the machine that will
+  still hold next time. The `project.md` scaffold asks for one line per setup
+  fact and names that file for local facts.
+- `## Current state` opens with what holds now, and attribution goes after it,
+  since the project `report` shows its first paragraph.
+- `doctor` warns when a written `project.md` grows past 12 KB, since every role
+  reads it.
+- Before saying where a candidate stands, the coordinator reads `task lint`.
+  `report` refreshes what was recorded, not whether the files in front of it
+  are still that candidate.
+- The project `report` reads in the order a person needs:
+  - Attention, where each row names its title and shows the first paragraph of
+    its `## Current state`, falling back to the Blockers excerpt;
+  - Recent, one line per record and day with its title;
+  - Decisions;
+  - Rework and Record quality condensed to their totals.
+
+  JSON gains `title`, `current_state` and `current_state_pointer` on Attention
+  rows and otherwise keeps every field and entry. The most failed declared
+  checks are ranked by count, also when check names look like integers.
+- `docs/cli.md` says what a fresh report establishes, how large the JSON gets
+  on a large project, and how to take only the fields you need.
+- A Markdown file without frontmatter among the records now says that a file
+  that is not a record, such as findings or a log, belongs outside the records
+  directory.
+
 ## 0.9.6
 
 - `main(argv, { cwd })`, exported from the package root, takes an optional

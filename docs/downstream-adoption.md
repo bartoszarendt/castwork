@@ -140,8 +140,8 @@ for a role goes under `role_settings.<host>.<role>` in `castwork.json`: run
 npx castwork remove
 ```
 
-Deletes the generated files it still owns and leaves `project.md`, `tasks/`, and
-`decisions/` in place. Your records are ordinary Markdown and remain readable
+Deletes the generated files it still owns and leaves `project.md`, `tasks/`,
+`decisions/`, and `findings/` in place. Your records are ordinary Markdown and remain readable
 without the toolkit installed — that is the point of the format.
 
 ## What you should not expect

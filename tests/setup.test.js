@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { digest, readManifest } from '../src/generated.js';
-import { CONFIG_FILE, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
+import { CONFIG_FILE, FINDINGS_DIRECTORY, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
 import { doctor, remove, setup, update } from '../src/setup.js';
 import { validate } from '../src/validate.js';
 
@@ -92,6 +92,7 @@ test('setup creates the state directories and records what it generated', (t) =>
   const result = setup(root, { hosts: ['codex'] });
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
   assert.ok(fs.existsSync(path.join(root, TASKS_DIRECTORY)));
+  assert.ok(fs.existsSync(path.join(root, FINDINGS_DIRECTORY)));
   assert.ok(fs.existsSync(path.join(root, GENERATED_MANIFEST)));
   assert.ok(result.added.length > 0);
   const manifest = readManifest(root);
@@ -277,14 +278,29 @@ test('update reports only the files whose content changed', (t) => {
   assert.deepEqual(updated.added, []);
 });
 
+test('setup refuses a file where a state directory belongs, and writes nothing', (t) => {
+  for (const [occupied, parent] of [[FINDINGS_DIRECTORY, true], ['.castwork', false]]) {
+    const root = fixture(t);
+    if (parent) fs.mkdirSync(path.join(root, '.castwork'), { recursive: true });
+    fs.writeFileSync(path.join(root, occupied), 'a user file', 'utf8');
+    assert.throws(() => setup(root, { hosts: ['codex'] }), new RegExp(`nothing was written: ${occupied.replace(/[./]/g, '\\$&')} is not a directory`));
+    assert.equal(fs.readFileSync(path.join(root, occupied), 'utf8'), 'a user file', 'the file is kept');
+    assert.ok(!fs.existsSync(path.join(root, CONFIG_FILE)), 'nothing else is written');
+    assert.ok(!fs.existsSync(path.join(root, '.codex')));
+  }
+});
+
 test('remove deletes generated files and never touches records', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });
   fs.writeFileSync(path.join(root, TASKS_DIRECTORY, 'T-001.md'), '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n', 'utf8');
 
+  fs.writeFileSync(path.join(root, FINDINGS_DIRECTORY, 'T-001-review.md'), '# Review\n', 'utf8');
+
   const result = remove(root);
   assert.ok(result.removed.length > 0);
   assert.ok(fs.existsSync(path.join(root, TASKS_DIRECTORY, 'T-001.md')));
+  assert.ok(fs.existsSync(path.join(root, FINDINGS_DIRECTORY, 'T-001-review.md')));
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
   assert.ok(!fs.existsSync(path.join(root, GENERATED_MANIFEST)));
 });

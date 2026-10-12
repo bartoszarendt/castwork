@@ -93,7 +93,10 @@ test('unparseable frontmatter is reported as such', () => {
 
 test('a record with no frontmatter is reported, not thrown', () => {
   const record = parseRecord('# just prose\n');
-  assert.ok(record.errors.some((error) => error.code === 'frontmatter.missing'));
+  const missing = record.errors.find((error) => error.code === 'frontmatter.missing');
+  assert.ok(missing);
+  assert.match(missing.message, /a file here that is not a record, such as findings or a log, belongs in \.castwork\/findings\//,
+    'a supporting file put among the records says where it belongs');
 });
 
 test('the status vocabulary is the nine documented values', () => {

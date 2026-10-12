@@ -110,9 +110,11 @@ Do not retain routine successful output. The entry's command, exit code and a
 short observed result are normally enough. When long output materially supports
 a failure, reproduction, or review finding, put it in a linked file named under
 `output` rather than pasting a transcript into the record. Link only where it
-lasts, not ignored scratch. A tracked supporting file outside `.castwork/tasks/`
-is part of the next snapshot: write it before taking that snapshot, or not at all.
-Without such a place, write it short.
+lasts, not ignored scratch or `.castwork/tasks/`: write it in
+`.castwork/findings/`, named after the task, such as `T-012-test.log`. Snapshots
+leave that folder out, so writing there never changes a candidate. A script a
+declared check runs is part of the candidate, never there: a reviewer
+extracting the candidate must have it.
 
 A routine successful probe is a sentence in the body, or nothing. An observation
 supporting acceptance or a finding stays a candidate-bound evidence entry, under
