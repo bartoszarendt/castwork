@@ -181,7 +181,7 @@ for (const host of HOSTS) {
     assert.match(entry.content, /If there is no argument, report the state, propose the next step, and ask\s+before starting it/);
     assert.match(entry.content, /first a record that can move\s+now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and\s+whose `depends_on` are done/);
     assert.match(entry.content, /Ask an open\s+question only when neither the records nor the documents name anything/);
-    assert.match(entry.content, /also\s+name\s+the\s+document\s+and\s+the\s+part\s+it\s+comes\s+from/);
+    assert.match(entry.content, /When\s+the\s+work\s+comes\s+from\s+a\s+document,\s+name\s+it\s+and\s+the\s+part:\s+orienting\s+is\s+yours\./);
     assert.doesNotMatch(entry.content, /report the state and ask what to work on/);
   });
 }
@@ -266,8 +266,8 @@ for (const host of HOSTS) {
     const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
-    assert.match(entry.content, /start the host's subagent for that role/);
-    assert.match(entry.content, /A\s+general-purpose\s+subagent\s+told\s+it\s+is\s+the\s+thinker\s+has\s+only\s+the\s+word/);
+    assert.match(entry.content, /Start\s+the\s+host's\s+subagent\s+named\s+after\s+the\s+role,\s+which\s+a\s+plugin\s+install\s+may\s+list\s+with\s+a\s+prefix,\s+such\s+as\s+`castwork:thinker`/);
+    assert.match(entry.content, /not\s+a\s+general-purpose\s+one\s+told\s+which\s+role\s+it\s+plays,\s+which\s+has\s+only\s+the\s+name/);
   });
 }
 

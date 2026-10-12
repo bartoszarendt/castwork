@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.6
 
 - `main(argv, { cwd })`, exported from the package root, takes an optional
   project root, as `run` already did; without it the command still reads the
@@ -32,6 +32,73 @@
   cover where the risk warrants and authorization allows, and confirms in an
   extracted copy that a test offered as evidence of a fix fails without it, or
   names that as a limit.
+- The generated entry command carries the coordinator role's text, one
+  heading level down, after its routes. A coordinator started from `/castwork`
+  was told to read its role file, and some never did. The Claude Code plugin
+  still installs `commands/start.md` as written and reads the role file.
+- `commands/start.md` no longer repeats the coordinator role: role-taking,
+  delegation, when to ask the thinker, diagnosis boundaries, statuses, actors
+  and boundaries come from the coordinator text, and the entry keeps
+  orientation, continuing, CLI use, updates, pausing and role routes. The
+  plugin's `castwork:thinker` prefix moved into the coordinator. A generated
+  Pi prompt is about 29,000 characters rather than 36,000.
+- A new `## Who answers a question` section in the coordinator: traffic is the
+  coordinator's, and so is a question it can answer by pointing at something
+  written or settle with a quick read-only look. Delegating now refers to this
+  section instead of keeping its own rule for when to ask the thinker. A
+  question that needs an argument about the work goes to the
+  thinker, gathered into one request. Only what needs the user goes to them,
+  with one recommendation and never "ask the thinker" as their option. The
+  thinker's answer covers the steps it names, and asking it hands over that
+  question, not the coordination. A role's finding that would change what is
+  asked of the user, such as a cost, is checked once before it is relayed.
+- The coordinator asks for the remaining path when it proposes the work, from
+  the thinker's plan where there is one, and does not ask the same question
+  again. It reads `task lint` or `report` before saying where a candidate
+  stands. Its end report says who accepted what, what was not assessed, and
+  how the work departed from the request.
+- The user's current instructions come before the task record for the
+  coordinator. For the thinker, worker, and verifier, limits from a brief or the
+  user, such as what they may write, run, or spend, bind even where the record
+  describes more; the rest of a prompt stays background. An instruction narrows
+  only what it names: the coordinator may drop a planned review or check that no
+  requirement or working policy demands, telling the user the risk, and a
+  required one stays until the user changes it. When the user's instructions
+  exclude delegation, the coordinator takes the roles itself whatever the
+  task's size. Running a declared check, or writing an entry under another
+  role's actor, is changing roles.
+- A failing check the user accepts changes the requirement to exactly what
+  they accepted, citing their decision and keeping the failed evidence: a
+  waived check is removed, and accepted known failures become a narrower check
+  under its own name that still runs and passes, so a new failure still shows.
+  No substitute check passes by restating the disposition. Closing a task whose
+  last assessment was blocking, with no assessment of the current candidate,
+  is said to the user with its risk.
+- An owner's choice that settles only one task's next step is recorded in that
+  task, quoted and dated; a decision record is for what outlives the task.
+  `decision-capture` keeps the owner's words apart from reasons or conditions
+  an agent adds, and treats a condition that returns the work to the owner as a
+  scheduled stop.
+- The thinker's plan says which checks each step needs and where the user's
+  permission will be needed along the path. When fixes keep exposing nearby
+  defects, it names the rule they share and frames one correction. Its answer
+  settles the steps that follow where the evidence allows.
+- Fewer findings each round is no sign of convergence while each fix brings a
+  defect next to it, and an intermittent failure that passes in isolation is
+  not explained by that pass. A snapshot does not identify work kept in ignored
+  paths.
+- The verifier gets its own copy when a writer shares the checkout, rather
+  than limits on what it runs; a brief carries the checks the thinker's plan
+  names for a step.
+- A working-policy line naming a model or host for a role is not a route; the
+  coordinator says so and offers to move it to `castwork.json`.
+- `castwork task --help` and `castwork decision --help` print the command list
+  instead of refusing the group's name.
+- All four role presets share a 125-line guidance limit.
+- `docs/pi-setup.md` notes three `pi-subagents` behaviours: agents are found
+  from the run's working directory, a next round resumes with
+  `subagent({ action: "resume", id, message })`, and a run stops after 30
+  minutes unless `options.timeoutMs` raises it.
 
 ## 0.9.5
 

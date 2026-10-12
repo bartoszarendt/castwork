@@ -47,6 +47,10 @@ assessed, and lint notes it as `candidate.moving_ref`. If the CLI is not
 available, say so and record the candidate as a label anyway; never invent a
 reference.
 
+Because a snapshot leaves ignored files out, it does not identify work kept in
+ignored paths, such as a harness under a scratch directory. Say so, and name
+those files and their hashes in the evidence that ran them.
+
 A snapshot exists only in the clone that took it: it can be reviewed there,
 including by an agent CLI working in the same checkout, but not from another
 clone. For a reviewer elsewhere, use a commit the project authorizes, or send
@@ -139,8 +143,10 @@ what was seen, what it means, what is next; not a new narrative section per run.
 - **Compare when attribution matters.** Reuse applicable baseline or batch
   evidence, or make a proportionate comparison within existing authority, using
   comparable commands, inputs and conditions. Matching baseline failures may
-  establish non-introduction; they do not establish the cause. Do not require a
-  fresh baseline run for every check or silently spend another run allowance.
+  establish non-introduction; they do not establish the cause. A pass in
+  isolation shows a failure did not reproduce; it does not explain it either.
+  Do not require a fresh baseline run for every check or silently spend another
+  run allowance.
 - **Names, not secrets.** Record an environment variable's name, never its
   value: records are repository files, and the repository's own checks read
   them.

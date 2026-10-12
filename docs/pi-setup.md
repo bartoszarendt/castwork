@@ -91,9 +91,11 @@ its role files and route list are Codex's, not Pi's. In Pi, use `/castwork`.
 
 ## The coordinator and arguments
 
-The coordinator is the session in which you invoke `/castwork`. It reads
-`.pi/agents/coordinator.md`; do not start it as a subagent. Pi has no `--agent`
-option for starting a standalone session as a named role.
+The coordinator is the session in which you invoke `/castwork`. Before its
+`## Argument` section, the prompt carries the coordinator role's text, the same
+as `.pi/agents/coordinator.md`, so the session has its role without a separate
+read; do not start it as a subagent. Pi has no `--agent` option for starting a standalone session as a
+named role.
 
 ```text
 /castwork
@@ -143,6 +145,20 @@ appends the role to a fresh Pi process with ordinary context and skills and
 ignores the extra inheritance keys. Neither extension is shipped by Castwork.
 The presets require one level of delegation; do not rely on an extension to
 prevent deeper nesting for you.
+
+Three behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
+
+- It finds agents from the working directory a run starts in. A role started
+  in another checkout, such as a sibling repository the task edits, finds no
+  `.pi/agents/` there and is refused as unknown or disabled. Start it from the
+  repository that holds the roles and name the other path in the brief.
+- A role's next round resumes the same run:
+  `subagent({ action: "resume", id, message })`, with the id of the run that
+  started it. A `task` argument cannot be combined with an action, so a
+  rejected call of that shape says nothing about whether resuming works.
+- A run stops after 30 minutes unless the call raises `options.timeoutMs`. A
+  check that may take longer runs detached and writes its output and exit
+  status to files, so the result outlives the run that started it.
 
 Without an extension or another delegation capability that can start an agent,
 the coordinator may take the needed role itself: announce the change, read and

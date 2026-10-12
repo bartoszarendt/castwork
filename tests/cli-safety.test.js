@@ -122,6 +122,12 @@ test('--help prints the list whatever command it is given to', (t) => {
   const result = cli(root, 'update', '--help');
   assert.equal(result.code, 0);
   assert.match(result.out, /Commands:/);
+  for (const group of ['task', 'decision']) {
+    const listed = cli(root, group, '--help');
+    assert.equal(listed.code, 0, `${group} --help`);
+    assert.match(listed.out, new RegExp(`${group} new +Create`), `${group} --help lists its commands`);
+  }
+  assert.equal(cli(root, 'task').code, 2, 'a group name alone is still a usage error');
 });
 
 test('every accepted flag is one the CLI knows, and help lists each command\'s flags', (t) => {

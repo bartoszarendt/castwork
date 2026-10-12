@@ -155,6 +155,9 @@ export function checkUsage(positionals, named) {
     ?? COMMAND_PATHS.find((candidate) => candidate.path === command);
   if (!entry) {
     if (command === 'task' || command === 'decision') {
+      // `task --help` asks for the list like any other `--help`; refusing the
+      // group's own name sent agents looking for its subcommands elsewhere.
+      if (named.includes('help')) return null;
       const known = COMMAND_PATHS.filter((candidate) => candidate.path.startsWith(`${command} `)).map((candidate) => candidate.path);
       throw usageError(`unknown command: ${command} ${positionals[1] ?? ''}`.trim(), `Known: ${known.join(', ')}.`);
     }

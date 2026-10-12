@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { commandDescriptions, generateHost, readCommand, readRoles, readSkills, skillFrontmatter, readAdapter, renderCommand, resolveRoutes } from '../src/adapter-generation.js';
-import { roleLineLimit } from '../src/validate.js';
+import { commandDescriptions, generateHost, readCommand, readRoles, readSkills, skillFrontmatter, readAdapter, renderCommand, renderEntryCoordinator, resolveRoutes } from '../src/adapter-generation.js';
+import { ROLE_LINE_LIMIT } from '../src/validate.js';
 import { formatScalar } from '../src/yaml.js';
 import { HOSTS } from '../src/layout.js';
 import { ROLE_IDS } from '../src/record.js';
@@ -20,10 +20,9 @@ test('the four canonical role ids are present and unchanged', () => {
   assert.deepEqual(readRoles().map((role) => role.id).sort(), [...ROLE_IDS].sort());
 });
 
-test('every role preset stays under 100 lines, the coordinator under 110', () => {
-  assert.deepEqual(ROLE_IDS.map(roleLineLimit), ROLE_IDS.map((id) => (id === 'coordinator' ? 110 : 100)));
+test('every role preset stays under the shared line limit', () => {
   for (const role of readRoles()) {
-    assert.ok(role.body.split('\n').length < roleLineLimit(role.id), `${role.id} is too long`);
+    assert.ok(role.body.split('\n').length < ROLE_LINE_LIMIT, `${role.id} is too long`);
   }
 });
 
@@ -215,12 +214,18 @@ test('command arguments declarations are non-empty strings and all other dollar 
   assert.throws(() => renderCommand({ ...command, argument_hint: {} }, [], entry), /argument-hint.*non-empty string/);
 });
 
+/** The coordinator text a host's entry command closes with. @param {string} host */
+function entryCoordinator(host) {
+  const coordinator = readRoles().find((role) => role.id === 'coordinator');
+  return renderEntryCoordinator(coordinator, readAdapter(host), readSkills().map((skill) => skill.id));
+}
+
 test('the argument generator change alone preserves existing-host command bytes', () => {
   const command = readCommand();
   for (const host of ['opencode']) {
     const actual = generateHost(host).find((file) => file.path.endsWith('commands/castwork.md')).content;
     const previous = `---\ndescription: ${formatScalar(command.description)}\n---\n\n${command.body}\n\n### Routes from this host\n\nNone: every role runs in this host.\n`;
-    assert.equal(actual, previous, host);
+    assert.equal(actual, `${previous}\n${entryCoordinator(host)}\n`, host);
   }
 });
 
@@ -234,7 +239,7 @@ test('the argument generator change alone preserves existing-host command bytes 
     const route = '- `verifier` runs in Codex (`codex`). Role file: `.codex/agents/verifier.toml`. Actor: `verifier@codex`. ' +
       'Settings: model `custom-$1`, model_reasoning_effort `high`.';
     const previous = `---\ndescription: ${formatScalar(command.description)}\n---\n\n${command.body}\n\n### Routes from this host\n\n${route}\n`;
-    assert.equal(actual, previous, host);
+    assert.equal(actual, `${previous}\n${entryCoordinator(host)}\n`, host);
   }
 });
 

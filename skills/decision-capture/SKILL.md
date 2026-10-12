@@ -33,8 +33,10 @@ only mattered for one task.
 task and stops mattering afterwards.
 
 **In `.castwork/decisions/`**, when it outlives the task. A decision the
-owner makes in conversation belongs here too: a session ends, and the choice
-goes with it unless it is written down. Cite the decision's id in each task
+owner makes in conversation belongs here too when it outlives the task: a
+session ends, and the choice goes with it unless it is written down. An
+owner's choice that settles only this task's next step, such as whether to try
+again, goes in the task, quoted and dated. Cite the decision's id in each task
 record it governs, so a later reader of the task finds it.
 
 Before writing one, run `npx --no castwork decision list` and read any
@@ -60,6 +62,12 @@ status: accepted
 ```
 
 ## Writing one well
+
+**Whose decision it is.** Quote the owner's words and date them. A reason,
+condition, or alternative you add is yours: say so. A condition that returns
+the work to the owner is a stop you schedule; add one only for what only the
+owner can decide. If their answer could select more than one option, ask
+before you record it.
 
 **Context** is what made the decision necessary. Someone reading in a year needs
 to know what the pressure was, or the decision looks arbitrary.

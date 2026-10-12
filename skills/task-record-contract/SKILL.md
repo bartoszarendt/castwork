@@ -147,6 +147,14 @@ A task with no `requirements` block is completely normal. Most tasks want
 Do not declare a requirement you intend to remove later to get a green result.
 Removing it defeats the reason for writing it down.
 
+When the owner accepts a check that fails, change the requirement deliberately
+to exactly what they accepted. When they waive the whole check, remove it. When
+they accept known failures within it, replace it with a narrower check under
+its own name that excludes exactly those and still has to run and pass on the
+candidate, so a new failure still shows. Cite their decision under
+`## Blockers and decisions` and keep the failed evidence. A disposition is a
+decision, not evidence: declare no check that passes by restating it.
+
 ## Status
 
 `draft`, `agent_ready`, `in_progress`, `in_review`, `needs_revision`, `blocked`,

@@ -384,8 +384,9 @@ function renderReference(skill) {
  * @param {{id: string, description: string}[]} roles
  * @param {Record<string, unknown>} adapter
  * @param {ResolvedRoute[]} routes
+ * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
  */
-function renderSkillIndex(command, skills, roles, adapter, routes) {
+function renderSkillIndex(command, skills, roles, adapter, routes, coordinator = null) {
   const lines = [
     '---',
     'name: castwork',
@@ -399,6 +400,7 @@ function renderSkillIndex(command, skills, roles, adapter, routes) {
     '',
     command ? command.body : '',
     ...(command ? ['', renderRoutes(routes)] : []),
+    ...(command && coordinator !== null ? ['', coordinator] : []),
     '',
     '## Roles',
     '',
@@ -411,11 +413,38 @@ function renderSkillIndex(command, skills, roles, adapter, routes) {
 }
 
 /**
+ * The coordinator role as the entry command carries it: the body a generated
+ * coordinator file has, without the routes the command already lists, one
+ * heading level down so it sits under the command's own sections.
+ *
+ * A coordinator started from the entry command was told to read its role
+ * file, and some never did, so the rules that live only there went unseen.
+ * Carrying the text makes the command enough on its own.
+ *
+ * @param {{id: string, procedures: string[], body: string}|undefined} coordinator
+ * @param {Record<string, unknown>} adapter
+ * @param {string[]} available the skill ids the toolkit has
+ * @returns {string|null}
+ */
+export function renderEntryCoordinator(coordinator, adapter, available) {
+  if (!coordinator) return null;
+  let body = coordinator.body.replace(PROCEDURE_LINE, '').replaceAll('<host>', String(adapter.id));
+  const procedures = renderProcedures(coordinator.procedures, adapter, available);
+  if (procedures !== null) body = `${body}\n\n${procedures}`;
+  let fenced = false;
+  return body.split('\n').map((line) => {
+    if (line.startsWith('```')) fenced = !fenced;
+    return !fenced && /^#{1,5} /.test(line) ? `#${line}` : line;
+  }).join('\n');
+}
+
+/**
  * @param {{description: string, argument_hint?: unknown, body: string}|null} command
  * @param {ResolvedRoute[]} routes
  * @param {{arguments?: unknown, source?: string}} [entry]
+ * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
  */
-export function renderCommand(command, routes, entry = {}) {
+export function renderCommand(command, routes, entry = {}, coordinator = null) {
   const declared = Object.hasOwn(entry, 'arguments');
   const source = entry.source ?? 'adapter command';
   if (declared && (typeof entry.arguments !== 'string' || entry.arguments.trim() === '')) {
@@ -433,6 +462,7 @@ export function renderCommand(command, routes, entry = {}) {
       ['commands/start.md description', command.description],
       ['commands/start.md argument-hint', command.argument_hint],
       ['commands/start.md body', command.body],
+      ...(coordinator === null ? [] : [['agents/coordinator.md body', coordinator]]),
     ];
     for (const route of routes) {
       sources.push([`src/adapters/${route.host}.json label or role path`, `${route.label} ${route.role_file}`]);
@@ -450,7 +480,7 @@ export function renderCommand(command, routes, entry = {}) {
     }
     lines.push(`argument-hint: ${yamlString(command.argument_hint)}`);
   }
-  lines.push('---', '', command.body, '', renderRoutes(routes));
+  lines.push('---', '', command.body, '', renderRoutes(routes), ...(coordinator === null ? [] : ['', coordinator]));
   const content = `${lines.join('\n')}\n`;
   if (!declared) return content;
   if (content.includes('$')) throw new PublicError(`${source} produced a dollar sign outside its arguments from generated command text`);
@@ -602,6 +632,7 @@ export function generateHost(host, options = {}) {
   const command = readCommand();
   const roleSettings = options.roleSettings ?? {};
   const routes = options.routes ?? [];
+  const coordinator = renderEntryCoordinator(roles.find((role) => role.id === 'coordinator'), adapter, skills.map((skill) => skill.id));
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
@@ -638,12 +669,14 @@ export function generateHost(host, options = {}) {
       }
       files.push({
         path: entry.to,
-        content: entry.format === 'skill' ? renderSkillIndex(command, skills, roles, adapter, routes) : renderCommand(command, routes, commandEntry),
+        content: entry.format === 'skill'
+          ? renderSkillIndex(command, skills, roles, adapter, routes, coordinator)
+          : renderCommand(command, routes, commandEntry, coordinator),
       });
       continue;
     }
     if (entry.kind === 'index') {
-      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes) });
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes, coordinator) });
       continue;
     }
     if (entry.kind === 'literal') {

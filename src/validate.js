@@ -14,6 +14,8 @@ import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
+export const ROLE_LINE_LIMIT = 125;
+
 /** @typedef {{level: 'error'|'warn', where: string, message: string}} Finding */
 
 /** @param {Finding[]} findings @param {string} where @param {string} message */
@@ -94,19 +96,8 @@ export function roleFindings(role, skills) {
     if (!skills.includes(procedure)) error(findings, where, `names procedure ${procedure}, which is not a skill under skills/`);
   }
   const lines = role.body.split('\n').length;
-  const limit = roleLineLimit(role.id);
-  if (lines >= limit) warn(findings, where, `${lines} body lines; ${role.id} is meant to stay under ${limit}`);
+  if (lines >= ROLE_LINE_LIMIT) warn(findings, where, `${lines} body lines; ${role.id} is meant to stay under ${ROLE_LINE_LIMIT}`);
   return findings;
-}
-
-/**
- * The body lines a role preset stays under. The coordinator also says when it
- * may take another role itself.
- *
- * @param {string} id
- */
-export function roleLineLimit(id) {
-  return id === 'coordinator' ? 110 : 100;
 }
 
 /**

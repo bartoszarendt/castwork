@@ -33,7 +33,11 @@ file the host reads as configuration rather than prose.
 A role's id, description, and body come from its file under `agents/`;
 `config.json` contributes only the per-host settings, and the entry command
 and the coordinator close with the routes `role_routes` sets from that host
-(see [Role routes](#role-routes)). The one substitution in a
+(see [Role routes](#role-routes)). After its routes, a generated entry command
+carries the coordinator role's text, one heading level down, so a coordinator
+started from it has its role without a separate read; the Claude Code plugin
+installs `commands/start.md` as written and reads the role file instead. The
+one substitution in a
 role's body is `<host>`, which becomes the adapter's `id`, so a generated role
 records `worker@claude` rather than leaving an agent to guess what a host is.
 A canonical role ends with one line naming the procedure skills it uses, such

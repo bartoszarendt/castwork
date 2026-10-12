@@ -47,9 +47,10 @@ const ROLES = ['coordinator', 'thinker', 'worker', 'verifier'];
 
 for (const host of HOSTS) {
   test(`${host} roles treat the record as authoritative over an inherited conversation`, () => {
-    for (const id of ROLES) {
-      assert.match(role(host, id), phrase('The task record is authoritative. A prompt, or a conversation you inherited from the agent that started you, is background.'), id);
+    for (const id of ['thinker', 'worker', 'verifier']) {
+      assert.match(role(host, id), phrase('The task record is authoritative for the work. Limits from your brief or the user, such as what you may write, run or spend, bind you even where the record describes more; the rest of a prompt, or a conversation you inherited from the agent that started you, is background.'), id);
     }
+    assert.match(role(host, 'coordinator'), phrase("The task record is authoritative, and the user's current instructions come before it; a brief, or a conversation you inherited from the agent that started you, is background."));
   });
 
   test(`${host} producing and assessing roles consult the host's skills as part of their responsibility`, () => {
@@ -101,13 +102,15 @@ for (const host of HOSTS) {
       'Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.',
       'the accepting actor must not be a recorded producer',
     ]);
+    // The entry carries the coordinator's own wording rather than a second copy.
     all(entry(host), [
-      'For a small task where delegation would not help, you may switch to the `worker` role.',
-      'Where no subagent or delegation capability (`## Role routes` says what counts) can start an agent, you may take any role yourself; being started by another agent is not such a case.',
-      'announce the change before acting, follow that preset, and record under that role\'s actor',
-      'a session that produced a candidate never accepts it under any actor.',
-      'A declared `independent_review` stays unmet until a separate reviewer accepts the candidate.',
+      'For a small task where delegation would not help, you may switch to worker.',
+      'Where no subagent or delegation capability can start an agent, you may take any role yourself; being started by another agent is not such a case.',
+      'Announce either change first, follow its preset, and record its actor',
+      'Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.',
+      'the accepting actor must not be a recorded producer',
     ]);
+    assert.doesNotMatch(entry(host), phrase('you may switch to the `worker` role.'), 'no second copy of role-taking');
   });
 
   test(`${host} coordinator offers a draft of an unwritten project.md when started directly`, () => {
@@ -218,8 +221,8 @@ for (const host of HOSTS) {
       "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself; otherwise the role chooses.",
       'A verifier can assess only a candidate that resolves; `task lint` shows whether it does.',
       'When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes.',
-      "Record durable decisions where they will be found again; an owner's decision goes in a decision record (`npx --no castwork decision new`), cited by the task records it governs.",
-      "Do not just retry: resolve what the evidence answers, ask the thinker when that would help, and ask the user what only they can decide; the same goes for a worker's `needs_context`.",
+      "Record a decision where it will be found again: one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the task records it governs; one that settles only this task's next step under its `## Blockers and decisions`. Quote the user's words",
+      "Do not just retry; the same goes for a worker's `needs_context`.",
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from that role's generated agent file.",
       'which role or shape, the host a routed role goes to, and why now',
@@ -275,7 +278,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       'A blocking finding that questions the work rather than the candidate',
       'is a sign of a stall the first time;',
-      'ask it rather than thinking alone when fresh context, its own model or route, or reasoning kept in the record would help.',
+      'ask it what `Who answers a question` sends it: its fresh context, its own model or route, and the reasoning it keeps in the record are why.',
       'When progress depends on a cause not established, investigate it.',
       "A category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
       'A workflow you write returns unresolved causes and changed approaches to your judgement.',
@@ -284,13 +287,14 @@ for (const host of HOSTS) {
       'So is work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs: run it once it can tell you something and authorization allows, and where practical reproduce a costly failure cheaply, such as in an offline test, before paying for another run; otherwise say what the evidence shows and take the next authorized step.',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
+    assert.doesNotMatch(role(host, 'coordinator'), phrase('rather than thinking alone'), 'one rule for when the thinker is asked');
     const start = entry(host);
     all(start, [
-      'The thinker is not only a first step.',
-      'resolve what the available evidence answers; consider the thinker when deeper investigation or a separate perspective would help, and ask the user when what remains is their decision.',
-      "A failure category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
-      'A workflow you write returns unresolved causes and changed approaches to your judgement; its termination returns the problem to you.',
+      'A question that needs an argument about the work goes to the thinker, gathered into one request:',
+      "A category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
+      'A workflow you write returns unresolved causes and changed approaches to your judgement.',
     ], 'entry');
+    assert.doesNotMatch(start, phrase('consider the thinker when deeper investigation'), 'the entry no longer keeps an older copy of when to ask the thinker');
     for (const content of [role(host, 'coordinator'), start]) {
       all(content, [
         'Diagnosis using information and resources already authorized for the task needs no further approval.',
@@ -306,6 +310,67 @@ for (const host of HOSTS) {
       'Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.',
       'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure.',
     ], 'stop report');
+  });
+
+  test(`${host} the coordinator answers what is written, sends arguments to the thinker, and asks the user once for permission`, () => {
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      '## Who answers a question',
+      'Traffic is yours: who acts next, in what shape, on which record and when, statuses from lint, and what reaches the user.',
+      'So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker\'s plan, or lint output, or settle with a quick read-only look, such as one file or one command.',
+      'A question that needs an argument about the work goes to the thinker, gathered into one request:',
+      'Its answer covers the steps it names: carry them out, and return when the work departs from it.',
+      'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
+      'Only what needs the user goes to them: their permission, as Boundaries lists, and what only they know or own, such as acceptance;',
+      'never offer asking the thinker as their choice.',
+      "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
+      "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
+      'Before you say where a candidate stands, read it fresh with `task lint` or `report` and name it, and correct an earlier claim you find wrong.',
+      'at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
+      'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
+      'When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.',
+      "If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
+      'An instruction narrows only what it names. Dropping a planned review or check that no requirement or working policy demands is your choice, to tell the user with its risk; a required one stays until the user changes it.',
+      "When the user's instructions exclude delegation, take the roles yourself whatever the task's size, and say how you read an instruction that may exclude it before you start any agent.",
+      'check that the name resolves where you start it, such as the directory the host finds agents from.',
+      "where the thinker's plan names the checks a step needs, the brief carries them.",
+      'where a writer shares its checkout, give it its own copy instead.',
+      'a fix that brings a new defect of the same kind or next to it, even as findings shrink,',
+      'which a pass in isolation does not explain',
+    ], 'coordinator');
+    all(role(host, 'thinker'), [
+      'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
+      "Where the path will need the user's permission, say where current authority ends, the attempts you propose and what stops them, so the user is asked once.",
+      'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
+      'Where the evidence allows, settle the steps that follow too, so they need no new question.',
+    ], 'thinker');
+    all(entry(host), [
+      "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
+      "When that work will need the user's permission along the way, ask for the whole path in the same request: what is already authorized, the decisions it will need, and what stops it.",
+      'The coordinator role says how to delegate, when to take a role yourself, and who answers which question; this command says how to orient, continue, pause, and route a role to another host.',
+      'Date it from the clock',
+      'Check what it says about a candidate against `task lint` before you write it.',
+      'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes` and `role_settings`.',
+    ], 'entry');
+  });
+
+  test(`${host} entry command carries the coordinator role, so a coordinator started from it needs no separate read`, () => {
+    const text = entry(host);
+    all(text, ['Read `coordinator`, unless this command carries its text under `## Coordinator`'], 'entry');
+    const start = text.indexOf('\n## Coordinator\n');
+    assert.ok(start > text.indexOf('### Routes from this host'), 'the coordinator follows the routes');
+    const section = text.slice(start);
+    all(section, [
+      'You keep the work moving and the user informed.',
+      '### Who answers a question',
+      '### While roles run',
+      '### Procedures',
+      '`decision-capture`',
+    ], 'entry coordinator');
+    assert.doesNotMatch(section, /^# /m, 'the role sits under the command, one heading level down');
+    assert.doesNotMatch(section, /^Procedure skills:/m, 'the procedure line is replaced by the linked list');
+    assert.ok(!section.includes('<host>'), 'the host id is written in');
+    if (text.includes('## Argument')) assert.ok(text.indexOf('## Argument') > start, 'the argument still closes the command');
   });
 
   test(`${host} roles choose a shape before work starts, where the choice is made`, () => {
@@ -334,17 +399,17 @@ for (const host of HOSTS) {
       'Orient in proportion to the request, and only once',
       "Judge it from where the work is meant to finish, such as a phase's acceptance: what still stands between here and there, what the rest waits on, and whether recent rounds and decisions moved that or only the work around it.",
       "When records keep moving and the work's finish does not, say so and propose what would move it, such as running the acceptance check, or asking the user to close a task whose further rounds would not.",
-      'A running role is no reason to end your turn: until it returns, do what neither waits on its result nor touches its candidate, files, or shared environment, as the `coordinator` role file describes under `## While roles run`.',
+      'A running role is no reason to end your turn.',
       'enough to locate the work, not the whole document',
       'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
       "what is written there changes only with the user's say-so",
       'ask only when the gap affects the work',
-      'so do not tell it to read its role file',
+      'A subagent started by name already has its role: do not tell it to read its role file',
       "says the role's model does not pick skills itself",
-      'Delegation is one level: a role started by another agent starts no agents',
+      'Delegation is one level: a role you start starts no agents.',
       'When you run the roles, statuses are yours',
-      "When lint shows a record's requirements met, set it `done`; work that went straight through needs no verifier unless the requirements, the working policy, or the user ask for one.",
-      'A role working alone sets its own status.',
+      'When lint shows the requirements met, set the record `done`.',
+      'a task can go straight from a worker to done when its requirements allow',
       'Give each parallel verifier lens its own actor name',
       'count on them only in a new session',
       'Claude Code reloads role files in an existing `.claude/agents/` for the next role it starts',
@@ -423,7 +488,21 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     'a narrower or modified command is a different check and leaves the declared one unmet.',
     'Matching baseline failures may establish non-introduction; they do not establish the cause.',
     'Do not require a fresh baseline run for every check or silently spend another run allowance.',
+    'A pass in isolation shows a failure did not reproduce; it does not explain it either.',
+    'it does not identify work kept in ignored paths',
   ], 'verification-evidence');
+  all(skill('decision-capture'), [
+    "An owner's choice that settles only this task's next step, such as whether to try again, goes in the task, quoted and dated.",
+    "**Whose decision it is.** Quote the owner's words and date them.",
+    'A reason, condition, or alternative you add is yours: say so.',
+    'A condition that returns the work to the owner is a stop you schedule; add one only for what only the owner can decide.',
+    'If their answer could select more than one option, ask before you record it.',
+  ], 'decision-capture');
+  all(skill('task-record-contract'), [
+    'When the owner accepts a check that fails, change the requirement deliberately to exactly what they accepted. When they waive the whole check, remove it.',
+    'When they accept known failures within it, replace it with a narrower check under its own name that excludes exactly those and still has to run and pass on the candidate, so a new failure still shows.',
+    'Cite their decision under `## Blockers and decisions` and keep the failed evidence. A disposition is a decision, not evidence: declare no check that passes by restating it.',
+  ], 'task-record-contract');
 });
 
 test('generated guidance keeps archives explicit, Current state with the coordinator and findings bounded', () => {
