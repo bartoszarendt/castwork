@@ -82,14 +82,14 @@ for (const host of HOSTS) {
     for (const id of ['worker', 'verifier']) {
       assert.match(role(host, id), phrase('Record `model` only when the host reports it; otherwise leave it out.'), id);
     }
-    assert.match(role(host, 'thinker'), phrase('Give the model only when the host reports it.'));
-    assert.match(role(host, 'worker'), phrase('`host`, `model` and `at` are optional.'));
+    assert.match(role(host, 'thinker'), phrase('Give the model only when the host reports it, and the level only when this file names the one you run at.'));
+    assert.match(role(host, 'worker'), phrase('`host`, `model`, `level` and `at` are optional.'));
     all(role(host, 'verifier'), [
       'If yours is among the producers, you are not independent.',
       'A session that produced a candidate never accepts it under any actor; taking this role creates no independence.',
     ]);
     all(role(host, 'coordinator'), [
-      'Give each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Do not assign a model.',
+      "Give each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise.",
     ]);
     assert.doesNotMatch(role(host, 'coordinator'), /do not assign an actor/);
   });
@@ -204,7 +204,7 @@ for (const host of HOSTS) {
       '`independent_review: true` where the task must not be done without a second pair of eyes',
       "`assessment_roles: [verifier]` where it must not be done without the verifier's verdict.",
       'A review that would help but is not required needs no requirement: it can happen anyway.',
-      'Say what would unblock it and, if useful, which role should act next.',
+      'Say what would unblock it and, if useful, which role should act next, and at which level: a higher level is a remedy only for a cause in the difficulty itself, and an unchanged retry at a higher level is still an unchanged retry.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
       'if the plan has phases, give each phase its own task.',
       'The plan says how the tasks fit together; each record says what its part is.',
@@ -227,8 +227,8 @@ for (const host of HOSTS) {
       "Record a decision where it will be found again: one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the task records it governs; one that settles only this task's next step under its `## Blockers and decisions`. Quote the user's words",
       "Do not just retry; the same goes for a worker's `needs_context`.",
       'A plain defect goes back to the worker.',
-      "When you report a role's model, effort, or variant, read it from that role's generated agent file.",
-      'which role or shape, the host a routed role goes to, and why now',
+      "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
+      'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
       'Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate; start a fresh one when its context is spent or a fresh view is the point.',
       '## While roles run',
       'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
@@ -355,7 +355,7 @@ for (const host of HOSTS) {
       'The coordinator role says how to delegate, when to take a role yourself, and who answers which question; this command says how to orient, continue, pause, and route a role to another host.',
       'Date it from the clock',
       'Check what it says about a candidate against `task lint` before you write it.',
-      'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes` and `role_settings`.',
+      'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes`, `role_settings` and `role_levels`.',
     ], 'entry');
   });
 

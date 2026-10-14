@@ -5,7 +5,7 @@ work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.9.7 is current.
+**Status:** version 0.9.8 is current.
 
 ## Layout
 
@@ -48,7 +48,7 @@ authoritative copy for one host.
   `.castwork/local/`.
 - **Configuration lives only in `castwork.json`** at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
-  project supports, and role settings and role routes are its deliberate
+  project supports, and role settings, role routes and role levels are its deliberate
   choices. `project.md` is prose; `.castwork/local/` is machine-local state, not an overlay.
 - **Four roles, and they do not vary by project.** A specialist is an `actor`
   under a canonical role, carrying a skill, chosen by prose policy. Do not add a

@@ -17,7 +17,7 @@ better than editing a record by hand.
 | `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line. Text folds undeclared check names found only on earlier candidates and earlier lint-as-evidence notes; mixed names show their current entries. Every credential note remains visible. `--json` keeps every reference and note. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
 | `task archive [<id>] [--check] [--json]` | Explicitly move the entries for earlier candidates into `<record>.archive.md` beside the task; the body is never moved. No id selects records over 100 KB. Reports exact proposed list moves and bytes; `--check` writes nothing. Strict in-memory verification refuses any outcome or report-content difference, with a named reason and no writes; the selected record becoming uncommitted, and its size note, are the only exempt differences. Records are processed independently; exit 1 if any failed/refused, 2 for usage. JSON is exactly one document. |
 | `task set <id> <field> <value>` | One safe frontmatter write of a top-level value. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. Refuses a field name that is not plain, a field holding a list or mapping, and any write that would change more than that field. |
-| `task add <id> <kind> <key=value>...` | Append one `candidate`, `evidence`, or `assessment` entry to the record's own list, with only the fields the record format defines for it. An evidence or assessment `candidate` must be a recorded `ref`; nothing is filled in that was not given, except `at=now`. See [record-format.md](record-format.md#command-behavior). |
+| `task add <id> <kind> <key=value>...` | Append one `candidate`, `evidence`, or `assessment` entry to the record's own list, with only the fields the record format defines for it; `level` takes `simple`, `standard`, or `complex`. An evidence or assessment `candidate` must be a recorded `ref`; nothing is filled in that was not given, except `at=now`. See [record-format.md](record-format.md#command-behavior). |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
 | `report [<id>] [--json]` | Read-only project account, or task/decision view selected by declared id. See [Report](#report). |
@@ -138,6 +138,12 @@ All rework units are within a record file, not merged by shared ids or refs:
 - Current triples in Attention use non-`done`, non-`cancelled` records; fail and
   missing evidence are separate. Other checks count distinct undeclared names
   and their effective results per ref, not runs.
+- Levels count entries by kind (candidates, evidence, assessments) and recorded
+  `level`: `simple`, `standard`, `complex`, unrecorded, and unrecognized
+  values. An omitted level is unrecorded, never `standard`. The counts change
+  no round or rework count, and no rework is attributed to a level. Project
+  text shows a Levels line only once some entry records one; JSON always has
+  `quality.levels`.
 
 Document order selects and presents entries within a task. Reference keys use
 `recordValueText()`, the same interpretation as the checks: numeric and quoted
@@ -252,9 +258,11 @@ which deletes what it no longer generates and still owns.
 `castwork.json` is the only configuration, and it is a property of the
 repository rather than of your machine. It holds `hosts` — the hosts this
 project supports, not the one you personally run — optional per-host
-`role_settings`, and optional `role_routes`, which name another host a role
-runs in. Both are the project's deliberate
-choices; see [host-adapters.md](host-adapters.md#role-routes). Nothing inherits
+`role_settings`, optional `role_routes`, which name another host a role
+runs in, and optional `role_levels`, which give a role `simple` or `complex`
+variants with their own model settings. All are the project's deliberate
+choices; see [host-adapters.md](host-adapters.md#role-routes) and
+[role levels](host-adapters.md#role-levels). Nothing inherits
 from anywhere: defaults come from the installed package. A setting a host
 cannot express, and a value it could not carry, are each refused rather than
 dropped in silence. Omit a setting to let the host's own configuration decide

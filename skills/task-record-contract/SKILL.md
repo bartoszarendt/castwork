@@ -117,6 +117,9 @@ Optional, asserted attributes: use the host id, not the machine name, and the
 exact model the host reports. Omit an unknown model, never write `unknown`.
 For producers on different hosts or models, omit the mixed attributes rather
 than selecting one. Candidate `at` means recorded at; it never orders entries.
+`level` names the level a role ran at (`simple`, `standard`, or `complex`),
+when its role file says so; omit it otherwise, and for producers at different
+levels. An omitted level means unrecorded, not `standard`.
 
 ## Declaring requirements
 

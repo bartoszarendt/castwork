@@ -10,7 +10,7 @@ adapters. **Agents choose the workflow. Hosts execute it.**
 Castwork interprets what was recorded. It does not prove who recorded it.
 `report [<id>]` reads task and decision records and local Git; it decides nothing.
 
-**Status:** version 0.9.7 is current.
+**Status:** version 0.9.8 is current.
 
 ## What the toolkit provides, and what it does not
 
@@ -170,7 +170,7 @@ Checkable requirements are declared per task.
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state
 castwork.json    project configuration: hosts, per-host role settings,
-                    role routes
+                    role routes, role levels
 ```
 
 A task can have a paired `<record>.archive.md` beside it in `tasks/`; both

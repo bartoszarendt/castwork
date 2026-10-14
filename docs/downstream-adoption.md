@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.9.7 is current.
+> **Status:** 0.9.8 is current.
 
 ## What you are adopting
 
@@ -130,8 +130,10 @@ its history, so run the entry command again at once if you resume instead.
 a personal choice: leave model and effort or variant settings unset in
 `castwork.json` and set them in the host's own configuration. New sessions
 pick it up, and the repository never changes. A model the project means to pin
-for a role goes under `role_settings.<host>.<role>` in `castwork.json`: run
-`update`, commit both, and start a new session. See
+for a role goes under `role_settings.<host>.<role>` in `castwork.json`, and
+a stronger or cheaper one for some assignments under
+`role_levels.<host>.<role>.<simple|complex>`: run `update`, commit both, and
+start a new session. See
 [host-adapters.md](host-adapters.md) for the settings each host accepts.
 
 ## Removing it

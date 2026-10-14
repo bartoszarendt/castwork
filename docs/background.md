@@ -142,7 +142,12 @@ toolkit selects roles, and no order of roles is required.
 selection, not an equivalent.** `role_settings.<host>.<role>` in
 `castwork.json` is fixed configuration: it binds a model, reasoning effort,
 and similar settings to each generated role, and it changes only when someone
-edits it. Nothing chooses a model per turn. Separating the thinker from the
+edits it. `role_levels` adds a `simple` or `complex` variant of a role with
+its own fixed settings, and a level is chosen per assignment: named in the
+thinker's plan, or chosen by the coordinator for clear work, and recorded on
+the entries. That is a choice among a few configured settings, made in
+judgement and written down, not the paper's learned selection from a model
+pool. Separating the thinker from the
 verifier does let planning and judgement bind different models, and
 `role_routes` lets a role run in another host altogether. That too is fixed
 configuration: where a route exists, the coordinator follows it, running the

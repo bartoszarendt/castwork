@@ -26,6 +26,13 @@ export const REQUIREMENT_KINDS = Object.freeze(['checks', 'independent_review', 
 /** The four canonical role ids. */
 export const ROLE_IDS = Object.freeze(['coordinator', 'thinker', 'worker', 'verifier']);
 
+/**
+ * The levels an entry's optional `level` names: the assignment the agent ran
+ * at. `standard` is a role's own binding; the others are configured variants.
+ * Records keep whatever was written; `task add` and `report` know these.
+ */
+export const LEVEL_IDS = Object.freeze(['simple', 'standard', 'complex']);
+
 /** Recognized assessment verdicts. */
 export const VERDICTS = Object.freeze(['accept', 'reject', 'needs_revision']);
 

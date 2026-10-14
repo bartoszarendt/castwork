@@ -32,7 +32,9 @@ the record's lock, so parallel lenses recording at once lose nothing.
 `verdict` is `accept`, `reject`, or `needs_revision`. Record `host`, the exact
 host-reported `model`, and an RFC 3339 `at` timestamp when the record must stay
 self-contained or comparable without host-local telemetry. They are asserted,
-informational metadata.
+informational metadata. Add `level` when your role file names the level you
+run at; a level is chosen for the assessment's difficulty and creates no
+independence.
 
 `findings` is a short quoted string, a linked file relative to the repository
 root, or an anchor to a heading in the body. Long findings go under a heading,

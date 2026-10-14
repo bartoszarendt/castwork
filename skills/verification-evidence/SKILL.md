@@ -88,7 +88,8 @@ evidence:
 - `check` matches the name the task declared under `requirements.checks`.
 - `candidate` is the `ref` you just recorded.
 - `result` is `pass` or `fail`.
-- `command`, `exit_code`, `output`, `actor`, `host`, `model`, `at` are optional.
+- `command`, `exit_code`, `output`, `actor`, `host`, `model`, `level`, `at` are optional.
+  `level` is the level your role file says you run at; omit it otherwise.
   Record them when they help someone reproduce what you did.
 
 `npx --no castwork task add <id> evidence check=test candidate=007c7f8 result=pass

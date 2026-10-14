@@ -1,7 +1,7 @@
 /** Pure report derivation. File identity, not id or ref, is the counting unit.
  * No I/O; recorded prose and dates never alter the existing checks' results.
  */
-import { declaredRequirements, isObjectId, recordEntries, recordValueText, relocateEntryLabel, RESULTS, VERDICTS } from './record.js';
+import { declaredRequirements, isObjectId, LEVEL_IDS, recordEntries, recordValueText, relocateEntryLabel, RESULTS, VERDICTS } from './record.js';
 import { currentCandidate, duplicateIdErrors, effectiveEvidence, effectiveAssessments, requirementEvaluation, readyToClose, structuralValidity } from './checks.js';
 import { HOSTS } from './layout.js';
 
@@ -441,12 +441,22 @@ export function deriveReport(inputs, options = {}) {
   const recent = [];
   const quality = { entries: 0, without_at: 0, date_only_at: 0, malformed_at: 0, malformed_decision_dates: 0,
     candidate_model: 0, candidate_host_model: 0, host_model: 0, moving_refs: 0,
-    legacy_host: {count: 0, names: /** @type {string[]} */ ([]), dated: 0, undated: 0, latest_recorded: '', latest_date_only: ''} };
+    legacy_host: {count: 0, names: /** @type {string[]} */ ([]), dated: 0, undated: 0, latest_recorded: '', latest_date_only: ''},
+    // Per entry kind, as recorded. An omitted level is unrecorded, never
+    // standard: it covers older records, unknown attribution and mixed
+    // production alike. Nothing here is attributed to a round or to rework.
+    levels: Object.fromEntries(['candidates', 'evidence', 'assessments'].map((kind) =>
+      [kind, {...Object.fromEntries(LEVEL_IDS.map((level) => [level, 0])), unrecorded: 0, unrecognized: 0}])) };
   for (const record of records) {
     if (record.task) {
       for (const [kind, entries] of Object.entries(record.task.entries)) for (const [index, entry] of entries.entries()) {
         quality.entries += 1;
         if (entry.host && entry.model) quality.host_model += 1;
+        const levels = /** @type {Record<string, number>} */ (quality.levels[kind]);
+        // Only a string names a level. A list or a mapping is malformed, not a
+        // level or a missing one, whatever it contains.
+        const level = typeof entry.level === 'string' ? entry.level.trim() : entry.level;
+        levels[level == null || level === '' ? 'unrecorded' : typeof level === 'string' && LEVEL_IDS.includes(level) ? level : 'unrecognized'] += 1;
         if (kind === 'candidates') {
           if (entry.model) quality.candidate_model += 1;
           if (entry.host && entry.model) quality.candidate_host_model += 1;

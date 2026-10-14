@@ -218,6 +218,13 @@ function projectText(report) {
     q.malformed_decision_dates ? `malformed decision dates ${q.malformed_decision_dates} / ${t.decisions}` : '',
     q.moving_refs ? `moving refs ${q.moving_refs} / ${t.candidates} candidate entries` : '',
   ].filter(Boolean);
+  // Shown only once some entry records a level, so a project without levels
+  // reads as before.
+  const levelKinds = Object.entries(q.levels).map(([kind, counts]) => {
+    const named = Object.entries(counts).filter(([level, count]) => count > 0 && level !== 'unrecorded');
+    return named.length ? `${kind} ${named.map(([level, count]) => `${level} ${count}`).join(', ')}, unrecorded ${counts.unrecorded}` : '';
+  }).filter(Boolean);
+  if (levelKinds.length) lines.push(`Levels  ${levelKinds.join(' · ')}`);
   lines.push(`Record quality  ${quality.length ? quality.join(' · ') : 'nothing counted'}; --json has the detail`,
     report.git_omitted ? `Git  ${report.git_omitted}` : `Git  first/last commits visible locally available in record views; ${report.records.filter((r) => r.git?.uncommitted).length} records have uncommitted changes`);
   return lines;

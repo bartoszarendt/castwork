@@ -16,7 +16,7 @@ Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.7 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.8 is
 > current.
 
 ## When it helps
@@ -179,8 +179,11 @@ no authority. The thinker, worker, and verifier can each have their own model
 and settings per host under `role_settings` in `castwork.json`. The
 coordinator uses the settings of the session in which you invoke Castwork.
 `role_routes` can run a role in another host — for example, to have Codex
-review work produced in Claude Code. See
-[docs/host-adapters.md](docs/host-adapters.md#role-routes).
+review work produced in Claude Code. `role_levels` can give a role `simple` or
+`complex` variants with their own models, chosen per assignment: the thinker's
+plan names the level, and the coordinator may choose `complex` for clearly
+hard work. See [docs/host-adapters.md](docs/host-adapters.md#role-routes)
+and [role levels](docs/host-adapters.md#role-levels).
 
 Castwork bundles five skills for working with its records:
 `task-record-contract`, `verification-evidence`, `assessment`,

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.9.8
+
+- `role_levels` in `castwork.json` can give the thinker, worker, or verifier a
+  `simple` or `complex` variant beside the role itself, which is `standard`:
+  the same role with other model settings, for assignments that need a cheaper
+  or a stronger model. A repository without it gets no variants or level
+  lists; the new guidance below reaches every entry command and role.
+  - A level is a complete setting set under the host's own names: it must name
+    its `model`, and nothing of the role's own model settings is carried into
+    it. `permission_mode` stays with the role. A `standard` or `coordinator`
+    entry, an unknown level, and a level without a model are refused with a
+    hint. `validate` warns when a level leaves an effort setting to the host,
+    which can pair the model with an effort chosen for another.
+  - Each level is generated as `<role>_<level>` beside the role, such as
+    `.claude/agents/worker_complex.md`, with the role's body and one line:
+    an agent launched as it, or a fresh routed process given the file and its
+    listed settings, runs at that level and records `level`; its actor names
+    its role, never the variant; and reading the file in a session already
+    running establishes no level. The entry command lists the levels after
+    the routes, the generated coordinator closes with them, and a route lists
+    each level's role file and settings for the routed role.
+  - The thinker's plan names a level per role with a reason. Without a plan the
+    coordinator may choose `complex` itself when the difficulty is evident,
+    never `simple`. The verifier's level follows how hard the candidate is to
+    verify, not the worker's level. A level is raised only with a stated reason,
+    and a level the user names comes first. An agent is resumed only at its
+    own level; changing level starts the chosen variant under the same actor,
+    unless the host has been seen to apply every setting of the new level to
+    the running agent, which is then told its level. The procedure is the entry
+    command's new `## Levels` section; the coordinator's "Do not assign a
+    model" is replaced by a pointer to it.
+  - A level changes which model runs and nothing else: requirements,
+    independence and permissions are as they were.
+- Candidates, evidence and assessments take an optional `level`, written by an
+  agent whose role file names one. `task add` accepts `simple`, `standard`, or
+  `complex`. An omitted level means unrecorded, never `standard`.
+- `report` counts entries by kind and recorded level in `quality.levels`, with
+  unrecorded and unrecognized values apart, and project text shows a Levels
+  line once any entry records one. Round and rework counts are unchanged.
+
+To use levels, add `role_levels` to `castwork.json`, run `update`, commit the
+generated files, and start a new session.
+
 ## 0.9.7
 
 - A fact that outlives its task is kept where it holds, with no new record

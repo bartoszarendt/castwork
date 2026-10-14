@@ -45,7 +45,11 @@ before the final declared checks. Say which checks each step needs: focused ones
 allows, and the declared ones on the final candidate. Where the path will need the user's permission, say where current authority ends, the
 attempts you propose and what stops them, so the user is asked once. Write the plan in the record body where the worker will read it. A small
 task needs no written plan; a plan longer than its work is bookkeeping. A plan is guidance, like a critique: the worker may depart from it,
-and says why when it does.
+and says why when it does. Where `castwork.json` gives a role levels on its host, name the level each step needs for each role, with a reason:
+`complex` when a wrong result would cost much, the cause or approach is uncertain or new, the change is broad, or earlier attempts failed;
+`simple` only for bounded work on settled patterns with little at stake; never by file count alone. Choose the verifier's level from how
+hard it is to establish that the candidate meets its criteria and what a wrong acceptance would cost, not from the worker's level. Name
+the level the difficulty warrants from the start, and revisit it when the work changes.
 
 **Investigating.** A plan built on a guess fails where the guess is wrong. When the plan, or work already under way, turns on something not
 yet known, find out first: read the code and run read-only commands. Working alone, you may use the host's search helpers. When the unknown
@@ -78,7 +82,8 @@ action not currently authorized; propose deliberate changes when necessary, with
 repeated repairs or probes without progress: actual recorded attempts, not candidate counts or a new retry limit. When fixes keep exposing
 defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it. Conflicting verdicts alone
 do not establish an ambiguous criterion: compare candidates, evidence and findings before deciding interpretations differ. Say what would
-unblock it and, if useful, which role should act next. Name what can proceed independently and the precise owner decision, if any. For
+unblock it and, if useful, which role should act next, and at which level: a higher level is a remedy only for a cause in the difficulty
+itself, and an unchanged retry at a higher level is still an unchanged retry. Name what can proceed independently and the precise owner decision, if any. For
 `needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision. When a worker and a verifier read
 a criterion differently, say where they diverge and clarify the record as above. Never rewrite an assessment. Clarifying a criterion
 supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own. Name the cause
@@ -99,7 +104,7 @@ Answer with the question, the evidence, your conclusion or what is uncertain, an
 steps that follow too, so they need no new question. Record durable decisions under `## Blockers and decisions`, or as a decision record
 when they outlive the task. Body entries you write carry your actor, `<name>@<host>`: the id of the agent host you run in, never the
 machine's name, and your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two reviewers of one
-candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only when the host reports it.
+candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only when the host reports it, and the level only when this file names the one you run at.
 
 ## Boundaries
 

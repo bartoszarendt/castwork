@@ -13,7 +13,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { out } from './cli-io.js';
 import { PublicError } from './public-error.js';
-import { RECORD_YAML, recordEntries, recordValueText, RESULTS, ROLE_IDS, VERDICTS } from './record.js';
+import { LEVEL_IDS, RECORD_YAML, recordEntries, recordValueText, RESULTS, ROLE_IDS, VERDICTS } from './record.js';
 import { findRecord } from './task-cli.js';
 import { readTask, replaceRecord, withRecordLock } from './task-record-io.js';
 import { formatScalar, parseYaml } from './yaml.js';
@@ -23,9 +23,9 @@ import { formatScalar, parseYaml } from './yaml.js';
  * ones it requires. The order follows docs/record-format.md.
  */
 const KINDS = Object.freeze({
-  candidate: { list: 'candidates', fields: ['ref', 'producers', 'note', 'host', 'model', 'at'], required: ['ref'] },
-  evidence: { list: 'evidence', fields: ['check', 'candidate', 'result', 'command', 'exit_code', 'actor', 'host', 'model', 'at', 'output'], required: ['check', 'candidate', 'result'] },
-  assessment: { list: 'assessments', fields: ['candidate', 'role', 'actor', 'verdict', 'host', 'model', 'at', 'findings'], required: ['candidate', 'role', 'verdict'] },
+  candidate: { list: 'candidates', fields: ['ref', 'producers', 'note', 'host', 'model', 'level', 'at'], required: ['ref'] },
+  evidence: { list: 'evidence', fields: ['check', 'candidate', 'result', 'command', 'exit_code', 'actor', 'host', 'model', 'level', 'at', 'output'], required: ['check', 'candidate', 'result'] },
+  assessment: { list: 'assessments', fields: ['candidate', 'role', 'actor', 'verdict', 'host', 'model', 'level', 'at', 'findings'], required: ['candidate', 'role', 'verdict'] },
 });
 
 /** @param {string} message @param {string} [hint] */
@@ -74,7 +74,7 @@ export function entryFromPairs(kind, pairs, now = new Date()) {
       entry[key] = value;
     }
   }
-  const allowed = { result: RESULTS, verdict: VERDICTS, role: ROLE_IDS };
+  const allowed = { result: RESULTS, verdict: VERDICTS, role: ROLE_IDS, level: LEVEL_IDS };
   for (const [key, values] of Object.entries(allowed)) {
     if (Object.hasOwn(entry, key) && !values.includes(/** @type {string} */ (entry[key]))) {
       throw refuse(`${key} ${recordValueText(entry[key])} is not one of ${values.join(', ')}`);

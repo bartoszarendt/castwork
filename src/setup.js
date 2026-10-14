@@ -322,7 +322,7 @@ export function setup(root, options = {}) {
 
   // Planned before anything is seeded, so a refusal leaves the tree as it was.
   const config = readConfig(root, { hosts });
-  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }), { force: options.force });
+  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }), { force: options.force });
   refuseBlocked(plan);
   refuseStateConflicts(root);
 
@@ -347,7 +347,7 @@ export function update(root, options = {}) {
   if (config.hosts.length === 0) {
     throw new PublicError(`${CONFIG_FILE} lists no hosts`, { hint: 'Run setup first.' });
   }
-  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }), { force: options.force });
+  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }), { force: options.force });
   if (options.check) return { hosts: config.hosts, plan: publicPlan(plan) };
   return { hosts: config.hosts, version: plan.version, ...applyPlan(root, plan) };
 }
@@ -437,7 +437,7 @@ export function doctor(root) {
   let generated = null;
   const layoutSpoken = manifest === null || manifest.layout_version === LAYOUT_VERSION;
   if (layoutSpoken && config.hosts.length > 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
-    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes }));
+    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }));
     // This copy is older than the one that wrote the manifest, and refuses to
     // update, so neither update nor --force-generated is the way forward.
     const newer = plan.downgrade

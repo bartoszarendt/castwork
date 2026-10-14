@@ -135,7 +135,7 @@ follow any other, and no status grants a permission.
 | `ref` | yes | a commit or equivalent reference |
 | `producers` | no | list of actor strings that produced it |
 | `note` | no | free text |
-| `host`, `model`, `at` | no | asserted producer attributes; `at` is when the entry was recorded |
+| `host`, `model`, `level`, `at` | no | asserted producer attributes; `at` is when the entry was recorded |
 
 A `ref` is one of three kinds, and they differ in what can be checked later:
 
@@ -206,7 +206,7 @@ a general way to hand work between hosts or clones.
 | `result` | yes | `pass` or `fail` |
 | `command` | no | what was run |
 | `exit_code` | no | its exit code |
-| `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
+| `actor`, `host`, `model`, `level`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `output` | no | a short string, or a repository-root-relative path to a linked file |
 
 ### Assessment entry
@@ -216,13 +216,13 @@ a general way to hand work between hosts or clones.
 | `candidate` | yes | a `ref` from `candidates` |
 | `role` | yes | the canonical responsibility: one of `coordinator`, `thinker`, `worker`, `verifier`. A specialist is an `actor` under one of these, not a fifth role. |
 | `verdict` | yes | `accept`, `reject`, or `needs_revision` |
-| `actor`, `host`, `model`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
+| `actor`, `host`, `model`, `level`, `at` | no | optional attributes; record them when anyone might compare this work with work done elsewhere |
 | `findings` | no | a short string, a repository-root-relative path, or a body heading anchor |
 
 Candidates may carry these same optional attributes for the agent that produced
 and recorded the candidate. `at` means **recorded at**, not produced at. For
-producers on different hosts or models, omit the mixed attributes rather than
-picking one producer's values. Omit an unknown model; never write a placeholder
+producers on different hosts, models or levels, omit the mixed attributes rather
+than picking one producer's values. Omit an unknown model; never write a placeholder
 such as `unknown`. No attribute validation is added.
 
 These optional attributes are asserted metadata:
@@ -234,6 +234,14 @@ These optional attributes are asserted metadata:
   so a record written with a machine's name stays valid.
 - `model` is the exact model identifier that host reported; it is not normalized
   across hosts.
+- `level` is the level the agent ran at: `simple`, `standard`, or `complex`,
+  as its generated role file names it (see
+  [Role levels](host-adapters.md#role-levels)). It is written only by an agent
+  whose role file names a level. An omitted level means unrecorded, never
+  `standard`. `task add` accepts only those three; a record keeps whatever was
+  written, and `report` counts other values as unrecognized. A level is chosen
+  for the difficulty of the assignment; it changes no check, and a stronger
+  model creates no independence.
 - `at` is an RFC 3339 timestamp when one is useful. It is informational only:
   timestamps never select effective task evidence or assessments, or decide
   freshness, validity, or completion. Reports may order informational Recent and

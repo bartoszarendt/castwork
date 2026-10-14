@@ -33,7 +33,8 @@ file the host reads as configuration rather than prose.
 A role's id, description, and body come from its file under `agents/`;
 `config.json` contributes only the per-host settings, and the entry command
 and the coordinator close with the routes `role_routes` sets from that host
-(see [Role routes](#role-routes)). After its routes, a generated entry command
+(see [Role routes](#role-routes)), and with any [role levels](#role-levels).
+After its routes, a generated entry command
 carries the coordinator role's text, one heading level down, so a coordinator
 started from it has its role without a separate read; the Claude Code plugin
 installs `commands/start.md` as written and reads the role file instead. The
@@ -148,7 +149,8 @@ negotiation, and no repair path.
 ## Portable project host-generation configuration
 
 `castwork.json` at the target root holds which hosts to generate for, any
-per-host role settings, and any [role routes](#role-routes). It describes the
+per-host role settings, any [role routes](#role-routes), and any
+[role levels](#role-levels). It describes the
 repository, not the machine it is checked out on: `hosts` names the hosts the
 project supports, and every `role_settings` value and `role_routes` entry is a
 choice the project made on purpose. Everything it
@@ -312,6 +314,98 @@ Availability is never configured or recorded; it is found out each time.
 The actor string records where the role actually ran — `worker@codex`, or
 `worker@claude` when it ran in the routing host instead — so records need no
 field for routing.
+
+## Role levels
+
+A role's `role_settings` binding serves every assignment, so a typo fix and a
+migration get the same worker, and a rename and a security change the same
+verifier. `role_levels` gives the `thinker`, `worker`, or `verifier` a variant
+for `simple` or `complex` assignments beside the role itself, which is
+`standard`:
+
+```json
+{
+  "hosts": ["claude", "codex"],
+  "role_settings": {
+    "codex": { "worker": { "model": "<balanced>", "model_reasoning_effort": "medium" } }
+  },
+  "role_levels": {
+    "codex": {
+      "worker": {
+        "simple":  { "model": "<fast>",   "model_reasoning_effort": "low" },
+        "complex": { "model": "<strong>", "model_reasoning_effort": "high" }
+      }
+    },
+    "claude": {
+      "verifier": { "complex": { "model": "<strong>", "effort": "xhigh" } }
+    }
+  }
+}
+```
+
+- **A level describes the assignment, not a ranking of models.** Levels are
+  not comparable across roles or hosts. Configure only the ones you want; a
+  role without levels runs as it always has.
+- **A level is a complete setting set.** It names its `model`, and the effort or
+  variant chosen for that model beside it, under the host's own setting names,
+  validated against the adapter's `role_frontmatter` like `role_settings`.
+  Nothing of the role's own model settings is carried into it. A setting the
+  level leaves out is filled by the host, which can pair the level's model with
+  an effort chosen for another: Codex, for one, resolves an effort an agent file
+  omits from the spawn, its defaults, or the parent session. `validate` warns
+  when a level omits an effort setting its host declares.
+- **Permissions stay with the role.** `permission_mode` in a level is refused;
+  the variant takes it from the role's `role_settings`.
+- **Refused:** a `standard` entry (that is `role_settings`), a `coordinator`
+  entry, an unknown level, role, host or setting, a level without `model`, and
+  any value that is neither a string nor `null`. `null` leaves a setting out,
+  as in `role_settings`, so the host fills it. Levels for a host that is known
+  but not generated are checked and left unapplied, as role settings are.
+
+Generation writes each level as a variant role file beside the role, named
+`<role>_<level>`, such as `.claude/agents/worker_complex.md` or
+`.codex/agents/worker_complex.toml`. The variant has the role's body and one
+line under its title: the level it runs at, that it records `level` on its
+entries, and that its actor names its role or the specialist name it was
+given, never the variant's name. Where a role has levels, its own file carries
+the same line for `standard`. Actor rules are otherwise unchanged: parallel
+reviewers keep their own actors, and a level neither creates nor removes
+independence. Variants are owned like every generated file, so `update`
+removes one whose level is no longer configured.
+
+The entry command lists the host's levels under `### Levels on this host`,
+after its routes, and the generated coordinator closes with the same list and
+the path of the entry file. A route lists, for each level its host configures
+for the routed role, the variant's role file and the settings to pass. Where no
+levels exist, no variants or level lists are generated; the procedure itself
+is part of every entry command.
+
+Which level an assignment gets is guidance in the entry command's `## Levels`
+section and the thinker's planning:
+
+- The thinker's plan names a level per role for the steps it plans, with a
+  reason: what a wrong result would cost, uncertainty, novelty, breadth, and
+  earlier failed attempts, never file count alone.
+- Without a plan the coordinator may choose `complex` on its own when the
+  difficulty is evident, never `simple`, which comes only from a plan or the
+  user. A coordinator often runs on the cheapest model in the session: a wrong
+  `complex` costs money, a wrong `simple` risks the result.
+- The verifier's level follows how hard the candidate is to verify and what a
+  wrong acceptance would cost, not the worker's level.
+- A level is raised only with a stated reason grounded in the observed
+  difficulty or a recorded diagnosis. Nothing escalates on its own.
+- A level the user names comes first. A preferred level with no variant runs
+  the role itself, and the coordinator says so; a level or model the user or
+  the record requires is left `needs_context` instead.
+
+Levels need generated project agents. A Claude Code plugin installed without
+`setup` loads its four canonical agents as written, which carry no project
+settings, so it runs the roles at their own settings.
+
+A level changes which model runs, and nothing else: requirements, statuses,
+candidate binding, independence and authorization are as they were. The level
+an agent ran at is recorded as an optional entry attribute; see
+[record-format.md](record-format.md).
 
 ## Adding a host
 

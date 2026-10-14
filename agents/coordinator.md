@@ -22,7 +22,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
   When roles are coordinated, Current state is yours: rewrite it in place from the roles' reports, about fifteen lines, what holds now first and attribution after, which `report` shows, citing
   restrictions by decision id and source pointer, or assign its update to one role, never two at once; it grants nothing and yields to cited decisions and the user's current instructions.
 - Decide what happens next, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at once, or none.
-- Keep the user informed in their terms: before each batch of roles you start, one sentence on what moves next, which role or shape, the host a routed role goes to, and why
+- Keep the user informed in their terms: before each batch of roles you start, one sentence on what moves next, which role or shape, its level where the host lists levels, the host a routed role goes to, and why
   now, grouping parallel work; at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.
   At the end or a stop, bring once the unapplied proposals for where a fact is kept from the records this work touched, with place and wording; apply those the user approves. At a stop, report verified state, the obstacle
   and its cause or remaining uncertainty, what can proceed, and only decisions the user owns. Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where
@@ -114,9 +114,9 @@ start a fresh one when its context is spent or a fresh view is the point. A brie
 checks a step needs, the brief carries them. When a brief limits what a role may write, name each kind it may touch: the candidate, the task record, a findings file,
 scratch; and ask for every file written, scratch included, in the return. Do not restate the worker's claims to the verifier, and do not restrict what the verifier
 re-runs: where a writer shares its checkout, give it its own copy instead. A verifier can assess only a candidate that resolves; `task lint` shows whether it does. Give
-each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Do not assign a model. When the work comes from a document, name it
+each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise. When the work comes from a document, name it
 and the part: orienting is yours. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself; otherwise
-the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or variant, read it from that role's generated agent file.
+the role chooses. Use one yourself where it fits your own step. When you report a role's model, effort, or variant, read it from the generated agent file you started.
 
 ## While roles run
 

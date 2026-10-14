@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
-import { bindingProblem, readConfig, settingsFor } from './config.js';
+import { bindingProblem, levelOmissions, readConfig, settingsFor } from './config.js';
 import { containedPath, digest, diskDigest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
@@ -221,12 +221,22 @@ function validateGeneratedOutput(findings, root) {
     warn(findings, CONFIG_FILE, 'hosts are configured but no generated manifest exists; run setup');
   }
   for (const host of config.hosts) {
+    // A level names its model; a setting it leaves out is filled by the host,
+    // which can pair that model with an effort chosen for another.
+    for (const [role, levels] of Object.entries(config.role_levels[host] ?? {})) {
+      for (const [level, settings] of Object.entries(levels)) {
+        for (const key of levelOmissions(host, settings)) {
+          warn(findings, CONFIG_FILE, `role_levels.${host}.${role}.${level} sets no ${key}; ${host} fills it from its own configuration, which may not suit this level's model`);
+        }
+      }
+    }
     /** @type {{path: string, content: string}[]} */
     let planned;
     try {
       planned = generateHost(host, {
         roleSettings: config.role_settings[host],
-        routes: resolveRoutes(host, config.role_routes, config.role_settings, config.hosts),
+        routes: resolveRoutes(host, config.role_routes, config.role_settings, config.hosts, config.role_levels),
+        levels: config.role_levels[host],
       });
     } catch (generationError) {
       // A refusal reads as setup would print it; anything else keeps its type.

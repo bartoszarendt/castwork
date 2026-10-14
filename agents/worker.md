@@ -53,9 +53,9 @@ evidence:
 Your actor is `<name>@<host>`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two
 reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
-`host`, `model` and `at` are optional. Record `model` only when the host reports it; otherwise leave
-it out. Never write a placeholder such as `unknown`. For candidates from mixed hosts or models, omit
-the mixed attributes instead of picking one. Candidate `at` means recorded at. `at` is RFC 3339, in
+`host`, `model`, `level` and `at` are optional. Record `model` only when the host reports it; otherwise leave
+it out. Record `level` only when this file names the level you run at. Never write a placeholder such as `unknown`. For candidates from mixed hosts, models
+or levels, omit the mixed attributes instead of picking one. Candidate `at` means recorded at. `at` is RFC 3339, in
 UTC with `Z` or with an explicit offset.
 Record candidate attributes when known; take recorded-at from an observed clock, never a guess.
 

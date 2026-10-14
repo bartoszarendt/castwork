@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { HOSTS } from './layout.js';
-import { parseRecord, ROLE_IDS } from './record.js';
+import { LEVEL_IDS, parseRecord, ROLE_IDS } from './record.js';
 import { PublicError } from './public-error.js';
 import { formatScalar } from './yaml.js';
 
@@ -385,8 +385,9 @@ function renderReference(skill) {
  * @param {Record<string, unknown>} adapter
  * @param {ResolvedRoute[]} routes
  * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
+ * @param {ResolvedLevel[]} [levels] this host's levels
  */
-function renderSkillIndex(command, skills, roles, adapter, routes, coordinator = null) {
+function renderSkillIndex(command, skills, roles, adapter, routes, coordinator = null, levels = []) {
   const lines = [
     '---',
     'name: castwork',
@@ -399,7 +400,7 @@ function renderSkillIndex(command, skills, roles, adapter, routes, coordinator =
     '# Castwork',
     '',
     command ? command.body : '',
-    ...(command ? ['', renderRoutes(routes)] : []),
+    ...(command ? ['', renderRouting(routes, levels, String(adapter.id))] : []),
     ...(command && coordinator !== null ? ['', coordinator] : []),
     '',
     '## Roles',
@@ -443,8 +444,10 @@ export function renderEntryCoordinator(coordinator, adapter, available) {
  * @param {ResolvedRoute[]} routes
  * @param {{arguments?: unknown, source?: string}} [entry]
  * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
+ * @param {ResolvedLevel[]} [levels] this host's levels
+ * @param {string} [host] the host the command is generated for, which names the levels' settings
  */
-export function renderCommand(command, routes, entry = {}, coordinator = null) {
+export function renderCommand(command, routes, entry = {}, coordinator = null, levels = [], host = '') {
   const declared = Object.hasOwn(entry, 'arguments');
   const source = entry.source ?? 'adapter command';
   if (declared && (typeof entry.arguments !== 'string' || entry.arguments.trim() === '')) {
@@ -472,6 +475,16 @@ export function renderCommand(command, routes, entry = {}, coordinator = null) {
           sources.push([`castwork.json role_settings.${route.host}.${route.role}.${key}`, String(value)]);
         }
       }
+      for (const level of route.levels ?? []) {
+        for (const [key, value] of Object.entries(level.settings)) {
+          sources.push([`castwork.json role_levels.${route.host}.${route.role}.${level.level}.${key}`, String(value)]);
+        }
+      }
+    }
+    for (const level of levels) {
+      for (const [key, value] of Object.entries(level.settings)) {
+        sources.push([`castwork.json role_levels.${host}.${level.role}.${level.level}.${key}`, String(value)]);
+      }
     }
     for (const [where, value] of sources) {
       if (value.includes('$')) throw new PublicError(`${source} cannot carry a dollar sign from ${where}`, {
@@ -480,7 +493,7 @@ export function renderCommand(command, routes, entry = {}, coordinator = null) {
     }
     lines.push(`argument-hint: ${yamlString(command.argument_hint)}`);
   }
-  lines.push('---', '', command.body, '', renderRoutes(routes), ...(coordinator === null ? [] : ['', coordinator]));
+  lines.push('---', '', command.body, '', renderRouting(routes, levels, host), ...(coordinator === null ? [] : ['', coordinator]));
   const content = `${lines.join('\n')}\n`;
   if (!declared) return content;
   if (content.includes('$')) throw new PublicError(`${source} produced a dollar sign outside its arguments from generated command text`);
@@ -488,7 +501,7 @@ export function renderCommand(command, routes, entry = {}, coordinator = null) {
 }
 
 /**
- * @typedef {{role: string, host: string, label: string, role_file: string, settings: Record<string, unknown>}} ResolvedRoute
+ * @typedef {{role: string, host: string, label: string, role_file: string, settings: Record<string, unknown>, levels?: {level: string, role_file: string, settings: Record<string, unknown>}[]}} ResolvedRoute
  */
 
 /**
@@ -505,9 +518,10 @@ export function renderCommand(command, routes, entry = {}, coordinator = null) {
  * @param {Record<string, string>} roleRoutes role to host id
  * @param {Record<string, Record<string, Record<string, unknown>>>} roleSettings keyed by host
  * @param {string[]} hosts
+ * @param {Record<string, Record<string, Record<string, Record<string, unknown>>>>} [roleLevels] keyed by host, then role and level
  * @returns {ResolvedRoute[]}
  */
-export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = [host]) {
+export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = [host], roleLevels = {}) {
   /** @type {ResolvedRoute[]} */
   const resolved = [];
   for (const role of ROLE_IDS) {
@@ -528,6 +542,8 @@ export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = 
       label: String(adapter.label ?? target),
       role_file: roleEntry.to.replace('{role}', role),
       settings: roleSettings[target]?.[role] ?? {},
+      levels: resolveLevels(roleLevels[target]).filter((entry) => entry.role === role)
+        .map((entry) => ({ level: entry.level, role_file: roleEntry.to.replace('{role}', entry.agent), settings: entry.settings })),
     });
   }
   return resolved;
@@ -541,7 +557,105 @@ export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = 
  * file, because the delegation capability chooses the permissions for the run
  * from what the role has to write.
  */
-const PERMISSION_SETTINGS = Object.freeze(['permission_mode']);
+export const PERMISSION_SETTINGS = Object.freeze(['permission_mode']);
+
+/**
+ * The levels a role can run at beside its own binding, which is `standard`.
+ * They describe the assignment, not a ranking of models.
+ */
+export const LEVELS = Object.freeze(LEVEL_IDS.filter((level) => level !== 'standard'));
+
+/**
+ * The agent a role runs as at a level. `standard` is the role itself; the
+ * others are variants generated beside it.
+ *
+ * @param {string} role @param {string} level
+ */
+export function levelAgent(role, level) {
+  return level === 'standard' ? role : `${role}_${level}`;
+}
+
+/**
+ * @typedef {{role: string, level: string, agent: string, settings: Record<string, unknown>}} ResolvedLevel
+ */
+
+/**
+ * One host's levels in a stable order: roles as `ROLE_IDS` orders them, levels
+ * as `LEVELS` does.
+ *
+ * @param {Record<string, Record<string, Record<string, unknown>>>} [levels] role, level, settings
+ * @returns {ResolvedLevel[]}
+ */
+export function resolveLevels(levels = {}) {
+  /** @type {ResolvedLevel[]} */
+  const resolved = [];
+  for (const role of ROLE_IDS) {
+    for (const level of LEVELS) {
+      const settings = levels[role]?.[level];
+      if (settings) resolved.push({ role, level, agent: levelAgent(role, level), settings });
+    }
+  }
+  return resolved;
+}
+
+/**
+ * The line a role carries when it has levels on its host, placed under its
+ * title. A variant's agent name is an execution choice, not an identity, and
+ * the roles name their actor after the name they were started as; the line
+ * keeps the variant's name out of the actor and says which level to record.
+ *
+ * @param {string} role @param {string} level
+ */
+function levelLine(role, level) {
+  const agent = levelAgent(role, level);
+  // Reading this file in a running session applies none of its settings. A
+  // process launched for it does run on them: the host started as this agent,
+  // or a routed CLI given this file to read first and its listed settings.
+  const launched = `Launched as \`${agent}\`, or as a fresh routed process given this file and the settings its route lists`;
+  const read = 'Reading this file in a session already running applies none of its settings and establishes no level: then record none.';
+  return level === 'standard'
+    ? `${launched}, you run at the \`standard\` level: this role with its own model settings. Record \`level: standard\` on the entries you write. ${read}`
+    : `${launched}, you run at the \`${level}\` level: this role with the model settings this repository chose for ${level} assignments. ` +
+        `Record \`level: ${level}\` on the entries you write. Your actor names your role, or the specialist name you were given, never \`${agent}\`. ${read}`;
+}
+
+/** @param {string} body @param {string} line */
+function underTitle(body, line) {
+  const end = body.indexOf('\n');
+  return end < 0 ? `${body}\n\n${line}` : `${body.slice(0, end)}\n\n${line}${body.slice(end)}`;
+}
+
+/**
+ * The settings a route or a level lists, in its adapter's order, as
+ * `key \`value\`` items.
+ *
+ * @param {string} host @param {Record<string, unknown>} settings
+ */
+function listedSettings(host, settings) {
+  return routeSettings(host)
+    .map((key) => [key, settings[key]])
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key} \`${String(value)}\``);
+}
+
+/**
+ * The level list following the routes in the entry command, and closing the
+ * generated coordinator. It is written only where levels exist, so a
+ * repository without them generates nothing more than before.
+ *
+ * @param {ResolvedLevel[]} levels
+ * @param {string} host whose setting names the list uses
+ */
+function renderLevels(levels, host) {
+  const lines = ['### Levels on this host', ''];
+  for (const role of ROLE_IDS) {
+    const own = levels.filter((entry) => entry.role === role);
+    if (own.length === 0) continue;
+    const items = own.map((entry) => `\`${entry.level}\` is \`${entry.agent}\` (${listedSettings(host, entry.settings).join(', ')})`);
+    lines.push(`- \`${role}\`: ${items.join('; ')}. \`standard\` is \`${role}\` itself.`);
+  }
+  return lines.join('\n');
+}
 
 /**
  * The settings a route to `host` lists, in its adapter's order.
@@ -570,17 +684,27 @@ function renderRoutes(routes) {
     return lines.join('\n');
   }
   for (const route of routes) {
-    const settings = routeSettings(route.host)
-      .map((key) => [key, route.settings[key]])
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => `${key} \`${String(value)}\``);
+    const settings = listedSettings(route.host, route.settings);
+    const levels = (route.levels ?? []).map((level) =>
+      `\`${level.level}\`: role file \`${level.role_file}\`, ${listedSettings(route.host, level.settings).join(', ')}`);
     lines.push(
       `- \`${route.role}\` runs in ${route.label} (\`${route.host}\`). Role file: \`${route.role_file}\`. ` +
         `Actor: \`${route.role}@${route.host}\`. ` +
-        `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}.`,
+        `Settings: ${settings.length > 0 ? settings.join(', ') : "the host's own defaults"}.` +
+        (levels.length > 0 ? ` Levels: ${levels.join('; ')}.` : ''),
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * The routes closing the entry command's `## Role routes` section, then this
+ * host's levels where it has any.
+ *
+ * @param {ResolvedRoute[]} routes @param {ResolvedLevel[]} levels @param {string} host
+ */
+function renderRouting(routes, levels, host) {
+  return levels.length > 0 ? `${renderRoutes(routes)}\n\n${renderLevels(levels, host)}` : renderRoutes(routes);
 }
 
 /**
@@ -620,9 +744,30 @@ function renderCoordinatorRoutes(routes, adapter) {
 }
 
 /**
+ * The levels closing a generated coordinator, for the same reason its routes
+ * do: a coordinator started directly as the host's agent, without the entry
+ * command, still sees which variants it can start, and where the procedure for
+ * choosing one is.
+ *
+ * @param {ResolvedLevel[]} levels
+ * @param {Record<string, unknown>} adapter
+ */
+function renderCoordinatorLevels(levels, adapter) {
+  return [
+    '## Levels on this host',
+    '',
+    'These roles have variants for other assignments. Before starting one, read',
+    `the \`## Levels\` section of \`${entryPath(adapter)}\`: who names a level, and`,
+    'what to do when one cannot run.',
+    '',
+    renderLevels(levels, String(adapter.id)).split('\n').slice(2).join('\n'),
+  ].join('\n');
+}
+
+/**
  * Plan every file one host's adapter would generate.
  * @param {string} host
- * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[]}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[], levels?: Record<string, Record<string, Record<string, unknown>>>}} [options]
  * @returns {{path: string, content: string}[]}
  */
 export function generateHost(host, options = {}) {
@@ -632,6 +777,7 @@ export function generateHost(host, options = {}) {
   const command = readCommand();
   const roleSettings = options.roleSettings ?? {};
   const routes = options.routes ?? [];
+  const levels = resolveLevels(options.levels);
   const coordinator = renderEntryCoordinator(roles.find((role) => role.id === 'coordinator'), adapter, skills.map((skill) => skill.id));
   /** @type {{path: string, content: string}[]} */
   const files = [];
@@ -648,11 +794,23 @@ export function generateHost(host, options = {}) {
         if (role.id === 'coordinator' && routes.length > 0) {
           role.body = `${role.body}\n\n${renderCoordinatorRoutes(routes, adapter)}`;
         }
+        if (role.id === 'coordinator' && levels.length > 0) {
+          role.body = `${role.body}\n\n${renderCoordinatorLevels(levels, adapter)}`;
+        }
         const settings = roleSettings[role.id] ?? {};
-        files.push({
-          path: entry.to.replace('{role}', role.id),
-          content: entry.format === 'toml' ? renderRoleToml(role, adapter, settings) : renderRoleMarkdown(role, adapter, settings),
-        });
+        const own = levels.filter((level) => level.role === role.id);
+        const render = (/** @type {typeof role} */ variant, /** @type {Record<string, unknown>} */ values) =>
+          entry.format === 'toml' ? renderRoleToml(variant, adapter, values) : renderRoleMarkdown(variant, adapter, values);
+        const base = own.length > 0 ? { ...role, body: underTitle(role.body, levelLine(role.id, 'standard')) } : role;
+        files.push({ path: entry.to.replace('{role}', role.id), content: render(base, settings) });
+        // A variant is the role with a level's model settings. It keeps the
+        // role's permissions and none of its model settings, so the level is
+        // the whole choice of model.
+        for (const level of own) {
+          const permissions = Object.fromEntries(PERMISSION_SETTINGS.filter((key) => settings[key] != null).map((key) => [key, settings[key]]));
+          const variant = { ...role, id: level.agent, body: underTitle(role.body, levelLine(role.id, level.level)) };
+          files.push({ path: entry.to.replace('{role}', level.agent), content: render(variant, { ...permissions, ...level.settings }) });
+        }
       }
       continue;
     }
@@ -670,13 +828,13 @@ export function generateHost(host, options = {}) {
       files.push({
         path: entry.to,
         content: entry.format === 'skill'
-          ? renderSkillIndex(command, skills, roles, adapter, routes, coordinator)
-          : renderCommand(command, routes, commandEntry, coordinator),
+          ? renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels)
+          : renderCommand(command, routes, commandEntry, coordinator, levels, host),
       });
       continue;
     }
     if (entry.kind === 'index') {
-      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes, coordinator) });
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels) });
       continue;
     }
     if (entry.kind === 'literal') {
@@ -715,7 +873,7 @@ function assertNoAbsolutePaths(host, file) {
  * host and the role's own home in another.
  *
  * @param {string[]} hosts
- * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, string>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, string>, roleLevels?: Record<string, Record<string, Record<string, Record<string, unknown>>>>}} [options]
  */
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
@@ -723,7 +881,8 @@ export function generateAll(hosts, options = {}) {
   for (const host of hosts) {
     files.push(...generateHost(host, {
       roleSettings: options.roleSettings?.[host],
-      routes: resolveRoutes(host, options.roleRoutes, options.roleSettings, hosts),
+      routes: resolveRoutes(host, options.roleRoutes, options.roleSettings, hosts, options.roleLevels),
+      levels: options.roleLevels?.[host],
     }));
   }
   return files;

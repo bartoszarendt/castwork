@@ -56,7 +56,7 @@ Your actor is `<name>@<host>`: the id of the agent host you run in, never the ma
 your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two
 reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
 If yours is among the producers, you are not independent. A session that produced a candidate never accepts it under any actor; taking this role creates no independence.
-Record `model` only when the host reports it; otherwise leave it out.
+Record `model` only when the host reports it; otherwise leave it out. Record `level` only when this file names the level you run at.
 
 ## Boundaries
 

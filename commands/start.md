@@ -187,13 +187,59 @@ When the user asks, in whatever words or language, to stop the work for now:
 - Then reply. When you wrote no handoff and continuing needs context the
   records do not capture, say in a line what it is and offer one.
 
+## Levels
+
+`role_levels` in `castwork.json` can give the `thinker`, `worker`, or
+`verifier` a `simple` or `complex` variant beside the role itself, which is
+`standard`: the same role with other model settings. This host's levels are
+listed at the end of this command, after its routes; with none listed, every
+role runs as itself. A level describes the assignment, not a ranking of
+models.
+
+- **Who names it.** The thinker's plan names the level each step needs for each
+  role, with a reason. Without a plan, choose `complex` yourself when the
+  difficulty is evident, such as a migration or a concurrency change, and say
+  why; never `simple`, which comes only from a plan or the user. A level that
+  turns on an uncertain cause, a disputed criterion or an architectural
+  consequence is the thinker's to name, and a thinker diagnosing a difficult
+  stall is worth `complex`.
+- **The verifier's level** follows how hard it is to establish that the
+  candidate meets its criteria and what a wrong acceptance would cost, not the
+  worker's level. Required review stays required at every level.
+- **Raising a level** needs a stated reason grounded in the observed difficulty
+  or a recorded diagnosis, written in the task. A plain defect still goes back
+  to the worker; nothing escalates on its own, and an unchanged retry at a
+  higher level is still an unchanged retry.
+- **The user decides over the plan.** A level the user names comes first. A
+  model the user names runs through the variant that binds it, or the host's
+  own way to choose a model for one run where it has one.
+- **Changing level.** Resume an agent for its next round only when its level
+  stays the same. To change level, start the chosen variant with the task id,
+  under the same actor; resuming an agent changes neither the settings it runs
+  on nor the level its role file told it to record. The one exception is a
+  host you have seen apply every setting of the chosen level to a running
+  agent, which you then tell its new level. A routed role at a new level is a
+  fresh process given that level's role file and settings. Taking a role
+  yourself runs it on your own session's settings, whatever a level file you
+  read says: record no level for that work.
+- **When it cannot run.** A level chosen as a preference with no variant here:
+  start the role itself and say so. A level or model the user named, or one the
+  record or the working policy requires: leave the work `needs_context`,
+  naming what is missing. A run that failed after it may have written is
+  reconciled first, as for any delegate.
+- **What it changes.** Only the model a role runs on. Actors, independence,
+  requirements and permissions stay as they are: a stronger model makes no
+  review independent.
+
 ## Role routes
 
 `role_routes` in `castwork.json` can prefer another host for the `thinker`,
 `worker`, or `verifier`; the coordinator is never routed. The routes from this
-host are listed at the end of this section. A working-policy line naming a
-model or host for a role is not a route: `castwork.json` sets those, through
-`role_routes` and `role_settings`. Say so, and offer to move it there.
+host are listed at the end of this section. A routed role at a level reads
+that level's role file and takes that level's settings, as its route lists
+them. A working-policy line naming a model or host for a role is
+not a route: `castwork.json` sets those, through `role_routes`,
+`role_settings` and `role_levels`. Say so, and offer to move it there.
 
 A routed role runs in its host's CLI as a separate process, started through a
 delegation capability: a skill, command, subagent, or tool this host exposes, or

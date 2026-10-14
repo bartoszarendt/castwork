@@ -19,7 +19,7 @@ import path from 'node:path';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { PublicError } from './public-error.js';
 import { installPath } from './generated.js';
-import { toolkitRoot, readAdapter } from './adapter-generation.js';
+import { LEVELS, PERMISSION_SETTINGS, toolkitRoot, readAdapter } from './adapter-generation.js';
 import { ROLE_IDS } from './record.js';
 
 /** Shipped defaults. */
@@ -228,18 +228,127 @@ function readRoleRoutes(raw) {
 }
 
 /**
+ * Read `role_levels`: per host and role, the complete model settings for a
+ * `simple` or `complex` assignment. Each level becomes a variant of the role,
+ * generated beside it, so the coordinator starts the one an assignment needs.
+ *
+ * It is a separate map rather than part of `role_settings`, which stays a
+ * plain pass-through of strings into host frontmatter. A level is complete on
+ * its own: it names its model, and nothing of the role's own model settings is
+ * carried into it, so an effort chosen for one model never reaches another.
+ * Levels for a host that is known but not selected are checked and then left
+ * unapplied, as role settings are.
+ *
+ * @param {Record<string, unknown>} raw
+ * @returns {Record<string, Record<string, Record<string, Record<string, unknown>>>>} host, role, level, settings
+ */
+function readRoleLevels(raw) {
+  const declared = raw.role_levels;
+  if (declared === undefined) return {};
+  const where = `${CONFIG_FILE} role_levels`;
+  if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
+    throw new PublicError(`${where} must be a map of host to role to level to settings`, {
+      hint: 'For example: "role_levels": { "codex": { "worker": { "complex": { "model": "<model>" } } } }.',
+    });
+  }
+
+  /** @type {Record<string, Record<string, Record<string, Record<string, unknown>>>>} */
+  const byHost = {};
+  for (const [host, roles] of Object.entries(declared)) {
+    if (!HOSTS.includes(host)) {
+      throw new PublicError(`${where} names unknown host ${host}`, { hint: `Known hosts: ${HOSTS.join(', ')}.` });
+    }
+    if (typeof roles !== 'object' || roles === null || Array.isArray(roles)) {
+      throw new PublicError(`${where}.${host} must be a map of role to levels`);
+    }
+    const accepted = settingsFor(host).filter((key) => !PERMISSION_SETTINGS.includes(key));
+    /** @type {Record<string, Record<string, Record<string, unknown>>>} */
+    const byRole = {};
+    for (const [role, levels] of Object.entries(roles)) {
+      if (role === 'coordinator') {
+        throw new PublicError(`${where}.${host} cannot configure the coordinator`, {
+          hint: `The coordinator is the session you invoke Castwork in. Levels apply to ${ROUTABLE_ROLES.join(', ')}.`,
+        });
+      }
+      if (!ROLE_IDS.includes(role)) {
+        throw new PublicError(`${where}.${host} names unknown role ${role}`, { hint: `Roles with levels: ${ROUTABLE_ROLES.join(', ')}.` });
+      }
+      if (typeof levels !== 'object' || levels === null || Array.isArray(levels)) {
+        throw new PublicError(`${where}.${host}.${role} must be a map of level to settings`);
+      }
+      /** @type {Record<string, Record<string, unknown>>} */
+      const byLevel = {};
+      for (const [level, settings] of Object.entries(levels)) {
+        const at = `${where}.${host}.${role}.${level}`;
+        if (level === 'standard') {
+          throw new PublicError(`${at}: standard is the role's own binding`, {
+            hint: `Write it as role_settings.${host}.${role}. role_levels takes ${LEVELS.join(' and ')}.`,
+          });
+        }
+        if (!LEVELS.includes(level)) {
+          throw new PublicError(`${where}.${host}.${role} names unknown level ${level}`, { hint: `Levels: ${LEVELS.join(', ')}.` });
+        }
+        if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+          throw new PublicError(`${at} must be a map of setting to value`);
+        }
+        /** @type {Record<string, unknown>} */
+        const checked = {};
+        for (const [key, value] of Object.entries(settings)) {
+          if (PERMISSION_SETTINGS.includes(key)) {
+            throw new PublicError(`${at}.${key}: a level does not set permissions`, {
+              hint: `The level's variant takes ${key} from role_settings.${host}.${role}; a level chooses only the model settings.`,
+            });
+          }
+          if (!accepted.includes(key)) {
+            throw new PublicError(`${at}.${key}: host ${host} has no setting ${key}`, { hint: `A level on ${host} accepts: ${accepted.join(', ')}.` });
+          }
+          const checkedValue = settingValue(value, `${at}.${key}`);
+          if (checkedValue !== null) checked[key] = checkedValue;
+        }
+        if (typeof checked.model !== 'string') {
+          throw new PublicError(`${at} sets no model`, {
+            hint: 'A level is a complete setting set: name its model, and the effort or variant chosen for that model beside it.',
+          });
+        }
+        const binding = bindingProblem(host, checked);
+        if (binding) throw new PublicError(`${at}.${binding.key} ${binding.problem}`, { hint: binding.hint });
+        byLevel[level] = checked;
+      }
+      byRole[role] = byLevel;
+    }
+    byHost[host] = byRole;
+  }
+  return byHost;
+}
+
+/**
+ * The model settings a host declares that a level left out, other than an
+ * OpenCode variant, which a model need not have. The host fills each from its
+ * own configuration, which can pair the level's model with an effort chosen
+ * for another; `validate` warns about it.
+ *
+ * @param {string} host
+ * @param {Record<string, unknown>} settings one level's settings
+ */
+export function levelOmissions(host, settings) {
+  return settingsFor(host)
+    .filter((key) => key !== 'model' && key !== 'variant' && !PERMISSION_SETTINGS.includes(key))
+    .filter((key) => settings[key] === undefined);
+}
+
+/**
  * `hosts` resolves settings for a host set other than the recorded one, so
  * `setup` can plan for a host it is about to add before it writes anything.
  *
  * @param {string} root
  * @param {{hosts?: string[]}} [options]
- * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, role_routes: Record<string, string>, raw: Record<string, unknown>|null}}
+ * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, role_routes: Record<string, string>, role_levels: Record<string, Record<string, Record<string, Record<string, unknown>>>>, raw: Record<string, unknown>|null}}
  */
 export function readConfig(root, options = {}) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
     const hosts = options.hosts ?? [];
-    return { hosts, role_settings: shippedSettings(hosts, {}), role_routes: {}, raw: null };
+    return { hosts, role_settings: shippedSettings(hosts, {}), role_routes: {}, role_levels: {}, raw: null };
   }
   /** @type {Record<string, unknown>} */
   let raw;
@@ -268,8 +377,9 @@ export function readConfig(root, options = {}) {
   }
   const overrides = readRoleSettings(raw);
   const routes = readRoleRoutes(raw);
+  const levels = readRoleLevels(raw);
   const hosts = options.hosts ?? recorded;
-  return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, raw };
+  return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw };
 }
 
 /**
