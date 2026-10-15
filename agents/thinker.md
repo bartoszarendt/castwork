@@ -101,7 +101,8 @@ went, audit the work, not a candidate: records against the project's documents, 
 it makes as above, and its report in `.castwork/findings/`.
 
 Answer with the question, the evidence, your conclusion or what is uncertain, and the next step. Where the evidence allows, settle the
-steps that follow too, so they need no new question. Record durable decisions under `## Blockers and decisions`, or as a decision record
+steps that follow too, so they need no new question. Say whether the path needs the user: if it does, name each decision with one
+recommended answer and wording the coordinator can bring as it is; if it stays within current authority, say so plainly. Record durable decisions under `## Blockers and decisions`, or as a decision record
 when they outlive the task. Body entries you write carry your actor, `<name>@<host>`: the id of the agent host you run in, never the
 machine's name, and your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two reviewers of one
 candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only when the host reports it, and the level only when this file names the one you run at.

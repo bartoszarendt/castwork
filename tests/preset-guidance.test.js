@@ -310,7 +310,9 @@ for (const host of HOSTS) {
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
     all(role(host, 'coordinator'), [
       'At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns.',
-      'Recommend an answer for each and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.',
+      "A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a shortfall, goes to the thinker before the user: ask it for the path, where current authority ends, and a recommendation for what lies beyond.",
+      'When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.',
+      "Bring the thinker's recommendation for each decision that remains and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.",
       'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure.',
     ], 'stop report');
   });
@@ -324,8 +326,13 @@ for (const host of HOSTS) {
       'A question that needs an argument about the work goes to the thinker, gathered into one request:',
       'Its answer covers the steps it names: carry them out, and return when the work departs from it.',
       'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
-      'Only what needs the user goes to them: their permission, as Boundaries lists, and what only they know or own, such as acceptance;',
-      'never offer asking the thinker as their choice.',
+      'Only what needs the user goes to them: their permission, as Boundaries lists, and what only they know or own, such as acceptance.',
+      "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them.",
+      "Bring one recommendation, the thinker's, and never offer asking the thinker as their choice.",
+      'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
+      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, or a design to choose goes to the thinker before you reply,",
+      'where the role cannot wait for that, have it stop its round cleanly and resume it with the answer.',
+      "Look for authorization in the decisions and records before asking for it: a brief of yours that contradicts a recorded decision the user has not narrowed since is yours to correct with a new brief, not the user's to authorize again.",
       "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
       "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
       'Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report` refreshes the record, not whether the files in front of you are still that candidate.',
@@ -343,11 +350,14 @@ for (const host of HOSTS) {
       'a fix that brings a new defect of the same kind or next to it, even as findings shrink,',
       'which a pass in isolation does not explain',
     ], 'coordinator');
+    assert.doesNotMatch(coordinator, phrase("the thinker's where judgement went into it"), 'the coordinator does not decide for itself whether a recommendation needed the thinker');
+    assert.doesNotMatch(coordinator, phrase('Recommend an answer for each'), 'at a stop the recommendation is the thinker\'s, not the coordinator\'s own');
     all(role(host, 'thinker'), [
       'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
       "Where the path will need the user's permission, say where current authority ends, the attempts you propose and what stops them, so the user is asked once.",
       'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
+      'Say whether the path needs the user: if it does, name each decision with one recommended answer and wording the coordinator can bring as it is; if it stays within current authority, say so plainly.',
     ], 'thinker');
     all(entry(host), [
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
@@ -475,6 +485,7 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     'Diagnosis using information and resources already authorized for the task needs no further approval.',
     'A proposal grants no authority to implement it: fixes, access, spending, and additional runs keep their existing boundaries.',
     'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
+    "When a coordinator runs the roles, a choice reaches the user with the thinker's recommendation, and a path the thinker finds within current authority is taken, not asked about.",
     'Prepare what existing authority permits before asking',
     'Keep temporary proposals in the task body; use a separate decision record only when the choice outlives the task, and distinguish a proposal from an accepted owner decision.',
   ], 'blocked-state');

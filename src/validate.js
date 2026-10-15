@@ -14,7 +14,7 @@ import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
-export const ROLE_LINE_LIMIT = 125;
+export const ROLE_LINE_LIMIT = 150;
 
 /** @typedef {{level: 'error'|'warn', where: string, message: string}} Finding */
 

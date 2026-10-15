@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.9.9
+
+- A choice put to the user carries the thinker's recommendation, not the
+  coordinator's own. Who decides is still the user's; which option to
+  recommend, and whether the user needs asking at all, are the thinker's to
+  answer first. A permission with no alternative, such as a command only the
+  user can run, and a fact only the user holds still go straight to the user.
+- A stop that leaves a choice the thinker's plan does not already settle, such
+  as between ways forward or whether to accept a shortfall, goes to the thinker
+  before the user. A branch the plan settles proceeds as planned, and an
+  explicit stop is honoured as before. When the thinker's
+  path stays within current authority, the coordinator takes it and says so,
+  without asking whether to proceed; only what lies beyond comes to the user,
+  once.
+- A running role's question is routed the same way: the coordinator answers
+  what is written and grants within the role's scope, and sends a limitation
+  to accept, a condition to read one way, or a design to choose to the thinker
+  before replying. A role that cannot wait stops its round cleanly and resumes
+  with the answer.
+- The coordinator looks for authorization in the decisions and records before
+  asking for it. A brief of its own that contradicts a recorded decision the
+  user has not narrowed since is corrected with a new brief rather than taken
+  to the user again; a newer restriction from the user still holds.
+- The thinker says whether its path needs the user: each decision with one
+  recommended answer and wording to bring as it is, or plainly that none is
+  needed. `blocked-state` says the same for coordinated work.
+- The role preset line limit is 150 for all four roles, up from 125.
+
+To pick up the guidance, move the Castwork pin and lockfile to this version, or
+run a local checkout as `node <checkout>/bin/castwork.js` in place of
+`npx castwork`; `update` regenerates from the copy you run and never upgrades
+it. Then run `update`, commit the generated files, and start a new session.
+
 ## 0.9.8
 
 - `role_levels` in `castwork.json` can give the thinker, worker, or verifier a

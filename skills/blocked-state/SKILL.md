@@ -53,6 +53,9 @@ For the user, give the verified state, the obstacle and its cause or remaining
 uncertainty, what can proceed independently, and only decisions they own. Give a
 recommended answer for each decision and concrete approval wording with scope,
 cost, stop conditions and what proceeds after approval where those matter.
+When a coordinator runs the roles, a choice reaches the user with the thinker's
+recommendation, and a path the thinker finds within current authority is taken,
+not asked about.
 Prepare what existing authority permits before asking; a clear external blocker
 needs no extra investigation merely to complete a checklist. Keep temporary
 proposals in the task body; use a separate decision record only when the choice
