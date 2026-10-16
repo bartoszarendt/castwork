@@ -12,7 +12,7 @@ import path from 'node:path';
 import { err, json, out } from './cli-io.js';
 import { decisionList, decisionNew } from './decision-cli.js';
 import { toolkitRoot } from './adapter-generation.js';
-import { CONFIG_FILE, GENERATED_MANIFEST, HOSTS } from './layout.js';
+import { CONFIG_FILE, GENERATED_MANIFEST, HOSTS, LOCAL_CONFIG_FILE } from './layout.js';
 import { PublicError } from './public-error.js';
 import { doctor, remove, setup, update } from './setup.js';
 import { taskLint, taskList, taskNew, taskSet, taskShow } from './task-cli.js';
@@ -31,6 +31,7 @@ export const FLAGS = Object.freeze({
   host: { value: '<name>', summary: 'Add a project-supported host. Repeatable.' },
   'force-generated': { value: '<path>', summary: 'Replace or delete one generated file that would otherwise be refused. Repeatable.' },
   check: { value: false, summary: 'Write nothing: update checks generated output; task archive checks exact proposed moves.' },
+  shared: { value: false, summary: `Generate the project's output alone, without ${LOCAL_CONFIG_FILE}, to commit it.` },
   debug: { value: false, summary: 'Print internal stack details.' },
   help: { value: false, summary: 'Print this list.' },
 });
@@ -45,7 +46,7 @@ export const GLOBAL_FLAGS = Object.freeze(['debug', 'help']);
  */
 export const COMMAND_PATHS = Object.freeze([
   { path: 'setup', flags: ['host', 'force-generated', 'json'], args: 0, summary: 'Install for the selected hosts and record what was generated.' },
-  { path: 'update', flags: ['check', 'force-generated', 'json'], args: 0, summary: 'Regenerate owned files; refuse before writing on a conflict. --check writes nothing.' },
+  { path: 'update', flags: ['check', 'shared', 'force-generated', 'json'], args: 0, summary: 'Regenerate owned files; refuse before writing on a conflict. --check writes nothing.' },
   { path: 'remove', flags: ['json'], args: 0, summary: 'Remove generated files we still own. Records are kept.' },
   { path: 'doctor', flags: ['json'], args: 0, summary: 'Read-only diagnosis of the installation.' },
   { path: 'validate', flags: ['json'], args: 0, summary: 'Check skills, config, links, and generated adapter output.' },
@@ -226,6 +227,53 @@ function printChanges(result) {
   return result.changed.length + result.added.length + result.removed.length > 0 || result.manifest !== null;
 }
 
+/**
+ * The files written with this machine's models. One Git does not ignore reads
+ * as changed, and committing it hands the models to everyone, so it is marked.
+ * @param {{local: string[], local_visible: string[], local_conflicts: string[], pending: string[], changed: string[], added: string[]}} result
+ */
+function printLocal(result) {
+  // A file the manifest names but the last commit holds differently goes in
+  // the commit too, though this run did not write it: a model the project
+  // adopted from this machine leaves the file as it was on disk.
+  for (const relative of result.pending) {
+    if (!result.changed.includes(relative) && !result.added.includes(relative)) {
+      out(`  commit  ${relative} (the last commit holds it differently from what the manifest records)`);
+    }
+  }
+  if (result.local.length > 0) {
+    out(`${result.local.length} generated file(s) carry this machine's models from ${LOCAL_CONFIG_FILE}:`);
+    for (const relative of result.local) {
+      out(`  local   ${relative}${result.local_visible.includes(relative) ? ' (not ignored by Git: leave it out of commits)' : ''}`);
+    }
+  }
+  // Leaving such a file out is not enough when the project's output for it
+  // changed too: the committed manifest would name output the clone lacks.
+  if (result.local_conflicts.length > 0) {
+    out(`The project's output changed under ${result.local_conflicts.length} of them: ${result.local_conflicts.join(', ')}.`);
+    out("Before committing, run update --shared to write the project's version, commit, then run update to put your models back.");
+  }
+}
+
+/** Said after update --shared while this machine has models of its own. */
+const SHARED = [
+  `The generated files now hold the project's output alone, without ${LOCAL_CONFIG_FILE}.`,
+  'Commit the generated files and the manifest that git status lists, with whatever changed',
+  "them, then run update to put this machine's models back and start a new host session.",
+].join('\n');
+
+/** Said when update wrote nothing but the last commit is behind what an earlier update wrote. */
+const BEHIND_COMMIT = `Nothing to write, but the last commit is behind the generated files and ${GENERATED_MANIFEST}: commit what git status lists for them, apart from task work.`;
+
+/** Said after advice to commit while files Git shows carry this machine's models. */
+const LEAVE_LOCAL = `Leave out of that commit the files marked above as carrying this machine's models from ${LOCAL_CONFIG_FILE}.`;
+
+/** Said instead of advice to commit while the project's output changed under this machine's models. */
+const CONFLICT_FIRST = 'Commit nothing yet: run update --shared first, as above.';
+
+/** Said after an update that changed only this machine's models, which are never committed. */
+const LOCAL_ONLY = "Only this machine's models changed, so there is nothing to commit. Start a new host session to use them.";
+
 /** Said after every update that changed something, because nothing else will. */
 const HANDOFF = [
   'Review the files listed above and commit them together, with whatever caused them (an',
@@ -274,12 +322,13 @@ export function run(argv, options = {}) {
       }
       for (const created of result.created) out(`  created ${created}`);
       printChanges(result);
+      printLocal(result);
       return 0;
     }
 
     case 'update': {
       if (flags.check === true) {
-        const { plan } = update(root, { force, check: true });
+        const { plan } = update(root, { force, check: true, shared: flags.shared === true });
         if (asJson) { json(plan); return plan.current ? 0 : 1; }
         out(`toolkit: castwork ${plan.version} (${plan.toolkit})`);
         out(`source:  ${plan.source_digest}`);
@@ -287,6 +336,7 @@ export function run(argv, options = {}) {
           out(`manifest: written by castwork ${plan.manifest_version ?? 'unknown'} (${plan.manifest_source_digest ?? 'no source_digest'})`);
         }
         printChanges(plan);
+        printLocal(plan);
         if (plan.downgrade) out(`  blocked ${GENERATED_MANIFEST} (written by castwork ${plan.manifest_version}, newer than this copy)`);
         for (const relative of plan.modified) out(`  blocked ${relative} (generated, then modified locally)`);
         for (const relative of plan.collisions) out(`  blocked ${relative} (yours; not generated by this installation)`);
@@ -297,10 +347,25 @@ export function run(argv, options = {}) {
         else out('run update to apply these changes');
         return plan.current ? 0 : 1;
       }
-      const result = update(root, { force });
+      const result = update(root, { force, shared: flags.shared === true });
       if (asJson) { json(result); return 0; }
-      if (printChanges(result)) out(HANDOFF);
+      // Whether anything is left to commit is judged against the last commit,
+      // so files carrying only this machine's models are never advice to commit.
+      const listed = printChanges(result);
+      printLocal(result);
+      // After --shared the files hold the project's output, which is what is
+      // committed; whether anything differs from the last commit is Git's to say.
+      // A conflict means nothing is ready to commit until update --shared has
+      // run, which printLocal already said; commit advice would contradict it.
+      if (result.reapply) out(SHARED);
+      else if (result.local_conflicts.length > 0) out(CONFLICT_FIRST);
+      else if (result.commit && (listed || result.pending.length > 0)) out(HANDOFF);
+      else if (result.commit) out(BEHIND_COMMIT);
+      else if (listed) out(LOCAL_ONLY);
       else out('everything is up to date');
+      // Git shows files carrying this machine's models among what it lists, so
+      // advice to commit names them as the exception.
+      if (result.commit && result.local_conflicts.length === 0 && result.local_visible.length > 0) out(LEAVE_LOCAL);
       return 0;
     }
 
@@ -321,6 +386,12 @@ export function run(argv, options = {}) {
       out(`manifest: ${report.version === null ? 'none' : `castwork ${report.version || 'unknown'} (${report.source_digest ?? 'no source_digest'})`}`);
       out(`hosts: ${report.hosts.length > 0 ? report.hosts.join(', ') : 'none configured'}`);
       out(`generated files: ${report.generated_files}${report.generated ? ` (${report.generated}; toolkit ${report.toolkit_version})` : ''}`);
+      if (report.local_models.length > 0) {
+        out(`local models: ${report.local_models.length} generated file(s) carry ${LOCAL_CONFIG_FILE}`);
+        for (const relative of report.local_models) {
+          out(`  ${relative}${report.local_visible.includes(relative) ? ' (not ignored by Git: leave it out of commits)' : ''}`);
+        }
+      }
       if (report.findings.length === 0) out('no findings');
       printFindings(report);
       return report.ok ? 0 : 1;

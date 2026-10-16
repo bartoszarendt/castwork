@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.9.9 is current.
+> **Status:** 0.9.10 is current.
 
 ## What you are adopting
 
@@ -39,7 +39,12 @@ npx castwork setup --host codex
 `--host` is repeatable and takes `codex`, `claude`, `opencode`, or `pi`. The
 choice is recorded in `castwork.json`, so later runs need no flags.
 
-Commit everything it writes except `.castwork/local/`. Generated files carry
+Commit everything it writes except `.castwork/local/`, where
+[`.castwork/local/castwork.json`](host-adapters.md#this-machines-models) can
+choose your machine's models. If you use that file and your generated files
+are tracked, leave out the files `update`
+marks as carrying your models; when it says the project's output changed under
+one, run `update --shared`, commit, and run `update` again. Generated files carry
 no absolute paths, so a colleague who clones the repository gets a working
 installation without running anything.
 

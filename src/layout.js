@@ -21,6 +21,12 @@ export const GENERATED_MANIFEST = `${STATE_DIRECTORY}/generated.json`;
 /** Gitignored machine-specific state. */
 export const LOCAL_DIRECTORY = `${STATE_DIRECTORY}/local`;
 
+/** This machine's choice of models and reasoning: configuration, kept with the machine's other state. */
+export const LOCAL_CONFIG_FILE = `${LOCAL_DIRECTORY}/castwork.json`;
+
+/** The digests of generated files this machine wrote from `.castwork/local/castwork.json`. */
+export const LOCAL_MANIFEST = `${LOCAL_DIRECTORY}/generated.json`;
+
 export const TASKS_DIRECTORY = `${STATE_DIRECTORY}/tasks`;
 /** An archive pairs with the same basename's task; never a task itself. */
 export const ARCHIVE_SUFFIX = '.archive.md';

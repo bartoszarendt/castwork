@@ -8,12 +8,13 @@
  * `--force-generated` names that file.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { compareVersions, generateAll, packageVersion, sourceDigest, toolkitRoot } from './adapter-generation.js';
 import { readConfig, writeConfig } from './config.js';
-import { containedPath, digest, diskDigest, installPath, ownership, readManifest, writeManifest } from './generated.js';
+import { containedPath, digest, diskDigest, installPath, ownership, readLocalManifest, readManifest, writeLocalManifest, writeManifest } from './generated.js';
 import {
   CONFIG_FILE,
   DECISIONS_DIRECTORY,
@@ -21,6 +22,7 @@ import {
   GENERATED_MANIFEST,
   HOSTS,
   LAYOUT_VERSION,
+  LOCAL_CONFIG_FILE,
   LOCAL_DIRECTORY,
   PROJECT_FILE,
   STATE_DIRECTORY,
@@ -73,6 +75,59 @@ function seedState(root) {
   return created;
 }
 
+/**
+ * The paths Git would show as changes: those it does not ignore. Generated
+ * host folders are often gitignored, and then a file carrying this machine's
+ * models is nothing Git sees. Without Git, or outside a repository, every path
+ * counts as seen, so nothing is called safe that has not been checked.
+ *
+ * @param {string} root
+ * @param {string[]} paths
+ * @returns {string[]}
+ */
+function gitVisible(root, paths) {
+  if (paths.length === 0) return [];
+  try {
+    const ignored = execFileSync('git', ['--no-optional-locks', '-C', root, 'check-ignore', '--stdin', '-z'], {
+      encoding: 'utf8',
+      input: `${paths.join('\0')}\0`,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 10000,
+    }).split('\0');
+    return paths.filter((relative) => !ignored.includes(relative));
+  } catch {
+    // Exit 1 is check-ignore's answer that none of them is ignored.
+    return paths;
+  }
+}
+
+/**
+ * How Git treats one path: tracked, ignored, or neither (`visible`). Null
+ * outside a repository or without Git, where there is nothing to commit.
+ *
+ * @param {string} root
+ * @param {string} relative
+ * @returns {'tracked'|'ignored'|'visible'|null}
+ */
+function gitState(root, relative) {
+  /** @param {string[]} args @returns {number|null} exit status, or null when Git could not answer */
+  const status = (args) => {
+    try {
+      execFileSync('git', ['--no-optional-locks', '-C', root, ...args], { stdio: 'ignore', timeout: 10000 });
+      return 0;
+    } catch (error) {
+      const code = /** @type {{status?: number|null}} */ (error).status;
+      return code === 1 ? 1 : null;
+    }
+  };
+  const tracked = status(['ls-files', '--error-unmatch', '--', relative]);
+  if (tracked === null) return null;
+  if (tracked === 0) return 'tracked';
+  const ignored = status(['check-ignore', '-q', '--', relative]);
+  if (ignored === null) return null;
+  return ignored === 0 ? 'ignored' : 'visible';
+}
+
 /** @param {string} root */
 function ensureGitignore(root) {
   const file = installPath(root, '.gitignore');
@@ -100,10 +155,37 @@ function ensureGitignore(root) {
  *   modified: string[],
  *   collisions: string[],
  *   manifest: 'added'|'changed'|null,
+ *   local: string[],
+ *   local_conflicts: string[],
+ *   commit: boolean,
  *   files: Record<string, string>,
  *   contents: Record<string, string>,
+ *   local_files: Record<string, string>,
  * }} GenerationPlan
  */
+
+/**
+ * What this machine writes, and what the project generates. They differ only
+ * where `.castwork/local/castwork.json` chooses other models; the project's output is
+ * what the tracked manifest records.
+ *
+ * @param {import('./config.js').Config} config
+ */
+function generatedFiles(config) {
+  const shared = generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels });
+  if (config.local === null) return { files: shared, shared };
+  try {
+    return {
+      files: generateAll(config.hosts, { roleSettings: config.local.role_settings, roleRoutes: config.role_routes, roleLevels: config.local.role_levels }),
+      shared,
+    };
+  } catch (error) {
+    if (!(error instanceof PublicError)) throw error;
+    throw new PublicError(error.message, {
+      hint: [error.hint, `${CONFIG_FILE} alone generates, so the value that fails is one ${LOCAL_CONFIG_FILE} sets.`].filter(Boolean).join(' '),
+    });
+  }
+}
 
 /**
  * Compare what this toolkit would generate with what is on disk. Reads only.
@@ -118,13 +200,20 @@ function ensureGitignore(root) {
  * `.castwork/generated.json` itself would be written, since it is tracked
  * like the files it lists and has to be committed with them.
  *
+ * `shared` is what the project generates, when `files` carries this machine's
+ * models from `.castwork/local/castwork.json`. The manifest records the project's
+ * digests, so it reads the same on every machine; `local` lists the files
+ * written with this machine's models instead, which stay out of commits.
+ *
  * @param {string} root
  * @param {{path: string, content: string}[]} files
- * @param {{force?: string[]}} [options]
+ * @param {{force?: string[], shared?: {path: string, content: string}[]}} [options]
  * @returns {GenerationPlan}
  */
 export function planGenerated(root, files, options = {}) {
   const manifest = readManifest(root);
+  const localManifest = readLocalManifest(root);
+  const shared = new Map((options.shared ?? files).map((file) => [file.path, digest(file.content)]));
   // One spelling per path, so `./x` and `x`, or `a\\b` and `a/b`, name the same file.
   const force = new Set((options.force ?? []).map((relative) => path.posix.normalize(relative.replace(/\\/g, '/'))));
   /** @type {GenerationPlan} */
@@ -143,20 +232,36 @@ export function planGenerated(root, files, options = {}) {
     modified: [],
     collisions: [],
     manifest: null,
+    local: [],
+    local_conflicts: [],
+    commit: false,
     files: {},
     contents: {},
+    local_files: {},
   };
+  /** Changed paths whose change is this machine's models arriving or leaving. @type {Set<string>} */
+  const localChanges = new Set();
 
   for (const file of files) {
     const wanted = digest(file.content);
-    plan.files[file.path] = wanted;
+    const recorded = shared.get(file.path);
+    if (recorded === undefined) throw new Error(`generated ${file.path} for this machine but not for the project`);
+    plan.files[file.path] = recorded;
     plan.contents[file.path] = file.content;
-    const state = ownership(root, file.path, manifest);
+    if (wanted !== recorded) {
+      plan.local.push(file.path);
+      plan.local_files[file.path] = wanted;
+      // The project's own output for this file changed too, so what is
+      // committed for it has to be the project's, not this machine's.
+      if (manifest?.files?.[file.path] !== recorded) plan.local_conflicts.push(file.path);
+    }
+    const state = ownership(root, file.path, manifest, localManifest);
     if (state === 'absent') {
       plan.added.push(file.path);
       continue;
     }
     const actual = diskDigest(containedPath(root, file.path));
+    if (wanted !== recorded || actual === localManifest[file.path]) localChanges.add(file.path);
     if (actual === wanted) plan.unchanged.push(file.path);
     else if (state === 'owned_unchanged' || force.has(file.path)) plan.changed.push(file.path);
     else if (state === 'owned_modified') plan.modified.push(file.path);
@@ -168,7 +273,8 @@ export function planGenerated(root, files, options = {}) {
     if (plan.files[relative] !== undefined) continue;
     const full = containedPath(root, relative);
     if (!fs.existsSync(full)) continue;
-    if (diskDigest(full) === recorded || force.has(relative)) plan.removed.push(relative);
+    const actual = diskDigest(full);
+    if (actual === recorded || actual === localManifest[relative] || force.has(relative)) plan.removed.push(relative);
     else plan.modified.push(relative);
   }
 
@@ -194,6 +300,15 @@ export function planGenerated(root, files, options = {}) {
   if (manifest === null) plan.manifest = 'added';
   else if (manifest.layout_version !== LAYOUT_VERSION
     || JSON.stringify(sortedEntries(manifest.files)) !== JSON.stringify(sortedEntries(plan.files))) plan.manifest = 'changed';
+
+  // Whether applying this plan leaves something to commit. Applying, switching
+  // or dropping this machine's models leaves the manifest as it is and is
+  // never committed; anything else is the project's output changing.
+  plan.commit = plan.manifest !== null
+    || plan.identity_changed
+    || plan.added.length > 0
+    || plan.removed.length > 0
+    || plan.changed.some((relative) => !localChanges.has(relative));
   return plan;
 }
 
@@ -221,7 +336,7 @@ function planIsCurrent(plan) {
  * @param {GenerationPlan} plan
  */
 export function publicPlan(plan) {
-  const { files: _files, contents: _contents, ...rest } = plan;
+  const { files: _files, contents: _contents, local_files: _localFiles, ...rest } = plan;
   return { ...rest, current: planIsCurrent(plan), blocked: planIsBlocked(plan) };
 }
 
@@ -290,7 +405,10 @@ function applyPlan(root, plan) {
   if (manifest !== null) {
     writeManifest(root, { layout_version: LAYOUT_VERSION, version: plan.version, source_digest: plan.source_digest, files: plan.files });
   }
-  return { added: plan.added, changed: plan.changed, removed: plan.removed, unchanged: plan.unchanged, manifest };
+  // Untracked bookkeeping, kept in step on every write so a later change to
+  // .castwork/local/castwork.json finds the files it wrote still ours.
+  writeLocalManifest(root, plan.local_files);
+  return { added: plan.added, changed: plan.changed, removed: plan.removed, unchanged: plan.unchanged, manifest, local: plan.local, commit: plan.commit };
 }
 
 /**
@@ -322,14 +440,15 @@ export function setup(root, options = {}) {
 
   // Planned before anything is seeded, so a refusal leaves the tree as it was.
   const config = readConfig(root, { hosts });
-  const plan = planGenerated(root, generateAll(hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }), { force: options.force });
+  const { files, shared } = generatedFiles(config);
+  const plan = planGenerated(root, files, { force: options.force, shared });
   refuseBlocked(plan);
   refuseStateConflicts(root);
 
   const created = seedState(root);
   writeConfig(root, hosts);
   const ignored = ensureGitignore(root);
-  return { hosts, added_hosts: added, created, ignored, version: plan.version, ...applyPlan(root, plan) };
+  return { hosts, added_hosts: added, created, ignored, version: plan.version, ...applyPlan(root, plan), ...gitReview(root, plan), reapply: false };
 }
 
 /**
@@ -339,17 +458,112 @@ export function setup(root, options = {}) {
  * the toolkit it just ran, which the package version alone cannot say, since
  * it does not change between unreleased builds.
  *
+ * `shared` generates the project's output alone, as if there were no
+ * `.castwork/local/castwork.json`: the way to write files that match the manifest
+ * before committing a change to the project's output, after which a plain
+ * `update` puts this machine's models back.
+ *
  * @param {string} root
- * @param {{force?: string[], check?: boolean}} [options]
+ * @param {{force?: string[], check?: boolean, shared?: boolean}} [options]
  */
 export function update(root, options = {}) {
-  const config = readConfig(root);
+  // --shared never reads .castwork/local/castwork.json, so a stale override cannot stop
+  // the project's own output from being written.
+  const config = readConfig(root, { local: options.shared !== true });
   if (config.hosts.length === 0) {
     throw new PublicError(`${CONFIG_FILE} lists no hosts`, { hint: 'Run setup first.' });
   }
-  const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }), { force: options.force });
-  if (options.check) return { hosts: config.hosts, plan: publicPlan(plan) };
-  return { hosts: config.hosts, version: plan.version, ...applyPlan(root, plan) };
+  const { files, shared } = generatedFiles(config);
+  const plan = planGenerated(root, files, { force: options.force, shared });
+  const review = gitReview(root, plan);
+  const reapply = options.shared === true && fs.existsSync(path.join(root, LOCAL_CONFIG_FILE));
+  if (options.check) return { hosts: config.hosts, plan: { ...publicPlan(plan), ...review, reapply } };
+  return { hosts: config.hosts, version: plan.version, ...applyPlan(root, plan), ...review, reapply };
+}
+
+/**
+ * What a plan leaves to commit, judged against the last commit rather than
+ * the manifest on disk, which an earlier update may already have moved on.
+ *
+ * - `local_visible`: files carrying this machine's models that Git would show.
+ * - `local_conflicts`: those whose committed version is not what the manifest
+ *   records. Leaving one out of a commit is not enough: the committed manifest
+ *   would name output the clone lacks. Only `update --shared` writes it.
+ * - `pending`: files holding the project's output whose committed version is
+ *   not what the manifest records, such as a model the project adopted from
+ *   this machine. They are committed with the manifest, though this update
+ *   may not have written them.
+ * - `commit`: whether anything is left to commit at all.
+ *
+ * Without Git, or before a first commit, the plan alone decides.
+ *
+ * @param {string} root
+ * @param {GenerationPlan} plan
+ */
+function gitReview(root, plan) {
+  const visible = gitVisible(root, plan.local);
+  const committed = committedFiles(root, [GENERATED_MANIFEST, ...Object.keys(plan.files)]);
+  if (committed === null) {
+    return { local_visible: visible, local_conflicts: visible.filter((relative) => plan.local_conflicts.includes(relative)), pending: [], commit: plan.commit };
+  }
+  const differs = (/** @type {string} */ relative) => committed.has(relative) && digest(committed.get(relative) ?? '') !== plan.files[relative];
+  const local = new Set(plan.local);
+  const conflicts = visible.filter((relative) => plan.local_conflicts.includes(relative) || differs(relative));
+  const pending = Object.keys(plan.files).filter((relative) => !local.has(relative) && differs(relative)).sort();
+
+  let manifestDiffers = false;
+  const text = committed.get(GENERATED_MANIFEST);
+  if (text !== undefined) {
+    try {
+      const head = JSON.parse(text);
+      manifestDiffers = head.version !== plan.version
+        || head.source_digest !== plan.source_digest
+        || JSON.stringify(sortedEntries(head.files ?? {})) !== JSON.stringify(sortedEntries(plan.files));
+    } catch {
+      manifestDiffers = true;
+    }
+  }
+  return { local_visible: visible, local_conflicts: conflicts, pending, commit: plan.commit || manifestDiffers || pending.length > 0 || conflicts.length > 0 };
+}
+
+/**
+ * The committed text of each path that has one, line endings read as LF, from
+ * one `git cat-file --batch`. Null outside a repository or without Git.
+ *
+ * @param {string} root
+ * @param {string[]} paths
+ * @returns {Map<string, string>|null}
+ */
+function committedFiles(root, paths) {
+  /** @param {string[]} args @param {string} [input] */
+  const run = (args, input) => execFileSync('git', ['--no-optional-locks', '-C', root, ...args], {
+    input,
+    stdio: ['pipe', 'pipe', 'ignore'],
+    maxBuffer: 256 * 1024 * 1024,
+    timeout: 10000,
+  });
+  /** @type {Map<string, string>} */
+  const found = new Map();
+  try {
+    // Paths are relative to the target, which may sit below the repository root.
+    const prefix = run(['rev-parse', '--show-prefix']).toString('utf8').trim();
+    const out = run(['cat-file', '--batch'], paths.map((relative) => `HEAD:${prefix}${relative}\n`).join(''));
+    let at = 0;
+    for (const relative of paths) {
+      const end = out.indexOf(0x0a, at);
+      if (end === -1) break;
+      const header = out.subarray(at, end).toString('utf8');
+      at = end + 1;
+      const match = /^[0-9a-f]+ blob (\d+)$/.exec(header);
+      if (!match) continue;
+      const size = Number(match[1]);
+      found.set(relative, out.subarray(at, at + size).toString('utf8').replace(/\r\n/g, '\n'));
+      at += size + 1;
+    }
+  } catch {
+    return null;
+  }
+  return found;
 }
 
 /**
@@ -362,12 +576,14 @@ export function remove(root) {
   if (!manifest) {
     throw new PublicError('nothing to remove: no generated manifest found');
   }
+  const local = readLocalManifest(root);
   const removed = [];
   const kept = [];
   for (const [relative, recorded] of Object.entries(manifest.files)) {
     const full = containedPath(root, relative);
     if (!fs.existsSync(full)) continue;
-    if (diskDigest(full) === recorded) {
+    const actual = diskDigest(full);
+    if (actual === recorded || actual === local[relative]) {
       fs.rmSync(full);
       removed.push(relative);
     } else {
@@ -376,6 +592,7 @@ export function remove(root) {
   }
   pruneEmptyDirectories(root, removed);
   fs.rmSync(containedPath(root, GENERATED_MANIFEST), { force: true });
+  writeLocalManifest(root, {});
   return { removed, kept };
 }
 
@@ -435,9 +652,13 @@ export function doctor(root) {
   // whether this repository is current.
   /** @type {'current'|'behind'|'blocked'|null} */
   let generated = null;
+  /** @type {string[]} */
+  let local = [];
+  let seen = { local_visible: /** @type {string[]} */ ([]), local_conflicts: /** @type {string[]} */ ([]), pending: /** @type {string[]} */ ([]) };
   const layoutSpoken = manifest === null || manifest.layout_version === LAYOUT_VERSION;
   if (layoutSpoken && config.hosts.length > 0 && fs.existsSync(path.join(root, STATE_DIRECTORY))) {
-    const plan = planGenerated(root, generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels }));
+    const { files, shared } = generatedFiles(config);
+    const plan = planGenerated(root, files, { shared });
     // This copy is older than the one that wrote the manifest, and refuses to
     // update, so neither update nor --force-generated is the way forward.
     const newer = plan.downgrade
@@ -455,8 +676,18 @@ export function doctor(root) {
     for (const relative of plan.collisions) {
       findings.push({ level: 'warn', message: `a file of yours stands where one is generated: ${relative}`, next: newer ?? `update writes nothing until you move it or pass --force-generated ${relative}` });
     }
+    const review = gitReview(root, plan);
+    seen = { local_visible: review.local_visible, local_conflicts: review.local_conflicts, pending: review.pending };
     const differing = plan.changed.length + plan.added.length + plan.removed.length;
-    if (differing > 0) {
+    if (differing > 0 && !review.commit) {
+      // Applying, switching or dropping this machine's models: the manifest
+      // stays as it is and nothing is committed.
+      findings.push({
+        level: 'warn',
+        message: `${differing} generated file(s) differ only in this machine's models from ${LOCAL_CONFIG_FILE}`,
+        next: newer ?? 'Run update, then start a new host session. There is nothing to commit.',
+      });
+    } else if (differing > 0) {
       findings.push({
         level: 'warn',
         message: `${differing} generated file(s) differ from what castwork ${plan.version} generates`,
@@ -469,9 +700,40 @@ export function doctor(root) {
         next: newer ?? 'Run update to rewrite it, then commit it.',
       });
     }
+    if (seen.local_conflicts.length > 0) {
+      findings.push({
+        level: 'warn',
+        message: `the project's output changed under files carrying this machine's models: ${seen.local_conflicts.join(', ')}`,
+        next: `Committing the manifest without the project's version of these leaves a clone that refuses to update. Run update --shared, commit, then run update to put your models back.`,
+      });
+    }
+    if (review.pending.length > 0) {
+      findings.push({
+        level: 'warn',
+        message: `generated file(s) not yet committed as the manifest records them: ${review.pending.join(', ')}`,
+        next: `Commit them with ${GENERATED_MANIFEST}; a clone of the last commit refuses to update until they agree.`,
+      });
+    }
     generated = planIsBlocked(plan) ? 'blocked' : planIsCurrent(plan) ? 'current' : 'behind';
+    local = plan.local;
   }
 
+  if (fs.existsSync(path.join(root, LOCAL_CONFIG_FILE))) {
+    const state = gitState(root, LOCAL_CONFIG_FILE);
+    if (state === 'tracked') {
+      findings.push({
+        level: 'warn',
+        message: `${LOCAL_CONFIG_FILE} is tracked by Git`,
+        next: `It holds this machine's models and stays out of commits. Run git rm --cached ${LOCAL_CONFIG_FILE} and commit that.`,
+      });
+    } else if (state === 'visible') {
+      findings.push({
+        level: 'warn',
+        message: `${LOCAL_CONFIG_FILE} is not ignored by Git`,
+        next: `It holds this machine's models and stays out of commits. Run setup, which adds ${LOCAL_DIRECTORY}/ to .gitignore, and check no other rule brings the file back.`,
+      });
+    }
+  }
   if (manifest !== null) findings.push(...identityFindings(manifest));
   const project = projectFinding(root);
   if (project) findings.push(project);
@@ -486,6 +748,8 @@ export function doctor(root) {
     toolkit_source_digest: sourceDigest(),
     generated,
     generated_files: manifest ? Object.keys(manifest.files).length : 0,
+    local_models: local,
+    ...seen,
     findings,
   };
 }

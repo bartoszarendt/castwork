@@ -7,7 +7,7 @@ better than editing a record by hand.
 | Command path | What it does |
 |---|---|
 | `setup` | Install for the selected hosts: create `.castwork/`, write `castwork.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. |
-| `update` | Regenerate for the recorded hosts and report every path written, `.castwork/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. |
+| `update` | Regenerate for the recorded hosts and report every path written, `.castwork/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. `--shared` leaves out `.castwork/local/castwork.json`, writing the project's output to commit. |
 | `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, `decisions/`, or `findings/`. |
 | `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it, and whether `project.md` is unwritten or has grown past 12 KB, since every role reads it. Exits non-zero only on an error-level finding. |
 | `validate` | Check skills, config, links, and generated adapter output. |
@@ -33,7 +33,7 @@ accepted by every command.
 | Command path | Flags |
 |---|---|
 | `setup` | `--host <name>` (repeatable), `--force-generated <path>` (repeatable), `--json` |
-| `update` | `--check`, `--force-generated <path>` (repeatable), `--json` |
+| `update` | `--check`, `--shared`, `--force-generated <path>` (repeatable), `--json` |
 | `task archive` | `--check`, `--json` |
 | `remove`, `doctor`, `validate`, `task list`, `task show`, `task lint`, `decision list`, `report`, `snapshot` | `--json` |
 | `task new`, `task set`, `task add`, `decision new`, `version`, `help` | none |
@@ -255,7 +255,7 @@ repository that already generates for Codex leaves `hosts` as
 is deliberate: remove it from `hosts` in `castwork.json` and run `update`,
 which deletes what it no longer generates and still owns.
 
-`castwork.json` is the only configuration, and it is a property of the
+`castwork.json` is the project's configuration, and it is a property of the
 repository rather than of your machine. It holds `hosts` — the hosts this
 project supports, not the one you personally run — optional per-host
 `role_settings`, optional `role_routes`, which name another host a role
@@ -266,8 +266,12 @@ choices; see [host-adapters.md](host-adapters.md#role-routes) and
 from anywhere: defaults come from the installed package. A setting a host
 cannot express, and a value it could not carry, are each refused rather than
 dropped in silence. Omit a setting to let the host's own configuration decide
-it; `.castwork/local/` is reserved for machine-local state and is not a
-second configuration layer.
+it; `.castwork/local/` is reserved for machine-local state. The one piece of
+configuration it holds is `.castwork/local/castwork.json`: it chooses this
+machine's models and reasoning and nothing else, and is never committed. `update`, `update --check`, and
+`doctor` list the generated files that carry them, and `update --shared`
+writes the project's output alone, for committing a change to it; see
+[this machine's models](host-adapters.md#this-machines-models).
 
 `update` regenerates from the hosts already recorded. It never changes which
 hosts you use — that is what `setup --host` is for — and it never writes over a

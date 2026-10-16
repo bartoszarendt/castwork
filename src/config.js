@@ -1,11 +1,12 @@
 /**
  * Project configuration.
  *
- * It lives in `castwork.json` at the target root and nowhere else.
- * `.castwork/project.md` owns prose only, and `.castwork/local/` is
- * machine-local state rather than a second layer read from here: everything
- * this file holds is generated into tracked output, so it describes the
- * repository and not the machine the repository is checked out on.
+ * It lives in `castwork.json` at the target root. `.castwork/project.md` owns
+ * prose only. Everything `castwork.json` holds is generated into tracked
+ * output, so it describes the repository and not the machine the repository
+ * is checked out on. The one exception is `.castwork/local/castwork.json`,
+ * gitignored with the rest of the machine's state, which changes which models
+ * this machine's roles run on and nothing else.
  *
  * A role setting is a plain value passed to one host. This module decides
  * which settings a host accepts by asking that host's adapter, and never
@@ -16,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { CONFIG_FILE, HOSTS } from './layout.js';
+import { CONFIG_FILE, HOSTS, LOCAL_CONFIG_FILE } from './layout.js';
 import { PublicError } from './public-error.js';
 import { installPath } from './generated.js';
 import { LEVELS, PERMISSION_SETTINGS, toolkitRoot, readAdapter } from './adapter-generation.js';
@@ -107,26 +108,32 @@ export function bindingProblem(host, settings) {
  * Settings for a host that is known but not selected are checked and then left
  * unapplied.
  *
+ * `shared` is given when reading `.castwork/local/castwork.json`: its settings are
+ * checked over the project's own, and it chooses models only, so a permission
+ * stays the project's.
+ *
  * @param {Record<string, unknown>} raw
+ * @param {string} [file] the file `raw` came from, as messages name it
+ * @param {Record<string, Record<string, Record<string, unknown>>>|null} [shared] the project's own overrides
  * @returns {Record<string, Record<string, Record<string, unknown>>>}
  */
-function readRoleSettings(raw) {
+function readRoleSettings(raw, file = CONFIG_FILE, shared = null) {
   const declared = raw.role_settings;
   if (declared === undefined) return {};
   if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
-    throw new PublicError(`${CONFIG_FILE} role_settings must be a map of host to role to settings`);
+    throw new PublicError(`${file} role_settings must be a map of host to role to settings`);
   }
 
   /** @type {Record<string, Record<string, Record<string, unknown>>>} */
   const byHost = {};
   for (const [host, roles] of Object.entries(declared)) {
     if (!HOSTS.includes(host)) {
-      throw new PublicError(`${CONFIG_FILE} role_settings names unknown host ${host}`, {
+      throw new PublicError(`${file} role_settings names unknown host ${host}`, {
         hint: `Known hosts: ${HOSTS.join(', ')}.`,
       });
     }
     if (typeof roles !== 'object' || roles === null || Array.isArray(roles)) {
-      throw new PublicError(`${CONFIG_FILE} role_settings.${host} must be a map of role to settings`);
+      throw new PublicError(`${file} role_settings.${host} must be a map of role to settings`);
     }
     const accepted = settingsFor(host);
     const hostDefaults = defaults()?.adapters?.[host]?.role_settings ?? {};
@@ -134,32 +141,37 @@ function readRoleSettings(raw) {
     const byRole = {};
     for (const [role, settings] of Object.entries(roles)) {
       if (!ROLE_IDS.includes(role)) {
-        throw new PublicError(`${CONFIG_FILE} role_settings.${host} names unknown role ${role}`, {
+        throw new PublicError(`${file} role_settings.${host} names unknown role ${role}`, {
           hint: `Known roles: ${ROLE_IDS.join(', ')}.`,
         });
       }
       if (role === 'coordinator') {
-        throw new PublicError(`${CONFIG_FILE} role_settings.${host} cannot configure the coordinator`, {
+        throw new PublicError(`${file} role_settings.${host} cannot configure the coordinator`, {
           hint: `The coordinator is the session you invoke Castwork in, which runs on the host's own settings. Remove role_settings.${host}.coordinator; settings apply to ${ROLE_IDS.filter((id) => id !== 'coordinator').join(', ')}.`,
         });
       }
       if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
-        throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role} must be a map of setting to value`);
+        throw new PublicError(`${file} role_settings.${host}.${role} must be a map of setting to value`);
       }
       /** @type {Record<string, unknown>} */
       const checked = {};
       for (const [key, value] of Object.entries(settings)) {
+        if (shared !== null && PERMISSION_SETTINGS.includes(key)) {
+          throw new PublicError(`${file} role_settings.${host}.${role}.${key}: ${file} chooses models only`, {
+            hint: `A permission is the project's choice. Set it in ${CONFIG_FILE} role_settings.${host}.${role}.`,
+          });
+        }
         if (!accepted.includes(key)) {
           const retired = key === 'reasoning_effort' ? `${RETIRED_EFFORT[/** @type {keyof typeof RETIRED_EFFORT} */ (host)]} ` : '';
-          throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role}.${key}: host ${host} has no setting ${key}`, {
+          throw new PublicError(`${file} role_settings.${host}.${role}.${key}: host ${host} has no setting ${key}`, {
             hint: `${retired}${host} accepts: ${accepted.join(', ')}.`,
           });
         }
-        checked[key] = settingValue(value, `${CONFIG_FILE} role_settings.${host}.${role}.${key}`);
+        checked[key] = settingValue(value, `${file} role_settings.${host}.${role}.${key}`);
       }
-      const binding = bindingProblem(host, { ...(hostDefaults[role] ?? {}), ...checked });
+      const binding = bindingProblem(host, { ...(hostDefaults[role] ?? {}), ...(shared?.[host]?.[role] ?? {}), ...checked });
       if (binding) {
-        throw new PublicError(`${CONFIG_FILE} role_settings.${host}.${role}.${binding.key} ${binding.problem}`, {
+        throw new PublicError(`${file} role_settings.${host}.${role}.${binding.key} ${binding.problem}`, {
           hint: `${binding.hint} Settings go under role_settings.${host}.${role}.`,
         });
       }
@@ -239,13 +251,20 @@ function readRoleRoutes(raw) {
  * Levels for a host that is known but not selected are checked and then left
  * unapplied, as role settings are.
  *
+ * `shared` is given when reading `.castwork/local/castwork.json`, which changes the
+ * settings of a level the project declares and adds none: a level is a
+ * variant file every clone carries. What it returns is then each named level
+ * with the local settings over the project's, `null` clearing one.
+ *
  * @param {Record<string, unknown>} raw
+ * @param {string} [file] the file `raw` came from, as messages name it
+ * @param {Record<string, Record<string, Record<string, Record<string, unknown>>>>|null} [shared] the project's own levels
  * @returns {Record<string, Record<string, Record<string, Record<string, unknown>>>>} host, role, level, settings
  */
-function readRoleLevels(raw) {
+function readRoleLevels(raw, file = CONFIG_FILE, shared = null) {
   const declared = raw.role_levels;
   if (declared === undefined) return {};
-  const where = `${CONFIG_FILE} role_levels`;
+  const where = `${file} role_levels`;
   if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
     throw new PublicError(`${where} must be a map of host to role to level to settings`, {
       hint: 'For example: "role_levels": { "codex": { "worker": { "complex": { "model": "<model>" } } } }.',
@@ -291,8 +310,14 @@ function readRoleLevels(raw) {
         if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
           throw new PublicError(`${at} must be a map of setting to value`);
         }
+        const base = shared === null ? {} : shared[host]?.[role]?.[level];
+        if (base === undefined) {
+          throw new PublicError(`${at}: ${CONFIG_FILE} declares no ${level} level for ${role} on ${host}`, {
+            hint: `${file} changes the settings of a level ${CONFIG_FILE} declares. A new level is a variant file every clone carries: declare it in ${CONFIG_FILE} role_levels.${host}.${role}.`,
+          });
+        }
         /** @type {Record<string, unknown>} */
-        const checked = {};
+        const checked = { ...base };
         for (const [key, value] of Object.entries(settings)) {
           if (PERMISSION_SETTINGS.includes(key)) {
             throw new PublicError(`${at}.${key}: a level does not set permissions`, {
@@ -304,10 +329,13 @@ function readRoleLevels(raw) {
           }
           const checkedValue = settingValue(value, `${at}.${key}`);
           if (checkedValue !== null) checked[key] = checkedValue;
+          else delete checked[key];
         }
         if (typeof checked.model !== 'string') {
           throw new PublicError(`${at} sets no model`, {
-            hint: 'A level is a complete setting set: name its model, and the effort or variant chosen for that model beside it.',
+            hint: shared === null
+              ? 'A level is a complete setting set: name its model, and the effort or variant chosen for that model beside it.'
+              : `A level is a complete setting set: ${file} may change its model but not clear it.`,
           });
         }
         const binding = bindingProblem(host, checked);
@@ -340,15 +368,40 @@ export function levelOmissions(host, settings) {
  * `hosts` resolves settings for a host set other than the recorded one, so
  * `setup` can plan for a host it is about to add before it writes anything.
  *
+ * `role_settings` and `role_levels` are the project's, from `castwork.json`.
+ * `local` is null, or the same two with `.castwork/local/castwork.json` over them: what
+ * this machine generates onto disk, while the tracked manifest keeps the
+ * project's.
+ *
+ * `local: false` leaves `.castwork/local/castwork.json` unread, so the project's own
+ * output can be generated whatever that file holds.
+ *
  * @param {string} root
- * @param {{hosts?: string[]}} [options]
- * @returns {{hosts: string[], role_settings: Record<string, Record<string, Record<string, unknown>>>, role_routes: Record<string, string>, role_levels: Record<string, Record<string, Record<string, Record<string, unknown>>>>, raw: Record<string, unknown>|null}}
+ * @param {{hosts?: string[], local?: boolean}} [options]
+ * @returns {Config}
  */
 export function readConfig(root, options = {}) {
+  const shared = readSharedConfig(root, options);
+  return { ...shared, local: options.local === false ? null : readLocalConfig(root, shared) };
+}
+
+/**
+ * @typedef {Record<string, Record<string, Record<string, unknown>>>} RoleSettings host, role, settings
+ * @typedef {Record<string, Record<string, Record<string, Record<string, unknown>>>>} RoleLevels host, role, level, settings
+ * @typedef {{hosts: string[], role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels, raw: Record<string, unknown>|null, overrides: RoleSettings}} SharedConfig
+ * @typedef {SharedConfig & {local: {role_settings: RoleSettings, role_levels: RoleLevels}|null}} Config
+ */
+
+/**
+ * @param {string} root
+ * @param {{hosts?: string[]}} options
+ * @returns {SharedConfig}
+ */
+function readSharedConfig(root, options) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
     const hosts = options.hosts ?? [];
-    return { hosts, role_settings: shippedSettings(hosts, {}), role_routes: {}, role_levels: {}, raw: null };
+    return { hosts, role_settings: shippedSettings(hosts, {}), role_routes: {}, role_levels: {}, raw: null, overrides: {} };
   }
   /** @type {Record<string, unknown>} */
   let raw;
@@ -379,7 +432,66 @@ export function readConfig(root, options = {}) {
   const routes = readRoleRoutes(raw);
   const levels = readRoleLevels(raw);
   const hosts = options.hosts ?? recorded;
-  return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw };
+  return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw, overrides };
+}
+
+/** What `.castwork/local/castwork.json` may hold. */
+const LOCAL_KEYS = Object.freeze(['role_settings', 'role_levels']);
+
+/**
+ * Read `.castwork/local/castwork.json`, the one machine's choice of models. It is
+ * gitignored and never committed: it changes the model settings of roles and
+ * levels the project already has, and nothing else, so it adds or removes no
+ * generated file and the tracked manifest stays the same on every machine.
+ * Hosts, routes, permissions, and levels stay the project's, in
+ * `castwork.json`.
+ *
+ * @param {string} root
+ * @param {SharedConfig} shared
+ * @returns {Config['local']}
+ */
+function readLocalConfig(root, shared) {
+  const file = path.join(root, LOCAL_CONFIG_FILE);
+  if (!fs.existsSync(file)) return null;
+  /** @type {unknown} */
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new PublicError(`${LOCAL_CONFIG_FILE} is not valid JSON: ${String(error)}`);
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new PublicError(`${LOCAL_CONFIG_FILE} must be an object`, { hint: `It holds ${LOCAL_KEYS.join(' and ')}.` });
+  }
+  const record = /** @type {Record<string, unknown>} */ (raw);
+  for (const key of Object.keys(record)) {
+    if (!LOCAL_KEYS.includes(key)) {
+      throw new PublicError(`${LOCAL_CONFIG_FILE} cannot set ${key}`, {
+        hint: `It chooses models on this machine only, through ${LOCAL_KEYS.join(' and ')}. Everything else is the project's, in ${CONFIG_FILE}.`,
+      });
+    }
+  }
+
+  const localSettings = readRoleSettings(record, LOCAL_CONFIG_FILE, shared.overrides);
+  /** @type {RoleSettings} */
+  const overrides = {};
+  for (const host of new Set([...Object.keys(shared.overrides), ...Object.keys(localSettings)])) {
+    overrides[host] = { ...(shared.overrides[host] ?? {}) };
+    for (const [role, values] of Object.entries(localSettings[host] ?? {})) {
+      overrides[host][role] = { ...(overrides[host][role] ?? {}), ...values };
+    }
+  }
+
+  const localLevels = readRoleLevels(record, LOCAL_CONFIG_FILE, shared.role_levels);
+  /** @type {RoleLevels} */
+  const levels = {};
+  for (const [host, roles] of Object.entries(shared.role_levels)) {
+    levels[host] = {};
+    for (const [role, byLevel] of Object.entries(roles)) {
+      levels[host][role] = { ...byLevel, ...(localLevels[host]?.[role] ?? {}) };
+    }
+  }
+  return { role_settings: shippedSettings(shared.hosts, overrides), role_levels: levels };
 }
 
 /**

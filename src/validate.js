@@ -9,9 +9,9 @@ import path from 'node:path';
 
 import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
 import { bindingProblem, levelOmissions, readConfig, settingsFor } from './config.js';
-import { containedPath, digest, diskDigest, readManifest } from './generated.js';
+import { containedPath, digest, diskDigest, readLocalManifest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
-import { CONFIG_FILE, HOSTS } from './layout.js';
+import { CONFIG_FILE, HOSTS, LOCAL_CONFIG_FILE } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
 export const ROLE_LINE_LIMIT = 150;
@@ -220,13 +220,18 @@ function validateGeneratedOutput(findings, root) {
   if (!manifest) {
     warn(findings, CONFIG_FILE, 'hosts are configured but no generated manifest exists; run setup');
   }
+  // What this machine writes: the project's settings, with .castwork/local/castwork.json
+  // over them when there is one.
+  const effective = config.local ?? config;
+  const local = readLocalManifest(root);
   for (const host of config.hosts) {
     // A level names its model; a setting it leaves out is filled by the host,
     // which can pair that model with an effort chosen for another.
-    for (const [role, levels] of Object.entries(config.role_levels[host] ?? {})) {
+    for (const [role, levels] of Object.entries(effective.role_levels[host] ?? {})) {
       for (const [level, settings] of Object.entries(levels)) {
         for (const key of levelOmissions(host, settings)) {
-          warn(findings, CONFIG_FILE, `role_levels.${host}.${role}.${level} sets no ${key}; ${host} fills it from its own configuration, which may not suit this level's model`);
+          const where = levelOmissions(host, config.role_levels[host]?.[role]?.[level] ?? {}).includes(key) ? CONFIG_FILE : LOCAL_CONFIG_FILE;
+          warn(findings, where, `role_levels.${host}.${role}.${level} sets no ${key}; ${host} fills it from its own configuration, which may not suit this level's model`);
         }
       }
     }
@@ -234,9 +239,9 @@ function validateGeneratedOutput(findings, root) {
     let planned;
     try {
       planned = generateHost(host, {
-        roleSettings: config.role_settings[host],
-        routes: resolveRoutes(host, config.role_routes, config.role_settings, config.hosts, config.role_levels),
-        levels: config.role_levels[host],
+        roleSettings: effective.role_settings[host],
+        routes: resolveRoutes(host, config.role_routes, effective.role_settings, config.hosts, effective.role_levels),
+        levels: effective.role_levels[host],
       });
     } catch (generationError) {
       // A refusal reads as setup would print it; anything else keeps its type.
@@ -259,7 +264,7 @@ function validateGeneratedOutput(findings, root) {
         continue;
       }
       const actual = diskDigest(full);
-      if (actual !== recorded) {
+      if (actual !== recorded && actual !== local[file.path]) {
         warn(findings, file.path, 'differs from the manifest digest; update writes nothing until it is restored or forced');
       } else if (actual !== digest(file.content)) {
         warn(findings, file.path, 'is out of date with the canonical sources; run update');

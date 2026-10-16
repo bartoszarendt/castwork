@@ -7,21 +7,16 @@
 node_modules/
 *.tgz
 
-# Host and editor configuration, local to each machine
+# Host configuration, local to each machine
 .claude/
 .codex/
 .opencode/
+opencode.json
 opencode.jsonc
 .mcp.json
-.cursor/
-.vscode/
-.idea/
 
 # Local tool state
 .codegraph/
-.serena/
-.tokensave/
-.playwright-mcp/
 
 # Internal working docs and scratch space, never tracked
 /.docs

@@ -137,7 +137,7 @@ test('every accepted flag is one the CLI knows, and help lists each command\'s f
   }
   const root = fixture(t);
   const help = cli(root, 'help').out;
-  assert.match(help, /update +Regenerate[^\n]*\n +flags: --check, --force-generated <path>, --json/);
+  assert.match(help, /update +Regenerate[^\n]*\n +flags: --check, --shared, --force-generated <path>, --json/);
   assert.match(help, /setup +Install[^\n]*\n +flags: --host <name>, --force-generated <path>, --json/);
   assert.match(help, /npx --no castwork help/);
 });

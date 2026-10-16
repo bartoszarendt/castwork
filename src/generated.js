@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { ARCHIVE_SUFFIX, GENERATED_MANIFEST, LAYOUT_VERSION, STATE_DIRECTORY, TASKS_DIRECTORY, USER_OWNED } from './layout.js';
+import { ARCHIVE_SUFFIX, GENERATED_MANIFEST, LAYOUT_VERSION, LOCAL_MANIFEST, STATE_DIRECTORY, TASKS_DIRECTORY, USER_OWNED } from './layout.js';
 import { PublicError } from './public-error.js';
 
 /**
@@ -279,16 +279,62 @@ export function writeManifest(root, manifest) {
 }
 
 /**
+ * The digests of the generated files this machine wrote from
+ * `.castwork/local/castwork.json`, by path. The tracked manifest records what the
+ * project generates; a file holding this machine's models is still ours when
+ * it matches either. Gitignored with the rest of `.castwork/local/`.
+ *
+ * @param {string} root
+ * @returns {Record<string, string>}
+ */
+export function readLocalManifest(root) {
+  const file = containedPath(root, LOCAL_MANIFEST);
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object');
+    const files = typeof parsed.files === 'object' && parsed.files !== null ? parsed.files : {};
+    for (const relative of Object.keys(files)) containedPath(root, relative);
+    return files;
+  } catch (error) {
+    if (error instanceof PublicError) throw error;
+    throw new PublicError(`${LOCAL_MANIFEST} could not be read: ${String(error)}`, {
+      hint: `Delete it, restore the generated files that carry this machine's models (git checkout -- <path>), and run update.`,
+    });
+  }
+}
+
+/**
+ * Written only when this machine's files differ from the project's, and
+ * removed when they no longer do.
+ *
+ * @param {string} root
+ * @param {Record<string, string>} files
+ */
+export function writeLocalManifest(root, files) {
+  const file = containedPath(root, LOCAL_MANIFEST);
+  if (Object.keys(files).length === 0) {
+    fs.rmSync(file, { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const ordered = { files: Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : 1))) };
+  fs.writeFileSync(file, `${JSON.stringify(ordered, null, 2)}\n`, 'utf8');
+}
+
+/**
  * How a file on disk relates to what the manifest expects.
  * @param {string} root
  * @param {string} relative
  * @param {Manifest|null} manifest
+ * @param {Record<string, string>} [local] this machine's digests, from `readLocalManifest`
  * @returns {'absent'|'owned_unchanged'|'owned_modified'|'user_owned'}
  */
-export function ownership(root, relative, manifest) {
+export function ownership(root, relative, manifest, local = {}) {
   const file = containedPath(root, relative);
   const recorded = manifest?.files?.[relative];
   if (!fs.existsSync(file)) return recorded ? 'absent' : 'absent';
   if (!recorded) return 'user_owned';
-  return diskDigest(file) === recorded ? 'owned_unchanged' : 'owned_modified';
+  const actual = diskDigest(file);
+  return actual === recorded || actual === local[relative] ? 'owned_unchanged' : 'owned_modified';
 }

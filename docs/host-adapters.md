@@ -230,13 +230,15 @@ model grants no authority and changes no assessment's meaning.
 
 Omitting a setting is the way to say "whatever this host is already configured
 to do". A personal preference — the model your account can reach, the effort
-you like — normally belongs in your host's own configuration, not here, because
-a value written here is generated into tracked files for everyone. Pin one only
-when the repository means it.
+you like — does not belong here, because a value written here is generated
+into tracked files for everyone. Pin one only when the repository means it,
+and put your own in [`.castwork/local/castwork.json`](#this-machines-models).
 
-Configuration lives here and nowhere else. `.castwork/project.md` is prose,
-and `.castwork/local/` is reserved for machine-local state: it is gitignored
-working space, not a second configuration layer that overrides this file.
+The project's configuration lives here and nowhere else.
+`.castwork/project.md` is prose, and `.castwork/local/` is gitignored working
+space for machine-local state. The one file there that changes generation is
+`.castwork/local/castwork.json`, for a single machine, and it chooses models
+only.
 
 ## Role routes
 
@@ -406,6 +408,79 @@ A level changes which model runs, and nothing else: requirements, statuses,
 candidate binding, independence and authorization are as they were. The level
 an agent ran at is recorded as an optional entry attribute; see
 [record-format.md](record-format.md).
+
+## This machine's models
+
+`.castwork/local/castwork.json`, gitignored with the rest of `.castwork/local/`,
+chooses the models this machine's roles run on without changing the
+project's configuration. It is yours: `update` and `remove` never write or
+delete it.
+
+```json
+{
+  "role_settings": {
+    "claude": { "worker": { "model": "claude-sonnet-5-5", "effort": "high" } },
+    "pi": { "verifier": { "model": "provider/id:high" } }
+  },
+  "role_levels": {
+    "codex": { "worker": { "complex": { "model_reasoning_effort": "xhigh" } } }
+  }
+}
+```
+
+- It holds `role_settings` and `role_levels` and nothing else. Hosts, routes,
+  and permissions stay the project's; `hosts`, `role_routes`, and
+  `permission_mode` are refused.
+- Each value is set over the project's, key by key, and is checked the same
+  way `castwork.json` is. `null` clears a setting, so the host's own
+  configuration decides it: the way to drop a model the project pins that your
+  account cannot reach.
+- A level must already be declared in `castwork.json`: the local file changes
+  its settings, and a level keeps its model. A new level is a variant file
+  every clone carries, so it is the project's to add.
+- A routed role takes its settings from the local file too, and they reach
+  the routing host's coordinator and entry command as well as the role file.
+
+`update` writes this machine's models into the generated files, but
+`.castwork/generated.json` keeps the project's digests, so the tracked
+manifest is the same on every machine. `.castwork/local/generated.json`
+records what this machine wrote, so `update`, `remove`, and `doctor` still
+treat those files as generated. `update` and `doctor` list them.
+
+Applying, switching, or dropping your models needs no shared commit: the
+manifest stays as it is, so it is `update`, then a new host session. Delete
+`.castwork/local/castwork.json` and run `update` to go back to the project's
+models.
+Whether anything is left to commit is judged against the last commit, so
+`update` still says so when the project's output changed in the meantime.
+
+Where the project gitignores its host folders, that is all, and Git sees
+nothing. Where generated files are tracked, a file carrying your models reads
+as modified, and `update` and `doctor` mark it to be left out of commits. A
+clone that receives one in a commit sees it as a generated file modified
+locally, which is how the mistake is found. Before pulling a change to such a
+file, restore it (`git checkout -- <path>`), pull, and run `update` again.
+
+Leaving the file out is not enough when the project's output for it changes
+too, such as a new permission in `castwork.json` or a castwork upgrade: the
+committed manifest would name the new output, and a clone holding the old one
+would refuse to update. `update` and `doctor` name such a file. Commit the
+project's version instead:
+
+1. `update --shared` writes the project's output alone, as if there were no
+   `.castwork/local/castwork.json`.
+2. Commit the result as usual.
+3. `update` puts your models back.
+
+`update --shared` never reads `.castwork/local/castwork.json`, so it works
+even when that file no longer fits the project, such as an override of a
+level the project dropped. When the project adopts the model your file set, the role file on disk
+already holds the project's output but the last commit holds the old one:
+`update` and `doctor` name it to commit with the manifest.
+
+`doctor` also asks Git whether `.castwork/local/castwork.json` is ignored and
+untracked, so a `.gitignore` that no longer covers `.castwork/local/`, or a
+file committed before it was ignored, is reported.
 
 ## Adding a host
 

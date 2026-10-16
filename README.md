@@ -16,7 +16,7 @@ Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.9 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.10 is
 > current.
 
 ## When it helps
@@ -176,7 +176,8 @@ learned coordinator.
 
 Each role is usable on its own, with no required order, and loading one grants
 no authority. The thinker, worker, and verifier can each have their own model
-and settings per host under `role_settings` in `castwork.json`. The
+and settings per host under `role_settings` in `castwork.json`, and one
+machine can choose its own in the gitignored `.castwork/local/castwork.json`. The
 coordinator uses the settings of the session in which you invoke Castwork.
 `role_routes` can run a role in another host — for example, to have Codex
 review work produced in Claude Code. `role_levels` can give a role `simple` or

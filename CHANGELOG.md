@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.9.10
+
+- `.castwork/local/castwork.json`, gitignored with the rest of
+  `.castwork/local/`, chooses the models this machine's roles run on without
+  changing the project's configuration. It is the user's: `update` and
+  `remove` never write or delete it. It holds `role_settings` and `role_levels` only,
+  set over the project's key by key and checked the same way; `null` clears a
+  setting the project pins. Hosts, routes, permissions, and new levels stay
+  the project's and are refused.
+- `update` writes this machine's models into the generated files while
+  `.castwork/generated.json` keeps the project's digests, so the tracked
+  manifest is the same on every machine. `.castwork/local/generated.json`
+  records what this machine wrote, so `update`, `remove`, and `doctor` still
+  treat those files as generated. `update`, `update --check`, and `doctor`
+  list them. Applying, switching, or dropping this machine's models is never
+  advice to commit. Where the host folders are gitignored, Git sees nothing;
+  a listed file Git does not ignore is marked to be left out of commits.
+- Whether anything is left to commit is judged against the last commit,
+  not the manifest on disk: a role file whose model the project adopted from
+  this machine is named to commit with the manifest, and dropping local
+  models over an uncommitted project change still says to commit.
+- `update --shared` writes the project's output alone, never reading
+  `.castwork/local/castwork.json`, so a stale override cannot stop it. Where
+  generated files are tracked and the project's output changes under a file
+  carrying this machine's models, `update` and `doctor` name it: run
+  `update --shared`, commit, then `update`, so the committed manifest and
+  files agree and a clone does not refuse to update.
+- `doctor` asks Git whether `.castwork/local/castwork.json` is ignored and
+  untracked, so a `.gitignore` that no longer covers `.castwork/local/`, or a
+  file committed earlier, is reported.
+- To adopt: write `.castwork/local/castwork.json` and run `update`. `setup`
+  already gitignores `.castwork/local/`, so nothing else changes; without the
+  file, nothing changes at all.
+
 ## 0.9.9
 
 - A choice put to the user carries the thinker's recommendation, not the

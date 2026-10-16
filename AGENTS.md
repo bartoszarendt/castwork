@@ -5,7 +5,7 @@ work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.9.9 is current.
+**Status:** version 0.9.10 is current.
 
 ## Layout
 
@@ -46,10 +46,15 @@ authoritative copy for one host.
 - **Generated files carry no absolute paths** and are tracked in the target
   repository. Machine-specific state belongs in the gitignored
   `.castwork/local/`.
-- **Configuration lives only in `castwork.json`** at the target root, and it
+- **Configuration lives in `castwork.json`** at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
   project supports, and role settings, role routes and role levels are its deliberate
-  choices. `project.md` is prose; `.castwork/local/` is machine-local state, not an overlay.
+  choices. `project.md` is prose; `.castwork/local/` is machine-local state.
+  The one exception is `.castwork/local/castwork.json`, gitignored with that
+  state, which chooses one machine's models and reasoning, the model-choice
+  keys of `role_settings` and of levels `castwork.json` declares, and nothing
+  else. It is the user's: `update` and `remove` never write or delete it. It
+  never changes the tracked manifest, and its output is never committed.
 - **Four roles, and they do not vary by project.** A specialist is an `actor`
   under a canonical role, carrying a skill, chosen by prose policy. Do not add a
   role registry or derive roles from policy.
@@ -75,6 +80,13 @@ authoritative copy for one host.
 
 Run the suite before reporting a change complete. Prefer removing a concept over
 adding one.
+
+For an owner-authorized release from `main`, bump the version in `package.json`
+and add a user-facing `CHANGELOG.md` entry. Before publishing, run `npm pack`,
+install the tarball in a disposable repository, and verify `setup`, `update`,
+and `remove`. Breaking changes get a major-or-minor bump and state in the
+changelog that there is no migration path; Castwork does not ship compatibility
+shims, aliases, or deprecated commands.
 
 ## Boundaries
 
