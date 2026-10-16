@@ -170,7 +170,7 @@ learned coordinator.
 | Role | Responsibility |
 |---|---|
 | `coordinator` | decides which roles act next and keeps you informed |
-| `thinker` | examines the problem and the approach, before or during the work: turns a request into work (intent, scope, acceptance criteria, requirements), plans, breaks work into tasks, critiques, and diagnoses stalls and disputes |
+| `thinker` | examines the problem and the approach, before, during, or after the work: turns a request into work (intent, scope, acceptance criteria, requirements), plans, breaks work into tasks, critiques, diagnoses stalls and disputes, and reviews how completed work went |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate: responsive, complete, correct |
 
@@ -190,6 +190,9 @@ Castwork bundles five skills for working with its records:
 `task-record-contract`, `verification-evidence`, `assessment`,
 `decision-capture`, and `blocked-state`. Guidance for the work itself —
 planning, debugging, testing, review — comes from your project or your host.
+Castwork names no such skill and assumes none is installed: a role uses one
+its host exposes when its description fits the step, and works from Castwork's
+guidance alone when none does.
 [Agent Skills](https://github.com/bartoszarendt/agent-skills) provides reusable
 guidance for how agents work; Castwork gives that work a shared record and role
 structure. They can be used together, and each is independently usable.

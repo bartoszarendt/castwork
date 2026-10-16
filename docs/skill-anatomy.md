@@ -71,6 +71,14 @@ Agents may use your project's own skills, skills installed for the user, and
 the host's built-in skills directly, alongside these. Castwork does not
 wrap, register, or arbitrate them, and there is no skill graph or marketplace.
 
+Castwork never assumes that a skill outside its bundle exists. Its roles,
+command, and bundled skills describe what a step needs, not which skill
+provides it: a role finds a skill its host exposes whose description fits the
+step, uses it when one does, and works from Castwork's guidance alone when
+none does. No outside skill is named in Castwork's own text, and none of it
+depends on one being installed. A skill the user or the working policy names
+is their choice, handled as below.
+
 The host decides which skills an agent can see, and hosts differ: in one
 repository a Codex worker may have a skill a Claude Code verifier does not. The
 role presets ask each role, the coordinator included, to use a skill when it

@@ -100,7 +100,7 @@ paper and what it does not.
 | Role | Responsibility |
 |---|---|
 | `coordinator` | decides which roles act next and keeps the user informed |
-| `thinker` | examines the problem and the approach, before or during the work: turns a request into work, plans it, breaks it down, critiques partial results, diagnoses stalls and disputes |
+| `thinker` | examines the problem and the approach, before, during, or after the work: turns a request into work, plans it, breaks it down, critiques partial results, diagnoses stalls and disputes, reviews how completed work went |
 | `worker` | produces the candidate and its evidence |
 | `verifier` | assesses the exact candidate for responsiveness, completeness, and correctness, and records a verdict |
 
@@ -152,6 +152,13 @@ one the user or working policy points to, when it fits the step at hand. The
 deliverable goes where the task asks; plans, decisions, evidence, and verdicts
 go where the record conventions say.
 See [docs/skill-anatomy.md](docs/skill-anatomy.md#project-and-host-skills).
+
+Castwork never assumes a skill outside its own exists. Its roles, command, and
+skills describe what a step needs, never which skill provides it: a role looks
+through the skills its host exposes for one whose description fits, uses it
+when one does, and works from Castwork's guidance alone when none does. No
+outside skill is named in Castwork's text, and nothing in it depends on one
+being installed. A skill the user or the working policy names is their choice.
 
 ## Policy is prose
 

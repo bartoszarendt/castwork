@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- The thinker also reviews completed work, such as a finished phase or an
+  abandoned attempt. It starts from `report`, the records, their findings and
+  the decisions they cite, and reads session transcripts only when the request
+  names them. It separates observations from inferred causes, states material
+  evidence gaps, says what helped as well as what caused avoidable rework, and
+  proposes only changes the evidence supports, each with how later work would
+  show whether it helped. The report goes in `.castwork/findings/`. Reviewing
+  an active blocker stays diagnosis.
+- The coordinator offers such a review in one line at the end when a phase
+  reached its acceptance, work was cancelled or stopped after rounds that did
+  not converge, or a shape or level had its first deliberate trial in the
+  project. It starts the review without asking where the working policy says
+  to, and never offers one after ordinary tasks or during a pause.
+- A plan for later work cites an earlier review's findings when they bear on
+  it, with the changes to use and how the work will show whether they helped.
+- Castwork never assumes a skill outside its own exists. Its guidance
+  describes what a step needs, not which skill provides it: a role uses a
+  skill its host exposes when its description fits, and works from Castwork's
+  guidance alone when none does.
+
 ## 0.9.11
 
 - The user is brought only their calls, and the guidance now says which those

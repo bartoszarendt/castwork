@@ -265,7 +265,7 @@ for (const host of HOSTS) {
       "For `needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision.",
       'When a worker and a verifier read a criterion differently, say where they diverge and clarify the record as above.',
       'Never rewrite an assessment. Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own.',
-      'Asked for an audit, or a review of how the work went, audit the work, not a candidate',
+      'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
       'Trace consequential stop claims to the contract, decisions and permitted supporting evidence',
       'Identify what current authority permits and what only the user can decide.',
@@ -637,10 +637,27 @@ for (const host of HOSTS) {
     ], 'worker');
     all(role(host, 'thinker'), [
       "When the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to its generated copy here.",
-      'Asked for an audit, or a review of how the work went, audit the work, not a candidate',
-      'and its report in `.castwork/findings/`.',
+      'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
+      'The report goes in `.castwork/findings/`.',
     ], 'thinker');
     assert.match(role(host, 'coordinator'), phrase('about fifteen lines, what holds now first and attribution after, which `report` shows,'));
+  });
+}
+
+for (const host of HOSTS) {
+  test(`${host} a review of how completed work went is offered at its occasions and carried into the next plan`, () => {
+    all(role(host, 'thinker'), [
+      'before, during, or after the work',
+      'reviews how completed work went',
+      'read session transcripts only when the request names them. Distinguish observations from inferred causes, and state material evidence gaps.',
+      'Say what helped as well as what caused avoidable rework, and which causes recur across tasks.',
+      'with how later work would show whether it helped. Reviewing an active blocker is diagnosis, not this.',
+      'When an earlier review of how work went bears on this work, cite its findings file in the plan',
+    ], 'thinker');
+    all(role(host, 'coordinator'), [
+      'At the end, when a phase reached its acceptance, work was cancelled or stopped after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show,',
+      'offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or during a pause.',
+    ], 'coordinator');
   });
 }
 
