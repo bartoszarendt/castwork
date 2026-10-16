@@ -219,7 +219,7 @@ for (const host of HOSTS) {
     assert.match(thinker.content, /For\s+this\s+machine\s+only,\s+such\s+as\s+a\s+local\s+path,\s+port,\s+or\s+wrapper,\s+`\.castwork\/local\/setup\.md`,\s+never\s+`project\.md`/);
     assert.match(thinker.content, /the\s+host's\s+user-level\s+instructions\s+or\s+a\s+user\s+skill,\s+which\s+Castwork\s+does\s+not\s+keep/);
     assert.match(thinker.content, /the\s+line\s+points\s+to\s+them,\s+saying\s+what\s+they\s+hold\s+and\s+when\s+to\s+read\s+them/);
-    assert.match(thinker.content, /a\s+finding\s+about\s+one\s+candidate\s+stays\s+in\s+its\s+assessment/);
+    assert.match(thinker.content, /[Aa]\s+finding\s+about\s+one\s+candidate\s+stays\s+in\s+its\s+assessment/);
   });
 }
 

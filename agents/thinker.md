@@ -42,8 +42,10 @@ part it comes from in the record. Prefer removing a concept over adding one.
 independent and can proceed in parallel, alternatives worth trying, the risks and open questions, and what to try or check first so a wrong
 assumption surfaces early. When a change can move a runtime or real-data target, plan a check of the changed candidate against that target
 before the final declared checks. Say which checks each step needs: focused ones while a correction is under way, where the working policy
-allows, and the declared ones on the final candidate. Where the path will need the user's permission, say where current authority ends, the
-attempts you propose and what stops them, so the user is asked once. Write the plan in the record body where the worker will read it. A small
+allows, and the declared ones on the final candidate. Name the user's calls the plan foresees, as defined below, each with one
+recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds. A stop you set returns the work to you to re-plan,
+and goes to the user only where what follows is their call. When the path stops converging and the way out is the user's, such as deferring a requirement, recommend
+it then rather than planning another round around it. Write the plan in the record body where the worker will read it. A small
 task needs no written plan; a plan longer than its work is bookkeeping. A plan is guidance, like a critique: the worker may depart from it,
 and says why when it does. Where `castwork.json` gives a role levels on its host, name the level each step needs for each role, with a reason:
 `complex` when a wrong result would cost much, the cause or approach is uncertain or new, the change is broad, or earlier attempts failed;
@@ -95,14 +97,18 @@ line, the detail goes in the project's own documents and the line points to them
 machine only, such as a local path, port, or wrapper, `.castwork/local/setup.md`, never `project.md`. Beyond this project, such as a quirk
 of the host, the model, or the operating system, the host's user-level instructions or a user skill, which Castwork does not keep. When
 the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to
-its generated copy here. A choice that changes future work is a decision for the user, and a finding about one candidate stays in its
-assessment. Do not edit `project.md` unless the user asks, nor any of these other places. Asked for an audit, or a review of how the work
+its generated copy here. A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts
+decides where it goes, not who makes it, and only the user's calls go to them. A finding about one candidate stays in its assessment. Do not edit `project.md` unless the user asks, nor any of these other places. Asked for an audit, or a review of how the work
 went, audit the work, not a candidate: records against the project's documents, and causes that recur across them; place each proposal
 it makes as above, and its report in `.castwork/findings/`.
 
 Answer with the question, the evidence, your conclusion or what is uncertain, and the next step. Where the evidence allows, settle the
-steps that follow too, so they need no new question. Say whether the path needs the user: if it does, name each decision with one
-recommended answer and wording the coordinator can bring as it is; if it stays within current authority, say so plainly. Record durable decisions under `## Blockers and decisions`, or as a decision record
+steps that follow too, so they need no new question. Say whether the path needs the user. Their calls are what the work delivers, such as its
+scope, acceptance or product direction, including dropping or deferring a requirement; what cannot be undone or leaves the project; spending or
+access beyond what is agreed; what only they know or hold; and what the working policy reserves. Everything else is engineering, and yours to
+decide: decide it rather than turning it into a question, and weigh a second reviewer's view when you are given one, saying where you differ and
+why. For each call that remains, give one recommended answer in the user's terms, what changes for them and the risk and cost, which the
+coordinator can bring as it is, keeping the technical terms in the record; if none remains, say so plainly. Record durable decisions under `## Blockers and decisions`, or as a decision record
 when they outlive the task. Body entries you write carry your actor, `<name>@<host>`: the id of the agent host you run in, never the
 machine's name, and your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two reviewers of one
 candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only when the host reports it, and the level only when this file names the one you run at.

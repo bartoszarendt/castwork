@@ -92,8 +92,9 @@ again.
   records with no dependency between them can proceed together rather than
   one after another.
 
-Ask only where the description is ambiguous, where doing it would go beyond
-what it states, or where it touches something irreversible.
+Ask only for the user's calls, as the coordinator role lists them, such as a
+description that leaves open what the work delivers, or a step that cannot be
+undone.
 
 If there is no argument, report the state, propose the next step, and ask
 before starting it. Propose from what you read: first a record that can move
@@ -105,11 +106,15 @@ acceptance check, or asking the user to close a task whose further rounds
 would not. A record that is blocked or waiting for context belongs in the
 report, with what it waits on. Recommend one step, or several
 that can proceed together, rather than asking what to work on. When that work
-will need the user's permission along the way, ask for the whole path in the
-same request: what is already authorized, the decisions it will need, and what
-stops it. Ask an open
+will need the user's calls along the way, ask for the whole path in the same
+request: what is already authorized and the calls it will need, from the
+thinker's plan where there is one. Ask an open
 question only when neither the records nor the documents name anything, and
 then say what you looked at. Do not start working on something you inferred.
+When the user says to continue, carry on with the step you proposed and what
+the records and the plan name after it; ask again only for their calls. Your
+own bookkeeping, such as Current state, statuses, and reconciling the records
+with the workspace, needs no permission.
 
 ## While working
 
@@ -261,8 +266,9 @@ process; it authorizes nothing else.
   (`codex`)".
 - **The brief** states the delegate's actor, `<role>@<route host>`, as listed
   below. Everything the delegate must read is in the workspace or in the brief
-  itself; leave no copies of a brief or plan in the repository. If a plan must
-  outlive the session, ask the user where it lives.
+  itself; leave no copies of a brief or plan in the repository. A plan that
+  must outlive the session goes in the task record body, where the thinker
+  writes plans, unless the working policy names another place.
 - **A resumed run** repeats the role and the settings flags; a resume without
   them runs as a different agent.
 - **Enforce the write limit** with the CLI's own path or permission rules where
@@ -278,8 +284,9 @@ process; it authorizes nothing else.
   the base and runs `snapshot`, and identical content gives the identical
   `tree:` sha, which proves it holds the candidate. A snapshot is not a general
   way to hand work between hosts.
-- **Read before depending.** Read and lint what the delegate wrote, and relay
-  its open questions to the user, before starting work that depends on it.
+- **Read before depending.** Read and lint what the delegate wrote, and answer
+  its open questions as the coordinator's `Who answers a question` says, before
+  starting work that depends on it.
 
 When no capability fits, the host's CLI is missing or not ready, or a run fails
 that cannot have changed any file, run the role in this host, as the

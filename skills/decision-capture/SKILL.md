@@ -65,8 +65,13 @@ status: accepted
 
 **Whose decision it is.** Quote the owner's words and date them. A reason,
 condition, or alternative you add is yours: say so. A condition that returns
-the work to the owner is a stop you schedule; add one only for what only the
-owner can decide. If their answer could select more than one option, ask
+the work to the owner is a stop you schedule; add one only where what follows
+is the owner's call, and let any other stop return the work to the agent doing
+it, or to the thinker when a coordinator runs the roles.
+An owner's instruction on how they want to be consulted belongs in the working
+policy in `.castwork/project.md`, in their words, rather than in one record:
+propose the line, and it lasts beyond the session once they approve it.
+If their answer could select more than one option, ask
 before you record it.
 
 **Context** is what made the decision necessary. Someone reading in a year needs

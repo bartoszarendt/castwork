@@ -50,10 +50,13 @@ and what would unblock it. The last one is the point — a blocker without an ex
 is just a complaint.
 
 For the user, give the verified state, the obstacle and its cause or remaining
-uncertainty, what can proceed independently, and only decisions they own. Give a
-recommended answer for each decision and concrete approval wording with scope,
-cost, stop conditions and what proceeds after approval where those matter.
-When a coordinator runs the roles, a choice reaches the user with the thinker's
+uncertainty, what can proceed independently, and only the calls that are
+theirs: what the work delivers, what cannot be undone or leaves the project,
+spending or access beyond what is agreed, what only they know or hold, and what
+the working policy reserves. Everything else is an engineering call, settled
+without them. Give a recommended answer for each of their calls in their terms,
+what changes for them and the risk and cost, and keep the technical terms in
+the record. When a coordinator runs the roles, a choice reaches the user with the thinker's
 recommendation, and a path the thinker finds within current authority is taken,
 not asked about.
 Prepare what existing authority permits before asking; a clear external blocker
@@ -89,8 +92,9 @@ alone, you set it yourself.
   evidence applies here; otherwise investigate a cause that progress depends on,
   using the thinker when deeper investigation or another perspective would help.
   Diagnosis using information and resources already authorized for the task
-  needs no further approval. A proposal grants no authority to implement it:
-  fixes, access, spending, and additional runs keep their existing boundaries.
+  needs no further approval. A proposal grants no authority of its own: a fix
+  or another run within the work's scope is an engineering call, and access and
+  spending keep their existing boundaries.
   Honor explicit owner budgets; do not invent a retry count as the reason to stop.
 - **Do not guess past a real ambiguity.** If the answer changes what you build,
   that is `needs_context`, not a coin flip.

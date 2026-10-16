@@ -301,7 +301,7 @@ for (const host of HOSTS) {
     for (const content of [role(host, 'coordinator'), start]) {
       all(content, [
         'Diagnosis using information and resources already authorized for the task needs no further approval.',
-        'A proposal grants no authority to implement it: fixes, access, spending, and additional runs keep their existing boundaries.',
+        "A proposal grants no authority of its own: a fix or another run within the work's scope is an engineering call, and access and spending keep their existing boundaries.",
         'Honor explicit stops.',
         'Give an established answer directly unless the user or working policy asks for another perspective; passing on that answer is coordination, not producing or assessing a candidate.',
         'A failed check, blocking verdict, or stopped workflow does not itself mean no authorized next step remains: consider permitted diagnosis or independent work',
@@ -309,11 +309,12 @@ for (const host of HOSTS) {
     }
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
     all(role(host, 'coordinator'), [
-      'At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only decisions the user owns.',
+      "At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only the user's calls.",
       "A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a shortfall, goes to the thinker before the user: ask it for the path, where current authority ends, and a recommendation for what lies beyond.",
       'When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.',
-      "Bring the thinker's recommendation for each decision that remains and prepare concrete wording with scope, cost, stop conditions and what proceeds after approval where those matter.",
-      'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains, with the attempts you propose and what stops them, such as a new kind of failure.',
+      "Bring the thinker's recommendation for each of the user's calls that remains, in their terms: what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record, and their answer adopts them.",
+      'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains.',
+      'A stop the plan sets, such as a new kind of failure, returns the work to the thinker, and reaches the user only where what follows is their call.',
     ], 'stop report');
   });
 
@@ -326,11 +327,11 @@ for (const host of HOSTS) {
       'A question that needs an argument about the work goes to the thinker, gathered into one request:',
       'Its answer covers the steps it names: carry them out, and return when the work departs from it.',
       'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
-      'Only what needs the user goes to them: their permission, as Boundaries lists, and what only they know or own, such as acceptance.',
+      'Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a fact only they hold.',
       "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them.",
       "Bring one recommendation, the thinker's, and never offer asking the thinker as their choice.",
       'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
-      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, or a design to choose goes to the thinker before you reply,",
+      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply,",
       'where the role cannot wait for that, have it stop its round cleanly and resume it with the answer.',
       "Look for authorization in the decisions and records before asking for it: a brief of yours that contradicts a recorded decision the user has not narrowed since is yours to correct with a new brief, not the user's to authorize again.",
       "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
@@ -354,18 +355,51 @@ for (const host of HOSTS) {
     assert.doesNotMatch(coordinator, phrase('Recommend an answer for each'), 'at a stop the recommendation is the thinker\'s, not the coordinator\'s own');
     all(role(host, 'thinker'), [
       'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
-      "Where the path will need the user's permission, say where current authority ends, the attempts you propose and what stops them, so the user is asked once.",
+      "Name the user's calls the plan foresees, as defined below, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
+      'A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call.',
+      "When the path stops converging and the way out is the user's, such as deferring a requirement, recommend it then rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
-      'Say whether the path needs the user: if it does, name each decision with one recommended answer and wording the coordinator can bring as it is; if it stays within current authority, say so plainly.',
+      'Say whether the path needs the user.',
+      "For each call that remains, give one recommended answer in the user's terms, what changes for them and the risk and cost, which the coordinator can bring as it is, keeping the technical terms in the record; if none remains, say so plainly.",
     ], 'thinker');
     all(entry(host), [
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
-      "When that work will need the user's permission along the way, ask for the whole path in the same request: what is already authorized, the decisions it will need, and what stops it.",
+      "When that work will need the user's calls along the way, ask for the whole path in the same request: what is already authorized and the calls it will need, from the thinker's plan where there is one.",
       'The coordinator role says how to delegate, when to take a role yourself, and who answers which question; this command says how to orient, continue, pause, and route a role to another host.',
       'Date it from the clock',
       'Check what it says about a candidate against `task lint` before you write it.',
       'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes`, `role_settings` and `role_levels`.',
+    ], 'entry');
+  });
+
+  test(`${host} the user is brought only their calls, and the thinker decides the engineering ones`, () => {
+    for (const content of [role(host, 'coordinator'), entry(host)]) {
+      all(content, [
+        "**Bring the user only their calls.** These are the user's: what the work delivers, such as its scope, acceptance or product direction, including dropping or deferring a requirement;",
+        'what cannot be undone or leaves the project, such as changing real data, deleting what the work did not create, or pushing, publishing or releasing, unless the working policy allows it;',
+        'spending or access beyond what is agreed; what only they know or hold; and whatever the working policy reserves.',
+        "Everything else is engineering: the approach, a compatibility correction, a fix to an instrument or a test, another round within the work's scope, how to read a condition.",
+        'The thinker decides what needs an argument, as `Who answers a question` says; carry out its decision and tell the user what was decided.',
+        'Where the working policy names a second reviewer for such calls, ask it as well as the thinker; the thinker combines both views and decides where they differ.',
+        'An instruction on how the user wants to be consulted outlives the session only once it is written down: in the reply where they give it, propose it for `## Working policy` in `.castwork/project.md`, in their words, and say that until they approve the line it holds for this session only. Carry on under it meanwhile: the work never waits on that answer.',
+      ], 'coordinator');
+      assert.doesNotMatch(content, phrase('Ask the user when the work goes beyond what they asked for'), 'the user is asked for their calls, not for anything not named');
+    }
+    all(role(host, 'thinker'), [
+      'Their calls are what the work delivers, such as its scope, acceptance or product direction, including dropping or deferring a requirement;',
+      'what cannot be undone or leaves the project; spending or access beyond what is agreed; what only they know or hold; and what the working policy reserves.',
+      'Everything else is engineering, and yours to decide: decide it rather than turning it into a question,',
+      "and weigh a second reviewer's view when you are given one, saying where you differ and why.",
+      "A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts decides where it goes, not who makes it, and only the user's calls go to them.",
+    ], 'thinker');
+    assert.doesNotMatch(role(host, 'thinker'), phrase('A choice that changes future work is a decision for the user'), 'a durable engineering choice is not the user\'s for being durable');
+    assert.doesNotMatch(entry(host), phrase('relay its open questions to the user'), "a delegate's questions are routed like any other");
+    assert.doesNotMatch(entry(host), phrase('ask the user where it lives'), 'a lasting plan has a default home');
+    all(entry(host), [
+      'Ask only for the user\'s calls, as the coordinator role lists them, such as a description that leaves open what the work delivers, or a step that cannot be undone.',
+      'When the user says to continue, carry on with the step you proposed and what the records and the plan name after it; ask again only for their calls.',
+      'Your own bookkeeping, such as Current state, statuses, and reconciling the records with the workspace, needs no permission.',
     ], 'entry');
   });
 
@@ -460,7 +494,8 @@ for (const host of HOSTS) {
       'send the base commit and `git diff --binary --no-textconv <base> <sha>`',
       'identical content gives the identical `tree:` sha',
       'A snapshot is not a general way to hand work between hosts.',
-      'Read and lint what the delegate wrote, and relay its open questions',
+      "Read and lint what the delegate wrote, and answer its open questions as the coordinator's `Who answers a question` says, before starting work that depends on it.",
+      'A plan that must outlive the session goes in the task record body, where the thinker writes plans, unless the working policy names another place.',
     ], host);
     const text = entry(host);
     const pausing = text.slice(text.indexOf('## Pausing'), text.indexOf('## Role routes'));
@@ -483,8 +518,11 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     "A workflow's termination returns the problem to the agent running it, like a role's return; it does not decide that all work must end.",
     'pursue diagnosis within existing authority',
     'Diagnosis using information and resources already authorized for the task needs no further approval.',
-    'A proposal grants no authority to implement it: fixes, access, spending, and additional runs keep their existing boundaries.',
+    "A proposal grants no authority of its own: a fix or another run within the work's scope is an engineering call, and access and spending keep their existing boundaries.",
     'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
+    'only the calls that are theirs: what the work delivers, what cannot be undone or leaves the project, spending or access beyond what is agreed, what only they know or hold, and what the working policy reserves.',
+    'Everything else is an engineering call, settled without them.',
+    'Give a recommended answer for each of their calls in their terms, what changes for them and the risk and cost, and keep the technical terms in the record.',
     "When a coordinator runs the roles, a choice reaches the user with the thinker's recommendation, and a path the thinker finds within current authority is taken, not asked about.",
     'Prepare what existing authority permits before asking',
     'Keep temporary proposals in the task body; use a separate decision record only when the choice outlives the task, and distinguish a proposal from an accepted owner decision.',
@@ -513,7 +551,8 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     "An owner's choice that settles only this task's next step, such as whether to try again, goes in the task, quoted and dated.",
     "**Whose decision it is.** Quote the owner's words and date them.",
     'A reason, condition, or alternative you add is yours: say so.',
-    'A condition that returns the work to the owner is a stop you schedule; add one only for what only the owner can decide.',
+    "A condition that returns the work to the owner is a stop you schedule; add one only where what follows is the owner's call, and let any other stop return the work to the agent doing it, or to the thinker when a coordinator runs the roles.",
+    "An owner's instruction on how they want to be consulted belongs in the working policy in `.castwork/project.md`, in their words, rather than in one record: propose the line, and it lasts beyond the session once they approve it.",
     'If their answer could select more than one option, ask before you record it.',
   ], 'decision-capture');
   all(skill('task-record-contract'), [

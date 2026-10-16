@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.9.11
+
+- The user is brought only their calls, and the guidance now says which those
+  are: what the work delivers, such as its scope, acceptance or product
+  direction, including dropping or deferring a requirement; what cannot be
+  undone or leaves the project, such as changing real data, deleting what the
+  work did not create, or pushing, publishing or releasing, unless the working
+  policy allows it; spending or access beyond what is agreed; what only the
+  user knows or holds; and whatever the working policy reserves. Everything
+  else is engineering: the approach, a compatibility correction, a fix to an
+  instrument or a test, another round within the work's scope, how to read a
+  condition. The thinker decides it, the coordinator carries it out and says
+  what was decided, and a proposal is no longer read as needing the user for
+  a fix or another run within the work's scope.
+- Where the working policy names a second reviewer for such calls, such as
+  another host's agent, the coordinator asks it as well as the thinker; the
+  thinker combines both views and decides where they differ.
+- A stop a plan sets returns the work to the thinker to re-plan, and reaches
+  the user only where what follows is their call. The thinker's plan names the
+  user's calls it foresees, each with one recommendation, so the user is asked
+  once, when the plan is agreed; when the path stops converging and the way
+  out is the user's, such as deferring a requirement, it recommends that then.
+  `decision-capture` says the same of a condition written into a decision;
+  used without a coordinator, such a stop returns the work to the agent doing
+  it.
+- A choice that changes future work is recorded where it lasts, as a decision
+  record when it outlives the task; how long it lasts decides where it goes,
+  not who makes it. Only the user's calls go to them.
+- A routed delegate's open questions are answered as the coordinator's
+  `Who answers a question` says, instead of being relayed to the user, and a
+  plan that must outlive the session goes in the task record body unless the
+  working policy names another place, instead of asking the user where.
+- A question reaches the user in their terms: what changes for them, the risk
+  and cost, and what proceeds after their answer. The technical terms stay in
+  the record, and the answer adopts them.
+- An instruction on how the user wants to be consulted outlives the session
+  only once it is written down: the coordinator proposes it for
+  `## Working policy` in `.castwork/project.md`, in the user's words, in the
+  reply where it is given, and says that until the user approves the line it
+  holds for that session only. The work carries on under it meanwhile and
+  never waits on that answer. `project.md` still changes only with the user's
+  say-so, so a user can keep such an instruction to one session.
+- After a bare `/castwork`, the user saying to continue carries on with the
+  proposed step and what the records and plan name after it. The
+  coordinator's own bookkeeping, such as Current state, statuses and
+  reconciling the records with the workspace, needs no permission.
+- A running role's question about whether a stop rule applies goes to the
+  thinker, like any other condition read one way.
+
+To pick up the guidance, move the Castwork pin and lockfile to this version, or
+run a local checkout as `node <checkout>/bin/castwork.js` in place of
+`npx castwork`; `update` regenerates from the copy you run and never upgrades
+it. Then run `update`, commit the generated files, and start a new session.
+Projects whose working policy or decisions require the user's approval for
+each run keep that requirement until the user narrows it.
+
 ## 0.9.10
 
 - `.castwork/local/castwork.json`, gitignored with the rest of
