@@ -68,6 +68,17 @@ condition, or alternative you add is yours: say so. A condition that returns
 the work to the owner is a stop you schedule; add one only where what follows
 is the owner's call, and let any other stop return the work to the agent doing
 it, or to the thinker when a coordinator runs the roles.
+Record what the owner committed to, such as an outcome, a guarantee, a risk
+they accepted, or a scope, apart from the method, check, or proof chosen to
+meet it, and say whose choice the method was. Their decision binds the
+commitment, and a method only where they chose it themselves or a declared
+requirement or the working policy demands it; approving a decision that names
+the agents' method does not make it theirs. A method the agents chose, which
+no declared requirement or working policy demands, may change when the
+replacement keeps or tightens the commitment within existing authorization:
+an engineering call, recorded citing theirs, in the task when it settles only
+that task and otherwise in a decision record. One that weakens the commitment
+goes back to them.
 An owner's instruction on how they want to be consulted belongs in the working
 policy in `.castwork/project.md`, in their words, rather than in one record:
 propose the line, and it lasts beyond the session once they approve it.

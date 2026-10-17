@@ -337,7 +337,11 @@ for (const host of HOSTS) {
       "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
       "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
       'Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report` refreshes the record, not whether the files in front of you are still that candidate.',
-      'At the end or a stop, bring once the unapplied proposals for where a fact is kept from the records this work touched, with place and wording; apply those the user approves.',
+      'At the end or a stop, take the unapplied proposals for where a fact is kept from the records this work touched, and check each claim against its source first: a cause not established stays worded as unresolved.',
+      'Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, replacing a line they correct rather than adding beside it, and say what you added.',
+      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs, applying those the user approves, and those for a place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there.",
+      "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs.",
+      'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment and stays within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record. One that weakens the commitment is theirs.',
       '`.castwork/local/setup.md` if it exists',
       'at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
       'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
@@ -482,7 +486,7 @@ for (const host of HOSTS) {
       'It records what the user authorized and grants nothing',
       'Leave it in place for the next handoff to replace.',
       'Then read `.castwork/local/setup.md`, if it exists: facts about this machine, such as local paths, ports, and wrappers, kept out of the repository.',
-      'A fact about this machine that will still hold next time belongs in `.castwork/local/setup.md`, not in the handoff: propose it with the other proposals for where a fact is kept, and point to that file rather than repeating it.',
+      'A fact about this machine that will still hold next time belongs in `.castwork/local/setup.md`, not in the handoff: add it there, as the other proposals for that file are applied, and point to that file rather than repeating it.',
       "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
       "states the delegate's actor, `<role>@<route host>`",
       'leave no copies of a brief or plan in the repository',
@@ -552,6 +556,10 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
     "**Whose decision it is.** Quote the owner's words and date them.",
     'A reason, condition, or alternative you add is yours: say so.',
     "A condition that returns the work to the owner is a stop you schedule; add one only where what follows is the owner's call, and let any other stop return the work to the agent doing it, or to the thinker when a coordinator runs the roles.",
+    'Record what the owner committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, apart from the method, check, or proof chosen to meet it, and say whose choice the method was.',
+    "Their decision binds the commitment, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs.",
+    'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record.',
+    'One that weakens the commitment goes back to them.',
     "An owner's instruction on how they want to be consulted belongs in the working policy in `.castwork/project.md`, in their words, rather than in one record: propose the line, and it lasts beyond the session once they approve it.",
     'If their answer could select more than one option, ask before you record it.',
   ], 'decision-capture');
@@ -633,10 +641,13 @@ for (const host of HOSTS) {
     all(role(host, 'worker'), [
       "pointing to the project's own documents when it needs more than a line and saying what they hold and when to read them",
       "the host's user-level instructions or a user skill when it holds beyond this project",
-      "When the cause is a role's or a skill's own guidance, propose the change for the repository that guidance comes from, never as an edit to its generated copy.",
+      "When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, propose the change for the repository it comes from, never as an edit to its generated copy, and say in a workaround kept here meanwhile whose defect it works around.",
     ], 'worker');
     all(role(host, 'thinker'), [
-      "When the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to its generated copy here.",
+      "When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, the change is proposed for the repository it comes from, never as an edit to its generated copy here, and a workaround kept here meanwhile says whose defect it works around.",
+      'Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.',
+      'Their decision binds that commitment, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it.',
+      'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment within existing authorization: that is yours to decide, and a change that weakens the commitment goes back to them.',
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'The report goes in `.castwork/findings/`.',
     ], 'thinker');

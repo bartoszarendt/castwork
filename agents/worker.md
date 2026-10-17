@@ -103,8 +103,9 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   for this repository, pointing to the project's own documents when it needs more than a line and
   saying what they hold and when to read them; a line for `.castwork/local/setup.md` when it holds only
   on this machine; or the host's user-level instructions or a user skill when it holds beyond this
-  project. When the cause is a role's or a skill's own guidance, propose the change for the repository
-  that guidance comes from, never as an edit to its generated copy. Edit none of them unless the user
+  project. When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, propose
+  the change for the repository it comes from, never as an edit to its generated copy, and say in a workaround kept here meanwhile whose
+  defect it works around. Edit none of them unless the user
   asks.
 - If a skill named to you is missing, say so; carry on where the work does not depend on it, and
   where it does, record `needs_context`. A skill supplies practice, not permission: the deliverable

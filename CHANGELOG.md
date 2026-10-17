@@ -21,6 +21,31 @@
   describes what a step needs, not which skill provides it: a role uses a
   skill its host exposes when its description fits, and works from Castwork's
   guidance alone when none does.
+- At the end or a stop, the coordinator checks each open proposal for where a
+  fact is kept against its source, keeping a cause that is not established
+  worded as unresolved, and applies those for `.castwork/local/setup.md`, for
+  `## Setup facts` in `project.md`, and for a `## Checks` line naming a new
+  check itself, correcting a line rather than adding a second one, and says
+  what it added. Proposals for `## Working policy`, and those that change what
+  a named check runs, still wait for the user's approval, since the second
+  changes what every task requiring that check accepts. Those for a place
+  outside the project, such as the repository a role's guidance comes from,
+  are the user's to take there. Before, every proposal waited for the user.
+- A cause in how a Castwork command behaves is proposed for the Castwork
+  repository, like a cause in a role's or a skill's guidance, and a workaround
+  kept in the project meanwhile says whose defect it works around.
+- A user's decision binds what they committed to, such as an outcome, a
+  guarantee, a risk they accepted, or a scope, and a method only where they
+  chose it themselves or a declared requirement or the working policy demands
+  it. Approving a decision that names the agents' method does not make that
+  method the user's. The thinker frames the user's calls at the commitment,
+  decision-capture records the commitment apart from the method and whose
+  choice the method was. A method the agents chose, which no declared
+  requirement or working policy demands, may change when the replacement keeps
+  or tightens the commitment within existing authorization: an engineering
+  call, recorded citing theirs, in the task when it settles only that task and
+  otherwise in a decision record. One that weakens the commitment still goes to the user. Before, a check or proof named
+  in an approved decision could only be changed by asking the user again.
 
 ## 0.9.11
 

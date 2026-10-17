@@ -40,9 +40,13 @@ reference covers it and a reviewer who extracts the candidate has it.
 ### Facts that outlive a task
 
 A cause or fact that will affect other tasks is kept where it holds, and no
-new record kind holds it. The roles propose the place in the task record;
-the user decides, and the coordinator brings the open proposals at the end of
-the work or at a stop.
+new record kind holds it. The roles propose the place in the task record. At
+the end of the work or at a stop, the coordinator checks each claim against
+its source and applies those for `.castwork/local/setup.md`, for
+`## Setup facts` in `project.md`, and for a `## Checks` line naming a new
+check, saying what it added. It brings the user those for `## Working policy`,
+those that change what a named check runs, since that changes what every task
+requiring the check accepts, and those for places outside the project.
 
 | What it is | Where it is kept |
 |---|---|
@@ -51,7 +55,7 @@ the work or at a stop.
 | a choice that changes future work | a decision record |
 | a fact about this machine, such as a local path, port, or wrapper | `.castwork/local/setup.md`, which stays on the machine; a handoff points to it |
 | a quirk of a host, model, or operating system beyond this project | the host's user-level instructions or a user skill; Castwork does not keep it |
-| a cause in a role's or a skill's own guidance | the repository that guidance comes from, never its generated copy |
+| a cause in a role's or a skill's own guidance, or in how a Castwork command behaves | the repository it comes from, never its generated copy; a workaround kept meanwhile says whose defect it is |
 | a supporting file a record links to, such as review notes, findings, a run log, or a report of how the work went | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |
 | a file the task delivers, or a script a declared check runs | the candidate, where the project keeps such files; never `findings/`, which snapshots leave out |
 

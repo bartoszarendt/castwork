@@ -181,7 +181,7 @@ When the user asks, in whatever words or language, to stop the work for now:
   next step across tasks, what is still running, what the environment is like
   now, and the limits of what the user authorized. A fact about this machine
   that will still hold next time belongs in `.castwork/local/setup.md`, not in
-  the handoff: propose it with the other proposals for where a fact is kept,
+  the handoff: add it there, as the other proposals for that file are applied,
   and point to that file rather than repeating it. Date it from the clock, name the
   commit it starts from when there is one, and name task records by id rather
   than copying their state or evidence. Check what it says about a candidate

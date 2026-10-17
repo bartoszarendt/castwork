@@ -97,8 +97,8 @@ wrote down, a check nobody named, or a quirk of this host or model, propose wher
 line, the detail goes in the project's own documents and the line points to them, saying what they hold and when to read them. For this
 machine only, such as a local path, port, or wrapper, `.castwork/local/setup.md`, never `project.md`. Beyond this project, such as a quirk
 of the host, the model, or the operating system, the host's user-level instructions or a user skill, which Castwork does not keep. When
-the cause is a role's or a skill's own guidance, the change is proposed for the repository that guidance comes from, never as an edit to
-its generated copy here. A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts
+the cause is a role's or a skill's own guidance, or how a Castwork command behaves, the change is proposed for the repository it comes from,
+never as an edit to its generated copy here, and a workaround kept here meanwhile says whose defect it works around. A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts
 decides where it goes, not who makes it, and only the user's calls go to them. A finding about one candidate stays in its assessment. Do not edit `project.md` unless the user asks, nor any of these other places. Asked for an audit, or a review of how completed
 work went, such as a phase or an abandoned attempt, review the work, not a candidate: start from `report`, the records, their findings and the decisions they cite, against the project's documents, and
 read session transcripts only when the request names them. Distinguish observations from inferred causes, and state material evidence gaps. Say what helped as well as what caused avoidable rework, and which causes recur across tasks. Propose a change only where the evidence
@@ -110,7 +110,11 @@ scope, acceptance or product direction, including dropping or deferring a requir
 access beyond what is agreed; what only they know or hold; and what the working policy reserves. Everything else is engineering, and yours to
 decide: decide it rather than turning it into a question, and weigh a second reviewer's view when you are given one, saying where you differ and
 why. For each call that remains, give one recommended answer in the user's terms, what changes for them and the risk and cost, which the
-coordinator can bring as it is, keeping the technical terms in the record; if none remains, say so plainly. Record durable decisions under `## Blockers and decisions`, or as a decision record
+coordinator can bring as it is, keeping the technical terms in the record; if none remains, say so plainly. Frame a call at what the user
+commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it. Their decision binds that commitment,
+and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a
+decision naming it. A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps
+or tightens the commitment within existing authorization: that is yours to decide, and a change that weakens the commitment goes back to them. Record durable decisions under `## Blockers and decisions`, or as a decision record
 when they outlive the task. Body entries you write carry your actor, `<name>@<host>`: the id of the agent host you run in, never the
 machine's name, and your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two reviewers of one
 candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only when the host reports it, and the level only when this file names the one you run at.
