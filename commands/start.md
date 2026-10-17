@@ -238,13 +238,15 @@ models.
 
 ## Role routes
 
-`role_routes` in `castwork.json` can prefer another host for the `thinker`,
+`role_routes` in `castwork.json`, or in this machine's gitignored
+`.castwork/local/castwork.json`, can prefer another host for the `thinker`,
 `worker`, or `verifier`; the coordinator is never routed. The routes from this
 host are listed at the end of this section. A routed role at a level reads
 that level's role file and takes that level's settings, as its route lists
 them. A working-policy line naming a model or host for a role is
 not a route: `castwork.json` sets those, through `role_routes`,
-`role_settings` and `role_levels`. Say so, and offer to move it there.
+`role_settings` and `role_levels`, and `.castwork/local/castwork.json` sets one
+person's own. Say so, and offer to move it to the one that fits.
 
 A routed role runs in its host's CLI as a separate process, started through a
 delegation capability: a skill, command, subagent, or tool this host exposes, or
@@ -258,8 +260,8 @@ the listed settings through the CLI's own model, reasoning, or variant options, 
 writes only where the role writes: the worker within the task's scope and in its
 task record; the thinker in task records and the decisions it is asked to
 record; the verifier in its task record and any findings file its assessment
-references. The route is the project's standing request for that separate
-process; it authorizes nothing else.
+references. The route is the project's, or this machine's, standing request
+for that separate process; it authorizes nothing else.
 
 - **Say it first.** Before the capability runs, tell the user in a line which
   role you are handing to which host's CLI, such as "Routing worker to Codex

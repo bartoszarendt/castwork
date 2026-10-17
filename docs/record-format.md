@@ -24,7 +24,7 @@ castwork.json    project configuration: hosts, per-host role settings,
 
 A task can also have `<record>.archive.md` beside it in `tasks/`, carrying its
 earlier rounds as part of the same logical record. Project configuration lives
-in `castwork.json`, with one machine's models and reasoning in the gitignored
+in `castwork.json`, with one machine's models, reasoning, and role routes in the gitignored
 `.castwork/local/castwork.json`; `project.md` owns prose only. Every
 Markdown file in `tasks/` is read as a task record, so supporting files, such
 as findings or logs, go in `findings/`, named after the task they belong to,

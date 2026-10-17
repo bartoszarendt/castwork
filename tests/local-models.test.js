@@ -1,9 +1,9 @@
 /**
- * This machine's models.
+ * This machine's models and routes.
  *
  * `.castwork/local/castwork.json`, gitignored with the machine's other state, changes the
- * model settings of roles and levels the project already has, and nothing
- * else. Generated files on disk carry them; the tracked manifest keeps the
+ * model settings of roles and levels the project already has, and which of the
+ * project's hosts runs a role, and nothing else. Generated files on disk carry them; the tracked manifest keeps the
  * project's digests, so it reads the same on every machine, and a gitignored
  * local manifest records what this machine wrote so those files stay ours.
  */
@@ -102,7 +102,7 @@ test('applying and dropping this machine models is never advice to commit', (t) 
   const root = fixture(t, ['claude']);
   writeLocal(root, { role_settings: { claude: { worker: { model: 'claude-mine' } } } });
   const before = doctor(root).findings.map((finding) => finding.message);
-  assert.ok(before.includes(`1 generated file(s) differ only in this machine's models from ${LOCAL_CONFIG_FILE}`));
+  assert.ok(before.includes(`1 generated file(s) differ only in this machine's models and routes from ${LOCAL_CONFIG_FILE}`));
   assert.equal(update(root, { check: true }).plan.commit, false);
   assert.equal(update(root).commit, false);
 
@@ -234,7 +234,7 @@ test('a project change under a tracked file carrying local models commits cleanl
   const result = update(root);
   assert.equal(result.commit, true);
   assert.deepEqual(result.local_conflicts, ['.claude/agents/worker.md']);
-  assert.ok(doctor(root).findings.some((finding) => finding.message.startsWith("the project's output changed under files carrying this machine's models")));
+  assert.ok(doctor(root).findings.some((finding) => finding.message.startsWith("the project's output changed under files carrying this machine's models and routes")));
 
   // The workflow: the project's output, commit, then this machine's models again.
   const shared = update(root, { shared: true });
@@ -342,6 +342,55 @@ test('a routed role setting reaches the routing host entry files', (t) => {
   assert.ok(result.local.includes('.claude/agents/coordinator.md'));
 });
 
+test('a local route reaches only the routing host entry files, and the tracked manifest keeps the project digests', (t) => {
+  const root = fixture(t, ['claude', 'codex']);
+  const manifest = read(root, GENERATED_MANIFEST);
+  const thinker = read(root, '.claude/agents/thinker.md');
+  const entry = read(root, '.agents/skills/castwork/SKILL.md');
+
+  writeLocal(root, {
+    role_routes: { thinker: 'claude' },
+    role_settings: { claude: { thinker: { model: 'opus', effort: 'high' } } },
+  });
+  const result = update(root);
+  const routed = read(root, '.agents/skills/castwork/SKILL.md');
+  assert.match(routed, /`thinker` runs in Claude Code \(`claude`\)\. Role file: `\.claude\/agents\/thinker\.md`\./);
+  assert.match(routed, /Actor: `thinker@claude`\. Settings: model `opus`, effort `high`\./);
+  assert.match(read(root, '.codex/agents/coordinator.toml'), /`thinker` runs in Claude Code/);
+  assert.doesNotMatch(read(root, '.claude/skills/castwork/SKILL.md'), /`thinker` runs in/, 'a route to the host itself is no route');
+  assert.deepEqual([...result.local].sort(), ['.agents/skills/castwork/SKILL.md', '.claude/agents/thinker.md', '.codex/agents/coordinator.toml']);
+  assert.deepEqual(result.added, [], 'a local route adds no file');
+  assert.equal(result.manifest, null);
+  assert.equal(read(root, GENERATED_MANIFEST), manifest);
+  assert.equal(doctor(root).generated, 'current');
+  assert.deepEqual(validate(root).findings, []);
+
+  // update --shared writes the project's output alone, without the route.
+  update(root, { shared: true });
+  assert.equal(read(root, '.agents/skills/castwork/SKILL.md'), entry);
+  update(root);
+  fs.rmSync(path.join(root, LOCAL_CONFIG_FILE));
+  update(root);
+  assert.equal(read(root, '.agents/skills/castwork/SKILL.md'), entry);
+  assert.equal(read(root, '.claude/agents/thinker.md'), thinker);
+  assert.equal(exists(root, LOCAL_MANIFEST), false);
+});
+
+test('a local route replaces the project route, and null drops it', (t) => {
+  const root = fixture(t, ['claude', 'codex', 'opencode'], { role_routes: { worker: 'codex', verifier: 'codex' } });
+  writeLocal(root, { role_routes: { worker: 'opencode', verifier: null } });
+  update(root);
+  const entry = read(root, '.claude/skills/castwork/SKILL.md');
+  assert.match(entry, /`worker` runs in OpenCode \(`opencode`\)/);
+  assert.doesNotMatch(entry, /`verifier` runs in/);
+  assert.deepEqual(readConfig(root).local?.role_routes, { worker: 'opencode' });
+  assert.deepEqual(readConfig(root).role_routes, { worker: 'codex', verifier: 'codex' }, 'the project routes stay as written');
+
+  writeLocal(root, { role_routes: { worker: null, verifier: null } });
+  update(root);
+  assert.match(read(root, '.claude/skills/castwork/SKILL.md'), /None: every role runs in this host\./);
+});
+
 test('a file carrying another machine models reads as modified where there is no local file', (t) => {
   const root = fixture(t, ['claude']);
   writeLocal(root, { role_settings: { claude: { worker: { model: 'claude-mine' } } } });
@@ -368,11 +417,28 @@ test('remove deletes files carrying this machine models, and the local manifest'
 /* What the local file may hold                                        */
 /* ------------------------------------------------------------------ */
 
-test('the local file holds role_settings and role_levels only', (t) => {
-  for (const key of ['hosts', 'role_routes']) {
+test('the local file holds role_settings, role_routes and role_levels only', (t) => {
+  for (const key of ['hosts', 'permissions']) {
     const error = refusal(t, { [key]: {} });
     assert.match(error.message, new RegExp(`^${LOCAL_CONFIG_FILE} cannot set ${key}$`));
   }
+});
+
+test('a local route names a host the project generates, and never the coordinator', (t) => {
+  const missing = refusal(t, { role_routes: { worker: 'pi' } });
+  assert.equal(missing.message, `${LOCAL_CONFIG_FILE} role_routes.worker names pi, which ${CONFIG_FILE} does not list in hosts`);
+  assert.match(missing.hint ?? '', /setup --host pi/);
+
+  // The command the hint names adds the host, and the route then applies.
+  const root = fixture(t, ['claude', 'codex']);
+  writeLocal(root, { role_routes: { worker: 'pi' } });
+  assert.throws(() => update(root), /does not list in hosts/);
+  setup(root, { hosts: ['pi'] });
+  assert.deepEqual(readConfig(root).hosts, ['claude', 'codex', 'pi']);
+  assert.match(read(root, '.claude/skills/castwork/SKILL.md'), /`worker` runs in Pi \(`pi`\)/);
+  assert.match(refusal(t, { role_routes: { coordinator: 'codex' } }).message, /role_routes cannot route the coordinator/);
+  assert.match(refusal(t, { role_routes: { worker: 'nope' } }).message, /names unknown host nope/);
+  assert.match(refusal(t, { role_routes: { worker: 3 } }).message, /role_routes\.worker must be a host id/);
 });
 
 test('the local file sets no permission', (t) => {

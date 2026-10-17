@@ -176,7 +176,7 @@ function generatedFiles(config) {
   if (config.local === null) return { files: shared, shared };
   try {
     return {
-      files: generateAll(config.hosts, { roleSettings: config.local.role_settings, roleRoutes: config.role_routes, roleLevels: config.local.role_levels }),
+      files: generateAll(config.hosts, { roleSettings: config.local.role_settings, roleRoutes: config.local.role_routes, roleLevels: config.local.role_levels }),
       shared,
     };
   } catch (error) {
@@ -426,7 +426,9 @@ function applyPlan(root, plan) {
  * @param {{hosts?: string[], force?: string[]}} [options]
  */
 export function setup(root, options = {}) {
-  const existing = readConfig(root);
+  // The project's hosts alone: the local file is checked below, against the
+  // hosts with any added, so `setup --host` can add the host a local route names.
+  const existing = readConfig(root, { local: false });
   const added = [];
   for (const host of options.hosts ?? []) {
     if (!existing.hosts.includes(host) && !added.includes(host)) added.push(host);
@@ -684,7 +686,7 @@ export function doctor(root) {
       // stays as it is and nothing is committed.
       findings.push({
         level: 'warn',
-        message: `${differing} generated file(s) differ only in this machine's models from ${LOCAL_CONFIG_FILE}`,
+        message: `${differing} generated file(s) differ only in this machine's models and routes from ${LOCAL_CONFIG_FILE}`,
         next: newer ?? 'Run update, then start a new host session. There is nothing to commit.',
       });
     } else if (differing > 0) {
@@ -703,7 +705,7 @@ export function doctor(root) {
     if (seen.local_conflicts.length > 0) {
       findings.push({
         level: 'warn',
-        message: `the project's output changed under files carrying this machine's models: ${seen.local_conflicts.join(', ')}`,
+        message: `the project's output changed under files carrying this machine's models and routes: ${seen.local_conflicts.join(', ')}`,
         next: `Committing the manifest without the project's version of these leaves a clone that refuses to update. Run update --shared, commit, then run update to put your models back.`,
       });
     }
@@ -724,13 +726,13 @@ export function doctor(root) {
       findings.push({
         level: 'warn',
         message: `${LOCAL_CONFIG_FILE} is tracked by Git`,
-        next: `It holds this machine's models and stays out of commits. Run git rm --cached ${LOCAL_CONFIG_FILE} and commit that.`,
+        next: `It holds this machine's models and routes and stays out of commits. Run git rm --cached ${LOCAL_CONFIG_FILE} and commit that.`,
       });
     } else if (state === 'visible') {
       findings.push({
         level: 'warn',
         message: `${LOCAL_CONFIG_FILE} is not ignored by Git`,
-        next: `It holds this machine's models and stays out of commits. Run setup, which adds ${LOCAL_DIRECTORY}/ to .gitignore, and check no other rule brings the file back.`,
+        next: `It holds this machine's models and routes and stays out of commits. Run setup, which adds ${LOCAL_DIRECTORY}/ to .gitignore, and check no other rule brings the file back.`,
       });
     }
   }

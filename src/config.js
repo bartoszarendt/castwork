@@ -6,7 +6,7 @@
  * output, so it describes the repository and not the machine the repository
  * is checked out on. The one exception is `.castwork/local/castwork.json`,
  * gitignored with the rest of the machine's state, which changes which models
- * this machine's roles run on and nothing else.
+ * this machine's roles run on, and which host's CLI runs them, and nothing else.
  *
  * A role setting is a plain value passed to one host. This module decides
  * which settings a host accepts by asking that host's adapter, and never
@@ -199,39 +199,56 @@ export const ROUTABLE_ROLES = Object.freeze(ROLE_IDS.filter((role) => role !== '
  * when generating, against the host set being generated, so `setup --host` can
  * add the host a route already names.
  *
+ * In `.castwork/local/castwork.json` a route may also be `null`, which drops the
+ * project's route for that role, and it must name a host `castwork.json`
+ * lists: a host is generated files every clone carries, so it is the
+ * project's to add.
+ *
  * @param {Record<string, unknown>} raw
- * @returns {Record<string, string>} role to host id
+ * @param {string} [file] the file being read, for messages
+ * @param {string[]|null} [hosts] the project's hosts, when reading the local file
+ * @returns {Record<string, string|null>} role to host id, or null to drop a route
  */
-function readRoleRoutes(raw) {
+function readRoleRoutes(raw, file = CONFIG_FILE, hosts = null) {
   const declared = raw.role_routes;
   if (declared === undefined) return {};
+  const where = `${file} role_routes`;
   if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
-    throw new PublicError(`${CONFIG_FILE} role_routes must be a map of role to host`, {
+    throw new PublicError(`${where} must be a map of role to host`, {
       hint: 'For example: "role_routes": { "worker": "codex" }.',
     });
   }
 
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, string|null>} */
   const routes = {};
   for (const [role, route] of Object.entries(declared)) {
     if (role === 'coordinator') {
-      throw new PublicError(`${CONFIG_FILE} role_routes cannot route the coordinator`, {
+      throw new PublicError(`${where} cannot route the coordinator`, {
         hint: `The coordinator is the session that routes the other roles. Routable roles: ${ROUTABLE_ROLES.join(', ')}.`,
       });
     }
     if (!ROLE_IDS.includes(role)) {
-      throw new PublicError(`${CONFIG_FILE} role_routes names unknown role ${role}`, {
+      throw new PublicError(`${where} names unknown role ${role}`, {
         hint: `Routable roles: ${ROUTABLE_ROLES.join(', ')}.`,
       });
     }
+    if (route === null && hosts !== null) {
+      routes[role] = null;
+      continue;
+    }
     if (typeof route !== 'string') {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role} must be a host id`, {
-        hint: `Write "${role}": "<host>". A route has no fallback: a role its host cannot run runs in the host that routes it. Model and reasoning go in role_settings.<host>.${role}.`,
+      throw new PublicError(`${where}.${role} must be a host id`, {
+        hint: `Write "${role}": "<host>"${hosts === null ? '' : ', or null to run it in the host that routes it'}. A route has no fallback: a role its host cannot run runs in the host that routes it. Model and reasoning go in role_settings.<host>.${role}.`,
       });
     }
     if (!HOSTS.includes(route)) {
-      throw new PublicError(`${CONFIG_FILE} role_routes.${role} names unknown host ${route}`, {
+      throw new PublicError(`${where}.${role} names unknown host ${route}`, {
         hint: `Known hosts: ${HOSTS.join(', ')}.`,
+      });
+    }
+    if (hosts !== null && !hosts.includes(route)) {
+      throw new PublicError(`${where}.${role} names ${route}, which ${CONFIG_FILE} does not list in hosts`, {
+        hint: `A routed role reads the role file generated for its host, and a host is generated files every clone carries. Add it to the project with setup --host ${route}.`,
       });
     }
     routes[role] = route;
@@ -389,7 +406,7 @@ export function readConfig(root, options = {}) {
  * @typedef {Record<string, Record<string, Record<string, unknown>>>} RoleSettings host, role, settings
  * @typedef {Record<string, Record<string, Record<string, Record<string, unknown>>>>} RoleLevels host, role, level, settings
  * @typedef {{hosts: string[], role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels, raw: Record<string, unknown>|null, overrides: RoleSettings}} SharedConfig
- * @typedef {SharedConfig & {local: {role_settings: RoleSettings, role_levels: RoleLevels}|null}} Config
+ * @typedef {SharedConfig & {local: {role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels}|null}} Config
  */
 
 /**
@@ -429,22 +446,26 @@ function readSharedConfig(root, options) {
     });
   }
   const overrides = readRoleSettings(raw);
-  const routes = readRoleRoutes(raw);
+  const routes = /** @type {Record<string, string>} */ (readRoleRoutes(raw));
   const levels = readRoleLevels(raw);
   const hosts = options.hosts ?? recorded;
   return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw, overrides };
 }
 
 /** What `.castwork/local/castwork.json` may hold. */
-const LOCAL_KEYS = Object.freeze(['role_settings', 'role_levels']);
+const LOCAL_KEYS = Object.freeze(['role_settings', 'role_routes', 'role_levels']);
+
+/** The local keys as a sentence lists them. */
+const LOCAL_KEY_LIST = `${LOCAL_KEYS.slice(0, -1).join(', ')} and ${LOCAL_KEYS.at(-1)}`;
 
 /**
- * Read `.castwork/local/castwork.json`, the one machine's choice of models. It is
- * gitignored and never committed: it changes the model settings of roles and
- * levels the project already has, and nothing else, so it adds or removes no
- * generated file and the tracked manifest stays the same on every machine.
- * Hosts, routes, permissions, and levels stay the project's, in
- * `castwork.json`.
+ * Read `.castwork/local/castwork.json`, the one machine's choice of models and
+ * routes. It is gitignored and never committed: it changes the model settings
+ * of roles and levels the project already has, and which of the project's
+ * hosts runs a role, and nothing else, so it adds or removes no generated file
+ * and the tracked manifest stays the same on every machine. A route changes
+ * only what the routing host's entry command and coordinator say. Hosts,
+ * permissions, and levels stay the project's, in `castwork.json`.
  *
  * @param {string} root
  * @param {SharedConfig} shared
@@ -461,13 +482,13 @@ function readLocalConfig(root, shared) {
     throw new PublicError(`${LOCAL_CONFIG_FILE} is not valid JSON: ${String(error)}`);
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    throw new PublicError(`${LOCAL_CONFIG_FILE} must be an object`, { hint: `It holds ${LOCAL_KEYS.join(' and ')}.` });
+    throw new PublicError(`${LOCAL_CONFIG_FILE} must be an object`, { hint: `It holds ${LOCAL_KEY_LIST}.` });
   }
   const record = /** @type {Record<string, unknown>} */ (raw);
   for (const key of Object.keys(record)) {
     if (!LOCAL_KEYS.includes(key)) {
       throw new PublicError(`${LOCAL_CONFIG_FILE} cannot set ${key}`, {
-        hint: `It chooses models on this machine only, through ${LOCAL_KEYS.join(' and ')}. Everything else is the project's, in ${CONFIG_FILE}.`,
+        hint: `It chooses models and routes on this machine only, through ${LOCAL_KEY_LIST}. Everything else is the project's, in ${CONFIG_FILE}.`,
       });
     }
   }
@@ -491,7 +512,16 @@ function readLocalConfig(root, shared) {
       levels[host][role] = { ...byLevel, ...(localLevels[host]?.[role] ?? {}) };
     }
   }
-  return { role_settings: shippedSettings(shared.hosts, overrides), role_levels: levels };
+
+  // A route is replaced whole, and null drops the project's, so the role runs
+  // in whichever host routes it.
+  /** @type {Record<string, string>} */
+  const routes = { ...shared.role_routes };
+  for (const [role, route] of Object.entries(readRoleRoutes(record, LOCAL_CONFIG_FILE, shared.hosts))) {
+    if (route === null) delete routes[role];
+    else routes[role] = route;
+  }
+  return { role_settings: shippedSettings(shared.hosts, overrides), role_routes: routes, role_levels: levels };
 }
 
 /**

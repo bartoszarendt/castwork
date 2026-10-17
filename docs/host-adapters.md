@@ -232,13 +232,13 @@ Omitting a setting is the way to say "whatever this host is already configured
 to do". A personal preference — the model your account can reach, the effort
 you like — does not belong here, because a value written here is generated
 into tracked files for everyone. Pin one only when the repository means it,
-and put your own in [`.castwork/local/castwork.json`](#this-machines-models).
+and put your own in [`.castwork/local/castwork.json`](#this-machines-models-and-routes).
 
 The project's configuration lives here and nowhere else.
 `.castwork/project.md` is prose, and `.castwork/local/` is gitignored working
 space for machine-local state. The one file there that changes generation is
 `.castwork/local/castwork.json`, for a single machine, and it chooses models
-only.
+and routes only.
 
 ## Role routes
 
@@ -266,6 +266,9 @@ a separate process, and have that result verified back in Claude Code.
   generates for, because the delegate reads the role file generated for that
   host. A route to a host that is not generated is refused before anything is
   written; `setup --host` adds it.
+- One machine can route a role, or drop a route, in
+  [`.castwork/local/castwork.json`](#this-machines-models-and-routes) without
+  changing the project's.
 - A route has no fallback to configure. When its host cannot run the role, the
   role runs in the host doing the routing, and the coordinator says so. When
   running in the other host is the point, such as a review by a different model
@@ -310,7 +313,8 @@ section tells the coordinator the rest:
   open.
 
 A route is the project's standing request for that separate process, like a
-model binding is its standing choice of model. It authorizes nothing else:
+model binding is its standing choice of model; a route in
+`.castwork/local/castwork.json` is that machine's. It authorizes nothing else:
 commits, other providers, and wider permissions stay where they were.
 Availability is never configured or recorded; it is found out each time.
 The actor string records where the role actually ran — `worker@codex`, or
@@ -409,17 +413,28 @@ candidate binding, independence and authorization are as they were. The level
 an agent ran at is recorded as an optional entry attribute; see
 [record-format.md](record-format.md).
 
-## This machine's models
+## This machine's models and routes
 
 `.castwork/local/castwork.json`, gitignored with the rest of `.castwork/local/`,
-chooses the models this machine's roles run on without changing the
-project's configuration. It is yours: `update` and `remove` never write or
-delete it.
+chooses the models this machine's roles run on, and which of the project's
+hosts runs them, without changing the project's configuration. It is yours:
+`update` and `remove` never write or delete it.
+
+To run the thinker in Claude Code from this machine, with `claude` among the
+`hosts` in `castwork.json`, this is the whole file:
+
+```json
+{ "role_routes": { "thinker": "claude" } }
+```
+
+Every key is optional. A model for that route, or for any role, goes in
+`role_settings` under the host that runs it, and a level `castwork.json`
+already declares can take another model in `role_levels`:
 
 ```json
 {
   "role_settings": {
-    "claude": { "worker": { "model": "claude-sonnet-5-5", "effort": "high" } },
+    "claude": { "thinker": { "model": "opus", "effort": "high" } },
     "pi": { "verifier": { "model": "provider/id:high" } }
   },
   "role_levels": {
@@ -428,9 +443,19 @@ delete it.
 }
 ```
 
-- It holds `role_settings` and `role_levels` and nothing else. Hosts, routes,
-  and permissions stay the project's; `hosts`, `role_routes`, and
-  `permission_mode` are refused.
+- It holds `role_settings`, `role_routes`, and `role_levels` and nothing else.
+  Hosts and permissions stay the project's; `hosts` and `permission_mode` are
+  refused.
+- A route here replaces the project's route for that role, and `null` drops
+  it, so the role runs in the host that routes it. The project need not route
+  anything first, but the route's host must be one `castwork.json` lists in
+  `hosts`: a host is generated files every clone carries, so it is the
+  project's to add. A local route changes only what the routing host's entry
+  command and coordinator say; it adds no file. Its settings are the route
+  host's `role_settings` and levels, from this file or the project's.
+- Dropping a route does not undo work that itself requires the other host, as
+  a task record or the working policy says: that work is still left open, as
+  [Role routes](#role-routes) describes.
 - Each value is set over the project's, key by key, and is checked the same
   way `castwork.json` is. `null` clears a setting, so the host's own
   configuration decides it: the way to drop a model the project pins that your
@@ -441,16 +466,16 @@ delete it.
 - A routed role takes its settings from the local file too, and they reach
   the routing host's coordinator and entry command as well as the role file.
 
-`update` writes this machine's models into the generated files, but
+`update` writes this machine's models and routes into the generated files, but
 `.castwork/generated.json` keeps the project's digests, so the tracked
 manifest is the same on every machine. `.castwork/local/generated.json`
 records what this machine wrote, so `update`, `remove`, and `doctor` still
 treat those files as generated. `update` and `doctor` list them.
 
-Applying, switching, or dropping your models needs no shared commit: the
+Applying, switching, or dropping your models or routes needs no shared commit: the
 manifest stays as it is, so it is `update`, then a new host session. Delete
 `.castwork/local/castwork.json` and run `update` to go back to the project's
-models.
+models and routes.
 Whether anything is left to commit is judged against the last commit, so
 `update` still says so when the project's output changed in the meantime.
 

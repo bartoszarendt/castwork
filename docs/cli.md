@@ -268,10 +268,10 @@ cannot express, and a value it could not carry, are each refused rather than
 dropped in silence. Omit a setting to let the host's own configuration decide
 it; `.castwork/local/` is reserved for machine-local state. The one piece of
 configuration it holds is `.castwork/local/castwork.json`: it chooses this
-machine's models and reasoning and nothing else, and is never committed. `update`, `update --check`, and
+machine's models, reasoning, and role routes and nothing else, and is never committed. `update`, `update --check`, and
 `doctor` list the generated files that carry them, and `update --shared`
 writes the project's output alone, for committing a change to it; see
-[this machine's models](host-adapters.md#this-machines-models).
+[this machine's models and routes](host-adapters.md#this-machines-models-and-routes).
 
 `update` regenerates from the hosts already recorded. It never changes which
 hosts you use — that is what `setup --host` is for — and it never writes over a

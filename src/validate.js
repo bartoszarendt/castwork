@@ -240,7 +240,7 @@ function validateGeneratedOutput(findings, root) {
     try {
       planned = generateHost(host, {
         roleSettings: effective.role_settings[host],
-        routes: resolveRoutes(host, config.role_routes, effective.role_settings, config.hosts, effective.role_levels),
+        routes: resolveRoutes(host, effective.role_routes, effective.role_settings, config.hosts, effective.role_levels),
         levels: effective.role_levels[host],
       });
     } catch (generationError) {

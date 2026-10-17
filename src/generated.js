@@ -299,7 +299,7 @@ export function readLocalManifest(root) {
   } catch (error) {
     if (error instanceof PublicError) throw error;
     throw new PublicError(`${LOCAL_MANIFEST} could not be read: ${String(error)}`, {
-      hint: `Delete it, restore the generated files that carry this machine's models (git checkout -- <path>), and run update.`,
+      hint: `Delete it, restore the generated files that carry this machine's models and routes (git checkout -- <path>), and run update.`,
     });
   }
 }

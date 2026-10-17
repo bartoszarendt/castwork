@@ -5,7 +5,7 @@ work. It provides Markdown task records carrying work, candidates,
 evidence, and assessments, four role presets, reusable skills, thin host
 adapters, and a few pure checks. Agents choose the workflow. Hosts execute it.
 
-**Status:** version 0.9.11 is current.
+**Status:** version 0.9.12 is current.
 
 ## Layout
 
@@ -52,8 +52,8 @@ authoritative copy for one host.
   choices. `project.md` is prose; `.castwork/local/` is machine-local state.
   The one exception is `.castwork/local/castwork.json`, gitignored with that
   state, which chooses one machine's models and reasoning, the model-choice
-  keys of `role_settings` and of levels `castwork.json` declares, and nothing
-  else. It is the user's: `update` and `remove` never write or delete it. It
+  keys of `role_settings` and of levels `castwork.json` declares, and its
+  `role_routes` among the hosts `castwork.json` lists, and nothing else. It is the user's: `update` and `remove` never write or delete it. It
   never changes the tracked manifest, and its output is never committed.
 - **Four roles, and they do not vary by project.** A specialist is an `actor`
   under a canonical role, carrying a skill, chosen by prose policy. Do not add a

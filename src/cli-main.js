@@ -242,7 +242,7 @@ function printLocal(result) {
     }
   }
   if (result.local.length > 0) {
-    out(`${result.local.length} generated file(s) carry this machine's models from ${LOCAL_CONFIG_FILE}:`);
+    out(`${result.local.length} generated file(s) carry this machine's models and routes from ${LOCAL_CONFIG_FILE}:`);
     for (const relative of result.local) {
       out(`  local   ${relative}${result.local_visible.includes(relative) ? ' (not ignored by Git: leave it out of commits)' : ''}`);
     }
@@ -259,20 +259,20 @@ function printLocal(result) {
 const SHARED = [
   `The generated files now hold the project's output alone, without ${LOCAL_CONFIG_FILE}.`,
   'Commit the generated files and the manifest that git status lists, with whatever changed',
-  "them, then run update to put this machine's models back and start a new host session.",
+  "them, then run update to put this machine's models and routes back and start a new host session.",
 ].join('\n');
 
 /** Said when update wrote nothing but the last commit is behind what an earlier update wrote. */
 const BEHIND_COMMIT = `Nothing to write, but the last commit is behind the generated files and ${GENERATED_MANIFEST}: commit what git status lists for them, apart from task work.`;
 
 /** Said after advice to commit while files Git shows carry this machine's models. */
-const LEAVE_LOCAL = `Leave out of that commit the files marked above as carrying this machine's models from ${LOCAL_CONFIG_FILE}.`;
+const LEAVE_LOCAL = `Leave out of that commit the files marked above as carrying this machine's models and routes from ${LOCAL_CONFIG_FILE}.`;
 
 /** Said instead of advice to commit while the project's output changed under this machine's models. */
 const CONFLICT_FIRST = 'Commit nothing yet: run update --shared first, as above.';
 
-/** Said after an update that changed only this machine's models, which are never committed. */
-const LOCAL_ONLY = "Only this machine's models changed, so there is nothing to commit. Start a new host session to use them.";
+/** Said after an update that changed only this machine's models or routes, which are never committed. */
+const LOCAL_ONLY = "Only this machine's models and routes changed, so there is nothing to commit. Start a new host session to use them.";
 
 /** Said after every update that changed something, because nothing else will. */
 const HANDOFF = [
@@ -387,7 +387,7 @@ export function run(argv, options = {}) {
       out(`hosts: ${report.hosts.length > 0 ? report.hosts.join(', ') : 'none configured'}`);
       out(`generated files: ${report.generated_files}${report.generated ? ` (${report.generated}; toolkit ${report.toolkit_version})` : ''}`);
       if (report.local_models.length > 0) {
-        out(`local models: ${report.local_models.length} generated file(s) carry ${LOCAL_CONFIG_FILE}`);
+        out(`local models and routes: ${report.local_models.length} generated file(s) carry ${LOCAL_CONFIG_FILE}`);
         for (const relative of report.local_models) {
           out(`  ${relative}${report.local_visible.includes(relative) ? ' (not ignored by Git: leave it out of commits)' : ''}`);
         }

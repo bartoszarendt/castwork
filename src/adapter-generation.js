@@ -735,7 +735,7 @@ function renderCoordinatorRoutes(routes, adapter) {
   return [
     '## Role routes',
     '',
-    'This repository routes these roles from this host to another. Before',
+    'These roles are routed from this host to another. Before',
     `starting one, read the \`## Role routes\` section of \`${entryPath(adapter)}\`:`,
     'how to start it there, and what to do when that host cannot run it.',
     '',

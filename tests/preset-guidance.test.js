@@ -373,7 +373,8 @@ for (const host of HOSTS) {
       'The coordinator role says how to delegate, when to take a role yourself, and who answers which question; this command says how to orient, continue, pause, and route a role to another host.',
       'Date it from the clock',
       'Check what it says about a candidate against `task lint` before you write it.',
-      'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes`, `role_settings` and `role_levels`.',
+      'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes`, `role_settings` and `role_levels`, and `.castwork/local/castwork.json` sets one person\'s own. Say so, and offer to move it to the one that fits.',
+      'The route is the project\'s, or this machine\'s, standing request for that separate process; it authorizes nothing else.',
     ], 'entry');
   });
 

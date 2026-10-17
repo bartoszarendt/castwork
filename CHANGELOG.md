@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.12
 
 - The thinker also reviews completed work, such as a finished phase or an
   abandoned attempt. It starts from `report`, the records, their findings and
@@ -46,6 +46,21 @@
   call, recorded citing theirs, in the task when it settles only that task and
   otherwise in a decision record. One that weakens the commitment still goes to the user. Before, a check or proof named
   in an approved decision could only be changed by asking the user again.
+- `.castwork/local/castwork.json` can also hold `role_routes`, so one machine
+  can run the thinker, worker, or verifier in another host's CLI, such as
+  `"role_routes": { "thinker": "claude" }`, without changing `castwork.json`.
+  A local route replaces the project's route for that role, and `null` drops
+  it. The project need not route anything first, but the route's host must be
+  one `castwork.json` lists in `hosts`; another is refused, since a host is
+  generated files every clone carries, and `setup --host` adds it to the
+  project. A local route changes only the routing
+  host's entry command and coordinator, adds no file, and is handled like a
+  local model: `update`, then a new host session, with nothing to commit, and
+  `update --shared` leaves it out. Messages about the local file now say
+  "this machine's models and routes".
+- When a working-policy line names a host or model for a role, the
+  coordinator offers to move it to `castwork.json` or, for one person's own
+  preference, to `.castwork/local/castwork.json`.
 
 ## 0.9.11
 
