@@ -257,10 +257,12 @@ or install one. Follow its procedure for checking the CLI is ready, running,
 monitoring, and reviewing the result. Give the delegate the task id and the
 listed role file to read first, start the role by name where that CLI can, pass
 the listed settings through the CLI's own model, reasoning, or variant options, and allow
-writes only where the role writes: the worker within the task's scope and in its
-task record; the thinker in task records and the decisions it is asked to
-record; the verifier in its task record and any findings file its assessment
-references. The route is the project's, or this machine's, standing request
+writes only where the role writes: the worker within the task's scope, in its
+task record and its findings files, and its run output in
+`.castwork/local/runs/`; the thinker in task records, the decisions it is asked
+to record, and a review it is asked for in `.castwork/reviews/`; the verifier in
+its task record, any findings file its assessment references, and its run
+output. The route is the project's, or this machine's, standing request
 for that separate process; it authorizes nothing else.
 
 - **Say it first.** Before the capability runs, tell the user in a line which

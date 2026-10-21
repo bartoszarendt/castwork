@@ -233,3 +233,37 @@ test('r4-1: a plain object literal passed by an external consumer still works', 
   assert.equal(availability(partial, 'aaa'), 'unavailable');
   assert.equal(availability(partial, 'logs/known.txt'), 'not_checked');
 });
+
+test('a linked file Git ignores is marked ignored; a tracked one and a missing one are not', (t) => {
+  const root = repository(t, 'ignored');
+  const git = (/** @type {string[]} */ args) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args], { stdio: ['ignore', 'ignore', 'ignore'] });
+  fs.writeFileSync(path.join(root, '.gitignore'), '*.log\n', 'utf8');
+  fs.mkdirSync(path.join(root, '.castwork', 'findings'), { recursive: true });
+  for (const name of ['T-001-run.log', 'T-001-kept.log', 'T-001-review.md']) fs.writeFileSync(path.join(root, '.castwork', 'findings', name), 'x\n', 'utf8');
+  git(['add', '-f', '.castwork/findings/T-001-kept.log']);
+  git(['commit', '--quiet', '-m', 'keep']);
+  const parsed = record([
+    'candidates:\n  - ref: aaa\nevidence:\n',
+    '  - { check: test, candidate: aaa, result: fail, output: .castwork/findings/T-001-run.log }\n',
+    '  - { check: test, candidate: aaa, result: fail, output: .castwork/findings/T-001-kept.log }\n',
+    '  - { check: test, candidate: aaa, result: fail, output: .castwork/findings/T-001-gone.log }\n',
+    'assessments:\n  - { candidate: aaa, role: verifier, actor: v@codex, verdict: needs_revision, findings: .castwork/findings/T-001-review.md }\n',
+  ].join(''));
+  const results = referenceAvailability(parsed, observe(parsed, root));
+  const ignored = (/** @type {string} */ ref) => results.find((result) => result.ref === ref)?.ignored === true;
+  assert.equal(ignored('.castwork/findings/T-001-run.log'), true);
+  assert.equal(ignored('.castwork/findings/T-001-kept.log'), false, 'a tracked file is in every clone, whatever the rules say');
+  assert.equal(ignored('.castwork/findings/T-001-review.md'), false);
+  assert.equal(availability(results, '.castwork/findings/T-001-gone.log'), 'unavailable');
+  assert.equal(ignored('.castwork/findings/T-001-gone.log'), false, 'a missing file is unavailable, not ignored');
+});
+
+test('outside a repository no linked file is asked about', (t) => {
+  const root = tmp(t, 'ignored-norepo');
+  fs.mkdirSync(path.join(root, 'logs'));
+  fs.writeFileSync(path.join(root, 'logs', 'known.txt'), 'x\n', 'utf8');
+  const parsed = record(LINKED);
+  const observations = observe(parsed, root);
+  assert.deepEqual(Object.keys(observations.ignored ?? {}), []);
+  assert.equal(referenceAvailability(parsed, observations).find((result) => result.ref === 'logs/known.txt')?.ignored, undefined);
+});

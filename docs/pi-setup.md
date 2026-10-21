@@ -146,7 +146,7 @@ ignores the extra inheritance keys. Neither extension is shipped by Castwork.
 The presets require one level of delegation; do not rely on an extension to
 prevent deeper nesting for you.
 
-Three behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
+Four behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
 
 - It finds agents from the working directory a run starts in. A role started
   in another checkout, such as a sibling repository the task edits, finds no
@@ -156,9 +156,16 @@ Three behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
   `subagent({ action: "resume", id, message })`, with the id of the run that
   started it. A `task` argument cannot be combined with an action, so a
   rejected call of that shape says nothing about whether resuming works.
-- A run stops after 30 minutes unless the call raises `options.timeoutMs`. A
-  check that may take longer runs detached and writes its output and exit
-  status to files, so the result outlives the run that started it.
+- A run stops after 30 minutes unless the call raises `options.timeoutMs`.
+  Size each run from how long its checks took before, and raise the limit for
+  one that needs longer. A check that may still outlast it runs detached and
+  writes its output and exit status under `.castwork/local/runs/<task>/`, so
+  the result outlives the run that started it; nothing wakes the coordinator
+  when it ends, so a role, not the coordinator, waits on it.
+- An `output` path on the call appends an instruction to write the reply to
+  exactly that path and to ignore every other output path in the task. A role
+  that writes its task record, a findings file or a review gets no `output`;
+  use one only for a read-only reply the coordinator collects.
 
 Without an extension or another delegation capability that can start an agent,
 the coordinator may take the needed role itself: announce the change, read and

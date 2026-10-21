@@ -15,7 +15,7 @@ import { err, heading, json, out, table } from './cli-io.js';
 import { toolkitRoot } from './adapter-generation.js';
 import { recordDirectory, recordFiles } from './generated.js';
 import { PROJECT_FILE, TASKS_DIRECTORY } from './layout.js';
-import { observationContext, observe, prefetchObjects } from './observations.js';
+import { observationContext, observe, prefetchLinks, prefetchObjects } from './observations.js';
 import { declaredRequirements, parseRecord, RECORD_YAML, recordEntries, recordValueText, STATUS_VALUES } from './record.js';
 import { formatScalar, parseYaml } from './yaml.js';
 import { PublicError } from './public-error.js';
@@ -173,8 +173,9 @@ function lintNotes(record, notes) {
     const name = entry.check == null ? '' : recordValueText(entry.check);
     if (name && !declared.includes(name)) groups.set(name, [...(groups.get(name) ?? []), index]);
   });
+  const perEntry = ['evidence.lint_as_evidence', 'evidence.script_outside_snapshot'];
   const rendered = notes.filter(note => note.code !== 'evidence.undeclared_check' &&
-    (note.code !== 'evidence.lint_as_evidence' || onCurrent(evidence[note.logical_index ?? note.index ?? -1])));
+    (!perEntry.includes(note.code) || onCurrent(evidence[note.logical_index ?? note.index ?? -1])));
   let earlierNames = 0, earlierEntries = 0;
   for (const [name, indexes] of groups) {
     const currentIndexes = indexes.filter(index => onCurrent(evidence[index]));
@@ -189,6 +190,8 @@ function lintNotes(record, notes) {
   if (earlierNames) rendered.push({code: 'evidence.undeclared_check', message: `${earlierNames} undeclared check names, ${earlierEntries} entries on earlier candidates; --json lists them`});
   const earlierLint = notes.filter(note => note.code === 'evidence.lint_as_evidence' && !onCurrent(evidence[note.logical_index ?? note.index ?? -1])).length;
   if (earlierLint) rendered.push({code: 'evidence.lint_as_evidence', message: `${earlierLint} entries on earlier candidates record task lint; --json lists them`});
+  const earlierScripts = notes.filter(note => note.code === 'evidence.script_outside_snapshot' && !onCurrent(evidence[note.logical_index ?? note.index ?? -1])).length;
+  if (earlierScripts) rendered.push({code: 'evidence.script_outside_snapshot', message: `${earlierScripts} entries on earlier candidates name a script in a folder snapshots leave out; --json lists them`});
   return rendered;
 }
 
@@ -213,6 +216,7 @@ function printReport(report, lintRecord) {
   }
   for (const reference of [...candidates.slice(-1), ...report.references.filter((entry) => entry.kind !== 'candidate')]) {
     out(`${reference.available.padEnd(12)} ${reference.kind}  ${reference.ref}${reference.kind === 'candidate' ? '  (current)' : ''}`);
+    if (reference.ignored) out('             ignored by Git: only this machine has it, so the record must say what it shows');
     if (reference.same_tree_as) out(`             commit ${reference.ref} has the same tree as snapshot ${reference.same_tree_as}`);
     if (reference.drift === 'matches') out('             working tree matches the snapshot');
     if (reference.drift === 'differs') {
@@ -254,6 +258,7 @@ export function taskLint(root, id, options = {}) {
   // candidate of every record.
   const context = observationContext(root);
   prefetchObjects(context, targets.map((entry) => entry.record));
+  prefetchLinks(context, targets.map((entry) => entry.record));
 
   const reports = [];
   let failed = problems.length > 0;

@@ -211,13 +211,32 @@ test('the current candidate named by something that can move is noted; an object
   assert.equal(codes(parse('status: in_review\n'), 'candidate.moving_ref').length, 0);
 });
 
+test('a command naming a script in a folder snapshots leave out is noted by where the script is', () => {
+  const entry = (/** @type {string} */ command) => parse(`status: in_review\ncandidates:\n  - ref: aaa\nevidence:\n  - { check: build, candidate: aaa, result: pass, command: '${command}' }\n`);
+  for (const [command, script] of [
+    ['pwsh -NoProfile -File .castwork/findings/P05-06-r6-build.ps1', '.castwork/findings/P05-06-r6-build.ps1'],
+    ['python .castwork\\local\\runs\\T-001\\probe.py --strict', '.castwork\\local\\runs\\T-001\\probe.py'],
+    ['bash -c "./.castwork/reviews/T-001-check.sh"', '.castwork/reviews/T-001-check.sh'],
+    ['node .castwork/tasks/helper.mjs', '.castwork/tasks/helper.mjs'],
+  ]) {
+    const [note] = codes(entry(command), 'evidence.script_outside_snapshot');
+    assert.ok(note, command);
+    assert.equal(note.message, `evidence[0].command names ${script}, in a folder snapshots leave out; a script a check runs belongs in the candidate`);
+  }
+  // A snapshot carries every other folder under .castwork/, and a name that is
+  // not a script's says nothing about one.
+  for (const command of ['node .castwork/checks/check.mjs', 'npm test 2>&1 | tee .castwork/local/runs/T-001/test.log', 'npx --no castwork report T-001', 'python scripts/check.py', 'cat .castwork/findings/T-001-review.md']) {
+    assert.equal(codes(entry(command), 'evidence.script_outside_snapshot').length, 0, command);
+  }
+});
+
 test('a record above 100 KB is noted as large', () => {
   const small = parse('status: draft\n', 'x\n');
   assert.equal(codes(small, 'record.large').length, 0);
   const large = parse('status: draft\n', `${'log line\n'.repeat(Math.ceil(LARGE_RECORD_BYTES / 9) + 10)}`);
   const [note] = codes(large, 'record.large');
   assert.ok(note);
-  assert.match(note.message, /move run logs to linked files/);
+  assert.match(note.message, /keep run output out of it, in \.castwork\/local\/runs\//);
   assert.deepEqual(large.errors, [], 'informational only');
 });
 

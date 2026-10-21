@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.9.12 is current.
+> **Status:** 0.9.13 is current.
 
 ## What you are adopting
 
@@ -148,7 +148,7 @@ npx castwork remove
 ```
 
 Deletes the generated files it still owns and leaves `project.md`, `tasks/`,
-`decisions/`, and `findings/` in place. Your records are ordinary Markdown and remain readable
+`decisions/`, `findings/`, and `reviews/` in place. Your records are ordinary Markdown and remain readable
 without the toolkit installed — that is the point of the format.
 
 ## What you should not expect

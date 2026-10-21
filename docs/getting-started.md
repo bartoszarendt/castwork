@@ -24,6 +24,7 @@ guessing if you name none and none are recorded. It writes:
   tasks/
   decisions/
   findings/
+  reviews/
   generated.json    tracked ownership manifest
   local/            gitignored
 castwork.json    project configuration: hosts, per-host role settings,

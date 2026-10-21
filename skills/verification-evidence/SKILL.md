@@ -108,14 +108,17 @@ root. A path that climbs out of the checkout with `..` is ignored rather than
 reported.
 
 Do not retain routine successful output. The entry's command, exit code and a
-short observed result are normally enough. When long output materially supports
-a failure, reproduction, or review finding, put it in a linked file named under
-`output` rather than pasting a transcript into the record. Link only where it
-lasts, not ignored scratch or `.castwork/tasks/`: write it in
-`.castwork/findings/`, named after the task, such as `T-012-test.log`. Snapshots
-leave that folder out, so writing there never changes a candidate. A script a
-declared check runs is part of the candidate, never there: a reviewer
-extracting the candidate must have it.
+short observed result are normally enough. What a run produces, such as logs,
+exit and pid files, dumps, captures, and the scripts of one-off probes, goes in
+`.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; the
+entry says what the run showed, so it reads without the file. When long output
+materially supports a failure, reproduction, or review finding, put it in a
+linked file named under `output` rather than pasting a transcript into the
+record. Link only where it lasts, not ignored scratch or `.castwork/tasks/`:
+write it in `.castwork/findings/`, named after the task, such as
+`T-012-test.log`. Snapshots leave that folder out, so writing there never
+changes a candidate. A script a declared check runs is part of the candidate,
+never there: a reviewer extracting the candidate must have it.
 
 A routine successful probe is a sentence in the body, or nothing. An observation
 supporting acceptance or a finding stays a candidate-bound evidence entry, under

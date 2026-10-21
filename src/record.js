@@ -5,6 +5,7 @@
  * `checks.js` reports what that means. Neither performs I/O.
  */
 
+import { SNAPSHOT_EXCLUDES } from './layout.js';
 import { parseYaml, YamlError } from './yaml.js';
 
 /** Recognized status values. Progress, not a transition graph. */
@@ -202,8 +203,18 @@ function validateEntries(errors, frontmatter, field, required, enums) {
   return entries;
 }
 
-/** Above this, a record is reported as large: logs belong in linked files. */
+/** Above this, a record is reported as large: run output belongs outside it. */
 export const LARGE_RECORD_BYTES = 100 * 1024;
+
+/**
+ * A script file in a folder snapshots leave out, as a command names it. A name
+ * is all this sees: whether the command runs the script, and whether a commit
+ * candidate holds it, are not established by it.
+ */
+const EXCLUDED_SCRIPT = new RegExp(
+  `(?:${SNAPSHOT_EXCLUDES.map((directory) => directory.replace(/[.]/g, '\\.').replace('/', '[\\\\/]')).join('|')})[\\\\/][^\\s"'|;&<>]*\\.(?:ps1|py|sh|bash|js|mjs|cjs|ts|rb|pl|php|bat|cmd)(?![\\w.])`,
+  'i',
+);
 
 /**
  * A reference that names one object and cannot move: a hex object id of 7 to
@@ -347,6 +358,17 @@ function entryNotes(frontmatter, evidence) {
       notes.push({
         code: 'evidence.credential_like',
         message: `evidence[${index}].command looks like it carries a credential; record the variable's name, never its value`,
+        ...where,
+      });
+    }
+    // A script in a folder snapshots leave out is not in a snapshot the
+    // evidence binds to. The note says where the script is, not that the
+    // command ran it.
+    const script = EXCLUDED_SCRIPT.exec(command)?.[0];
+    if (script !== undefined) {
+      notes.push({
+        code: 'evidence.script_outside_snapshot',
+        message: `evidence[${index}].command names ${script}, in a folder snapshots leave out; a script a check runs belongs in the candidate`,
         ...where,
       });
     }
@@ -596,7 +618,7 @@ export function parseRecord(text, options = {}) {
   }
   const size = new TextEncoder().encode(text).length;
   if (size > LARGE_RECORD_BYTES) {
-    info.push({ code: 'record.large', message: `the record is ${Math.round(size / 1024)} KB; move run logs to linked files` });
+    info.push({ code: 'record.large', message: `the record is ${Math.round(size / 1024)} KB; keep run output out of it, in .castwork/local/runs/` });
   }
 
   const headings = collectHeadings(body);

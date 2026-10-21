@@ -31,12 +31,23 @@ export const TASKS_DIRECTORY = `${STATE_DIRECTORY}/tasks`;
 /** An archive pairs with the same basename's task; never a task itself. */
 export const ARCHIVE_SUFFIX = '.archive.md';
 export const DECISIONS_DIRECTORY = `${STATE_DIRECTORY}/decisions`;
-/** What is written about the work and linked from records: never parsed, never the work itself. */
+/** Notes about the work and the files records link: never parsed, never the work itself. */
 export const FINDINGS_DIRECTORY = `${STATE_DIRECTORY}/findings`;
+/** Reviews of how work went, read when later work is planned: never parsed. */
+export const REVIEWS_DIRECTORY = `${STATE_DIRECTORY}/reviews`;
+/** What runs produce and no record needs to keep: machine-local, with the rest of `local/`. */
+export const RUNS_DIRECTORY = `${LOCAL_DIRECTORY}/runs`;
 export const PROJECT_FILE = `${STATE_DIRECTORY}/project.md`;
 
 /** Never deleted by `remove`. */
-export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY]);
+export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY]);
+
+/**
+ * Paths a snapshot leaves out: the records that describe it, the findings
+ * they link to, which a verifier writes after the candidate exists, reviews of
+ * how the work went, and machine-local state, run output included.
+ */
+export const SNAPSHOT_EXCLUDES = Object.freeze([TASKS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY, LOCAL_DIRECTORY]);
 
 /**
  * Supported host ids.

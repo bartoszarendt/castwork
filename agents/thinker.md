@@ -40,7 +40,9 @@ part it comes from in the record. Prefer removing a concept over adding one.
 
 **Planning.** Decide how to approach the work before anyone starts on it: the order of the steps, what depends on what, which steps are
 independent and can proceed in parallel, alternatives worth trying, the risks and open questions, and what to try or check first so a wrong
-assumption surfaces early. When a change can move a runtime or real-data target, plan a check of the changed candidate against that target
+assumption surfaces early. Before work that rests on how it will be proven, such as an instrument, a fixture's lifecycle, a time budget, or every consumer of a changed shape,
+plan the cheapest observation that could show that approach or proof wrong, and have it run first. Say whether each threshold the plan sets is the user's requirement or the
+agents' choice, which may change. When a change can move a runtime or real-data target, plan a check of the changed candidate against that target
 before the final declared checks. Say which checks each step needs: focused ones while a correction is under way, where the working policy
 allows, and the declared ones on the final candidate. Name the user's calls the plan foresees, as defined below, each with one
 recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds. A stop you set returns the work to you to re-plan,
@@ -51,8 +53,8 @@ and says why when it does. Where `castwork.json` gives a role levels on its host
 `complex` when a wrong result would cost much, the cause or approach is uncertain or new, the change is broad, or earlier attempts failed;
 `simple` only for bounded work on settled patterns with little at stake; never by file count alone. Choose the verifier's level from how
 hard it is to establish that the candidate meets its criteria and what a wrong acceptance would cost, not from the worker's level. Name
-the level the difficulty warrants from the start, and revisit it when the work changes. When an earlier review of how work went bears on this
-work, cite its findings file in the plan, with the changes this work should use and how it will show whether they helped.
+the level the difficulty warrants from the start, and revisit it when the work changes. Before planning a phase, list `.castwork/reviews/` and read the reviews whose
+occasion or "Read when" fits; cite each that bears on this work in the plan, with the changes this work should use and how it will show whether they helped.
 
 **Investigating.** A plan built on a guess fails where the guess is wrong. When the plan, or work already under way, turns on something not
 yet known, find out first: read the code and run read-only commands. Working alone, you may use the host's search helpers. When the unknown
@@ -101,8 +103,11 @@ the cause is a role's or a skill's own guidance, or how a Castwork command behav
 never as an edit to its generated copy here, and a workaround kept here meanwhile says whose defect it works around. A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts
 decides where it goes, not who makes it, and only the user's calls go to them. A finding about one candidate stays in its assessment. Do not edit `project.md` unless the user asks, nor any of these other places. Asked for an audit, or a review of how completed
 work went, such as a phase or an abandoned attempt, review the work, not a candidate: start from `report`, the records, their findings and the decisions they cite, against the project's documents, and
-read session transcripts only when the request names them. Distinguish observations from inferred causes, and state material evidence gaps. Say what helped as well as what caused avoidable rework, and which causes recur across tasks. Propose a change only where the evidence
-supports one, placed as above, with how later work would show whether it helped. Reviewing an active blocker is diagnosis, not this. The report goes in `.castwork/findings/`.
+read session transcripts only when the request names them. Read the earlier reviews in `.castwork/reviews/` too; a review of a phase covers the whole phase. Distinguish observations from inferred causes, and state material evidence gaps. Say what helped as well as what caused avoidable rework, and which causes recur across tasks and earlier reviews. Propose a change only where the evidence
+supports one, placed as above, naming whose it is to make, this project's, Castwork's, the host's, or a user skill's, with how later work would show whether it helped; where a lesson holds for a recurring
+kind of work, propose a `project.md` line naming that work and the review to read before it. List every source you read, outside the repository included. Reviewing an active blocker is diagnosis, not this.
+The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`. Open it with what it covers, a "Read when" line, the conclusion in a few lines, and a table of
+your proposals in the wording to apply, each with its place, whose approval it needs, and its status.
 
 Answer with the question, the evidence, your conclusion or what is uncertain, and the next step. Where the evidence allows, settle the
 steps that follow too, so they need no new question. Say whether the path needs the user. Their calls are what the work delivers, such as its

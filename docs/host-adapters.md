@@ -141,7 +141,7 @@ That manifest is tracked alongside the files it describes.
   nothing is written, and your file is preserved. A file that already holds
   exactly what would be generated is adopted instead.
 - `remove` deletes only manifest entries whose digest still matches, and never
-  touches `project.md`, `tasks/`, `decisions/`, or `findings/`.
+  touches `project.md`, `tasks/`, `decisions/`, `findings/`, or `reviews/`.
 
 This is the whole ownership model. There is no certificate, no layout version
 negotiation, and no repair path.

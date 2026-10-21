@@ -68,8 +68,10 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   (records are repository files, which its own checks read); a subset of a check under its own name,
   never the declared check's. A failed check is a `fail`: information, not something to tidy away.
   A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound evidence, under its own name when undeclared.
-  Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: write them in
-  `.castwork/findings/`, named after the task, such as `T-012-run.log`; snapshots leave that folder out.
+  What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in
+  `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.
+  Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: where a failure, an acceptance or a reproduction
+  rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; snapshots leave that folder out.
   A file the task delivers, or a script a declared check runs, is part of the candidate: never there.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as

@@ -265,6 +265,60 @@ test('doctor warns when a written project.md has grown past what every role shou
   assert.equal(doctor(root).ok, true, 'a warning, not an error');
 });
 
+test('doctor warns when Git ignores files in findings or reviews, and when findings grow past what records link', (t) => {
+  const root = fixture(t);
+  spawnSync('git', ['-C', root, 'init', '--quiet']);
+  setup(root, { hosts: ['codex'] });
+  const about = (/** @type {string} */ directory) => doctor(root).findings.filter((finding) => finding.message.includes(`${directory}/`));
+  const findings = path.join(root, '.castwork', 'findings');
+  const reviews = path.join(root, '.castwork', 'reviews');
+  assert.ok(fs.existsSync(reviews), 'setup creates reviews/');
+  fs.writeFileSync(path.join(findings, 'T-001-review.md'), '# Review\n', 'utf8');
+  fs.writeFileSync(path.join(findings, 'T-001-run.log'), 'x\n', 'utf8');
+  fs.writeFileSync(path.join(reviews, '2026-10-20-phase-1.md'), '# Phase 1 review\n', 'utf8');
+  assert.deepEqual([...about('.castwork/findings'), ...about('.castwork/reviews')], [], 'nothing ignored, nothing large');
+
+  fs.appendFileSync(path.join(root, '.gitignore'), '*.log\n.castwork/reviews/\n');
+  const [ignoredFinding] = about('.castwork/findings');
+  assert.equal(ignoredFinding.level, 'warn');
+  assert.equal(ignoredFinding.message, '1 of 2 file(s) in .castwork/findings/ are ignored by Git, so a record linking one breaks in every other clone');
+  assert.match(ignoredFinding.next, /\.castwork\/local\/runs\//);
+  const [ignoredReview] = about('.castwork/reviews');
+  assert.equal(ignoredReview.message, '1 of 1 file(s) in .castwork/reviews/ are ignored by Git');
+  assert.match(ignoredReview.next, /remove the rule that ignores them/);
+  assert.equal(doctor(root).ok, true, 'warnings, not errors');
+
+  fs.writeFileSync(path.join(root, '.gitignore'), '', 'utf8');
+  fs.mkdirSync(path.join(findings, 'T-002-batch'));
+  fs.truncateSync(path.join(findings, 'T-001-run.log'), 15 * 1024 * 1024);
+  fs.writeFileSync(path.join(findings, 'T-002-batch', 'capture.bin'), '', 'utf8');
+  fs.truncateSync(path.join(findings, 'T-002-batch', 'capture.bin'), 6 * 1024 * 1024);
+  const [large] = about('.castwork/findings');
+  assert.equal(large.message, '.castwork/findings/ holds 3 files, 21 MB');
+  assert.match(large.next, /Run output no record needs goes in \.castwork\/local\/runs\//);
+});
+
+for (const type of ['junction', 'dir']) {
+  test(`doctor does not follow findings/ when it is a ${type} to an outside directory`, (t) => {
+    const root = fixture(t);
+    const outside = fixture(t);
+    setup(root, { hosts: ['codex'] });
+    fs.writeFileSync(path.join(outside, 'elsewhere.log'), 'x\n', 'utf8');
+    const findings = path.join(root, '.castwork', 'findings');
+    fs.rmSync(findings, { recursive: true, force: true });
+    try {
+      fs.symlinkSync(outside, findings, type);
+    } catch (error) {
+      t.skip(`symlink creation unavailable: ${/** @type {{code?: string}} */ (error).code}`);
+      return;
+    }
+    const about = doctor(root).findings.filter((finding) => finding.message.includes('.castwork/findings/'));
+    assert.equal(about.length, 1);
+    assert.match(about[0].message, /^\.castwork\/findings\/ was not checked: .*symbolic link/);
+    assert.doesNotMatch(JSON.stringify(about), /elsewhere/);
+  });
+}
+
 test('doctor warns about a project.md that is missing, empty, or only partly written', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['codex'] });

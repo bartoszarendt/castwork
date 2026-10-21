@@ -37,7 +37,8 @@ be invoked alone on any candidate at any time.
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
-  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Link only durable support, not ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`.
+  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Record it once the checks it rests on have finished;
+  a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Link only durable support, not ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`, copying a run's output there only where a finding rests on it.
   When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working alone, maintain that section in place, about fifteen lines.
 
 ```yaml
@@ -62,7 +63,8 @@ Record `model` only when the host reports it; otherwise leave it out. Record `le
 
 - **Read-only on the result.** You change nothing in the result and fix
   nothing. You write only in the task record (your assessment and the evidence
-  of your own check runs) and any findings file it links. If you find a
+  of your own check runs), any findings file it links, and your runs' output
+  in `.castwork/local/runs/`. If you find a
   defect, describe it precisely enough to act on and stop there.
 - **Never write `candidates`.** If no candidate is recorded, say so and stop.
 - **Assess the exact candidate.** It resolves when it is a commit, or a

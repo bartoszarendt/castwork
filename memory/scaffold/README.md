@@ -8,14 +8,17 @@ and never overwrites what is in it.
   project.md       prose: what this project is, its working policy, setup facts
   tasks/           one Markdown record per task, e.g. tasks/T-001.md
   decisions/       one Markdown file per durable decision
-  findings/        what is written about the work: findings, notes, logs
+  findings/        notes about the work and the files records link
+  reviews/         reviews of how work went, read when later work is planned
   generated.json   tracked ownership manifest for generated files
   local/           gitignored machine-specific state: setup.md for facts
-                   about this machine, a pause handoff
+                   about this machine, a pause handoff, runs/ for what runs
+                   produce
 ```
 
 Nothing else is written here. Every Markdown file under `tasks/` is read as a
-task record, so supporting files, such as findings or logs, go in `findings/`.
+task record, so supporting files go in `findings/`, and what runs produce, such
+as logs and dumps, in `local/runs/`.
 
 The toolkit's own sources (roles, skills, the entry command) are not copied
 into your repository. `setup` projects them into each selected host's own

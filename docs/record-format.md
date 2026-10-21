@@ -13,11 +13,13 @@ YAML frontmatter; the body is prose.
   project.md        prose: setup facts, working policy, pointers
   tasks/            one Markdown record per task
   decisions/        one Markdown file per durable decision
-  findings/         what is written about the work and linked from records:
-                    review notes, findings, run logs, reports of how it went
+  findings/         notes about the work and the files records link: review
+                    notes, syntheses, the output a finding rests on
+  reviews/          reviews of how work went, read when later work is planned
   generated.json    tracked ownership manifest for generated files
   local/            gitignored machine-specific state: setup.md for facts
-                    about this machine, a pause handoff
+                    about this machine, a pause handoff, runs/ for what runs
+                    produce
 castwork.json    project configuration: hosts, per-host role settings,
                     role routes
 ```
@@ -26,11 +28,20 @@ A task can also have `<record>.archive.md` beside it in `tasks/`, carrying its
 earlier rounds as part of the same logical record. Project configuration lives
 in `castwork.json`, with one machine's models, reasoning, and role routes in the gitignored
 `.castwork/local/castwork.json`; `project.md` owns prose only. Every
-Markdown file in `tasks/` is read as a task record, so supporting files, such
-as findings or logs, go in `findings/`, named after the task they belong to,
-such as `T-012-review.md`. Nothing parses `findings/`, and a snapshot leaves it
-out as it leaves out `tasks/`, so a verifier writing there after the candidate
-exists does not change it.
+Markdown file in `tasks/` is read as a task record, so supporting files go in
+`findings/`, named after the task they belong to, such as `T-012-review.md`.
+Nothing parses `findings/`, and a snapshot leaves it out as it leaves out
+`tasks/`, so a verifier writing there after the candidate exists does not
+change it.
+
+`findings/` is tracked, and what is in it is read in every clone, so it holds
+notes and the files a record links because a failure, an acceptance or a
+reproduction rests on them. Everything else a run produces, such as logs,
+exit and pid files, dumps, captures, and the scripts of one-off probes, goes
+in `local/runs/<task>/`, which Git ignores and snapshots leave out. An entry
+says what the run showed, so it reads without the file; a file copied into
+`findings/` when it is linked lasts, and the rest stays on the machine that
+ran it.
 
 For the same reason, `findings/` holds what is written about the work, never
 the work. A file the task delivers, or a script a declared check runs, is part
@@ -56,13 +67,23 @@ requiring the check accepts, and those for places outside the project.
 | a fact about this machine, such as a local path, port, or wrapper | `.castwork/local/setup.md`, which stays on the machine; a handoff points to it |
 | a quirk of a host, model, or operating system beyond this project | the host's user-level instructions or a user skill; Castwork does not keep it |
 | a cause in a role's or a skill's own guidance, or in how a Castwork command behaves | the repository it comes from, never its generated copy; a workaround kept meanwhile says whose defect it is |
-| a supporting file a record links to, such as review notes, findings, a run log, or a report of how the work went | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |
+| a supporting file a record links to, such as review notes, a synthesis, or the run output a failure, an acceptance or a reproduction rests on | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |
+| what a run produces that no record links, such as logs, exit and pid files, dumps, captures, and one-off probe scripts | `.castwork/local/runs/<task>/`: ignored and outside snapshots; the entry says what the run showed |
+| a review of how work went, such as a retrospective or an audit | `.castwork/reviews/`, named for its date and occasion: tracked |
 | a file the task delivers, or a script a declared check runs | the candidate, where the project keeps such files; never `findings/`, which snapshots leave out |
 
-A review of how the work went, such as an audit or a retrospective, is a task
-whose result is findings: its report is a supporting file, and each change it
-proposes goes in the row above that fits. A report the user asked for as the
-deliverable itself is the work, and is part of the candidate.
+A review of how the work went, such as an audit or a retrospective, goes in
+`reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`,
+never among the files of one task: the thinker lists that folder before it
+plans a phase, and it stays small enough to read. A review opens with what it
+covers, a "Read when" line, its conclusion in a few lines, and a table of its
+proposals: each one's wording, its place, whose approval it needs, and its
+status, which the coordinator records once the user answers. Each change it
+proposes goes in the row above that fits; where a lesson holds for a recurring
+kind of work, a `## Working policy` line can name that work and the review to
+read before it. The coordinator links the review from the closing record, the
+decision that closed the work if one did, and the handoff. A report the user
+asked for as the deliverable itself is the work, and is part of the candidate.
 
 `project.md` is read by every role, so it stays short: `doctor` warns when it
 grows past 12 KB.
@@ -423,6 +444,8 @@ prose headings raise no diagnostic.
 **2. Reference availability.** For each candidate reference and linked file:
 `available`, `unavailable`, or `not_checked`. **Unavailable is not malformed** —
 the reference may resolve in another checkout. Nothing is fetched from a remote.
+A linked file that is here but ignored by Git is marked `ignored`: only this
+machine has it, so the record has to say what it shows.
 
 **3. Requirement evaluation.** For each declared requirement: `satisfied`,
 `not_satisfied`, or `unknown`, with a reason code and, for each supporting fact,
@@ -433,10 +456,12 @@ its trust.
 The CLI may gather local observations and pass them to the checks: whether a
 candidate reference resolves in the local repository (a commit, or the tree
 object a `tree:<sha>` snapshot names), whether the working tree still matches
-the current candidate when that is a snapshot, and whether a linked evidence or
-assessment file exists in the current checkout. Gathering writes nothing into
-`.git`: references are looked up with one read-only `git cat-file` per run, and
-the working tree is compared through a temporary index outside the repository.
+the current candidate when that is a snapshot, whether a linked evidence or
+assessment file exists in the current checkout, and whether Git ignores one
+that does. Gathering writes nothing into `.git`: references are looked up with
+one read-only `git cat-file` per run, linked files with one `git check-ignore`,
+and the working tree is compared through a temporary index outside the
+repository.
 Gathering is optional and local only, and never looks outside the checkout: a
 linked path whose real destination lies elsewhere is not looked at, and is
 reported `not_checked` rather than `unavailable`. The same holds for a
@@ -519,7 +544,8 @@ errors; the rest are informational and change no outcome.
 | `evidence.undeclared_check` | info | evidence is recorded under a `check` that is not among `requirements.checks`; one note per such name, with how many entries use it; text counts current entries for mixed names and summarizes names found only on earlier candidates; JSON retains all | use the declared name only for a run of the whole declared check; a subset, such as some of the tests, goes under its own name and does not satisfy the declared one |
 | `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint`; text summarizes earlier-candidate entries, JSON retains all | lint reports on the record, not the candidate; record the project's own checks instead |
 | `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
-| `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | `task archive <id> --check` shows what moving earlier candidates' entries would save; the body stays, so keep run logs in durable linked files and observations short |
+| `evidence.script_outside_snapshot` | info | an evidence entry's command names a script in a folder snapshots leave out (`tasks/`, `findings/`, `reviews/`, `local/` under `.castwork/`); the name alone shows neither that the command runs it nor whether a commit candidate holds it; text summarizes earlier-candidate entries, JSON retains all | if a check runs it, the script is part of the candidate: put it where the project keeps such files and record a new candidate |
+| `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | `task archive <id> --check` shows what moving earlier candidates' entries would save; the body stays, so keep run output in `.castwork/local/runs/` and observations short |
 | `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
 
 ## Archive

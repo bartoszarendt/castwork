@@ -90,14 +90,16 @@ test('a repository without a commit has no base, and every path differs', (t) =>
   assert.ok(!snapshot.paths.some((relative) => relative.startsWith('.castwork/tasks')));
 });
 
-test('findings written after a snapshot do not change it', (t) => {
+test('findings, reviews and run output written after a snapshot do not change it', (t) => {
   const root = repository(t);
   const before = takeSnapshot(root);
-  fs.mkdirSync(path.join(root, '.castwork', 'findings'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.castwork', 'findings', 'T-001-review.md'), '# Review\n\nA finding.\n', 'utf8');
+  for (const [directory, name] of [['findings', 'T-001-review.md'], ['reviews', '2026-10-20-phase-1.md'], ['local/runs/T-001', 'test.log']]) {
+    fs.mkdirSync(path.join(root, '.castwork', directory), { recursive: true });
+    fs.writeFileSync(path.join(root, '.castwork', directory, name), '# Written later\n', 'utf8');
+  }
   const after = takeSnapshot(root);
-  assert.equal(after.ref, before.ref, 'a verifier writing findings leaves the candidate as it was');
-  assert.ok(!after.paths.some((relative) => relative.startsWith('.castwork/findings')));
+  assert.equal(after.ref, before.ref, 'a verifier writing findings, or a thinker writing a review, leaves the candidate as it was');
+  assert.ok(!after.paths.some((relative) => /^\.castwork\/(findings|reviews|local)\//.test(relative)));
 });
 
 test('a tasks directory that is tracked and then ignored does not stop a snapshot or change it', (t) => {

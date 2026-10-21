@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { digest, readManifest } from '../src/generated.js';
-import { CONFIG_FILE, FINDINGS_DIRECTORY, GENERATED_MANIFEST, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
+import { CONFIG_FILE, FINDINGS_DIRECTORY, GENERATED_MANIFEST, PROJECT_FILE, REVIEWS_DIRECTORY, TASKS_DIRECTORY } from '../src/layout.js';
 import { doctor, remove, setup, update } from '../src/setup.js';
 import { validate } from '../src/validate.js';
 
@@ -93,6 +93,7 @@ test('setup creates the state directories and records what it generated', (t) =>
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
   assert.ok(fs.existsSync(path.join(root, TASKS_DIRECTORY)));
   assert.ok(fs.existsSync(path.join(root, FINDINGS_DIRECTORY)));
+  assert.ok(fs.existsSync(path.join(root, REVIEWS_DIRECTORY)));
   assert.ok(fs.existsSync(path.join(root, GENERATED_MANIFEST)));
   assert.ok(result.added.length > 0);
   const manifest = readManifest(root);
@@ -296,11 +297,13 @@ test('remove deletes generated files and never touches records', (t) => {
   fs.writeFileSync(path.join(root, TASKS_DIRECTORY, 'T-001.md'), '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\n---\n', 'utf8');
 
   fs.writeFileSync(path.join(root, FINDINGS_DIRECTORY, 'T-001-review.md'), '# Review\n', 'utf8');
+  fs.writeFileSync(path.join(root, REVIEWS_DIRECTORY, '2026-10-20-phase-1.md'), '# Phase 1 review\n', 'utf8');
 
   const result = remove(root);
   assert.ok(result.removed.length > 0);
   assert.ok(fs.existsSync(path.join(root, TASKS_DIRECTORY, 'T-001.md')));
   assert.ok(fs.existsSync(path.join(root, FINDINGS_DIRECTORY, 'T-001-review.md')));
+  assert.ok(fs.existsSync(path.join(root, REVIEWS_DIRECTORY, '2026-10-20-phase-1.md')));
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
   assert.ok(!fs.existsSync(path.join(root, GENERATED_MANIFEST)));
 });

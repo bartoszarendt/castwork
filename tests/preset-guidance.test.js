@@ -178,7 +178,7 @@ for (const host of HOSTS) {
   test(`${host} verifier writes only in the record, runs checks on the candidate, and assesses no moving name`, () => {
     const verifier = role(host, 'verifier');
     all(verifier, [
-      'You write only in the task record (your assessment and the evidence of your own check runs) and any findings file it links.',
+      "You write only in the task record (your assessment and the evidence of your own check runs), any findings file it links, and your runs' output in `.castwork/local/runs/`.",
       'Never write `candidates`.** If no candidate is recorded, say so and stop.',
       'a `tree:<sha>` snapshot, whose object exists here',
       "Assess a snapshot's contents, read with git, not the current working tree.",
@@ -329,7 +329,7 @@ for (const host of HOSTS) {
       'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
       'Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a fact only they hold.',
       "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them.",
-      "Bring one recommendation, the thinker's, and never offer asking the thinker as their choice.",
+      "Bring one recommendation, the thinker's, citing where it gave it, such as its entry in the record; without one, ask the thinker first, and never offer asking the thinker as their choice.",
       'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
       "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply,",
       'where the role cannot wait for that, have it stop its round cleanly and resume it with the answer.',
@@ -338,7 +338,7 @@ for (const host of HOSTS) {
       "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
       'Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report` refreshes the record, not whether the files in front of you are still that candidate.',
       'At the end or a stop, take the unapplied proposals for where a fact is kept from the records this work touched, and check each claim against its source first: a cause not established stays worded as unresolved.',
-      'Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, replacing a line they correct rather than adding beside it, and say what you added.',
+      'Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, yourself and without asking, replacing a line they correct rather than adding beside it, and say what you added.',
       "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs, applying those the user approves, and those for a place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there.",
       "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs.",
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment and stays within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record. One that weakens the commitment is theirs.',
@@ -650,7 +650,7 @@ for (const host of HOSTS) {
       'Their decision binds that commitment, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it.',
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment within existing authorization: that is yours to decide, and a change that weakens the commitment goes back to them.',
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
-      'The report goes in `.castwork/findings/`.',
+      'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`.',
     ], 'thinker');
     assert.match(role(host, 'coordinator'), phrase('about fifteen lines, what holds now first and attribution after, which `report` shows,'));
   });
@@ -661,17 +661,67 @@ for (const host of HOSTS) {
     all(role(host, 'thinker'), [
       'before, during, or after the work',
       'reviews how completed work went',
-      'read session transcripts only when the request names them. Distinguish observations from inferred causes, and state material evidence gaps.',
-      'Say what helped as well as what caused avoidable rework, and which causes recur across tasks.',
-      'with how later work would show whether it helped. Reviewing an active blocker is diagnosis, not this.',
-      'When an earlier review of how work went bears on this work, cite its findings file in the plan',
+      'read session transcripts only when the request names them.',
+      'Distinguish observations from inferred causes, and state material evidence gaps.',
+      'Say what helped as well as what caused avoidable rework, and which causes recur across tasks and earlier reviews.',
+      'with how later work would show whether it helped;',
+      'Reviewing an active blocker is diagnosis, not this.',
+      'Before planning a phase, list `.castwork/reviews/` and read the reviews whose occasion or "Read when" fits; cite each that bears on this work in the plan',
+      'Read the earlier reviews in `.castwork/reviews/` too; a review of a phase covers the whole phase.',
+      "naming whose it is to make, this project's, Castwork's, the host's, or a user skill's,",
+      'propose a `project.md` line naming that work and the review to read before it. List every source you read, outside the repository included.',
+      'Open it with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status.',
     ], 'thinker');
     all(role(host, 'coordinator'), [
-      'At the end, when a phase reached its acceptance, work was cancelled or stopped after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show,',
-      'offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or during a pause.',
+      'At the end, when a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show,',
+      'offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or at an ordinary pause.',
+      "Link a review from the closing record's Current state, the decision that closed the work if one did, and the handoff, and name it in the commit that applies its proposals.",
+      "Bring its proposals in its own wording, never a second reviewer's in their place, those for places outside this project included, and once the user answers, record each one's status in its table.",
     ], 'coordinator');
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} run output stays on the machine, records close with a fresh state, and briefs fit the host`, () => {
+    all(role(host, 'coordinator'), [
+      'When a record closes, after its last acceptance or disposition, rewrite its Current state to the closing state, archive it when earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
+      'Where the host limits how long one run may take, size each assignment to fit, from how long its checks took before, and give a check that cannot fit a run of its own;',
+      'never ask for a verdict before the checks it rests on finish.',
+      'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
+      'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
+      "Where the host lets you name a file for a role's reply, name none for a role that writes to the repository: the host may tell it to ignore every other path the brief names.",
+      "A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
+    ], 'coordinator');
+    all(role(host, 'thinker'), [
+      "Before work that rests on how it will be proven, such as an instrument, a fixture's lifecycle, a time budget, or every consumer of a changed shape, plan the cheapest observation that could show that approach or proof wrong, and have it run first.",
+      "Say whether each threshold the plan sets is the user's requirement or the agents' choice, which may change.",
+    ], 'thinker');
+    all(role(host, 'worker'), [
+      'What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.',
+      'where a failure, an acceptance or a reproduction rests on one, copy it in `.castwork/findings/`',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'Record it once the checks it rests on have finished; a checkpoint before that is a note in the body.',
+      "Your runs' output goes in `.castwork/local/runs/<task>/`.",
+      "copying a run's output there only where a finding rests on it.",
+    ], 'verifier');
+  });
+}
+
+test('the procedure skills keep run output in .castwork/local/runs/ and reviews in .castwork/reviews/', () => {
+  all(skill('verification-evidence'), [
+    'What a run produces, such as logs, exit and pid files, dumps, captures, and the scripts of one-off probes, goes in `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; the entry says what the run showed, so it reads without the file.',
+  ], 'verification-evidence');
+  all(skill('task-record-contract'), [
+    'Run output stays out of the record: a record past 100 KB is reported as `record.large`.',
+    "copy a run's output there only where a failure, an acceptance or a reproduction rests on it.",
+    'A review of how work went goes in `.castwork/reviews/`.',
+  ], 'task-record-contract');
+  all(skill('assessment'), [
+    'The output of your own runs goes in `.castwork/local/runs/<task>/`, and is copied into findings only where a finding rests on it.',
+    'Record the verdict once the checks it rests on have finished.',
+  ], 'assessment');
+});
 
 test('the procedure skills send supporting files to .castwork/findings/ and open Current state with what holds now', () => {
   for (const id of ['assessment', 'task-record-contract', 'verification-evidence']) {

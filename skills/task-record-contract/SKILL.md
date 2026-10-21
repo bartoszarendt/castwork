@@ -56,14 +56,18 @@ transcripts, lint output, or a table of every check you ran. Routine successful
 output does not need to be retained; link a file under `output` only when its
 contents materially support a failure, reproduction, or review finding. A
 milestone narrative belongs in the milestone document, not repeated in every
-task that contributed to it. Run logs go in linked files: a record past 100 KB
-is reported as `record.large`. A routine successful probe is a sentence in the
-body, or nothing; material observations stay candidate-bound evidence. Link
-only durable support, not ignored scratch or `.castwork/tasks/`: write it in
-`.castwork/findings/`, named after the task, such as `T-012-review.md`. Snapshots
-leave that folder out, as they leave out the records, so a file the task
-delivers, or a script a declared check runs, never goes there: it is part of
-the candidate.
+task that contributed to it. Run output stays out of the record: a record past
+100 KB is reported as `record.large`. A routine successful probe is a sentence
+in the body, or nothing; material observations stay candidate-bound evidence.
+What a run produces and no record links, such as logs, exit and pid files,
+dumps, and captures, goes in `.castwork/local/runs/<task>/`, which Git ignores.
+Link only durable support, not ignored scratch or `.castwork/tasks/`: write it
+in `.castwork/findings/`, named after the task, such as `T-012-review.md`, and
+copy a run's output there only where a failure, an acceptance or a
+reproduction rests on it. Snapshots leave that folder out, as they leave out
+the records, so a file the task delivers, or a script a declared check runs,
+never goes there: it is part of the candidate. A review of how work went goes
+in `.castwork/reviews/`.
 
 `task archive [<id>] [--check]` explicitly moves the entries for earlier candidates
 into a paired `<record>.archive.md`; the two files remain one logical record, and

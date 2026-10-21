@@ -25,12 +25,14 @@ import {
   LOCAL_CONFIG_FILE,
   LOCAL_DIRECTORY,
   PROJECT_FILE,
+  REVIEWS_DIRECTORY,
+  RUNS_DIRECTORY,
   STATE_DIRECTORY,
   TASKS_DIRECTORY,
 } from './layout.js';
 import { PublicError } from './public-error.js';
 
-const STATE_DIRECTORIES = Object.freeze([STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, LOCAL_DIRECTORY]);
+const STATE_DIRECTORIES = Object.freeze([STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY, LOCAL_DIRECTORY]);
 
 /**
  * A file where a state directory belongs would be kept and the directory never
@@ -739,6 +741,7 @@ export function doctor(root) {
   if (manifest !== null) findings.push(...identityFindings(manifest));
   const project = projectFinding(root);
   if (project) findings.push(project);
+  findings.push(...writtenFindings(root));
 
   return {
     ok: findings.every((finding) => finding.level !== 'error'),
@@ -842,6 +845,89 @@ function projectFinding(root) {
     message: `${PROJECT_FILE} has sections still as setup wrote them, or empty: ${unwritten.join(', ')}`,
     next: 'Fill them in, or remove a section that does not apply here.',
   };
+}
+
+/** Past this, findings hold run output rather than what records link. */
+const LARGE_FINDINGS_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Findings and reviews are read from every clone: a record's link into
+ * findings, and the next plan's look at earlier reviews, find nothing Git
+ * left out. What makes findings large is run output, which no clone needs.
+ *
+ * @param {string} root
+ * @returns {{level: 'warn', message: string, next: string}[]}
+ */
+function writtenFindings(root) {
+  const out = [];
+  for (const directory of [FINDINGS_DIRECTORY, REVIEWS_DIRECTORY]) {
+    // Contained like every path the installer seeds: a link standing where
+    // the directory belongs would have the scan report files from elsewhere.
+    let start;
+    try {
+      start = installPath(root, directory);
+    } catch (error) {
+      out.push({
+        level: 'warn',
+        message: `${directory}/ was not checked: ${error instanceof Error ? error.message : String(error)}`,
+        next: 'Keep it an ordinary directory inside the repository.',
+      });
+      continue;
+    }
+    const files = filesUnder(start).map((file) => ({ ...file, relative: `${directory}/${file.relative}` }));
+    if (files.length === 0) continue;
+    const visible = new Set(gitVisible(root, files.map((file) => file.relative)));
+    const ignored = files.filter((file) => !visible.has(file.relative)).length;
+    if (ignored > 0 && directory === REVIEWS_DIRECTORY) {
+      out.push({
+        level: 'warn',
+        message: `${ignored} of ${files.length} file(s) in ${directory}/ are ignored by Git`,
+        next: 'Reviews are read when later work is planned, in every clone: remove the rule that ignores them.',
+      });
+    } else if (ignored > 0) {
+      out.push({
+        level: 'warn',
+        message: `${ignored} of ${files.length} file(s) in ${directory}/ are ignored by Git, so a record linking one breaks in every other clone`,
+        next: `Keep what records link in Git, by narrowing the rule that ignores it or adding it with git add -f. Run output no record needs goes in ${RUNS_DIRECTORY}/, which is ignored already.`,
+      });
+    }
+    const size = files.reduce((total, file) => total + file.size, 0);
+    if (directory === FINDINGS_DIRECTORY && size > LARGE_FINDINGS_BYTES) {
+      out.push({
+        level: 'warn',
+        message: `${directory}/ holds ${files.length} files, ${Math.round(size / (1024 * 1024))} MB`,
+        next: `It is for notes and the files records link because a failure, an acceptance or a reproduction rests on them. Run output no record needs goes in ${RUNS_DIRECTORY}/, which Git ignores and snapshots leave out.`,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Every regular file below a directory, relative to it with `/`, never
+ * following a link. None when the directory is missing.
+ * @param {string} directory
+ * @returns {{relative: string, size: number}[]}
+ */
+function filesUnder(directory) {
+  /** @type {{relative: string, size: number}[]} */
+  const files = [];
+  /** @param {string} relative */
+  const walk = (relative) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(path.join(directory, relative), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.isFile()) files.push({ relative: child, size: fs.statSync(path.join(directory, child)).size });
+    }
+  };
+  walk('');
+  return files;
 }
 
 /** Each `## ` section's body by heading. @param {string} text */

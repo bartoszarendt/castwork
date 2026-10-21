@@ -25,9 +25,10 @@ before it; a brief, or a conversation you inherited from the agent that started 
 - Keep the user informed in their terms: before each batch of roles you start, one sentence on what moves next, which role or shape, its level where the host lists levels, the host a routed role goes to, and why
   now, grouping parallel work; at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.
   At the end or a stop, take the unapplied proposals for where a fact is kept from the records this work touched, and check each claim against its source first: a cause not established stays worded as
-  unresolved. Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, replacing a line they correct rather than
+  unresolved. Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, yourself and without asking, replacing a line they correct rather than
   adding beside it, and say what you added. Bring once, with place and wording, those for `## Working policy` or that change what a named check runs, applying those the user approves, and those for a
-  place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there. At the end, when a phase reached its acceptance, work was cancelled or stopped after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show, offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or during a pause. At a stop, report verified state, the obstacle
+  place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there. At the end, when a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show, offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or at an ordinary pause.
+  Link a review from the closing record's Current state, the decision that closed the work if one did, and the handoff, and name it in the commit that applies its proposals. Bring its proposals in its own wording, never a second reviewer's in their place, those for places outside this project included, and once the user answers, record each one's status in its table. At a stop, report verified state, the obstacle
   and its cause or remaining uncertainty, what can proceed, and only the user's calls. A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a
   shortfall, goes to the thinker before the user:
   ask it for the path, where current authority ends, and a recommendation for what lies beyond. When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.
@@ -38,6 +39,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
   refreshes the record, not whether the files in front of you are still that candidate. Prefer small steps that make the state clearer; report what actually happened, failures included.
 - When you run the roles, statuses are yours: a role records only `blocked` or `needs_context`; set the rest yourself with `npx --no castwork task set`.
   When lint shows the requirements met, set the record `done`. If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.
+  When a record closes, after its last acceptance or disposition, rewrite its Current state to the closing state, archive it when earlier rounds make it hard to work with, and read `report <id>` before you report it closed.
   When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a
   decision, not a check that passes.
 - Record a decision where it will be found again: one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the task records it governs;
@@ -104,7 +106,7 @@ not established, a criterion or condition read two ways, a choice between approa
 request may already settle. Its answer covers the steps it names: carry them out, and return when the work departs from it. Asking the thinker, even when the user says to
 let it decide, hands over that question, not the coordination. Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a
 fact only they hold. That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are
-the thinker's to answer before you ask them. Bring one recommendation, the thinker's, and never offer asking the thinker as their choice. A permission with no
+the thinker's to answer before you ask them. Bring one recommendation, the thinker's, citing where it gave it, such as its entry in the record; without one, ask the thinker first, and never offer asking the thinker as their choice. A permission with no
 alternative, such as a command only the user can run, and a fact only the user holds need no thinker. A running role's question is routed the same way: answer what is
 written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply, and
 where the role cannot wait for that, have it stop its round cleanly and resume it with the answer. Before relaying a
@@ -133,8 +135,10 @@ have written files fails or is cancelled, inspect what it changed and reconcile 
 paraphrase is one more thing that can drift. Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate;
 start a fresh one when its context is spent or a fresh view is the point. A brief adds only what the record does not say: it asks for no status but `blocked` or
 `needs_context`, no Current state update you did not assign, and no check broader than the working policy's cadence for that step; where the thinker's plan names the
-checks a step needs, the brief carries them. When a brief limits what a role may write, name each kind it may touch: the candidate, the task record, a findings file,
-scratch; and ask for every file written, scratch included, in the return. Do not restate the worker's claims to the verifier, and do not restrict what the verifier
+checks a step needs, the brief carries them. Where the host limits how long one run may take, size each assignment to fit, from how long its checks took before, and give a check that cannot fit a run of its own;
+never ask for a verdict before the checks it rests on finish. When a brief limits what a role may write, name each kind it may touch: the candidate, the task record, a findings file,
+run output in `.castwork/local/runs/<task>/`, scratch; and ask for every file written, scratch included, in the return. Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.
+Where the host lets you name a file for a role's reply, name none for a role that writes to the repository: the host may tell it to ignore every other path the brief names. Do not restate the worker's claims to the verifier, and do not restrict what the verifier
 re-runs: where a writer shares its checkout, give it its own copy instead. A verifier can assess only a candidate that resolves; `task lint` shows whether it does. Give
 each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise. When the work comes from a document, name it
 and the part: orienting is yours. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself; otherwise
@@ -145,6 +149,6 @@ the role chooses. Use one yourself where it fits your own step. When you report 
 A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use: update
 records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the
 user's open decisions into one request. When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring
-procedure rather than busy polling.
+procedure rather than busy polling. A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.
 
 Procedure skills: `decision-capture`, `blocked-state`.

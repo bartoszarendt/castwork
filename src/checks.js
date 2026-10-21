@@ -30,10 +30,10 @@ export const CHECKED = 'checked';
 export const ASSERTED = 'asserted';
 
 /**
- * @typedef {{ref: string, available: 'available'|'unavailable'|'not_checked', kind: 'candidate'|'link', drift?: 'matches'|'differs'|'not_checked', drift_paths?: string[], same_tree_as?: string}} ReferenceResult
+ * @typedef {{ref: string, available: 'available'|'unavailable'|'not_checked', kind: 'candidate'|'link', ignored?: boolean, drift?: 'matches'|'differs'|'not_checked', drift_paths?: string[], same_tree_as?: string}} ReferenceResult
  * @typedef {{fact: string, trust: 'checked'|'asserted'}} SupportingFact
  * @typedef {{requirement: string, status: 'satisfied'|'not_satisfied'|'unknown', reason: string, facts: SupportingFact[]}} RequirementResult
- * @typedef {{refs?: Record<string, boolean>, files?: Record<string, boolean>, drift?: Record<string, string[]>, trees?: Record<string, string>}} Observations
+ * @typedef {{refs?: Record<string, boolean>, files?: Record<string, boolean>, ignored?: Record<string, boolean>, drift?: Record<string, string[]>, trees?: Record<string, string>}} Observations
  */
 
 /**
@@ -105,14 +105,16 @@ export function referenceAvailability(record, observations = {}) {
     out.push(result);
   });
 
+  // A linked file Git ignores is there for this machine only: every other
+  // clone has a link to nothing.
+  const ignored = observations.ignored ?? null;
   for (const entry of [...evidence, ...assessments]) {
     const link = entry.output ?? entry.findings;
     if (typeof link !== 'string' || !isRelativePath(link)) continue;
-    out.push({
-      ref: link,
-      kind: 'link',
-      available: observed(files, link),
-    });
+    /** @type {ReferenceResult} */
+    const result = { ref: link, kind: 'link', available: observed(files, link) };
+    if (result.available === 'available' && ignored !== null && ignored[link] === true) result.ignored = true;
+    out.push(result);
   }
 
   return out;

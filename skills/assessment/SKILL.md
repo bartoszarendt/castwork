@@ -43,7 +43,10 @@ reproduce tool transcripts or a full audit report in the record: say what you
 found: the contract item, observation and location, and why it blocks or accepts.
 Not a walk through every file read or a restatement of earlier rounds. Link only
 support that lasts, not ignored scratch or `.castwork/tasks/`: write it in
-`.castwork/findings/`, named after the task, such as `T-012-review.md`.
+`.castwork/findings/`, named after the task, such as `T-012-review.md`. The
+output of your own runs goes in `.castwork/local/runs/<task>/`, and is copied
+into findings only where a finding rests on it. Record the verdict once the
+checks it rests on have finished.
 
 ## Three lenses, in order
 

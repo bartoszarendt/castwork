@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.9.13
+
+- What runs produce, such as logs, exit and pid files, dumps, captures, and
+  one-off probe scripts, goes in `.castwork/local/runs/<task>/`, which Git
+  ignores and snapshots leave out, and an evidence entry says what the run
+  showed so it reads without the file. `.castwork/findings/` keeps notes and
+  the files a record links because a failure, an acceptance or a reproduction
+  rests on them, copied in when they are linked. Before, every supporting file
+  went to findings, which grew to thousands of files and hundreds of megabytes
+  in some projects, broke links where Git ignored part of it, and drowned what
+  was worth reading.
+- Reviews of how work went, such as retrospectives and audits, have their own
+  tracked folder, `.castwork/reviews/`, named for their date and occasion, such
+  as `2026-10-20-phase-51.md`. A review opens with what it covers, a "Read
+  when" line, a short conclusion, and a table of its proposals with each one's
+  place, approval, and status. The thinker reads the earlier reviews before
+  planning a phase or writing a new review, says which causes recur, covers a
+  whole phase, names whose each fix is, and lists every source it read. The
+  coordinator links a review from the closing record, the closing decision and
+  the handoff, names it in the commit that applies its proposals, relays them in
+  the review's own wording rather than a second reviewer's, those for outside
+  the project included, and records their status once the user answers. A
+  review is also offered when rounds that did not converge end in a pause.
+  `setup` creates the folder, `remove` never touches it, and snapshots leave it
+  out.
+- When a record closes, the coordinator rewrites its Current state to the
+  closing state, archives it when earlier rounds make it hard to work with, and
+  reads `report <id>` before reporting it closed. It applies verified setup
+  facts without asking.
+- The thinker plans the cheapest observation that could show an approach or
+  its proof wrong, such as an instrument, a fixture's lifecycle, a time budget,
+  or every consumer of a changed shape, before the work that rests on it, and
+  says whether each threshold is the user's requirement or the agents' choice.
+- The coordinator brings the user the thinker's recommendation citing where
+  the thinker gave it, and asks the thinker first when there is none. It sizes
+  each assignment to the host's limit for one run, gives a check that cannot fit
+  a run of its own, never asks for a verdict before the checks it rests on
+  finish, names no reply file for a role that writes to the repository, and
+  never ends its turn waiting on a process it started in the background. The
+  verifier records its verdict once its checks have finished.
+- `task lint` marks a linked file that Git ignores, since only this machine has
+  it, and notes an evidence command that names a script in a folder snapshots
+  leave out, such as `.castwork/findings/`, since a script a check runs belongs
+  in the candidate. `doctor` warns when Git ignores files in
+  `.castwork/findings/` or `.castwork/reviews/`, and when findings grow past
+  20 MB, and checks neither folder when it is a link. The `record.large` note
+  now points run output to `.castwork/local/runs/` instead of to linked files.
+
 ## 0.9.12
 
 - The thinker also reviews completed work, such as a finished phase or an

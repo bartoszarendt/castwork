@@ -51,12 +51,12 @@ function resolvesInside(realRoot, resolved) {
  * one git process for all their references rather than one per candidate, and
  * compares the working tree with each snapshot once.
  *
- * @typedef {{root: string, repository: boolean|null, objects: Map<string, {oid: string, type: string}|null>, drift: Map<string, string[]|null>}} ObservationContext
+ * @typedef {{root: string, repository: boolean|null, objects: Map<string, {oid: string, type: string}|null>, drift: Map<string, string[]|null>, ignored: Map<string, boolean>}} ObservationContext
  */
 
 /** @param {string} root @returns {ObservationContext} */
 export function observationContext(root) {
-  return { root, repository: null, objects: new Map(), drift: new Map() };
+  return { root, repository: null, objects: new Map(), drift: new Map(), ignored: new Map() };
 }
 
 /** @param {ObservationContext} context */
@@ -161,7 +161,7 @@ function refResolves(context, ref) {
  * @returns {import('./checks.js').Observations}
  */
 export function observe(record, root, context = observationContext(root), options = {}) {
-  const { candidates, evidence, assessments } = recordEntries(record);
+  const { candidates } = recordEntries(record);
   // Null prototypes, because every key here comes from a record. On a plain
   // object `refs['__proto__'] = false` is a silent no-op and the later read
   // answers with Object.prototype, which reported an unresolvable ref as
@@ -209,7 +209,35 @@ export function observe(record, root, context = observationContext(root), option
     }
   }
 
+  /** @type {Record<string, boolean>} */
+  const ignored = Object.create(null);
+  for (const { link, present } of linkedFiles(record, root)) files[link] = present;
+
+  // Asked only about files that are here: Git answers for a missing path too,
+  // and that answer would describe a file no clone has.
+  const present = Object.keys(files).filter((link) => files[link]);
+  if (present.length > 0 && isRepository(context)) {
+    askIgnored(context, present);
+    for (const link of present) {
+      if (context.ignored.has(link)) ignored[link] = context.ignored.get(link) === true;
+    }
+  }
+
+  return { refs, files, ignored, drift, trees };
+}
+
+/**
+ * The files a record links that live inside the checkout, and whether each is
+ * there.
+ *
+ * @param {import('./record.js').ParsedRecord} record
+ * @param {string} root
+ * @returns {{link: string, present: boolean}[]}
+ */
+function linkedFiles(record, root) {
+  const { evidence, assessments } = recordEntries(record);
   const realRoot = realpath(path.resolve(root)) ?? path.resolve(root);
+  const out = [];
   for (const entry of [...evidence, ...assessments]) {
     const link = entry.output ?? entry.findings;
     if (typeof link !== 'string' || !isRelativePath(link)) continue;
@@ -224,8 +252,43 @@ export function observe(record, root, context = observationContext(root), option
     // the checkout resolves cleanly and still names a file the record does not
     // own, so the real destination has to be inside the root as well.
     if (!resolvesInside(realRoot, resolved)) continue;
-    files[link] = fs.existsSync(resolved);
+    out.push({ link, present: fs.existsSync(resolved) });
   }
+  return out;
+}
 
-  return { refs, files, drift, trees };
+/**
+ * Ask Git once which files these records link are ignored, so a lint over
+ * many records starts one `git check-ignore` rather than one per record.
+ *
+ * @param {ObservationContext} context
+ * @param {import('./record.js').ParsedRecord[]} records
+ */
+export function prefetchLinks(context, records) {
+  if (!isRepository(context)) return;
+  askIgnored(context, records.flatMap((record) => linkedFiles(record, context.root)).filter((file) => file.present).map((file) => file.link));
+}
+
+/**
+ * Which of these paths Git ignores, with one `git check-ignore` for all the
+ * paths this run has not asked about. A tracked file is never reported, since
+ * ignore rules no longer apply to it. Paths are read from standard input, so a
+ * path is data to git, never an option.
+ *
+ * @param {ObservationContext} context
+ * @param {string[]} links repository-root relative paths
+ */
+function askIgnored(context, links) {
+  const pending = [...new Set(links)].filter((link) => !context.ignored.has(link) && !/[\r\n\0]/.test(link));
+  if (pending.length === 0) return;
+  let answered = [];
+  try {
+    answered = git(context.root, ['check-ignore', '--stdin', '-z'], { input: `${pending.join('\0')}\0` }).split('\0');
+  } catch (error) {
+    // Exit 1 is check-ignore's answer that none of them is ignored; any other
+    // failure leaves them unasked, as `not_checked` would.
+    if (/** @type {{status?: number|null}} */ (error).status !== 1) return;
+  }
+  const ignored = new Set(answered.map((line) => line.replace(/\\/g, '/')));
+  for (const link of pending) context.ignored.set(link, ignored.has(link.replace(/\\/g, '/')));
 }

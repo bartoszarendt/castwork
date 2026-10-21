@@ -141,6 +141,24 @@ test('bookkeeping edits change no evaluation', (t) => {
   assert.deepEqual(after, before);
 });
 
+test('lint names a script in a folder snapshots leave out on the current candidate and folds the earlier ones', (t) => {
+  const root = fixture(t);
+  writeTask(root, 'T-001', `candidates:
+  - ref: 1111111
+  - ref: 2222222
+evidence:
+  - {check: build, candidate: 1111111, result: pass, command: 'pwsh -File .castwork/findings/T-001-build.ps1'}
+  - {check: build, candidate: 1111111, result: fail, command: 'pwsh -File .castwork/findings/T-001-build.ps1'}
+  - {check: build, candidate: 2222222, result: pass, command: 'python .castwork/local/runs/T-001/probe.py'}
+`);
+  const text = capture(['task', 'lint', 'T-001'], root).out;
+  assert.match(text, /evidence\.script_outside_snapshot: evidence\[2\]\.command names \.castwork\/local\/runs\/T-001\/probe\.py, in a folder snapshots leave out/);
+  assert.doesNotMatch(text, /evidence\[0\]\.command names/);
+  assert.match(text, /evidence\.script_outside_snapshot: 2 entries on earlier candidates name a script in a folder snapshots leave out; --json lists them/);
+  const json = JSON.parse(capture(['task', 'lint', 'T-001', '--json'], root).out);
+  assert.equal(json.records[0].structural.info.filter((note) => note.code === 'evidence.script_outside_snapshot').length, 3);
+});
+
 test('findRecord reports a helpful error for an unknown id', (t) => {
   const root = fixture(t);
   assert.throws(() => findRecord(root, 'T-999'), /no task record with id T-999/);
