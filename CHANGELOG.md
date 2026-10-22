@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+- The thinker steps back from a phase that stopped converging. When the signs
+  of a stall recur across a phase's tasks, or the work goes to its proof rather
+  than its result, such as rounds on an instrument, a harness, a fixture or a
+  permission packet while the result it checks stays the same, or the user's
+  decisions keep arriving on one gate, the coordinator asks the thinker to step
+  back rather than to diagnose the next blocker. It asks the question the user
+  would: what is this phase for, what stands between here and a result someone
+  can use, and what is the simplest credible route there. The thinker starts
+  from what the phase is for, separates what the user committed to from the
+  method, gates and evidence the agents chose, says what to cancel, reorder, cut
+  to a slice that delivers, or prove another way, keeps every criterion not met
+  recorded as not met, and brings the user's calls together, each with its
+  recommendation. A step back runs at `complex` where levels exist, and the
+  coordinator resumes the thinker that planned the work for its re-plans.
+  Before, each stall was diagnosed at its blocker, and the work moved only once
+  the user asked the phase-level question themselves.
+- Any role may say the question is wrong. When what it finds shows that the
+  question it was given, or the step it serves, stands between the work and its
+  outcome, it says so first, with the question it would ask instead. That is a
+  finding, and it widens nothing the role may do.
+- The thinker sizes the proof to the work: a behaviour is proved on the
+  platform and configuration it runs on in production, with the project's
+  ordinary suites, preferring fixtures made fresh for each run and thrown away
+  to repairing a long-lived one or proving it unchanged. A new instrument is
+  built only when those cannot show what the user committed to, and its cost is
+  weighed against the change it checks.
+- A finding blocks, as `needs_revision` or `reject`, only where it fails an
+  acceptance criterion, a declared requirement, or what the user committed to,
+  such as safety or data integrity. Other findings are recorded as not
+  blocking, beside an `accept` when nothing else blocks. The coordinator names
+  them in the record's closing state and brings them to the thinker when it
+  next plans, instead of starting another round. Whoever is assessed treats a
+  finding as an example of its kind and fixes the same defect wherever the
+  candidate has it within the task's scope, in the same round, naming any
+  occurrence outside that scope as a proposal.
+- When a phase delivers something people use, the thinker's plan ends with a
+  step that uses the assembled result as they would, against what the phase is
+  for. What it finds is new work, not a reason to reopen accepted tasks.
+- `report` shows a `Movement` line: for the seven calendar days ending on the
+  latest recorded day, the decisions, candidates and assessments recorded, how
+  many assessments were blocking, how many tasks they touched, and how many of
+  those are done now. JSON has it as `movement`. The window comes from recorded
+  dates, never the clock. Orientation reads it when recent rounds and
+  decisions may not have moved the work's finish.
+
 ## 0.9.13
 
 - What runs produce, such as logs, exit and pid files, dumps, captures, and

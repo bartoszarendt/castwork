@@ -31,6 +31,27 @@ const mapping = (value) => value !== null && typeof value === 'object' && !Array
 /** @param {unknown} value */
 const blocking = (value) => value === 'needs_revision' || value === 'reject';
 
+/** The seven calendar days ending on the latest day any entry or decision
+ * records, the rounds and decisions in them, and how many of the tasks they
+ * touched are done now. The window comes from recorded days, never the clock.
+ * @param {{path: string, kind: string, entry: Record<string, unknown>, date: {day?: string}}[]} recent
+ * @param {{path: string, status: string}[]} records
+ */
+function movementOf(recent, records) {
+  const to = recent.reduce((latest, row) => (row.date.day ?? '') > latest ? row.date.day ?? '' : latest, '');
+  if (!to) return null;
+  const from = new Date(Date.parse(`${to}T00:00:00Z`) - 6 * 86400000).toISOString().slice(0, 10);
+  const rows = recent.filter((row) => (row.date.day ?? '') >= from);
+  const count = (/** @type {(row: typeof rows[number]) => boolean} */ match) => rows.filter(match).length;
+  const touched = new Set(rows.filter((row) => row.kind !== 'decision').map((row) => row.path));
+  const tasks = records.filter((record) => touched.has(record.path));
+  return {from, to, decisions: count((row) => row.kind === 'decision'), candidates: count((row) => row.kind === 'candidates'),
+    assessments: count((row) => row.kind === 'assessments'),
+    blocking_assessments: count((row) => row.kind === 'assessments' && blocking(row.entry.verdict)),
+    tasks: tasks.length, tasks_done: tasks.filter((task) => task.status === 'done').length,
+    tasks_cancelled: tasks.filter((task) => task.status === 'cancelled').length};
+}
+
 /** Calendar validity, without Date's rollover of impossible days.
  * @param {string} day
  */
@@ -523,5 +544,6 @@ export function deriveReport(inputs, options = {}) {
       max_candidates: maxCandidates, max_candidate_records: tasks.filter((r) => r.task?.counts.candidates === maxCandidates).map((r) => r.path),
       blocking_verdicts: sum('blocking_verdicts'), blocking_records: tasks.length - blockingRecords.zero, blocking_histogram: blockingRecords,
       declared_fails_recorded: sum('declared_fails_recorded'), declared_fail_names: Object.fromEntries([...failNames].sort((a,b) => b[1] - a[1])),
-      outcome_triples: totalOutcomes, current_triples: currentOutcomes }, attention, recent, quality, mentioned_decisions: mentionedDecisions };
+      outcome_triples: totalOutcomes, current_triples: currentOutcomes }, attention, recent, movement: movementOf(recent, records), quality,
+    mentioned_decisions: mentionedDecisions };
 }

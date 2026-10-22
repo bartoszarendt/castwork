@@ -215,10 +215,18 @@ marker when the logical paragraph/item continues; it is positional, not the
 latest, because records order that section differently. JSON keeps both. Prose
 and display order never change selection, authority or a requirement result.
 
-Project text puts what needs reading first: Attention, then Recent and
+Project text puts what needs reading first: Movement, Attention, then Recent and
 Decisions, then Rework and Record quality condensed to their totals, with the
 distributions and every Record quality count in JSON. Record quality names only
 the counts that are not zero.
+
+Movement covers the seven calendar days ending on the latest recorded day of
+any dated entry or decision, never the clock: the decisions, candidates and
+assessments recorded in them, how many of those assessments were blocking, how
+many tasks the entries touched, and how many of those tasks are `done` or
+`cancelled` now. Many rounds and decisions on few tasks, few of them done, can
+be work that moves while its finish does not. JSON has it as `movement`, `null`
+when nothing is dated and in a selected record's view.
 
 Wrapped continuation lines are indented under their labels. A recorded scalar
 whose indentation already occupies 100 columns is kept intact, possibly wider,

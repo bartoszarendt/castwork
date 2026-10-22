@@ -159,11 +159,13 @@ function decisionText(report,row) {
 }
 /** @param {Report} report */
 function projectText(report) {
-  const t = report.totals, q = report.quality;
+  const t = report.totals, q = report.quality, m = report.movement;
   const lines = [`${report.project}  ${t.tasks} tasks  ${t.decisions} decisions`,
     'Record values are asserted; Git dates are observed locally. This report decides nothing.',
     `Tasks  ${Object.entries(t.task_statuses).map(([k,v]) => `${k} ${v}`).join(' · ')}`,
-    `  ${t.invalid_tasks} of ${t.tasks} structurally invalid (task lint)`, '', 'Attention'];
+    `  ${t.invalid_tasks} of ${t.tasks} structurally invalid (task lint)`,
+    `Movement  ${m ? `${m.from} to ${m.to}, the latest recorded week: ${m.decisions} decisions; ${m.candidates} candidates, ${m.assessments} assessments (${m.blocking_assessments} blocking) on ${m.tasks} tasks, ${m.tasks_done} of them done now${m.tasks_cancelled ? `, ${m.tasks_cancelled} cancelled` : ''}` : 'no dated entries'}`,
+    '', 'Attention'];
   const drafts = report.attention.filter((row) => row.status === 'draft' && row.no_candidate);
   // Display priority only: derivation/JSON retain all records and their order.
   const priority = (/** @type {Report['attention'][number]} */ row) => {

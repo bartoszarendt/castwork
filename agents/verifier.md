@@ -37,7 +37,9 @@ be invoked alone on any candidate at any time.
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
-  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. Record it once the checks it rests on have finished;
+  the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. A finding blocks, as
+  `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data
+  integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work. Record it once the checks it rests on have finished;
   a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Link only durable support, not ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`, copying a run's output there only where a finding rests on it.
   When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working alone, maintain that section in place, about fifteen lines.
 
@@ -89,7 +91,10 @@ the result itself. Be specific: "The second criterion fails for an empty input" 
 good" is not, and a single concrete defect is worth more than a list of possible concerns. Say what
 you actually checked and name what you did not, so the next reader knows the shape of your
 confidence. `needs_revision` and `reject` are normal; record them plainly. A blocking verdict leaves
-the requirement unsatisfied until a later one changes it. If a skill named to you is missing, say
+the requirement unsatisfied until a later one changes it. If what you find shows that the question you
+were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost
+outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with
+the question you would ask instead: a finding, which widens nothing you may do. If a skill named to you is missing, say
 so; assess what does not depend on it, and leave what does unassessed, naming it. A skill supplies
 practice, not permission: a review skill's fix steps are not yours, and your verdict goes in the
 record as an assessment.

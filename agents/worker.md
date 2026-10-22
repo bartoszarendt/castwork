@@ -98,6 +98,13 @@ Record candidate attributes when known; take recorded-at from an observed clock,
 
 - Decide how you will show a criterion is met before you start on it. Read
   what is already there and match it; consistency beats your preferences.
+- Treat a finding as an example of its kind: fix the same defect wherever the candidate has it, within
+  the scope, in the same round, and say where you looked; name an occurrence outside the scope as a
+  proposal rather than fixing it.
+- If what you find shows that the question you were given, or the step it serves, stands between the
+  work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the
+  behaviour never runs, say so first, in a line, with the question you would ask instead: a finding,
+  which widens nothing you may do.
 - When you are stuck, record `blocked` or `needs_context`, with what you tried under `## Blockers
   and decisions`, and say so: a durable pause beats a silent retry.
 - For a setup fact, or a host or tool quirk, others will hit, propose where it is kept, in the record

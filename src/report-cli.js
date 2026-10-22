@@ -134,7 +134,7 @@ export function reportCommand(root, id, options = {}) {
     records: report.records.map((record) => ({
       id: record.id, path: record.path, kind: record.kind, status: record.status, title: record.title,
     })),
-    recent: [], attention: [],
+    recent: [], attention: [], movement: null,
   };
   if (options.json) {
     json(result);

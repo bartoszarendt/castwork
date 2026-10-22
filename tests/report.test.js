@@ -550,6 +550,23 @@ test('Recent shows one line per record and recorded day, with its title, keeping
   const text = renderReport(r);
   assert.match(text, /\n  2026-10-07  A  pass 2, candidate  First task\n  2026-10-07  B  candidate  Second task\n  0 dated entries not shown/);
 });
+test('Movement counts the latest recorded week against the tasks it touched that are done now', () => {
+  const verifier = {role: 'verifier', actor: 'v@codex'};
+  const gate = input({id: 'A', title: 'Gate', status: 'needs_revision',
+    candidates: [{ref: 'aaaaaaa', at: '2026-10-15T09:00:00Z'}, {ref: 'bbbbbbb', at: '2026-10-09T09:00:00Z'}, {ref: 'ccccccc', at: '2026-10-08T09:00:00Z'}],
+    assessments: [{...verifier, candidate: 'aaaaaaa', verdict: 'needs_revision', at: '2026-10-15T10:00:00Z'},
+      {...verifier, candidate: 'bbbbbbb', verdict: 'accept', at: '2026-10-10'}]}, '', 'A.md');
+  const closed = input({id: 'B', status: 'done', candidates: [{ref: 'ddddddd', at: '2026-10-12T09:00:00Z'}]}, '', 'B.md');
+  const earlier = input({id: 'C', status: 'done', candidates: [{ref: 'eeeeeee', at: '2026-10-01T09:00:00Z'}]}, '', 'C.md');
+  const decisions = ['2026-10-15', '2026-10-15', '2026-10-08'].map((date, index) => input({id: `D-${index}`, date}, '', `D${index}.md`, 'decision'));
+  const r = derive(gate, closed, earlier, ...decisions);
+  // The week ends on the latest recorded day and includes its first day; what lies before it is left out.
+  assert.deepEqual(r.movement, {from: '2026-10-09', to: '2026-10-15', decisions: 2, candidates: 3, assessments: 2,
+    blocking_assessments: 1, tasks: 2, tasks_done: 1, tasks_cancelled: 0});
+  assert.match(renderReport(r).replace(/\s+/g, ' '), /\(task lint\) Movement 2026-10-09 to 2026-10-15, the latest recorded week: 2 decisions; 3 candidates, 2 assessments \(1 blocking\) on 2 tasks, 1 of them done now Attention /);
+  assert.equal(derive(input({candidates: [{ref: 'aaaaaaa'}]})).movement, null, 'nothing dated, nothing counted');
+});
+
 test('the most failed declared checks are ranked by count, also for integer-like check names', () => {
   const fails = (check, count) => Array.from({length: count}, () => ({check, candidate: 'abcdef0', result: 'fail'}));
   const a = input({requirements: {checks: ['1', '2', '3', '4']}, candidates: [{ref: 'abcdef0'}],
@@ -632,6 +649,7 @@ test('golden project text has count bases and fixed section order: open work and
     'Record values are asserted; Git dates are observed locally. This report decides nothing.',
     'Tasks  ',
     '  0 of 0 structurally invalid (task lint)',
+    'Movement  no dated entries',
     '',
     'Attention',
     '  none recorded',

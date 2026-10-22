@@ -229,7 +229,7 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      'Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate; start a fresh one when its context is spent or a fresh view is the point.',
+      'Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker that planned the work for its re-plans; start a fresh one when its context is spent or a fresh view is the point.',
       '## While roles run',
       'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
       "update records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the user's open decisions into one request.",
@@ -452,7 +452,7 @@ for (const host of HOSTS) {
       'You already have this text; do not load the `castwork` skill again.',
       'Orient in proportion to the request, and only once',
       "Judge it from where the work is meant to finish, such as a phase's acceptance: what still stands between here and there, what the rest waits on, and whether recent rounds and decisions moved that or only the work around it.",
-      "When records keep moving and the work's finish does not, say so and propose what would move it, such as running the acceptance check, or asking the user to close a task whose further rounds would not.",
+      "When records keep moving and the work's finish does not, say so and propose what would move it, such as running the acceptance check, a thinker step back from the phase, or asking the user to close a task whose further rounds would not.",
       'A running role is no reason to end your turn.',
       'enough to locate the work, not the whole document',
       'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
@@ -707,6 +707,53 @@ for (const host of HOSTS) {
     ], 'verifier');
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} a stall across a phase gets a step back, proof is sized to the work, and only the contract blocks`, () => {
+    const wrongQuestion = 'If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.';
+    for (const id of ['thinker', 'worker', 'verifier']) all(role(host, id), [wrongQuestion], id);
+    all(role(host, 'thinker'), [
+      "**Stepping back.** Asked to step back, or when a stall's signs recur across a phase's tasks rather than in one, diagnose the phase, not its next blocker.",
+      "Start from what it is for, in the project's documents and the user's commitments, not from the current gate or proof.",
+      'a dependency the result does not need is a choice, not a commitment.',
+      'what to cancel, reorder, cut to a slice that delivers, or prove another way; what was spent is no reason to keep a path.',
+      'Keep every criterion not met recorded as not met: nothing is relabelled as passed.',
+      "Give it as one answer, with the user's calls it needs, such as cancelling planned work or accepting a shortfall, each with a recommendation, so they answer once.",
+      "Prove a behaviour on the platform and configuration it runs on in production, with the project's ordinary suites, preferring fixtures made fresh for each run and thrown away to repairing a long-lived one or proving it unchanged;",
+      'build a new instrument only when those cannot show what the user committed to, and weigh its cost against the change it checks.',
+      "When a phase delivers something people use, end it with a step that uses the assembled result as they would, the running product rather than each task's evidence, against what the phase is for;",
+      'what that finds is new work for you to plan, not a reason to reopen accepted tasks.',
+    ], 'thinker');
+    all(role(host, 'worker'), [
+      'Treat a finding as an example of its kind: fix the same defect wherever the candidate has it, within the scope, in the same round, and say where you looked; name an occurrence outside the scope as a proposal rather than fixing it.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work.',
+    ], 'verifier');
+    all(role(host, 'coordinator'), [
+      "When these signs recur across a phase's tasks rather than in one, have the thinker step back, as the entry command's `## Stepping back` says.",
+      "A finding the verifier records as not blocking is follow-up work, not another round: name it in the record's closing state and bring it to the thinker when it next plans.",
+      '**Do not let bookkeeping or proof become the work.** If records, or what was built to prove the result, outweigh the result, stop and say so, and have the thinker step back.',
+    ], 'coordinator');
+    all(entry(host), [
+      '## Stepping back',
+      "such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase rather than to diagnose its next blocker.",
+      'Ask the question as the user would: what is this phase for, what stands between here and a result someone can use, and what is the simplest credible route there.',
+      'Where the host lists levels, it runs at `complex`; resume the thinker that planned the phase where that level allows',
+      "Its answer is one path: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations.",
+      'the `Movement` line of `report` counts them against the tasks they touched that are now done.',
+      'a thinker diagnosing a difficult stall, or stepping back from a phase, is worth `complex`.',
+    ], 'entry');
+  });
+}
+
+test('the assessment skill blocks only on the contract and fixes a finding wherever its kind appears', () => {
+  all(skill('assessment'), [
+    'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity.',
+    'Record any other finding as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work rather than another round.',
+    'Treat each finding as an example of its kind: fix the same defect wherever the candidate has it within the scope of the work, and say where you looked; name an occurrence outside that scope as a proposal rather than fixing it.',
+  ], 'assessment');
+});
 
 test('the procedure skills keep run output in .castwork/local/runs/ and reviews in .castwork/reviews/', () => {
   all(skill('verification-evidence'), [

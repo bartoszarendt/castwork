@@ -69,7 +69,9 @@ a bare `/castwork` in the same session, you have oriented already.
    with what the documents say comes next. Judge it from where the work is
    meant to finish, such as a phase's acceptance: what still stands between
    here and there, what the rest waits on, and whether recent rounds and
-   decisions moved that or only the work around it.
+   decisions moved that or only the work around it. Where they may not have,
+   the `Movement` line of `report` counts them against the tasks they touched
+   that are now done.
 
 ## Then continue
 
@@ -102,8 +104,8 @@ now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and
 whose `depends_on` are done; otherwise the next work the project's documents
 name that no record covers yet. When records keep moving and the work's finish
 does not, say so and propose what would move it, such as running the
-acceptance check, or asking the user to close a task whose further rounds
-would not. A record that is blocked or waiting for context belongs in the
+acceptance check, a thinker step back from the phase, or asking the user to
+close a task whose further rounds would not. A record that is blocked or waiting for context belongs in the
 report, with what it waits on. Recommend one step, or several
 that can proceed together, rather than asking what to work on. When that work
 will need the user's calls along the way, ask for the whole path in the same
@@ -115,6 +117,23 @@ When the user says to continue, carry on with the step you proposed and what
 the records and the plan name after it; ask again only for their calls. Your
 own bookkeeping, such as Current state, statuses, and reconciling the records
 with the workspace, needs no permission.
+
+## Stepping back
+
+The coordinator role lists the signs of a stall in one task. When they recur
+across a phase's tasks, or the work goes to its proof rather than its result,
+such as rounds on an instrument, harness, fixture or permission packet while
+the result it checks stays the same, or the user's decisions keep arriving on
+one gate, ask the thinker to step back from the phase rather than to diagnose
+its next blocker. Ask the question as the user would: what is this phase for,
+what stands between here and a result someone can use, and what is the
+simplest credible route there. Where the host lists levels, it runs at
+`complex`; resume the thinker that planned the phase where that level allows,
+as `## Levels` says. Its answer is one path: take what stays within authority,
+and bring the user's calls it names together, in one request, with its
+recommendations. A step back looks forward from where the work is; a review of
+how the work went is offered at its own occasions, as the coordinator role
+says.
 
 ## While working
 
@@ -207,7 +226,7 @@ models.
   why; never `simple`, which comes only from a plan or the user. A level that
   turns on an uncertain cause, a disputed criterion or an architectural
   consequence is the thinker's to name, and a thinker diagnosing a difficult
-  stall is worth `complex`.
+  stall, or stepping back from a phase, is worth `complex`.
 - **The verifier's level** follows how hard it is to establish that the
   candidate meets its criteria and what a wrong acceptance would cost, not the
   worker's level. Required review stays required at every level.

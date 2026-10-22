@@ -132,6 +132,12 @@ tell whether the string is true, and it never claims to.
 - **`needs_revision`** — the work is close; name precisely what must change.
 - **`reject`** — the approach is wrong; say what would be right.
 
+A finding blocks, as `needs_revision` or `reject`, only where it fails an
+acceptance criterion, a declared requirement, or what the user committed to,
+such as safety or data integrity. Record any other finding as not blocking,
+beside an `accept` when nothing else blocks, as a proposal for follow-up work
+rather than another round.
+
 `reject` and `needs_revision` are ordinary outcomes. Record them plainly. The
 requirement stays unsatisfied until you record a later verdict, which is exactly
 what should happen — and the record stays editable throughout.
@@ -139,7 +145,10 @@ what should happen — and the record stays editable throughout.
 ## Being assessed
 
 Read the findings before defending anything. Fix what is right, and say clearly
-where you disagree and why rather than silently not doing it. Then record a new
+where you disagree and why rather than silently not doing it. Treat each finding
+as an example of its kind: fix the same defect wherever the candidate has it
+within the scope of the work, and say where you looked; name an occurrence
+outside that scope as a proposal rather than fixing it. Then record a new
 candidate and fresh evidence — the old evidence belongs to the old candidate.
 
 ## Be specific
