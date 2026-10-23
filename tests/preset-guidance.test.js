@@ -664,6 +664,7 @@ for (const host of HOSTS) {
       'read session transcripts only when the request names them.',
       'Distinguish observations from inferred causes, and state material evidence gaps.',
       'Say what helped as well as what caused avoidable rework, and which causes recur across tasks and earlier reviews.',
+      "An earlier review's cause recurs only where this work's own evidence shows it: being named again, including by work planned around that review, does not confirm it.",
       'with how later work would show whether it helped;',
       'Reviewing an active blocker is diagnosis, not this.',
       'Before planning a phase, list `.castwork/reviews/` and read the reviews whose occasion or "Read when" fits; cite each that bears on this work in the plan',

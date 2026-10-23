@@ -46,6 +46,11 @@
   those are done now. JSON has it as `movement`. The window comes from recorded
   dates, never the clock. Orientation reads it when recent rounds and
   decisions may not have moved the work's finish.
+- A review counts a cause an earlier review inferred as recurring only where
+  the work it covers shows it. Being named again, including by work planned
+  around that review, does not confirm it. Before, the thinker was asked which
+  causes recur across earlier reviews, and a cause could look confirmed because
+  the plans that followed its review were built around it.
 
 ## 0.9.13
 
