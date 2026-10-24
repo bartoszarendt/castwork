@@ -309,7 +309,7 @@ for (const host of HOSTS) {
     }
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
     all(role(host, 'coordinator'), [
-      "At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed, and only the user's calls.",
+      "At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed within existing authorization, and only the user's calls.",
       "A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a shortfall, goes to the thinker before the user: ask it for the path, where current authority ends, and a recommendation for what lies beyond.",
       'When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.',
       "Bring the thinker's recommendation for each of the user's calls that remains, in their terms: what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record, and their answer adopts them.",
@@ -329,7 +329,7 @@ for (const host of HOSTS) {
       'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
       'Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a fact only they hold.',
       "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them.",
-      "Bring one recommendation, the thinker's, citing where it gave it, such as its entry in the record; without one, ask the thinker first, and never offer asking the thinker as their choice.",
+      "Bring one recommendation, the thinker's, in its wording, citing where it gave it, such as its entry in the record, never a menu of your own; without one, ask the thinker first, and never offer asking the thinker as their choice.",
       'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
       "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply,",
       'where the role cannot wait for that, have it stop its round cleanly and resume it with the answer.',
@@ -340,7 +340,7 @@ for (const host of HOSTS) {
       'At the end or a stop, take the unapplied proposals for where a fact is kept from the records this work touched, and check each claim against its source first: a cause not established stays worded as unresolved.',
       'Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, yourself and without asking, replacing a line they correct rather than adding beside it, and say what you added.',
       "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs, applying those the user approves, and those for a place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there.",
-      "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs.",
+      "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs,",
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment and stays within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record. One that weakens the commitment is theirs.',
       '`.castwork/local/setup.md` if it exists',
       'at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
@@ -359,13 +359,13 @@ for (const host of HOSTS) {
     assert.doesNotMatch(coordinator, phrase('Recommend an answer for each'), 'at a stop the recommendation is the thinker\'s, not the coordinator\'s own');
     all(role(host, 'thinker'), [
       'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
-      "Name the user's calls the plan foresees, as defined below, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
+      "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call.',
       "When the path stops converging and the way out is the user's, such as deferring a requirement, recommend it then rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
       'Say whether the path needs the user.',
-      "For each call that remains, give one recommended answer in the user's terms, what changes for them and the risk and cost, which the coordinator can bring as it is, keeping the technical terms in the record; if none remains, say so plainly.",
+      "For each call that remains, give its options with one recommended answer first, in the user's terms, the commitment it changes, what changes for them and the risk and cost, and what proceeds meanwhile, which the coordinator can bring as it is, keeping the technical terms in the record;",
     ], 'thinker');
     all(entry(host), [
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
@@ -647,7 +647,7 @@ for (const host of HOSTS) {
     all(role(host, 'thinker'), [
       "When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, the change is proposed for the repository it comes from, never as an edit to its generated copy here, and a workaround kept here meanwhile says whose defect it works around.",
       'Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.',
-      'Their decision binds that commitment, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it.',
+      'and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it;',
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment within existing authorization: that is yours to decide, and a change that weakens the commitment goes back to them.',
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`.',
@@ -786,24 +786,23 @@ for (const host of HOSTS) {
   test(`${host} the user is asked only their calls, with the thinker's recommendation, and what was decided kept apart`, () => {
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
-      'At a stop with calls for them and at the end, keep what you or the thinker decided without them, where anything was, with where it is recorded, apart from what needs them: they may overrule the first afterwards, and only the second waits on them.',
-      'Number each call and give its options, the thinker\'s recommended one first and any precedent of theirs beside it, so that a word answers it, such as "1A, 2B"; bring no engineering item among them for approval, even one the thinker settled, but name it as decided.',
-      'Say what carries on meanwhile: what lies within existing authorization and does not wait on their answer.',
-      "**Before you ask the user anything,** check, in order: is it one of their calls, as the next point lists them; does a record, a decision, the working policy or the thinker's plan already answer it; can an agent find it out or do it within the work's access and authorization; where it needs judgement, is the thinker's recommendation in hand, cited in its wording; and what carries on while they answer.",
-      'A question that is not theirs, is answered already, or is one an agent can settle goes no further: settle it as `Who answers a question` says, and tell them what was decided. A fact or permission only they can give needs no thinker.',
-      "Relay the thinker's recommendation in its wording, never a menu of your own.",
-      'A call is theirs where it changes something they committed to or approved, such as an outcome, a guarantee, a scope, a budget, a cap, a coverage requirement, a stop on failure, or a risk they accepted; cite where they did when you rely on it.',
-      "A term the agents wrote that the user never approved or supplied, such as a number of attempts or a one-shot dispatch in an agents' review, a sequence or landing unit, or a frozen design, is engineering however a record words it.",
+      'Here and at the end, keep what you or the thinker decided without them, where anything was, apart from what needs them, with where it is recorded: they may overrule the first afterwards, and only the second waits on them.',
+      'Number the calls, each with its options, the recommended one first and any precedent of theirs beside it, so that a word answers them, such as "1A, 2B"; name an engineering item as decided rather than bring it for approval.',
+      "**Before you ask the user anything,** check, in order: is it one of their calls, as the point above lists them; does a record, a decision, the working policy or the thinker's plan already answer it; can an agent find it out or do it within the work's access and authorization; where it needs judgement, is the thinker's recommendation in hand; and what carries on meanwhile.",
+      'Ask only what is theirs, that nothing written answers and no agent can settle; settle the rest as `Who answers a question` says, and tell them what was decided.',
+      "Bring one recommendation, the thinker's, in its wording, citing where it gave it, such as its entry in the record, never a menu of your own; without one, ask the thinker first, and never offer asking the thinker as their choice.",
+      'every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it,',
+      "approving a decision that names the agents' method does not make it theirs, and a term the agents wrote that the user never approved or supplied, such as a number of attempts or a one-shot dispatch in an agents' review, a sequence or landing unit, or a frozen design, is engineering however a record words it.",
       'A stopped assignment does not by itself revoke a grant of theirs: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.',
-      "What only they know or hold is what no agent can find out or do with the work's access: before asking them to do work, supply data, or contact anyone outside the project, have the thinker name such a route,",
-      'A route still needs the authorization the action needs: a browser an agent drives can change what it opens.',
-      "Start that reviewer so that its finish reaches you: through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn when it cannot finish in one call; never end your turn while it runs.",
-      'A rule the agents wrote, in a brief, a plan or a record, that escalates after a number of failed attempts or on a stall returns the work to the thinker, to step back or to have it reviewed independently, and reaches the user only where what follows is their call; write no such rule that sends the work to them.',
+      "What only they know or hold is what no agent can find out or do within the work's access and authorization: before asking them for work, data, or contact outside the project, have the thinker name such a route,",
+      'or say why there is none. A route still needs the authorization the action needs: a browser an agent drives can change what it opens.',
+      "Run a second reviewer through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn when it cannot finish in one call.",
+      'An escalation rule the agents wrote in a brief, a plan or a record, such as one after a number of failed attempts or on a stall, returns the work to the thinker to step back or have it reviewed independently, and reaches the user only where what follows is their call; write none that sends work to them.',
       'A limit or stop the user set or supplied, such as in a brief they gave you, binds as written, whoever drafted it.',
-      'Propose nothing for one they scoped to the session, such as an instruction that begins "in this session", or for a line they declined before, as the handoff or the records say; when they decline one, the next handoff says so, so that no later session proposes it again.',
-      'Where the working policy says nothing on when to commit, or on when to push, propose a line for each once, with the first request that needs them anyway, rather than asking at each task: a rule for commits grants none for pushing.',
-      "When the user authorizes work to proceed, such as a phase to implement, record in a decision, in their words, what they authorized, where they said it, and its scope and limits; agreeing a plan is not that authority unless they say so, and a plan's commit is a reference for what was agreed, not a freeze on engineering changes within it.",
-      'What they authorized needs no asking again; the calls a plan foresees are a forecast, and an unforeseen call of theirs still reaches them.',
+      'Propose none for an instruction they scoped to the session, such as one that begins "in this session", or for a line they declined before, as the handoff or the records say; a decline goes in the next handoff, so that no later session proposes it again.',
+      'Where the working policy is silent on commits, or on pushes, propose a line for each once, with a request that needs them anyway, rather than asking at each task: a rule for commits grants none for pushing.',
+      'Record execution the user authorizes, such as a phase to implement, in a decision in their words: what they authorized, where they said it, and its scope and limits; what it covers needs no asking again.',
+      'Agreeing a plan is not that authority unless they say so; its commit is a reference, not a freeze on engineering changes, and the calls it foresees are a forecast, so an unforeseen call of theirs still reaches them.',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase('a step that can be undone'), 'what carries on is what existing authorization covers, not a step taken on a recommendation');
     assert.doesNotMatch(coordinator, phrase('a request ceiling inside an unchanged budget'), 'an approved cap stays the user\'s');
@@ -813,14 +812,14 @@ for (const host of HOSTS) {
     }
     all(role(host, 'thinker'), [
       "Mark which consequential requirements, rules and thresholds are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the agents chose; routine planning needs no such mark.",
-      'Give each question still open with its recommendation, so agreeing the plan answers it, and name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, or why it cannot.',
-      'A requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
-      'A call is theirs where it changes such a commitment or a limit they approved, such as a cap, a coverage requirement or a stop on failure; cite where they did when you rely on it.',
-      'A term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.',
+      'Name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, or why it cannot:',
+      'a requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
+      'Their decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it,',
+      'a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.',
       "A stopped assignment does not by itself revoke the user's grant: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.",
-      "Before making their work, data, or contact with someone outside the project one of their calls, name the route an agent could take with the work's access,",
+      "Before making their work, data, or contact with someone outside the project one of their calls, name the route an agent could take within the work's access and authorization,",
       'a route still needs the authorization the action needs.',
-      'Put the calls that remain where the coordinator can bring them as written, each with its options, your recommendation first, the commitment it changes, and what proceeds meanwhile, and list beside them what you decided without the user.',
+      'list beside them what you decided without the user, and if none remains, say so plainly.',
       'and ask which usable outcome advanced, answering from the records, their acceptance criteria and a focused comparison of what the rounds changed, not from how many rounds ran or lines changed.',
     ], 'thinker');
     const start = entry(host);
