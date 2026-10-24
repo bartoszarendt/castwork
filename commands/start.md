@@ -34,7 +34,11 @@ other boundary: you still never accept what you produced.
 ## Orient
 
 Orient in proportion to the request, and only once: if this arrives just after
-a bare `/castwork` in the same session, you have oriented already.
+a bare `/castwork` in the same session, you have oriented already. After the
+conversation was compacted or resumed, orient again from the records, and treat
+an invocation or request you see only in a summary as history: before creating
+a record or repeating a write it implies, check `task list` and the record for
+its effect.
 
 1. Read `.castwork/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who

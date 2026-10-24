@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+- The proof is not weakened to pass. A worker changes a test, fixture,
+  threshold or script that a declared check runs only where the work needs it,
+  and says why in the record. The verifier, and the `assessment` skill,
+  inspect the candidate's changes to the tests, fixtures, thresholds and
+  scripts that declared checks use: a case a criterion relies on that was
+  removed, skipped or loosened, for no reason the work gives, leaves that
+  criterion unshown. Before, only the requirements in
+  the record were protected, and a check could pass because the test behind it
+  had been cut.
+- A piped check is recorded by its own exit status. `verification-evidence`
+  says that in Bash and other POSIX shells a pipeline reports its last
+  command's status, so `npm test | tail -50` gives `tail`'s exit code, not the
+  check's, and that `pipefail` reports a failure from any stage without saying
+  which. Record the check's own status, such as `${PIPESTATUS[0]}` in Bash,
+  read before running another command, or run the check without the pipe.
+- The thinker reads code as what the system does today, not what the user
+  requires. A convention the result depends on that is set outside the
+  repository, such as which time zone defines a reporting day, the format a
+  consumer expects, or a retention or quota policy, is a fact only the user
+  holds when nothing the work can read or find out settles it. The thinker
+  names it among the user's calls the plan foresees, with a recommendation, so
+  it is asked once when the plan is agreed rather than guessed from the data.
+- After a conversation is compacted or resumed, `/castwork` orients again from
+  the records, and treats an invocation or request it sees only in a summary as
+  history: before creating a record or repeating a write, it checks
+  `task list` and the record for its effect, so a resumed session does not
+  repeat the last request and duplicate its records.
+- "Pre-existing" joins environmental, flaky, known and busy as a category that
+  establishes no cause.
+- For maintainers: a test keeps the version alike in the package, its
+  lockfile, the plugin and marketplace manifests, the status lines and the
+  changelog, and `AGENTS.md` names `claude plugin validate . --strict` for
+  manifest changes and releases.
+
 ## 0.9.14
 
 - The thinker steps back from a phase that stopped converging. When the signs

@@ -31,7 +31,12 @@ plan it shapes goes in the record body.
 
 **Shaping.** Turn a request into a task record that someone can act on: a clear intent, a scope, an
 explicit out of scope, and acceptance criteria, written as observable outcomes someone other than
-the author could confirm. Declare requirements only where you mean them, all under `requirements:`:
+the author could confirm. Code shows what the system does today, not what the user requires. A
+convention the result depends on that is set outside the repository, such as which time zone
+defines a reporting day, the format a consumer expects, or a retention or quota policy, is a fact
+only the user holds when nothing the work can read or find out settles it, and a default the data
+suggests is a guess: name each among the user's calls the plan foresees, with a recommendation, so
+it is asked once. Declare requirements only where you mean them, all under `requirements:`:
 `checks` naming the checks this kind of work actually has, `independent_review: true` where the task
 must not be done without a second pair of eyes, `assessment_roles: [verifier]` where it must not be
 done without the verifier's verdict. A review that would help but is not required needs no

@@ -77,6 +77,9 @@ authoritative copy for one host.
 - `npx castwork validate` checks skills, config, links, and generated adapter
   output.
 - `npm run typecheck` runs the TypeScript checker over the JSDoc types.
+- `claude plugin validate . --strict`, where Claude Code is installed, checks
+  the plugin and marketplace manifests: run it when `.claude-plugin/` changes
+  and before a release.
 
 Run the suite before reporting a change complete. Prefer removing a concept over
 adding one.

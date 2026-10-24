@@ -843,3 +843,33 @@ test("decision capture keeps an approved limit binding, records methods as the a
     'An instruction they scope to the session, such as one that begins "in this session", stays in the session: propose no line for it, nor again one they declined.',
   ], 'decision-capture');
 });
+
+for (const host of HOSTS) {
+  test(`${host} roles keep the proof intact, read outside conventions as the user's facts, and re-orient after compaction`, () => {
+    all(role(host, 'worker'), [
+      'weaken the requirements or the proof to get a favorable result',
+      'A test, fixture, threshold or script that a declared check runs is part of the proof: change it only where the work needs it, and say why in the record.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'Inspect the candidate\'s changes to the tests, fixtures, thresholds and scripts that declared checks use: a case a criterion relies on that was removed, skipped or loosened, for no reason the work gives, leaves that criterion unshown.',
+    ], 'verifier');
+    all(role(host, 'thinker'), [
+      'Code shows what the system does today, not what the user requires.',
+      'is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name each among the user\'s calls the plan foresees, with a recommendation, so it is asked once.',
+    ], 'thinker');
+    all(role(host, 'coordinator'), ['a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy.'], 'coordinator');
+    all(entry(host), [
+      'After the conversation was compacted or resumed, orient again from the records, and treat an invocation or request you see only in a summary as history: before creating a record or repeating a write it implies, check `task list` and the record for its effect.',
+    ], 'entry');
+  });
+}
+
+test('the procedure skills read changes to the proof, record a check\'s own exit status, and name "pre-existing" as a category', () => {
+  all(skill('assessment'), [
+    'Inspect the candidate\'s changes to the tests, fixtures, thresholds and scripts its checks use: a case a criterion relies on that was removed, skipped or loosened, for no reason the work gives, leaves that criterion unshown.',
+  ], 'assessment');
+  all(skill('verification-evidence'), [
+    'In Bash and other POSIX shells a pipeline reports its last command\'s status, so `npm test | tail -50` gives `tail`\'s exit code, not the check\'s, and `pipefail` reports a failure from any stage without saying which. Record the check\'s own status, such as `${PIPESTATUS[0]}` in Bash, read before running another command, or run it without the pipe.',
+  ], 'verification-evidence');
+  all(skill('blocked-state'), ['A category such as environmental, flaky, known, pre-existing, or busy, or an owner\'s disposition, establishes no mechanism.'], 'blocked-state');
+});

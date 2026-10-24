@@ -91,8 +91,10 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   `done` only after lint shows the requirements met.
 - **Your own acceptance is never independent.** Your actor is among the candidate's producers, so an
   assessment you record does not satisfy `independent_review`, whatever role it claims.
-- **Do not weaken the requirements to get a favorable result,** and do not
-  fabricate evidence. An `exit_code` you did not see is worse than no evidence.
+- **Do not weaken the requirements or the proof to get a favorable result,** and do not
+  fabricate evidence. An `exit_code` you did not see is worse than no evidence. A test, fixture,
+  threshold or script that a declared check runs is part of the proof: change it only where the work
+  needs it, and say why in the record.
 
 ## Working well here
 

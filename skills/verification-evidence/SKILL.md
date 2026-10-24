@@ -142,7 +142,12 @@ what was seen, what it means, what is next; not a new narrative section per run.
 - **A manual check is still evidence.** Name what you inspected and what you
   concluded. Do not invent an exit code for it.
 - **One command per entry.** `exit_code` belongs to a single command you ran
-  and saw, never to prose or a chain of commands.
+  and saw, never to prose or a chain of commands. In Bash and other POSIX
+  shells a pipeline reports its last command's status, so `npm test | tail -50`
+  gives `tail`'s exit code, not the check's, and `pipefail` reports a failure
+  from any stage without saying which. Record the check's own status, such as
+  `${PIPESTATUS[0]}` in Bash, read before running another command, or run it
+  without the pipe.
 - **Name the check honestly.** A subset of a declared check, such as some of
   the tests, goes under its own name, never under the declared check's name.
   `task lint` reports on the record, so it is not evidence about the candidate.

@@ -54,7 +54,10 @@ checks it rests on have finished.
    `## Acceptance criteria` first, then the change. Work that is good but not
    what was asked for is still not what was asked for.
 2. **Is it correct?** Look for the failure the tests do not cover: the empty
-   case, the second call, the error path, the concurrent one.
+   case, the second call, the error path, the concurrent one. Inspect the
+   candidate's changes to the tests, fixtures, thresholds and scripts its
+   checks use: a case a criterion relies on that was removed, skipped or
+   loosened, for no reason the work gives, leaves that criterion unshown.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
    should be paying for it.

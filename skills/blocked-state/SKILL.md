@@ -87,8 +87,8 @@ alone, you set it yourself.
 - **Do not silently retry.** Repeating a failing approach and hoping is how an
   hour disappears. When another attempt would only repeat what already failed,
   that is a stall: write it down and pursue diagnosis within existing authority.
-  A category such as environmental, flaky, known, or busy, or an owner's
-  disposition, establishes no mechanism. Reuse a documented diagnosis when its
+  A category such as environmental, flaky, known, pre-existing, or busy, or an
+  owner's disposition, establishes no mechanism. Reuse a documented diagnosis when its
   evidence applies here; otherwise investigate a cause that progress depends on,
   using the thinker when deeper investigation or another perspective would help.
   Diagnosis using information and resources already authorized for the task

@@ -90,7 +90,7 @@ sends work to them. A limit or stop the user set or supplied, such as in a brief
 
 A blocking finding that questions the work rather than the candidate, such as a criterion read two ways, is a sign of a stall the first time; so are repeated
 `needs_revision` on one criterion, a fix that brings a new defect of the same kind or next to it, even as findings shrink, an intermittent failure several roles have seen,
-which a pass in isolation does not explain, and a cause explained only by a category such as environmental, flaky, known, or busy. So is work that moves while what it
+which a pass in isolation does not explain, and a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy. So is work that moves while what it
 should reach does not, such as rounds spent around an acceptance check that never runs: run it once it can tell you something and authorization allows, and where
 practical reproduce a costly failure cheaply, such as in an offline test, before paying for another run; otherwise say what the evidence shows and take the next authorized
 step. When these signs recur across a phase's tasks rather than in one, have the thinker step back, as the entry command's `## Stepping back` says. When progress depends on

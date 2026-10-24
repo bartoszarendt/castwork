@@ -28,7 +28,9 @@ be invoked alone on any candidate at any time.
 - Assess it against the work, in order:
   1. **Responsive:** does it do what the record asked, and not something else?
   2. **Complete:** does every acceptance criterion hold, and is anything the record requires missing?
-  3. **Correct:** is what is there right? Does the evidence describe what actually happens; is anything claimed that is not there? When
+  3. **Correct:** is what is there right? Does the evidence describe what actually happens; is anything claimed that is not there? Inspect
+     the candidate's changes to the tests, fixtures, thresholds and scripts that declared checks use: a case a criterion relies on that
+     was removed, skipped or loosened, for no reason the work gives, leaves that criterion unshown. When
      the change alters something other parts rely on, check those parts, or name that gap as a limit. Try to break it with inputs and
      conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.
      When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the
