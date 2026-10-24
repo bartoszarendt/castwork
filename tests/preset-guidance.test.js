@@ -781,3 +781,66 @@ test('the procedure skills send supporting files to .castwork/findings/ and open
   assert.match(skill('task-record-contract'), phrase('a file the task delivers, or a script a declared check runs, never goes there: it is part of the candidate.'));
   assert.match(skill('verification-evidence'), phrase('A script a declared check runs is part of the candidate, never there: a reviewer extracting the candidate must have it.'));
 });
+
+for (const host of HOSTS) {
+  test(`${host} the user is asked only their calls, with the thinker's recommendation, and what was decided kept apart`, () => {
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      'At a stop with calls for them and at the end, keep what you or the thinker decided without them, where anything was, with where it is recorded, apart from what needs them: they may overrule the first afterwards, and only the second waits on them.',
+      'Number each call and give its options, the thinker\'s recommended one first and any precedent of theirs beside it, so that a word answers it, such as "1A, 2B"; bring no engineering item among them for approval, even one the thinker settled, but name it as decided.',
+      'Say what carries on meanwhile: what lies within existing authorization and does not wait on their answer.',
+      "**Before you ask the user anything,** check, in order: is it one of their calls, as the next point lists them; does a record, a decision, the working policy or the thinker's plan already answer it; can an agent find it out or do it within the work's access and authorization; where it needs judgement, is the thinker's recommendation in hand, cited in its wording; and what carries on while they answer.",
+      'A question that is not theirs, is answered already, or is one an agent can settle goes no further: settle it as `Who answers a question` says, and tell them what was decided. A fact or permission only they can give needs no thinker.',
+      "Relay the thinker's recommendation in its wording, never a menu of your own.",
+      'A call is theirs where it changes something they committed to or approved, such as an outcome, a guarantee, a scope, a budget, a cap, a coverage requirement, a stop on failure, or a risk they accepted; cite where they did when you rely on it.',
+      "A term the agents wrote that the user never approved or supplied, such as a number of attempts or a one-shot dispatch in an agents' review, a sequence or landing unit, or a frozen design, is engineering however a record words it.",
+      'A stopped assignment does not by itself revoke a grant of theirs: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.',
+      "What only they know or hold is what no agent can find out or do with the work's access: before asking them to do work, supply data, or contact anyone outside the project, have the thinker name such a route,",
+      'A route still needs the authorization the action needs: a browser an agent drives can change what it opens.',
+      "Start that reviewer so that its finish reaches you: through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn when it cannot finish in one call; never end your turn while it runs.",
+      'A rule the agents wrote, in a brief, a plan or a record, that escalates after a number of failed attempts or on a stall returns the work to the thinker, to step back or to have it reviewed independently, and reaches the user only where what follows is their call; write no such rule that sends the work to them.',
+      'A limit or stop the user set or supplied, such as in a brief they gave you, binds as written, whoever drafted it.',
+      'Propose nothing for one they scoped to the session, such as an instruction that begins "in this session", or for a line they declined before, as the handoff or the records say; when they decline one, the next handoff says so, so that no later session proposes it again.',
+      'Where the working policy says nothing on when to commit, or on when to push, propose a line for each once, with the first request that needs them anyway, rather than asking at each task: a rule for commits grants none for pushing.',
+      "When the user authorizes work to proceed, such as a phase to implement, record in a decision, in their words, what they authorized, where they said it, and its scope and limits; agreeing a plan is not that authority unless they say so, and a plan's commit is a reference for what was agreed, not a freeze on engineering changes within it.",
+      'What they authorized needs no asking again; the calls a plan foresees are a forecast, and an unforeseen call of theirs still reaches them.',
+    ], 'coordinator');
+    assert.doesNotMatch(coordinator, phrase('a step that can be undone'), 'what carries on is what existing authorization covers, not a step taken on a recommendation');
+    assert.doesNotMatch(coordinator, phrase('a request ceiling inside an unchanged budget'), 'an approved cap stays the user\'s');
+    for (const content of [coordinator, role(host, 'thinker')]) {
+      assert.doesNotMatch(content, phrase('an attempt that consumed nothing spends nothing'), 'zero charged requests do not settle usage or a stop');
+      assert.doesNotMatch(content, phrase('whatever failed before'), 'later success does not erase a stop on the first failure');
+    }
+    all(role(host, 'thinker'), [
+      "Mark which consequential requirements, rules and thresholds are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the agents chose; routine planning needs no such mark.",
+      'Give each question still open with its recommendation, so agreeing the plan answers it, and name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, or why it cannot.',
+      'A requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
+      'A call is theirs where it changes such a commitment or a limit they approved, such as a cap, a coverage requirement or a stop on failure; cite where they did when you rely on it.',
+      'A term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.',
+      "A stopped assignment does not by itself revoke the user's grant: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.",
+      "Before making their work, data, or contact with someone outside the project one of their calls, name the route an agent could take with the work's access,",
+      'a route still needs the authorization the action needs.',
+      'Put the calls that remain where the coordinator can bring them as written, each with its options, your recommendation first, the commitment it changes, and what proceeds meanwhile, and list beside them what you decided without the user.',
+      'and ask which usable outcome advanced, answering from the records, their acceptance criteria and a focused comparison of what the rounds changed, not from how many rounds ran or lines changed.',
+    ], 'thinker');
+    const start = entry(host);
+    all(start, [
+      "When no roles are coordinated, as when you take the work yourself as the coordinator role's Delegating section allows, a question a record or plan sends to the thinker is yours to settle as the thinker file says, unless it is the user's call; tell them what you decided.",
+      'Taking that judgement changes no other boundary: you still never accept what you produced.',
+      'Where a decision records what the user authorized for the current work, read it before you ask them anything: what it authorizes needs no asking again, and agreeing a plan authorizes nothing by itself.',
+      'Note there each line the user declined for the working policy, so the next session does not propose it again.',
+    ], 'entry');
+    assert.doesNotMatch(start, phrase('`Changes` line'), 'report has no Changes line');
+  });
+}
+
+test("decision capture keeps an approved limit binding, records methods as the agents', and keeps authorization apart from plan agreement", () => {
+  all(skill('decision-capture'), [
+    'When the owner approves several recommendations in one answer, such as "approved as recommended", record as theirs the parts that were their calls and every limit they approved, such as a cap, a coverage requirement or a stop on failure, each with what it commits them to, and the methods that came with them as the agents\' choices, citing the approval,',
+    'This applies to what you record from now on: a restriction an existing decision records as approved stays binding until the owner changes it.',
+    'Record a grant by what it bounds, such as its caps, its limits and stops, the risk accepted, and its scope, including any attempt limit the owner approved or supplied. A stopped assignment does not by itself revoke it.',
+    'When the owner authorizes work to proceed, such as a phase to implement, record what they authorized, where they said it, and its scope and limits.',
+    'Agreeing a plan is a decision about what the work is, not that authority, unless they say so; for a plan, record which of its consequential rules are their words and which are proposals they confirmed.',
+    'An instruction they scope to the session, such as one that begins "in this session", stays in the session: propose no line for it, nor again one they declined.',
+  ], 'decision-capture');
+});

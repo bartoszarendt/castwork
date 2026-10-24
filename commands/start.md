@@ -25,6 +25,12 @@ When you adopt it, name it once at the start of your first message, as
 repeat it in later messages. You already have this text; do not load the
 `castwork` skill again.
 
+When no roles are coordinated, as when you take the work yourself as the
+coordinator role's Delegating section allows, a question a record or plan
+sends to the thinker is yours to settle as the thinker file says, unless it is
+the user's call; tell them what you decided. Taking that judgement changes no
+other boundary: you still never accept what you produced.
+
 ## Orient
 
 Orient in proportion to the request, and only once: if this arrives just after
@@ -47,7 +53,10 @@ a bare `/castwork` in the same session, you have oriented already.
    `CLAUDE.md`, and in the README. Do not search the repository for files that
    might be plans: a project may have none. Say so when a pointer does not
    resolve. Read the decisions under `.castwork/decisions/` that these
-   documents or the open records cite. When the work could touch a choice made
+   documents or the open records cite. Where a decision records what the
+   user authorized for the current work, read it before you ask them
+   anything: what it authorizes needs no asking again, and agreeing a plan
+   authorizes nothing by itself. When the work could touch a choice made
    earlier, `npx --no castwork decision list` shows every decision with its
    status; read the ones that bear on the work, not all of them.
 3. Find open tasks with `npx --no castwork task list` and read them as the
@@ -198,7 +207,9 @@ When the user asks, in whatever words or language, to stop the work for now:
   `.castwork/local/handoff.md`, which stays on this machine and outside
   snapshots. Keep in it only context the records do not already capture: the
   next step across tasks, what is still running, what the environment is like
-  now, and the limits of what the user authorized. A fact about this machine
+  now, and the limits of what the user authorized. Note there each line the
+  user declined for the working policy, so the next session does not propose
+  it again. A fact about this machine
   that will still hold next time belongs in `.castwork/local/setup.md`, not in
   the handoff: add it there, as the other proposals for that file are applied,
   and point to that file rather than repeating it. Date it from the clock, name the

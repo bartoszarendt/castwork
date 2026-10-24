@@ -206,6 +206,8 @@ test('the scaffolded project.md says what the Documents pointers are for', (t) =
   const project = fs.readFileSync(path.join(root, PROJECT_FILE), 'utf8');
   assert.match(project, /## Documents\n[\s\S]*The coordinator reads them to report where the project is and to propose what\s+comes next/);
   assert.match(project, /## Working policy\n[\s\S]*replacing or removing a stale sentence is better than adding another[\s\S]*## Checks/);
+  // Said once here, commit cadence and the user's own stops are not asked again at each task.
+  assert.match(project, /## Working policy\n[\s\S]*Say when agents may commit[\s\S]*separately when they may push[\s\S]*a rule for\s+commits grants none for pushing[\s\S]*Agents decide the rest and tell you what they decided\.[\s\S]*## Checks/);
   assert.match(project, /## Setup facts\n[\s\S]*keep each fact to a line\.[\s\S]*saying what it holds and when to\s+read it[\s\S]*`\.castwork\/local\/setup\.md`, which stays on that machine[\s\S]*## Documents/);
 });
 

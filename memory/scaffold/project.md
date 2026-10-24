@@ -20,6 +20,12 @@ know; replacing or removing a stale sentence is better than adding another.
 > security skill where the host has one; ask before adding a dependency; prefer
 > removing a concept over adding one.
 
+Say when agents may commit, such as "commit each task once it is accepted",
+and separately when they may push, such as "push only when I ask": a rule for
+commits grants none for pushing. Say too what must reach you before it happens
+beyond your usual calls, such as spending, production data, or contacting
+customers. Agents decide the rest and tell you what they decided.
+
 ## Checks
 
 Name the commands your checks refer to, so an agent recording evidence uses the

@@ -51,6 +51,71 @@
   around that review, does not confirm it. Before, the thinker was asked which
   causes recur across earlier reviews, and a cause could look confirmed because
   the plans that followed its review were built around it.
+- Before asking the user anything, the coordinator checks, in order: is it one
+  of their calls, does a record, decision, the working policy or the plan
+  already answer it, can an agent find it out or do it within the work's access
+  and authorization, where it needs judgement is the thinker's recommendation in
+  hand, and what carries on meanwhile. It relays the thinker's recommendation in
+  its wording, never a menu of its own; a fact or permission only the user can
+  give needs no thinker. Calls are numbered, with options, the recommended one
+  first and any precedent of the user's beside it, so a word answers them; no
+  engineering item is brought for approval. At a stop with calls for the user,
+  and at the end, what was decided without them is kept apart from what needs
+  them, and what lies within existing authorization carries on.
+- A call is the user's where it changes something they committed to or
+  approved, such as an outcome, a scope, a budget, a cap, a coverage
+  requirement, a stop on failure, or a risk they accepted, and a role relying
+  on such a restriction cites where they did. A term the agents wrote that the
+  user never approved or supplied, such as a number of attempts or a one-shot
+  dispatch in an agents' review, a sequence, or a frozen design, is
+  engineering. A stopped assignment does not by itself revoke the user's
+  grant: work continues within all the limits and conditions they approved or
+  supplied, after reconciling usage and uncertainty, an explicit stop or
+  attempt limit is honoured even when no request was charged, and an unchanged
+  budget cancels no other limit. A rule the agents wrote that escalates
+  after failed attempts or on a stall returns the work to the thinker, and the
+  agents write no such rule that sends work to the user; a limit or stop the
+  user set or supplied, such as in a brief they gave, binds as written.
+- When the user approves several recommendations in one answer, decision
+  capture records as theirs the parts that were their calls and every limit they
+  approved, and the methods that came with them as the agents' choices, citing
+  the approval. This applies to what is recorded from now on: a restriction an
+  existing decision records as approved stays binding until the user changes it.
+- When the user authorizes work to proceed, such as a phase to implement, the
+  coordinator records what they authorized, where they said it, and its scope
+  and limits. Agreeing a plan is not that authority unless they say so, and a
+  plan's commit is a reference for what was agreed, not a freeze on engineering
+  changes. Orientation reads the authorization, and what it covers needs no
+  asking again; the calls a plan foresees are a forecast, so an unforeseen call
+  of the user's still reaches them. The thinker marks which consequential
+  requirements, rules and thresholds are the user's words and which are the
+  agents' proposals, and gives each open question with its recommendation.
+- Before asking the user to do work, supply data, or contact anyone outside the
+  project, the thinker names the route an agent could take, such as research,
+  the project's documents, a delegated agent with a browser, or an observation
+  within the agreed caps, or why there is none. A route still needs the
+  authorization the action needs. A plan names any substantial involvement it
+  needs from the user, with its purpose and the alternatives.
+- In a step back the thinker asks which usable outcome advanced, answering from
+  the records, their acceptance criteria and a focused comparison of what the
+  rounds changed, not from how many rounds ran or lines changed.
+- An instruction the user scoped to the session, such as one that begins "in
+  this session", is no longer proposed for `## Working policy`, nor is a line
+  they declined before; a decline goes in the next handoff. Where the working
+  policy says nothing on committing, or on pushing, the coordinator proposes a
+  line for each once, with a request that needs the user anyway: a rule for
+  commits grants none for pushing. The `project.md` scaffold asks for both, and
+  for what must reach the user before it happens.
+- A second reviewer the working policy names is started so that its finish
+  reaches the coordinator: through the host's delegation where that wakes it,
+  otherwise in the foreground within the shell's time limit, polled with bounded
+  waits within the same turn when it cannot finish in one call. Before, a
+  coordinator could start it in the background and end its turn, and nothing
+  woke it.
+- When no roles are coordinated, a question a record or plan sends to the
+  thinker is settled by the session doing the work, as the thinker file says,
+  unless it is the user's call; that changes no other boundary, and the session
+  still never accepts what it produced.
 
 ## 0.9.13
 

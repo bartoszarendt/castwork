@@ -79,9 +79,27 @@ replacement keeps or tightens the commitment within existing authorization:
 an engineering call, recorded citing theirs, in the task when it settles only
 that task and otherwise in a decision record. One that weakens the commitment
 goes back to them.
+When the owner approves several recommendations in one answer, such as
+"approved as recommended", record as theirs the parts that were their calls and
+every limit they approved, such as a cap, a coverage requirement or a stop on
+failure, each with what it commits them to, and the methods that came with them
+as the agents' choices, citing the approval, so that a later step can change
+those as above. This applies to what you record from now on: a restriction an
+existing decision records as approved stays binding until the owner changes it.
+Record a grant by what it bounds, such as its caps, its limits and stops, the
+risk accepted, and its scope, including any attempt limit the owner approved or
+supplied. A stopped assignment does not by itself revoke it.
+When the owner authorizes work to proceed, such as a phase to implement,
+record what they authorized, where they said it, and its scope and limits.
+Agreeing a plan is a decision about what the work is, not that authority,
+unless they say so; for a plan, record which of its consequential rules are
+their words and which are proposals they confirmed.
 An owner's instruction on how they want to be consulted belongs in the working
 policy in `.castwork/project.md`, in their words, rather than in one record:
-propose the line, and it lasts beyond the session once they approve it.
+propose the line, and it lasts beyond the session once they approve it. An
+instruction they scope to the session, such as one that begins "in this
+session", stays in the session: propose no line for it, nor again one they
+declined.
 If their answer could select more than one option, ask
 before you record it.
 
