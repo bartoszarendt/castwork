@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.14
 
 - The thinker steps back from a phase that stopped converging. When the signs
   of a stall recur across a phase's tasks, or the work goes to its proof rather
@@ -105,7 +105,10 @@
   policy says nothing on committing, or on pushing, the coordinator proposes a
   line for each once, with a request that needs the user anyway: a rule for
   commits grants none for pushing. The `project.md` scaffold asks for both, and
-  for what must reach the user before it happens.
+  for what must reach the user before it happens. `doctor` compares
+  `project.md` with the current scaffold, so a `## Working policy` still as an
+  earlier `setup` wrote it is no longer reported as unwritten: if yours is, write
+  it.
 - A second reviewer the working policy names is started so that its finish
   reaches the coordinator: through the host's delegation where that wakes it,
   otherwise in the foreground within the shell's time limit, polled with bounded
