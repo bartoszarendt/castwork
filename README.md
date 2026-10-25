@@ -16,7 +16,7 @@ Agents choose how to approach the work. The record gives you and the next agent
 something concrete to inspect and continue.
 
 > **Status:** pre-1.0 and not yet on npm. Breaking changes are expected; the
-> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.14 is
+> [changelog](CHANGELOG.md) says what changed and what to do. Version 0.9.15 is
 > current.
 
 ## When it helps

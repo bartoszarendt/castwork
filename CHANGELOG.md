@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.15
 
 - A step back names the simplest route even when it changes a gate, a
   sequence or a coverage the user approved. That route becomes the user's call,
