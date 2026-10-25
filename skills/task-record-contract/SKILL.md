@@ -64,7 +64,8 @@ dumps, and captures, goes in `.castwork/local/runs/<task>/`, which Git ignores.
 Link only durable support, not ignored scratch or `.castwork/tasks/`: write it
 in `.castwork/findings/`, named after the task, such as `T-012-review.md`, and
 copy a run's output there only where a failure, an acceptance or a
-reproduction rests on it. Snapshots leave that folder out, as they leave out
+reproduction rests on it, and only the part it rests on, not copied sources,
+archives or a whole run's output the entry already states. Snapshots leave that folder out, as they leave out
 the records, so a file the task delivers, or a script a declared check runs,
 never goes there: it is part of the candidate. A review of how work went goes
 in `.castwork/reviews/`.

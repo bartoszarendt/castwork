@@ -60,9 +60,15 @@ identical `tree:` sha.
 
 Evidence belongs to the bytes it ran on. Take the snapshot after your last
 change and before your final evidence. If you change anything afterwards, take
-a new snapshot, record it as a new candidate, and run the evidence again for
-it. `task lint` says whether the working tree still matches the current
-snapshot.
+a new snapshot, record it as a new candidate, and run again for it the declared
+checks and the earlier observations the change could affect. Decide which from
+what changed: the product code an observation ran, or the part of its
+observer, oracle, classifier or fixture that produced or judged it, can affect
+it even when the product is unchanged, as a fix to a shared false-pass
+condition affects every result it judged; a change to a branch only another
+case uses need not. An observation the change could not affect can still show
+a criterion: cite it with its candidate and say why it still stands. `task lint`
+says whether the working tree still matches the current snapshot.
 
 `producers` is who made it — the actor strings that later decide whether a
 review was independent. Optional candidate `host`, `model`, and `at` are
@@ -116,8 +122,10 @@ materially supports a failure, reproduction, or review finding, put it in a
 linked file named under `output` rather than pasting a transcript into the
 record. Link only where it lasts, not ignored scratch or `.castwork/tasks/`:
 write it in `.castwork/findings/`, named after the task, such as
-`T-012-test.log`. Snapshots leave that folder out, so writing there never
-changes a candidate. A script a declared check runs is part of the candidate,
+`T-012-test.log`. Copy the part it rests on, such as the lines that show the
+result, not copied sources, archives or a whole run's output the entry already
+states. Snapshots leave that folder out, so writing there never changes a
+candidate. A script a declared check runs is part of the candidate,
 never there: a reviewer extracting the candidate must have it.
 
 A routine successful probe is a sentence in the body, or nothing. An observation

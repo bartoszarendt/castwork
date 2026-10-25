@@ -309,7 +309,7 @@ for (const host of HOSTS) {
     }
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
     all(role(host, 'coordinator'), [
-      "At a stop, report verified state, the obstacle and its cause or remaining uncertainty, what can proceed within existing authorization, and only the user's calls.",
+      "At a stop, report verified state, which usable outcome the work moved or that none did, the obstacle and its cause or remaining uncertainty, what can proceed within existing authorization, and only the user's calls.",
       "A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a shortfall, goes to the thinker before the user: ask it for the path, where current authority ends, and a recommendation for what lies beyond.",
       'When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.',
       "Bring the thinker's recommendation for each of the user's calls that remains, in their terms: what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record, and their answer adopts them.",
@@ -343,7 +343,7 @@ for (const host of HOSTS) {
       "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs,",
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment and stays within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record. One that weakens the commitment is theirs.',
       '`.castwork/local/setup.md` if it exists',
-      'at the end, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
+      'at the end, which usable outcome the work moved, or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
       'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
       'When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.',
       "If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
@@ -361,7 +361,7 @@ for (const host of HOSTS) {
       'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
       "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call.',
-      "When the path stops converging and the way out is the user's, such as deferring a requirement, recommend it then rather than planning another round around it.",
+      "When the path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement or changing a gate they approved, recommend it then rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
       'Say whether the path needs the user.',
@@ -762,7 +762,7 @@ test('the procedure skills keep run output in .castwork/local/runs/ and reviews 
   ], 'verification-evidence');
   all(skill('task-record-contract'), [
     'Run output stays out of the record: a record past 100 KB is reported as `record.large`.',
-    "copy a run's output there only where a failure, an acceptance or a reproduction rests on it.",
+    "copy a run's output there only where a failure, an acceptance or a reproduction rests on it, and only the part it rests on, not copied sources, archives or a whole run's output the entry already states.",
     'A review of how work went goes in `.castwork/reviews/`.',
   ], 'task-record-contract');
   all(skill('assessment'), [
@@ -863,6 +863,49 @@ for (const host of HOSTS) {
     ], 'entry');
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} the simplest route is named even when it changes an approved gate, the design-changing step runs first within authorization, and evidence is rerun where a change could affect it`, () => {
+    all(role(host, 'thinker'), [
+      'Run early the step whose result could change the design, such as the real operation under its failure conditions, rather than qualifying the instruments around it first.',
+      'A probe that ships and enables nothing, such as a throwaway test of that step, is investigation, not building the step, so a sequence that orders the building does not hold it back; it still stays within existing authorization, approved decisions and the working policy, on resources isolated from shared ones, and a probe outside those is the amendment to recommend.',
+      'By default, run an expensive set, such as every supported platform and version, once on the final candidate and develop against one representative configuration; check a configuration earlier where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built or catch a costly regression.',
+      'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource.',
+      'Name it even where it changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside, and a cheaper version of the same campaign says why it beats changing the gate.',
+      'When a gate keeps blocking, ask what it protects, and check, or have checked, that property in the product itself under the condition the gate excludes, such as a simulated delay or a failing hook, before investigating further what the gate measures: the product may need less than the gate asks, or fail even when it passes.',
+      'Size a grant of actions, such as changes on a host or live runs, to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.',
+    ], 'thinker');
+    all(role(host, 'coordinator'), [
+      "When a second reviewer names a call of the user's that the thinker's answer leaves out, such as changing a gate they approved, ask the thinker for it before carrying on.",
+      'A brief for a second reviewer of the approach, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy, within existing authorization and on isolated resources, where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.',
+    ], 'coordinator');
+    const worker = role(host, 'worker');
+    all(worker, [
+      'record it as a new candidate, and run again the declared checks and the earlier observations the change could affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged it, even when the product is unchanged.',
+      'An observation the change could not affect can still show its criterion: cite it with its candidate and say why it still stands.',
+      "Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.",
+    ], 'worker');
+    assert.doesNotMatch(worker, phrase('record it as a new candidate, and run the evidence again.'), 'a new candidate reruns what the change can reach, not every observation');
+    all(role(host, 'verifier'), [
+      "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again; the declared checks run on this candidate.",
+    ], 'verifier');
+    for (const id of ['worker', 'verifier']) {
+      assert.doesNotMatch(role(host, id), phrase('reaches it even when the product is unchanged'), `${id}: a changed instrument affects only the conclusions it could affect`);
+    }
+  });
+}
+
+test('the procedure skills rerun what a change could affect and copy into findings only the part a result rests on', () => {
+  all(skill('verification-evidence'), [
+    'record it as a new candidate, and run again for it the declared checks and the earlier observations the change could affect.',
+    'the product code an observation ran, or the part of its observer, oracle, classifier or fixture that produced or judged it, can affect it even when the product is unchanged, as a fix to a shared false-pass condition affects every result it judged; a change to a branch only another case uses need not.',
+    'An observation the change could not affect can still show a criterion: cite it with its candidate and say why it still stands.',
+    "Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.",
+  ], 'verification-evidence');
+  all(skill('assessment'), [
+    "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again. The declared checks run on the candidate you assess.",
+  ], 'assessment');
+});
 
 test('the procedure skills read changes to the proof, record a check\'s own exit status, and name "pre-existing" as a category', () => {
   all(skill('assessment'), [

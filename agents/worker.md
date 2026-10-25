@@ -61,7 +61,10 @@ Record candidate attributes when known; take recorded-at from an observed clock,
 
 - When the work is not committed, run `npx --no castwork snapshot` after your last change and before
   your final evidence, and record the `tree:<sha>` it prints. If you change anything afterwards,
-  take a new snapshot, record it as a new candidate, and run the evidence again. If the CLI is not
+  take a new snapshot, record it as a new candidate, and run again the declared checks and the earlier observations the change could
+  affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged
+  it, even when the product is unchanged. An observation the change could not affect can still show its criterion: cite it with its
+  candidate and say why it still stands. If the CLI is not
   available, say so and record the candidate as a mutable label; never invent a reference.
 - Evidence rules: one command per entry; `exit_code` only for a single command you ran and saw;
   `task lint` is not evidence about the candidate; environment variable names, never their values
@@ -72,6 +75,7 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.
   Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: where a failure, an acceptance or a reproduction
   rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; snapshots leave that folder out.
+  Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.
   A file the task delivers, or a script a declared check runs, is part of the candidate: never there.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as

@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+- A step back names the simplest route even when it changes a gate, a
+  sequence or a coverage the user approved. That route becomes the user's call,
+  brought with what it saves and risks, instead of an alternative the thinker
+  sets aside; a cheaper version of the same campaign says why it beats changing
+  the gate. A path that converges only at a cost out of proportion to what it
+  protects counts, like one that stops converging, as a reason to recommend
+  the user's way out. Before, a thinker could agree the proof was out of
+  proportion and still keep it, because the cheaper route needed the user.
+- The step whose result could change the design runs early, such as the real
+  operation under its failure conditions, rather than after the instruments
+  around it are qualified. A probe that ships and enables nothing is
+  investigation, so a sequence that orders building the step does not hold it
+  back; it still stays within existing authorization, approved decisions and
+  the working policy, on resources isolated from shared ones, and a probe
+  outside those is the amendment the thinker recommends. When a gate keeps
+  blocking, the thinker asks what it protects and has that property checked in
+  the product under the condition the gate excludes, before investigating
+  further what the gate measures. Within its authorization, the thinker may
+  investigate with a probe in a scratch copy outside the repository that
+  touches no shared resource.
+- After a change, the new candidate reruns its declared checks and the earlier
+  observations the change could affect, through the product code an
+  observation ran or the part of its observer, oracle, classifier or fixture
+  that produced or judged it, even when the product is unchanged: a fix to a
+  shared false-pass condition affects every result it judged, a change to a
+  branch only another case uses need not. An observation the change could not
+  affect can still show its criterion, cited with its candidate and why it
+  still stands. The verifier, and the `assessment` skill, check that reason.
+  By default an expensive set of runs, such as every supported platform and
+  version, runs once on the final candidate, with development on one
+  representative configuration; a configuration is checked earlier where it
+  differs materially, the change is sensitive to compatibility, the working
+  policy sets a cadence, or an earlier result could change what gets built or
+  catch a costly regression. Before, any change reran every observation.
+- A brief for a second reviewer of the approach names the outcome it serves,
+  points at the code and its tests as well as the records, allows a probe in a
+  scratch copy, within existing authorization and on isolated resources, where
+  the answer turns on how the product behaves, and rules out no conclusion. When a second reviewer names a call of the user's that the
+  thinker's answer leaves out, the coordinator asks the thinker for it before
+  carrying on.
+- The thinker sizes a grant of actions, such as changes on a host or live runs,
+  to the route the plan foresees, by kinds of action, caps and stops, and
+  proposes a one-shot limit only where a repeat could do harm.
+- The coordinator's reports at a stop and at the end say which usable outcome
+  the work moved, or that none did.
+- A file copied into `.castwork/findings/` holds the part a failure, acceptance
+  or reproduction rests on, not copied sources, archives or a whole run's
+  output the entry already states.
 - The proof is not weakened to pass. A worker changes a test, fixture,
   threshold or script that a declared check runs only where the work needs it,
   and says why in the record. The verifier, and the `assessment` skill,

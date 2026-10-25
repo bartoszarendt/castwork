@@ -58,6 +58,12 @@ checks it rests on have finished.
    candidate's changes to the tests, fixtures, thresholds and scripts its
    checks use: a case a criterion relies on that was removed, skipped or
    loosened, for no reason the work gives, leaves that criterion unshown.
+   Where a criterion rests on an observation of an earlier candidate, check
+   the record's reason that the change since could not affect it: a change
+   that could, in the product code it ran or in the part of its observer,
+   oracle, classifier or fixture that produced or judged it, leaves that
+   criterion unshown until it runs again. The declared checks run on the
+   candidate you assess.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
    should be paying for it.
