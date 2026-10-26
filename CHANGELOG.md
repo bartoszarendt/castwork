@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- A session can end without a pause, such as at a quota limit, a crash or a
+  closed terminal, and then no handoff covers its last work. Before anyone
+  writes, the coordinator now checks the working tree against the candidates
+  the open records name: drift `task lint` reports from a snapshot, and changes
+  no record accounts for, may be an interrupted run's or the user's own. It
+  reconciles them with the records before anyone writes to those files, asking
+  whose they are where nothing written says, and neither discards them nor
+  builds on them unexamined. Before, orienting relied on a handoff such a
+  session never wrote.
+
 ## 0.9.15
 
 - A step back names the simplest route even when it changes a gate, a

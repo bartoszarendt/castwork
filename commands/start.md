@@ -38,7 +38,14 @@ a bare `/castwork` in the same session, you have oriented already. After the
 conversation was compacted or resumed, orient again from the records, and treat
 an invocation or request you see only in a summary as history: before creating
 a record or repeating a write it implies, check `task list` and the record for
-its effect.
+its effect. A session can also end without a pause, such as at a quota limit, a
+crash or a closed terminal: no handoff then covers its last work, though an
+older one may describe an earlier moment. Before anyone writes, check the
+working tree against the candidates the open records name: drift `task lint`
+reports from a snapshot, and changes no record accounts for, may be an
+interrupted run's or the user's own. Reconcile them with the records before
+anyone writes to those files, asking whose they are where nothing written says;
+neither discard them nor build on them unexamined.
 
 1. Read `.castwork/project.md` — what this project is, its working policy,
    and the names of its checks. The policy is prose written by the people who

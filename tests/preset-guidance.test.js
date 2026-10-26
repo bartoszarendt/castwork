@@ -895,6 +895,16 @@ for (const host of HOSTS) {
   });
 }
 
+for (const host of HOSTS) {
+  test(`${host} entry reconciles an interrupted session's changes before anyone writes`, () => {
+    all(entry(host), [
+      'A session can also end without a pause, such as at a quota limit, a crash or a closed terminal: no handoff then covers its last work, though an older one may describe an earlier moment.',
+      "Before anyone writes, check the working tree against the candidates the open records name: drift `task lint` reports from a snapshot, and changes no record accounts for, may be an interrupted run's or the user's own.",
+      'Reconcile them with the records before anyone writes to those files, asking whose they are where nothing written says; neither discard them nor build on them unexamined.',
+    ], 'entry');
+  });
+}
+
 test('the procedure skills rerun what a change could affect and copy into findings only the part a result rests on', () => {
   all(skill('verification-evidence'), [
     'record it as a new candidate, and run again for it the declared checks and the earlier observations the change could affect.',
