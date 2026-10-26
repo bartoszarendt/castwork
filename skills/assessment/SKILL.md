@@ -66,7 +66,12 @@ checks it rests on have finished.
    candidate you assess.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
-   should be paying for it.
+   should be paying for it. A finding names the concrete burden, such as a
+   concept, option, layer or test a reader must carry, and a simpler
+   alternative that keeps the contract; that an abstraction exists, or has one
+   implementation, is not a finding. A missing test is a finding only with the
+   consequential failure it would catch and the gap in coverage; a defect you
+   observed is a defect whether or not a test is needed.
 
 ## Read the candidate
 

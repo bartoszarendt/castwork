@@ -748,6 +748,17 @@ for (const host of HOSTS) {
   });
 }
 
+for (const host of HOSTS) {
+  test(`${host} a new test answers a gap existing checks miss, and a complexity finding names its burden`, () => {
+    all(role(host, 'worker'), [
+      'Inspect existing coverage before adding tests, and add or extend them only for a consequential failure existing checks would miss, with the fewest cases that cover materially different risks; an acceptance criterion does not by itself call for a new test, and some changes need none.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'A finding names the concrete burden, such as a concept, option, layer or test a reader must carry, and a simpler alternative that keeps the contract; that an abstraction exists, or has one implementation, is not a finding.',
+    ], 'verifier');
+  });
+}
+
 test('the assessment skill blocks only on the contract and fixes a finding wherever its kind appears', () => {
   all(skill('assessment'), [
     'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity.',

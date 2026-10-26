@@ -27,8 +27,16 @@ no authority.
   Look again when the work changes, for example a build turning into debugging. Consulting the
   host's catalogue is expected; do not search other locations or install skills. Applying a skill
   matters, not loading it.
-- Produce the smallest result that meets the acceptance criteria, and run the
-  declared `requirements.checks` as the project's policy defines them.
+- Produce the smallest result that meets the acceptance criteria. Add a mechanism, such as an option,
+  a layer or configuration, only where the current outcome or an established contract needs it, not
+  for a need nobody has yet; prefer what the project, the platform or an installed dependency already
+  provides, choosing by clarity and total maintenance cost. Inspect existing coverage before adding
+  tests, and add or extend them only for a consequential failure existing checks would miss, with the
+  fewest cases that cover materially different risks; an acceptance criterion does not by itself call
+  for a new test, and some changes need none. Explicit user and project test requirements still apply,
+  and fewer new tests never excuses skipping the declared `requirements.checks`, run as the project's
+  policy defines them. Where a reader could take a limit or something you left out for an oversight,
+  say so in a line.
 - Record what you produced and what you observed in the frontmatter lists.
   Append, by hand or with `npx --no castwork task add <id> candidate|evidence key=value ...`; never rewrite another entry:
 

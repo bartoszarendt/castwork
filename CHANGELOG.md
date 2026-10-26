@@ -11,6 +11,24 @@
   whose they are where nothing written says, and neither discards them nor
   builds on them unexamined. Before, orienting relied on a handoff such a
   session never wrote.
+- The worker adds a mechanism, such as an option, a layer or configuration,
+  only where the current outcome or an established contract needs it, not for
+  a need nobody has yet, and prefers what the project, the platform or an
+  installed dependency already provides. It inspects existing coverage before
+  adding tests, and adds or extends them only for a consequential failure
+  existing checks would miss, with the fewest cases that cover materially
+  different risks: an acceptance criterion does not by itself call for a new
+  test. Explicit test requirements still apply, and fewer new tests never
+  excuses skipping a declared check. The thinker chooses the simplest approach
+  that meets the full outcome and plans a new test only for such a gap, and
+  `task-record-contract` says a criterion can be seen through an existing
+  check, a run or an inspection. The verifier gains a fourth lens,
+  proportionate, which `assessment` shares: a finding about complexity names
+  the concrete burden and a simpler alternative that keeps the contract, and a
+  missing test is a finding only with the failure it would catch; whether a
+  finding blocks still follows the existing rule. Before, the worker had one
+  line asking for the smallest result, and nothing said when a test was
+  warranted.
 
 ## 0.9.15
 

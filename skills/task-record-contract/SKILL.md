@@ -35,7 +35,9 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Out of scope** — the nearby work that must *not* be bundled in. This is the
   most useful heading in the record and the most often skipped.
 - **Acceptance criteria** — observable outcomes, one per bullet. If you cannot
-  say how you would see it, it is not a criterion yet.
+  say how you would see it, it is not a criterion yet. Seeing it can be an
+  existing check, a run or an inspection: a criterion does not by itself call
+  for a new test.
 - **Current state** — what holds now: current candidate, unresolved issues,
   restrictions with decision ids and source line pointers, next step. Rewrite
   in place, about fifteen lines. Open with what holds now; who wrote it and

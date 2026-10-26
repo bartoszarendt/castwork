@@ -38,6 +38,10 @@ be invoked alone on any candidate at any time.
      conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.
      When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the
      previous candidate, or name that as a limit.
+  4. **Proportionate:** would the project want to maintain it? A finding names the concrete burden, such as a concept, option,
+     layer or test a reader must carry, and a simpler alternative that keeps the contract; that an abstraction exists, or has one
+     implementation, is not a finding. A missing test is a finding only with the consequential failure it would catch and the gap
+     in coverage; a defect you observed is a defect whether or not a test is needed.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
   selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
