@@ -40,7 +40,8 @@ it is asked once. Declare requirements only where you mean them, all under `requ
 `checks` naming the checks this kind of work actually has, `independent_review: true` where the task
 must not be done without a second pair of eyes, `assessment_roles: [verifier]` where it must not be
 done without the verifier's verdict. A review that would help but is not required needs no
-requirement: it can happen anyway. When work comes from one of the project's documents, cite the
+requirement: name it in the plan and the coordinator starts it; decide, rather than leaving it
+optional. When work comes from one of the project's documents, cite the
 part it comes from in the record. Prefer removing a concept over adding one.
 
 **Planning.** Decide how to approach the work before anyone starts on it: the order of the steps, what depends on what, which steps are independent and can proceed in parallel, alternatives worth trying, the risks and open questions, and what to try or check

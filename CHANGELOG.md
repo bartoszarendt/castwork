@@ -29,6 +29,27 @@
   finding blocks still follows the existing rule. Before, the worker had one
   line asking for the smallest result, and nothing said when a test was
   warranted.
+- A review the thinker's plan names runs. The thinker names a review that
+  would help but is not required in the plan, and decides rather than leaving
+  it optional; the coordinator's default is one worker and a verifier where
+  the requirements or the plan name one. Dropping a review the plan names
+  stays the coordinator's call, told to the user with its risk. Before, the
+  thinker's preset said such a review "can happen anyway" and the coordinator
+  started a verifier only where requirements wanted one, so a review the plan
+  called optional never ran, and tasks closed on the worker's own evidence.
+- The coordinator resumes a role for its next round only while the role's
+  context is under about half of its model's window, since a resumed agent
+  starts its round holding everything it held before; past that, it starts a
+  fresh one with the task id. It reads the role's current context, its latest
+  turn's against its model's window, wherever the host reports it, such as a
+  run's status or a state file beside its output, never its peak or a count of
+  tokens spent, and notes where in `.castwork/local/setup.md`. Where the host
+  reports no current figure, it starts a fresh one for anything beyond a small
+  follow-up and says the figure was unavailable. Before, it started a fresh one
+  "when its context is spent", which it could not observe, so resumed rounds
+  began close to the window's limit and the host compacted them mid-round.
+  This prevents risky resumptions; it does not watch a round under way, so a
+  fresh agent on a long round can still approach the limit.
 
 ## 0.9.15
 

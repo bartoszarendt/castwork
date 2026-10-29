@@ -203,7 +203,7 @@ for (const host of HOSTS) {
       'all under `requirements:`',
       '`independent_review: true` where the task must not be done without a second pair of eyes',
       "`assessment_roles: [verifier]` where it must not be done without the verifier's verdict.",
-      'A review that would help but is not required needs no requirement: it can happen anyway.',
+      'A review that would help but is not required needs no requirement: name it in the plan and the coordinator starts it; decide, rather than leaving it optional.',
       'Say what would unblock it and, if useful, which role should act next, and at which level: a higher level is a remedy only for a cause in the difficulty itself, and an unchanged retry at a higher level is still an unchanged retry.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
       'if the plan has phases, give each phase its own task.',
@@ -229,13 +229,17 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      'Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker that planned the work for its re-plans; start a fresh one when its context is spent or a fresh view is the point.',
+      "Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker that planned the work for its re-plans, while its context is under about half of its model's window: a resumed agent starts its round holding everything it held before.",
+      'Past that, or where a fresh view is the point, start a fresh one with the task id.',
+      "Read how full it is now, its latest turn's context against its model's window, where the host reports it, such as a run's status or a state file beside its output, never its peak or a count of tokens spent, and note where in `.castwork/local/setup.md` once you find it.",
+      'Where the host reports no current figure, start a fresh one for anything beyond a small follow-up, such as answering its question, and say the figure was unavailable.',
       '## While roles run',
       'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
       "update records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the user's open decisions into one request.",
       "When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than busy polling.",
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');
+    assert.doesNotMatch(coordinator, /context is spent/, 'how full a context is gets read where the host reports it');
     assert.doesNotMatch(coordinator, /do not poll/i, 'a routed run without completion notification is still collected');
   });
 
@@ -248,7 +252,7 @@ for (const host of HOSTS) {
       'When several approaches are plausible and trying two costs less than choosing wrong, try each against the same acceptance criteria, then compare once and choose.',
       'each under its own actor',
       'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it: a counterexample, a failure mode, or a hidden assumption. Not a debate, and not for routine work.',
-      'The default: one worker, and a verifier where its requirements want one. Use another shape only when its condition holds.',
+      "The default: one worker, and a verifier where its requirements or the thinker's plan name one. Use another shape only when its condition holds.",
       'Hand the work to the worker, a question about the work or its approach to the thinker, and an assessment of the candidate to the verifier.',
     ], 'coordinator');
   });
