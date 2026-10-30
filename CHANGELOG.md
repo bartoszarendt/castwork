@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- A role starts each round fresh unless a resume is shown to be safe. The
+  coordinator starts a fresh agent, given the task id where there is one, and
+  resumes one only when the round continues that agent's own last round on the
+  same task and it read, before resuming, that the agent's current context, as
+  the host reports it for its latest round, is under about half of its model's
+  window. A figure not read, an earlier round's, or one the host does not
+  report, means a fresh agent. Before, the preset opened with "resume the
+  same agent" and left the context check to be remembered; in one Pi session
+  the coordinator resumed 115 times against 35 fresh starts, 47 of them past
+  half, without once reading the figure. The Pi setup guide says a resume
+  takes the id the last call returned, since each revival is a new run and an
+  earlier run's status is a snapshot; where pi-subagents keeps the figure; that
+  its `[fresh]` label on a revived run is the context mode, not a new
+  conversation; and that a fresh launch passes `options.context: "fresh"`
+  where `defaultSubagentContext` is `fork`.
+
 ## 0.9.16
 
 - A plan that is failing is questioned by a thinker that does not hold it. The

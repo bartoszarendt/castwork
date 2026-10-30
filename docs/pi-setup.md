@@ -152,10 +152,20 @@ Four behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
   in another checkout, such as a sibling repository the task edits, finds no
   `.pi/agents/` there and is refused as unknown or disabled. Start it from the
   repository that holds the roles and name the other path in the brief.
-- A role's next round resumes the same run:
-  `subagent({ action: "resume", id, message })`, with the id of the run that
-  started it. A `task` argument cannot be combined with an action, so a
-  rejected call of that shape says nothing about whether resuming works.
+- Where the coordinator resumes a role, it calls
+  `subagent({ action: "resume", id, message })` with the id the last call for
+  that role returned. Each revival is a new run with its own id and async
+  directory, and an earlier run's status is a snapshot of its own round. A
+  `task` argument cannot be combined with an action, so a rejected call of
+  that shape says nothing about whether resuming works. The reply says
+  "Revived async subagent from" the old id and names the new one; the
+  `[fresh]` beside it is the run's context mode, not a new conversation. As of
+  pi-subagents 0.84, the current context is `tokens.window` against
+  `contextLimit` for the role's step in `status.json`, in the latest run's
+  async directory; `windowPeak` is its peak. A fresh agent is a new launch
+  with fresh context: where `defaultSubagentContext` is set to `fork`, a launch
+  that omits `context` inherits the coordinator's conversation, so pass
+  `options.context: "fresh"`.
 - A run stops after 30 minutes unless the call raises `options.timeoutMs`.
   Size each run from how long its checks took before, and raise the limit for
   one that needs longer. A check that may still outlast it runs detached and

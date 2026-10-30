@@ -229,16 +229,17 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      "Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker for a small follow-up to its own plan, such as answering its question or writing that plan into records, while its context is under about half of its model's window: a resumed agent starts its round holding everything it held before.",
-      'Past half its window, or where a fresh view is the point, start a fresh one with the task id.',
-      "Read how full it is now, its latest turn's context against its model's window, where the host reports it, such as a run's status or a state file beside its output, never its peak or a count of tokens spent, and note where in `.castwork/local/setup.md` once you find it.",
-      'Where the host reports no current figure, start a fresh one for anything beyond a small follow-up, such as answering its question, and say the figure was unavailable.',
+      'Start each round with a fresh agent, given the task id where there is one.',
+      "Resume an agent instead only when both hold: the round continues its own last round on the same task, the worker with the findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing its plan into records; and you read, before resuming it, that its context is under about half of its model's window.",
+      'A resumed agent starts its round holding everything it held before.',
+      "Read how full it is now, its latest turn's context against its model's window, where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier round's figure or a count of tokens spent, and note where in `.castwork/local/setup.md` once you find it; a figure you did not read, or one the host does not report, means a fresh agent.",
       '## While roles run',
       'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
       "update records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the user's open decisions into one request.",
       "When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than busy polling.",
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');
+    assert.doesNotMatch(coordinator, phrase('Resume the same agent for its next round'), 'a fresh agent is the default, a resume the exception');
     assert.doesNotMatch(coordinator, /context is spent/, 'how full a context is gets read where the host reports it');
     assert.doesNotMatch(coordinator, /do not poll/i, 'a routed run without completion notification is still collected');
   });
@@ -967,8 +968,8 @@ for (const host of HOSTS) {
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
       'A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.',
-      'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh at any context: resumed, it would question a plan it still holds.',
-      "Its brief gives the task id, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem; it asks the thinker to judge from `report <id>` whether the rounds since the plan moved the task before it plans the next.",
+      'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh whatever its context: resumed, it would question a plan it still holds.',
+      "Its brief gives the task id where there is one, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem; it asks the thinker to judge from `report <id>` whether the rounds since the plan moved the task before it plans the next.",
       'A risk keeps its conditions: what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition.',
       "If the thinker still leaves it out, bring the call to the user with both views, a line each, the thinker's first: whether the user is asked is not the thinker's to settle against a reviewer who says they should be.",
       'Where a role runs in another checkout than yours, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs: its role files can come from another build, or lag behind its manifest, while the version reads the same, and its own copy compares them only with what that copy generates.',
