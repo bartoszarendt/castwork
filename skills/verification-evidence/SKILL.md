@@ -149,6 +149,12 @@ what was seen, what it means, what is next; not a new narrative section per run.
   raised — but the new candidate has no evidence until you record some.
 - **A manual check is still evidence.** Name what you inspected and what you
   concluded. Do not invent an exit code for it.
+- **Say what the run arranged.** A failure shown only under a condition the
+  run itself arranged, such as an input built for the test, a state set up by
+  hand, or a timing the test imposed, is recorded with that condition and with
+  how, if at all, it arises in use: it shows the failure possible there, not
+  that it happens. Whether it matters turns on what the criterion covers, not
+  on the condition being arranged.
 - **One command per entry.** `exit_code` belongs to a single command you ran
   and saw, never to prose or a chain of commands. In Bash and other POSIX
   shells a pipeline reports its last command's status, so `npm test | tail -50`

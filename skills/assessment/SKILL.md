@@ -150,7 +150,14 @@ A finding blocks, as `needs_revision` or `reject`, only where it fails an
 acceptance criterion, a declared requirement, or what the user committed to,
 such as safety or data integrity. Record any other finding as not blocking,
 beside an `accept` when nothing else blocks, as a proposal for follow-up work
-rather than another round.
+rather than another round. A failure shown only under a condition the run
+itself arranged, rather than one that arose in use, is reported with that
+condition and with how, if at all, it arises in use, and blocks only where the
+criterion, or what the user committed to, covers that cause; where nothing
+written settles whether it does, say that the verdict turns on that boundary.
+Where a blocking finding rests only on a criterion the agents added or
+tightened once the work was under way, which the user never confirmed, say so
+in the finding: it questions that criterion as much as the candidate.
 
 `reject` and `needs_revision` are ordinary outcomes. Record them plainly. The
 requirement stays unsatisfied until you record a later verdict, which is exactly

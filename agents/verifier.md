@@ -103,7 +103,11 @@ confidence. `needs_revision` and `reject` are normal; record them plainly. A blo
 the requirement unsatisfied until a later one changes it. If what you find shows that the question you
 were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost
 outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with
-the question you would ask instead: a finding, which widens nothing you may do. If a skill named to you is missing, say
+the question you would ask instead: a finding, which widens nothing you may do. A failure shown only under a condition the run itself
+arranged, reported as `verification-evidence` says, blocks only where the criterion, or what the user committed to, covers that cause;
+where nothing written settles whether it does, say that your verdict turns on that boundary. Where a blocking finding rests only on a
+criterion the agents added or tightened once the work was under way, which the user never confirmed, say so in the finding: it
+questions that criterion as much as the candidate. If a skill named to you is missing, say
 so; assess what does not depend on it, and leave what does unassessed, naming it. A skill supplies
 practice, not permission: a review skill's fix steps are not yours, and your verdict goes in the
 record as an assessment.

@@ -229,8 +229,8 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      "Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker that planned the work for its re-plans, while its context is under about half of its model's window: a resumed agent starts its round holding everything it held before.",
-      'Past that, or where a fresh view is the point, start a fresh one with the task id.',
+      "Resume the same agent for its next round where the host can, the worker with findings, the verifier with the next candidate, the thinker for a small follow-up to its own plan, such as answering its question or writing that plan into records, while its context is under about half of its model's window: a resumed agent starts its round holding everything it held before.",
+      'Past half its window, or where a fresh view is the point, start a fresh one with the task id.',
       "Read how full it is now, its latest turn's context against its model's window, where the host reports it, such as a run's status or a state file beside its output, never its peak or a count of tokens spent, and note where in `.castwork/local/setup.md` once you find it.",
       'Where the host reports no current figure, start a fresh one for anything beyond a small follow-up, such as answering its question, and say the figure was unavailable.',
       '## While roles run',
@@ -332,7 +332,7 @@ for (const host of HOSTS) {
       'Its answer covers the steps it names: carry them out, and return when the work departs from it.',
       'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
       'Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a fact only they hold.',
-      "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them.",
+      "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them, except for a call a second reviewer names, as Boundaries says.",
       "Bring one recommendation, the thinker's, in its wording, citing where it gave it, such as its entry in the record, never a menu of your own; without one, ask the thinker first, and never offer asking the thinker as their choice.",
       'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
       "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply,",
@@ -718,7 +718,7 @@ for (const host of HOSTS) {
     const wrongQuestion = 'If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.';
     for (const id of ['thinker', 'worker', 'verifier']) all(role(host, id), [wrongQuestion], id);
     all(role(host, 'thinker'), [
-      "**Stepping back.** Asked to step back, or when a stall's signs recur across a phase's tasks rather than in one, diagnose the phase, not its next blocker.",
+      "**Stepping back.** Asked to step back, or when a stall's signs recur across a phase's tasks or across the rounds of one task, diagnose the phase or that task, not its next blocker.",
       "Start from what it is for, in the project's documents and the user's commitments, not from the current gate or proof.",
       'a dependency the result does not need is a choice, not a commitment.',
       'what to cancel, reorder, cut to a slice that delivers, or prove another way; what was spent is no reason to keep a path.',
@@ -736,18 +736,18 @@ for (const host of HOSTS) {
       'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work.',
     ], 'verifier');
     all(role(host, 'coordinator'), [
-      "When these signs recur across a phase's tasks rather than in one, have the thinker step back, as the entry command's `## Stepping back` says.",
+      "When these signs recur across a phase's tasks or across the rounds of one task, have a fresh thinker step back, as the entry command's `## Stepping back` says.",
       "A finding the verifier records as not blocking is follow-up work, not another round: name it in the record's closing state and bring it to the thinker when it next plans.",
       '**Do not let bookkeeping or proof become the work.** If records, or what was built to prove the result, outweigh the result, stop and say so, and have the thinker step back.',
     ], 'coordinator');
     all(entry(host), [
       '## Stepping back',
-      "such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase rather than to diagnose its next blocker.",
-      'Ask the question as the user would: what is this phase for, what stands between here and a result someone can use, and what is the simplest credible route there.',
-      'Where the host lists levels, it runs at `complex`; resume the thinker that planned the phase where that level allows',
+      "such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase or task rather than to diagnose its next blocker.",
+      'Ask the question as the user would: what is this phase or task for, what stands between here and a result someone can use, and what is the simplest credible route there.',
+      'Where the host lists levels, it runs at `complex`. Start a fresh thinker for it, never one that planned the phase or its last re-plan: a step back questions that plan, and one that still holds it questions it least.',
       "Its answer is one path: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations.",
       'the `Movement` line of `report` counts them against the tasks they touched that are now done.',
-      'a thinker diagnosing a difficult stall, or stepping back from a phase, is worth `complex`.',
+      'a thinker diagnosing a difficult stall, or stepping back from a phase or task, is worth `complex`.',
     ], 'entry');
   });
 }
@@ -940,4 +940,71 @@ test('the procedure skills read changes to the proof, record a check\'s own exit
     'In Bash and other POSIX shells a pipeline reports its last command\'s status, so `npm test | tail -50` gives `tail`\'s exit code, not the check\'s, and `pipefail` reports a failure from any stage without saying which. Record the check\'s own status, such as `${PIPESTATUS[0]}` in Bash, read before running another command, or run it without the pipe.',
   ], 'verification-evidence');
   all(skill('blocked-state'), ['A category such as environmental, flaky, known, pre-existing, or busy, or an owner\'s disposition, establishes no mechanism.'], 'blocked-state');
+});
+
+for (const host of HOSTS) {
+  test(`${host} a failing plan is questioned by a fresh thinker, a harm has a cause and a risk its conditions, and a reviewer's user call reaches the user`, () => {
+    const verifier = role(host, 'verifier');
+    all(verifier, [
+      'A failure shown only under a condition the run itself arranged, reported as `verification-evidence` says, blocks only where the criterion, or what the user committed to, covers that cause; where nothing written settles whether it does, say that your verdict turns on that boundary.',
+      'Where a blocking finding rests only on a criterion the agents added or tightened once the work was under way, which the user never confirmed, say so in the finding: it questions that criterion as much as the candidate.',
+    ], 'verifier');
+    const thinker = role(host, 'thinker');
+    all(thinker, [
+      'A criterion that guards against a harm, such as lost or corrupted data, a leak, or a wrong result someone relies on, names what could bring it about in use, by accident or on purpose, and what that would take.',
+      "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside the criterion unless the user, a decision or the project's documents put it in:",
+      "where nothing written settles that boundary, it is among the user's calls the plan foresees, with your recommendation.",
+      'A failure shown only under a condition the run itself arranged is reported with that condition and with how, if at all, it arises in use: it shows the failure possible there, not that it happens, and whether it matters turns on what the criterion covers, not on the condition being arranged.',
+      'A criterion you add or tighten after a finding is your proposal: mark it as one where it stands, with the finding that prompted it, until the user confirms it.',
+      'When a blocking finding rests only on such a criterion, decide whether the work needs it, and narrow or drop it, saying why, where nothing the user committed to does.',
+      'So is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
+      'Asked to step back from a plan you wrote earlier in this same session, say so in a line and recommend a fresh thinker: one that still holds the plan questions it least.',
+      "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
+      'State each risk with what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition: a risk without its conditions reads as certain, and the user may refuse one that would never reach them.',
+      "When you re-plan, rewrite that plan in place, replacing every earlier plan still in the record rather than adding one above them, and say under `## Blockers and decisions` what changed and why: the record holds one current plan, and a superseded plan's reasoning stays in the findings it cites.",
+    ], 'thinker');
+    assert.doesNotMatch(thinker, phrase('a value only the work itself chooses'), 'a value the work chooses can still be seen, guessed or met by accident');
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      'A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.',
+      'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh at any context: resumed, it would question a plan it still holds.',
+      "Its brief gives the task id, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem; it asks the thinker to judge from `report <id>` whether the rounds since the plan moved the task before it plans the next.",
+      'A risk keeps its conditions: what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition.',
+      "If the thinker still leaves it out, bring the call to the user with both views, a line each, the thinker's first: whether the user is asked is not the thinker's to settle against a reviewer who says they should be.",
+      'Where a role runs in another checkout than yours, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs: its role files can come from another build, or lag behind its manifest, while the version reads the same, and its own copy compares them only with what that copy generates.',
+      "Where it lists changes, say so before that role starts, and update it there with your copy, as the entry command's `## While working` says, once the user agrees.",
+    ], 'coordinator');
+    assert.doesNotMatch(coordinator, phrase('the thinker that planned the work for its re-plans'), 'a re-plan after a failing round comes from a fresh thinker');
+    const start = entry(host);
+    all(start, [
+      "When they recur across a phase's tasks or across the rounds of one task, or the work goes to its proof rather than its result,",
+      'A continue while one of their calls is open settles that call only where it names an option; otherwise ask which, in one line, before you record a decision, and carry on meanwhile with what does not turn on it.',
+    ], 'entry');
+    assert.doesNotMatch(start, phrase('resume the thinker that planned the phase'), 'a step back comes from a fresh thinker');
+  });
+}
+
+test('the procedure skills give a criterion its source and a risk its conditions, keep one plan, and read no option into a bare continue', () => {
+  all(skill('task-record-contract'), [
+    "Say where a consequential criterion comes from: the user's words, a decision by id, or the agents' proposal.",
+    "A criterion an agent adds or tightens once the work is under way, such as a clarification after a finding, stays the agents' proposal, marked so where it stands, until the user confirms it: a later re-plan or step back may narrow or drop it, saying why, where nothing the user committed to needs it.",
+    'A criterion that guards against a harm names what could bring it about in use, by accident or on purpose, and what that would take.',
+    "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside it unless the user, a decision or the project's documents put it in.",
+    "**Plan** — when the work needs one, the thinker's current plan. A re-plan rewrites it in place, like Current state, replacing every earlier plan still in the record,",
+  ], 'task-record-contract');
+  all(skill('decision-capture'), [
+    'Record a risk they accepted or refused with the conditions it was put to them under, and whether it was seen in use or only made to happen in a test: their answer covers that risk as described.',
+    'An answer that names no option while one of their calls is open, such as "proceed" or "continue", selects none: ask which, in one line, rather than recording the option you think they meant.',
+  ], 'decision-capture');
+  all(skill('blocked-state'), [
+    'State a risk with what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition.',
+  ], 'blocked-state');
+  all(skill('verification-evidence'), [
+    '**Say what the run arranged.** A failure shown only under a condition the run itself arranged, such as an input built for the test, a state set up by hand, or a timing the test imposed, is recorded with that condition and with how, if at all, it arises in use: it shows the failure possible there, not that it happens.',
+    'Whether it matters turns on what the criterion covers, not on the condition being arranged.',
+  ], 'verification-evidence');
+  all(skill('assessment'), [
+    'A failure shown only under a condition the run itself arranged, rather than one that arose in use, is reported with that condition and with how, if at all, it arises in use, and blocks only where the criterion, or what the user committed to, covers that cause; where nothing written settles whether it does, say that the verdict turns on that boundary.',
+    'Where a blocking finding rests only on a criterion the agents added or tightened once the work was under way, which the user never confirmed, say so in the finding: it questions that criterion as much as the candidate.',
+  ], 'assessment');
 });

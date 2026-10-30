@@ -2,6 +2,89 @@
 
 ## Unreleased
 
+- A plan that is failing is questioned by a thinker that does not hold it. The
+  coordinator starts a fresh thinker, at any context, to re-plan after a round
+  that failed or did not move the task, to diagnose a stall, or to step back,
+  and resumes one only for a small follow-up to its own plan, such as answering
+  its question or writing that plan into records. The brief gives the task id,
+  the user's words that bear on the question, the question itself, and, as
+  facts, which criteria the blocking findings since the plan cite and in which
+  assessments, not the coordinator's account of the problem; it asks the
+  thinker to judge from `report <id>` whether the rounds since the plan moved
+  the task. A step back is also due when a stall's signs recur across the
+  rounds of one task, not only across a phase's tasks, and a thinker asked to
+  step back from a plan it wrote in the same session says so and recommends a
+  fresh one. Before, the coordinator resumed the thinker that planned the work
+  for its re-plans, and the one that planned the phase for its step back, so
+  the agent asked to question a plan was the one holding it; and a stall inside
+  one long task returned only for its next re-plan.
+- A harm has a cause and a risk its conditions. A criterion that guards
+  against a harm, such as lost or corrupted data, a leak, or a wrong result
+  someone relies on, names what could bring it about in use, by accident or on
+  purpose, and what that would take (the thinker, `task-record-contract`). A
+  cause that ordinary use, concurrent use included, would not produce by
+  accident, and that someone could produce on purpose only with access that
+  already lets them do the harm directly, lies outside the criterion unless the
+  user, a decision or the project's documents put it in; a boundary nothing
+  written settles is among the user's calls the plan foresees. A failure shown
+  only under a condition the run itself arranged, such as an input built for
+  the test, a state set up by hand, or a timing the test imposed, is recorded
+  with that condition and how, if at all, it arises in use
+  (`verification-evidence`, the thinker): whether it matters turns on what the
+  criterion covers, not on the condition being arranged. The verifier and
+  `assessment` block on it only where the criterion, or what the user
+  committed to, covers that cause, and say when the verdict turns on a
+  boundary nothing written settles. A risk brought to the user, in the
+  coordinator, the thinker and `blocked-state`, keeps what must hold for it to
+  happen in use and whether it was seen in use or only made to happen in a
+  test, and `decision-capture` records the user's answer with those
+  conditions. Before, a failure produced by arranging its condition read as a
+  demonstrated defect, the user could be asked to accept a "demonstrated" loss
+  stated without its conditions, and a refusal of it bound later work to
+  defending against causes ordinary use never brings about.
+- A second reviewer's call of the user's reaches the user. When the reviewer
+  names a call the thinker's answer leaves out, and the thinker, asked for it,
+  still leaves it out, the coordinator brings it to the user with both views,
+  a line each, the thinker's first; the thinker keeps such a call a call rather
+  than settling it, and the rule that whether the user needs asking is the
+  thinker's to answer no longer covers such a call. Before, the thinker decided
+  where the two differed, so the reviewer brought in to counter a held view
+  could be overruled without the user hearing of it.
+- A criterion says where it comes from. `task-record-contract` asks whether a
+  consequential criterion is the user's words, a decision, or the agents'
+  proposal. One an agent adds or tightens once the work is under way, such as
+  a clarification after a finding, stays the agents' proposal, marked so where
+  it stands, until the user confirms it, and a later re-plan or step back may
+  narrow or drop it, saying why, where nothing the user committed to needs it.
+  The verifier says when a blocking finding rests only on such a criterion,
+  and the coordinator sends that finding to a fresh thinker before the worker,
+  to decide whether the work needs the criterion; the user's words, decisions
+  and declared requirements bind as before. Before, a clarification written
+  into the record read to later roles as part of the contract, and each one
+  that failed became another round of correction, so criteria could only
+  tighten without the user.
+- A bare continue is not an answer to an open call. An answer that names no
+  option while one of the user's calls is open, such as "proceed" or
+  "continue", selects none: the coordinator asks which in one line before it
+  records a decision, and carries on meanwhile with what does not turn on it
+  (`decision-capture`, the entry command). Before, such an answer could be
+  recorded as the option the agents thought the user meant.
+- Where a role runs in another checkout than the coordinator's, such as a
+  worktree, the coordinator runs `update --check` there with its own copy
+  before the role's first round, says so where it lists changes, and updates
+  that checkout with its own copy once the user agrees. The copy that checkout
+  installs compares its files only with what that copy generates, and reports
+  an older copy's output as current; a matching `source_digest` in the two
+  manifests shows only that one build wrote them, while generated files Git
+  does not track can lag behind theirs. Before, roles in a worktree set up
+  earlier could run older presets than the session that started them,
+  unnoticed, while both checkouts reported the same version.
+- A record holds one current plan. A re-plan rewrites the plan in place, like
+  Current state, replacing every earlier plan still in the record, with what
+  changed and why under `## Blockers and decisions`, and a superseded plan's
+  reasoning stays in the findings it cites; `task-record-contract` gains a Plan
+  entry. Before, re-plans were added above earlier ones, and a fresh role read
+  a stack of superseded plans as guidance.
 - A session can end without a pause, such as at a quota limit, a crash or a
   closed terminal, and then no handoff covers its last work. Before anyone
   writes, the coordinator now checks the working tree against the candidates

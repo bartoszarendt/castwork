@@ -70,7 +70,10 @@ is the owner's call, and let any other stop return the work to the agent doing
 it, or to the thinker when a coordinator runs the roles.
 Record what the owner committed to, such as an outcome, a guarantee, a risk
 they accepted, or a scope, apart from the method, check, or proof chosen to
-meet it, and say whose choice the method was. Their decision binds the
+meet it, and say whose choice the method was. Record a risk they accepted or
+refused with the conditions it was put to them under, and whether it was seen
+in use or only made to happen in a test: their answer covers that risk as
+described. Their decision binds the
 commitment, and a method only where they chose it themselves or a declared
 requirement or the working policy demands it; approving a decision that names
 the agents' method does not make it theirs. A method the agents chose, which
@@ -101,7 +104,9 @@ instruction they scope to the session, such as one that begins "in this
 session", stays in the session: propose no line for it, nor again one they
 declined.
 If their answer could select more than one option, ask
-before you record it.
+before you record it. An answer that names no option while one of their calls
+is open, such as "proceed" or "continue", selects none: ask which, in one line,
+rather than recording the option you think they meant.
 
 **Context** is what made the decision necessary. Someone reading in a year needs
 to know what the pressure was, or the decision looks arbitrary.

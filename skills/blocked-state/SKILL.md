@@ -56,7 +56,9 @@ spending or access beyond what is agreed, what only they know or hold, and what
 the working policy reserves. Everything else is an engineering call, settled
 without them. Give a recommended answer for each of their calls in their terms,
 what changes for them and the risk and cost, and keep the technical terms in
-the record. When a coordinator runs the roles, a choice reaches the user with the thinker's
+the record. State a risk with what must hold for it to happen in use, and
+whether it was seen in use or only made to happen in a test that forced its
+precondition. When a coordinator runs the roles, a choice reaches the user with the thinker's
 recommendation, and a path the thinker finds within current authority is taken,
 not asked about.
 Prepare what existing authority permits before asking; a clear external blocker

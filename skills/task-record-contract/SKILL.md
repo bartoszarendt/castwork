@@ -37,7 +37,22 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Acceptance criteria** — observable outcomes, one per bullet. If you cannot
   say how you would see it, it is not a criterion yet. Seeing it can be an
   existing check, a run or an inspection: a criterion does not by itself call
-  for a new test.
+  for a new test. Say where a consequential criterion comes from: the user's
+  words, a decision by id, or the agents' proposal. A criterion an agent adds
+  or tightens once the work is under way, such as a clarification after a
+  finding, stays the agents' proposal, marked so where it stands, until the
+  user confirms it: a later re-plan or step back may narrow or drop it, saying
+  why, where nothing the user committed to needs it. A criterion that guards
+  against a harm names what could bring it about in use, by accident or on
+  purpose, and what that would take. A cause that ordinary use, concurrent use
+  included, would not produce by accident, and that someone could produce on
+  purpose only with access that already lets them do the harm directly, lies
+  outside it unless the user, a decision or the project's documents put it in.
+- **Plan** — when the work needs one, the thinker's current plan. A re-plan
+  rewrites it in place, like Current state, replacing every earlier plan still
+  in the record, with what changed and why under
+  `## Blockers and decisions`: the record holds one current plan, and a
+  superseded plan's reasoning stays in the findings it cites.
 - **Current state** — what holds now: current candidate, unresolved issues,
   restrictions with decision ids and source line pointers, next step. Rewrite
   in place, about fifteen lines. Open with what holds now; who wrote it and
