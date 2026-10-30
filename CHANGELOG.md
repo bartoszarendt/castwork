@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.16
 
 - A plan that is failing is questioned by a thinker that does not hold it. The
   coordinator starts a fresh thinker, at any context, to re-plan after a round

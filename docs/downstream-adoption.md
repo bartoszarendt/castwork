@@ -3,7 +3,7 @@
 How to adopt Castwork in a project that has its own way of working, and what
 you are committing to.
 
-> **Status:** 0.9.15 is current.
+> **Status:** 0.9.16 is current.
 
 ## What you are adopting
 
