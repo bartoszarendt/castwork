@@ -67,8 +67,23 @@ observer, oracle, classifier or fixture that produced or judged it, can affect
 it even when the product is unchanged, as a fix to a shared false-pass
 condition affects every result it judged; a change to a branch only another
 case uses need not. An observation the change could not affect can still show
-a criterion: cite it with its candidate and say why it still stands. `task lint`
-says whether the working tree still matches the current snapshot.
+a criterion: cite it with its candidate and say why it still stands. So can a
+declared check when the difference between the two candidates touches nothing
+it reads, such as a plan document no test opens: record an entry for the new
+candidate with the earlier run's `check`, `result` and `command`, no
+`exit_code`, and an `output` that begins `cited from <earlier ref>:` and names
+the paths the difference touches and why the check reads none of them. A check
+that reads any of them, or whose inputs you cannot tell, runs again. Inputs
+outside Git count too, such as installed dependencies, environment settings, a
+database's state, a served image or an external service: cite a check only
+with the same invocation, where none of those it reads has changed since its
+run, and never one whose purpose or the working policy needs a fresh
+observation. Cite the entry that ran, by its `at` or linked output where
+several share a check and candidate, never another citation. A verifier
+confirms the difference with `git diff` before relying on the citation; where
+Git or either candidate's objects are unavailable, it cannot be confirmed: run
+the check again within existing authority, or name the gap.
+`task lint` says whether the working tree still matches the current snapshot.
 
 `producers` is who made it — the actor strings that later decide whether a
 review was independent. Optional candidate `host`, `model`, and `at` are
@@ -124,8 +139,8 @@ record. Link only where it lasts, not ignored scratch or `.castwork/tasks/`:
 write it in `.castwork/findings/`, named after the task, such as
 `T-012-test.log`. Copy the part it rests on, such as the lines that show the
 result, not copied sources, archives or a whole run's output the entry already
-states. Snapshots leave that folder out, so writing there never changes a
-candidate. A script a declared check runs is part of the candidate,
+states. A snapshot holds that folder as the base commit has it, without what
+was written there since, so writing there never changes a candidate. A script a declared check runs is part of the candidate,
 never there: a reviewer extracting the candidate must have it.
 
 A routine successful probe is a sentence in the body, or nothing. An observation
@@ -136,9 +151,10 @@ what was seen, what it means, what is next; not a new narrative section per run.
 ## Rules that matter
 
 - **Record what you ran.** An `exit_code` you did not observe is worse than no
-  evidence at all. If you did not run it, there is no evidence entry.
+  evidence at all. If you did not run it, on this candidate or, cited as above,
+  on an earlier one, there is no evidence entry.
   Resolve a declared check to the project's actual invocation: working directory,
-  paths, flags and selection. Run that invocation within existing authority; a
+  paths, flags, environment and selection. Run that invocation within existing authority; a
   narrower or modified command is a different check and leaves the declared one
   unmet. If the invocation is unclear or cannot be run, name that gap.
 - **Record failures.** A `fail` is information. The later entry for the same
@@ -146,7 +162,8 @@ what was seen, what it means, what is next; not a new narrative section per run.
   is now failing.
 - **Re-record after a new candidate.** Evidence for an earlier candidate is
   simply not applied to a new one. Nothing is invalidated and no diagnostic is
-  raised — but the new candidate has no evidence until you record some.
+  raised — but the new candidate has no evidence until you record some, by
+  running a check again or citing an earlier run as above.
 - **A manual check is still evidence.** Name what you inspected and what you
   concluded. Do not invent an exit code for it.
 - **Say what the run arranged.** A failure shown only under a condition the
@@ -165,6 +182,12 @@ what was seen, what it means, what is next; not a new narrative section per run.
 - **Name the check honestly.** A subset of a declared check, such as some of
   the tests, goes under its own name, never under the declared check's name.
   `task lint` reports on the record, so it is not evidence about the candidate.
+- **Say what decided the result.** Where an entry claims a particular guard or
+  behaviour, keep the inputs it does not test valid, and say which cases or
+  assertions decided the result and that they ran. A pass or a refusal that
+  something else could have produced, such as another check refusing first or
+  the test's own condition, does not show it. That a test passes now shows
+  present behaviour; that it fails without the change is a separate showing.
 - **Compare when attribution matters.** Reuse applicable baseline or batch
   evidence, or make a proportionate comparison within existing authority, using
   comparable commands, inputs and conditions. Matching baseline failures may

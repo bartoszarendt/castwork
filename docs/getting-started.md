@@ -207,7 +207,10 @@ npx castwork decision list      # the decisions recorded so far
 
 Add a new candidate. Earlier evidence and assessments concern the old one and
 are simply not applied to the new one — no diagnostic is raised against them,
-and nothing is invalidated. Re-record evidence for the new candidate.
+and nothing is invalidated. Re-record evidence for the new candidate: run
+again what the change could affect, and cite for it an earlier run of a check
+the change could not reach, as
+[record-format.md](record-format.md#candidate-entry) describes.
 
 ## Nothing to run first
 

@@ -63,7 +63,17 @@ checks it rests on have finished.
    that could, in the product code it ran or in the part of its observer,
    oracle, classifier or fixture that produced or judged it, leaves that
    criterion unshown until it runs again. The declared checks run on the
-   candidate you assess.
+   candidate you assess, or one is cited from its run on an earlier candidate,
+   its `output` beginning `cited from <earlier ref>:`: confirm with `git diff`
+   between the two that the difference touches nothing it reads, that the
+   invocation is the same, and that nothing outside Git it reads, such as
+   installed dependencies, environment settings or a database's state, has
+   changed, and that neither its purpose nor the working policy needs a fresh
+   observation, and treat a citation you cannot confirm, where Git or a
+   candidate's objects are unavailable included, as unshown. A run of a
+   declared check you made yourself on an earlier candidate you may cite the
+   same way, never one another session recorded under the same actor, nor the
+   producer's run alone.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
    should be paying for it. A finding names the concrete burden, such as a

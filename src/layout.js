@@ -43,9 +43,10 @@ export const PROJECT_FILE = `${STATE_DIRECTORY}/project.md`;
 export const USER_OWNED = Object.freeze([PROJECT_FILE, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY]);
 
 /**
- * Paths a snapshot leaves out: the records that describe it, the findings
- * they link to, which a verifier writes after the candidate exists, reviews of
- * how the work went, and machine-local state, run output included.
+ * Paths whose changes a snapshot leaves out, holding them as the base commit
+ * has them: the records that describe it, the findings they link to, which a
+ * verifier writes after the candidate exists, reviews of how the work went,
+ * and machine-local state, run output included.
  */
 export const SNAPSHOT_EXCLUDES = Object.freeze([TASKS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY, LOCAL_DIRECTORY]);
 

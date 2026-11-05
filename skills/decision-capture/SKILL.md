@@ -37,7 +37,9 @@ owner makes in conversation belongs here too when it outlives the task: a
 session ends, and the choice goes with it unless it is written down. An
 owner's choice that settles only this task's next step, such as whether to try
 again, goes in the task, quoted and dated. Cite the decision's id in each task
-record it governs, so a later reader of the task finds it.
+record it governs, so a later reader of the task finds it. Where it changes
+what a task may do or does next, that task's `## Current state` says so once
+the decision is recorded.
 
 Before writing one, run `npx --no castwork decision list` and read any
 decision that covers the same ground: the new one may supersede it (see

@@ -30,9 +30,11 @@ in `castwork.json`, with one machine's models, reasoning, and role routes in the
 `.castwork/local/castwork.json`; `project.md` owns prose only. Every
 Markdown file in `tasks/` is read as a task record, so supporting files go in
 `findings/`, named after the task they belong to, such as `T-012-review.md`.
-Nothing parses `findings/`, and a snapshot leaves it out as it leaves out
-`tasks/`, so a verifier writing there after the candidate exists does not
-change it.
+Nothing parses `findings/`. A snapshot holds `findings/`, `reviews/` and
+`tasks/` as the base commit has them: a file committed there is in it, but a
+file added or changed there since is not, even when staged. So a verifier
+writing there after the candidate exists does not change it, and anything a
+deliverable needs belongs where the snapshot covers it.
 
 `findings/` is tracked, and what is in it is read in every clone, so it holds
 notes and the files a record links because a failure, an acceptance or a
@@ -70,7 +72,7 @@ requiring the check accepts, and those for places outside the project.
 | a supporting file a record links to, such as review notes, a synthesis, or the run output a failure, an acceptance or a reproduction rests on | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |
 | what a run produces that no record links, such as logs, exit and pid files, dumps, captures, and one-off probe scripts | `.castwork/local/runs/<task>/`: ignored and outside snapshots; the entry says what the run showed |
 | a review of how work went, such as a retrospective or an audit | `.castwork/reviews/`, named for its date and occasion: tracked |
-| a file the task delivers, or a script a declared check runs | the candidate, where the project keeps such files; never `findings/`, which snapshots leave out |
+| a file the task delivers, or a script a declared check runs | the candidate, where the project keeps such files; never `findings/`, which snapshots hold only as the base commit has it |
 
 A review of how the work went, such as an audit or a retrospective, goes in
 `reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`,
@@ -170,8 +172,9 @@ A `ref` is one of three kinds, and they differ in what can be checked later:
 2. **A snapshot, `tree:<sha>`**, for work that may not be committed yet.
    `npx --no castwork snapshot`, run from the project root, prints one: a
    git tree object holding the working tree under the project root, which is
-   normally the whole repository, minus ignored files, `.castwork/tasks/`,
-   and `.castwork/local/`, with the repository's own line-ending rules
+   normally the whole repository, minus ignored files and `.castwork/local/`,
+   with `.castwork/tasks/`, `.castwork/findings/` and `.castwork/reviews/` as
+   the base commit has them, and with the repository's own line-ending rules
    applied. It needs no commit and moves no ref. It is `available` while the
    tree object exists in this clone: it exists only in the clone where it was
    taken, and since nothing refers to it, `git gc` may prune it once it is
@@ -197,7 +200,16 @@ Evidence belongs to the bytes it ran on. Take the snapshot after the last
 change and before the final evidence. After changing the candidate, take a new
 snapshot and record it as a new candidate: the old evidence stays with the old
 one. Never commit without project or user authorization, and never relabel
-evidence from one candidate as evidence for another.
+evidence from one candidate as evidence for another. A declared check whose
+inputs the difference does not touch, outside Git as well as in it, may be
+cited for the new candidate with the same invocation, unless its purpose or
+the working policy needs a fresh observation: its entry has no `exit_code`,
+and its `output` begins `cited from <earlier ref>:`, identifies the entry that
+ran, and names the changed paths and why the check reads none of them, as
+[`verification-evidence`](../skills/verification-evidence/SKILL.md) describes.
+Lint does not tell a cited entry from a run; a verifier confirms the
+difference with `git diff`, and where Git or a candidate's objects are
+unavailable, the citation cannot be used.
 
 A verifier inspects a snapshot with plain git, never the current working tree.
 To extract the whole candidate, run both commands with `GIT_INDEX_FILE` set to

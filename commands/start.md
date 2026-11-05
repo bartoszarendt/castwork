@@ -179,9 +179,16 @@ something better than an edit:
 
 The CLI is this project's installed copy of the `castwork` package. It is
 not on the PATH, so a bare `castwork` is not found; run it through `npx`.
-`--no` keeps npx to the installed copy: without it, a non-interactive npx
-downloads and runs whatever package of that name the registry holds. If the
-command is not available, say so and edit the record by hand. Do not install
+`--no` stops npx installing anything: without it, a non-interactive npx
+downloads and runs whatever package of that name the registry holds. It does
+not keep npx off the network: in a checkout with no installed copy, such as a
+worktree, npx still asks the registry for the package. Where the network is
+not allowed, add `--offline`, as in `npx --no --offline castwork report`: it
+stops npm's network lookup, but may still run a copy installed globally or
+cached by an earlier npx, not this project's. Where the copy matters, as in a
+checkout with no install of its own, use the launcher a brief or
+`.castwork/local/setup.md` names, such as `node_modules/castwork/bin/castwork.js`
+in a checkout that has it, run with `node`. If the command is not available, say so and edit the record by hand. Do not install
 anything to get it.
 
 If the user asks you to update Castwork in this repository, first run

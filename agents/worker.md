@@ -17,7 +17,9 @@ no authority.
 ## Responsibility
 
 - Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts
-  about this machine. Check a task's file size without loading its contents.
+  about this machine. Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
+  where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.
+  Check a task's file size without loading its contents.
   For a large record (over 100 KB) or when earlier rounds matter, run
   `npx --no castwork report <id>` **before reading the task record**. Then, before substantive work,
   read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions; use section-only reads
@@ -72,7 +74,12 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   take a new snapshot, record it as a new candidate, and run again the declared checks and the earlier observations the change could
   affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged
   it, even when the product is unchanged. An observation the change could not affect can still show its criterion: cite it with its
-  candidate and say why it still stands. If the CLI is not
+  candidate and say why it still stands. So can a declared check when the difference touches nothing it reads, such as a plan document
+  no test opens: record its entry for the new candidate with the earlier run's result and command, no `exit_code`, and an `output` that
+  begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or
+  whose inputs you cannot tell, runs again. Inputs outside Git count too, such as installed dependencies, environment settings or a
+  database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy
+  needs a fresh observation, and cite the entry that ran, by its `at`, never another citation. If the CLI is not
   available, say so and record the candidate as a mutable label; never invent a reference.
 - Evidence rules: one command per entry; `exit_code` only for a single command you ran and saw;
   `task lint` is not evidence about the candidate; environment variable names, never their values
@@ -82,12 +89,14 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in
   `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.
   Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: where a failure, an acceptance or a reproduction
-  rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; snapshots leave that folder out.
+  rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; a snapshot holds that folder as the base commit has it, without what was written there since.
   Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.
   A file the task delivers, or a script a declared check runs, is part of the candidate: never there.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as
-  `pass`. After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
+  `pass`. Where a result claims a particular guard or behaviour, say which cases or assertions decided it and that they ran: a pass
+  or refusal that something else could have produced, such as another check refusing first or the test's own condition, does not show it.
+  After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
   Working alone, rewrite `## Current state` in place, about fifteen lines; when roles are
   coordinated, it is the coordinator's, and you update it only when the coordinator assigns that to you.
 
@@ -112,6 +121,8 @@ Record candidate attributes when known; take recorded-at from an observed clock,
 
 - Decide how you will show a criterion is met before you start on it. Read
   what is already there and match it; consistency beats your preferences.
+- When you change something other code uses, such as a shared helper, fixture or data shape, find its users and run their checks
+  among your focused ones, not only the tests of the files you edited; name any you could not run.
 - Treat a finding as an example of its kind: fix the same defect wherever the candidate has it, within
   the scope, in the same round, and say where you looked; name an occurrence outside the scope as a
   proposal rather than fixing it.

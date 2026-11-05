@@ -17,6 +17,67 @@
   its `[fresh]` label on a revived run is the context mode, not a new
   conversation; and that a fresh launch passes `options.context: "fresh"`
   where `defaultSubagentContext` is `fork`.
+- A declared check may be cited for a new candidate when the difference touches
+  nothing it reads. Its entry for the new candidate keeps the earlier run's
+  result and command, has no `exit_code`, and has an `output` beginning
+  `cited from <earlier ref>:` that names the changed paths and why the check
+  reads none of them; a check that reads any of them, or whose inputs cannot be
+  told, runs again (`verification-evidence`, the worker). Inputs outside Git
+  count too, such as installed dependencies, environment settings or a
+  database's state: only the same invocation is cited, where none of those has
+  changed, never a check whose purpose or the working policy needs a fresh
+  observation, and the citation names the entry that ran, never another
+  citation. The verifier and `assessment` confirm the difference with
+  `git diff` and treat a citation they cannot confirm as unshown, including
+  where Git or a candidate's objects are unavailable; a verifier cites only a
+  run it made itself, not one another session recorded under the same actor,
+  nor the producer's. Lint does not tell a cited entry from a run.
+  Before, the rule that a new candidate reruns "the declared checks and the
+  earlier observations the change could affect" was meant to cover only
+  observations, but it read either way: projects recorded unrun checks as
+  `pass` after changes to a plan document alone, against the rule that an
+  unrun check has no entry, or paid about an hour of reruns for each.
+- `npx --no` is no longer said to keep npx to the installed copy. It stops
+  installation, but in a checkout with no installed copy, such as a worktree,
+  npx still asks the registry. Every role and the entry command now run the
+  CLI with the launcher a brief or `.castwork/local/setup.md` names, if any,
+  and otherwise add `--offline` where the network is not allowed. `--offline`
+  stops npm's network lookup but may still run a global or cached copy, not
+  the project's, so where the copy matters, as in a checkout with no install,
+  a named launcher such as `node_modules/castwork/bin/castwork.js` in a
+  checkout that has it identifies the copy.
+- Snapshot exclusions are described as they work. A snapshot holds
+  `.castwork/tasks/`, `findings/` and `reviews/` as the base commit has them:
+  a file committed there is in it, and one added or changed since is not, even
+  when staged; anything a deliverable needs belongs where the snapshot covers
+  it. Before, the documents said those folders were left out, and one listed
+  only `tasks/` and `local/`.
+- A brief for a role in another checkout names the checkout whose task record
+  is the one written, where the candidate is, and the setup facts and CLI
+  launcher that checkout lacks, and a copy of the record elsewhere points to
+  that one: uncommitted changes, to records, decisions and findings included,
+  and ignored files do not pass between checkouts. Before, a brief left that
+  unsaid, and two copies of one task advanced apart.
+- An assignment is sized to the host's run limit with its setup, reading,
+  checks and recording together, not from the checks' time alone. Before, a
+  round ran checks that took 28 of its 30 minutes and was cut before it could
+  record them.
+- Evidence says what decided its result. Where a result claims a particular
+  guard or behaviour, the worker and `verification-evidence` keep the inputs
+  it does not test valid and name the cases or assertions that decided it,
+  since a pass or refusal another check or the test's own condition produced
+  does not show it; a declared check's invocation includes its environment,
+  for the verifier too; and the thinker plans an observation of a behaviour to
+  reject what a run that never performs it would give, such as a refusal,
+  empty data, or calls made one after another. Before, verifiers repeatedly
+  found tests passing on a different condition than the one claimed.
+- The worker runs the checks of whatever uses a shared helper, fixture or data
+  shape it changed, not only the tests of the files it edited. Before, only the
+  thinker and the verifier said so.
+- Current state is also rewritten when a decision or stop of the user's
+  changes what is authorized or what comes next, and `decision-capture` says
+  so. Before, the coordinator rewrote it from the roles' reports, and records
+  went on asking for what the user had already approved.
 
 ## 0.9.16
 

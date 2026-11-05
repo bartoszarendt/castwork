@@ -185,8 +185,10 @@ for (const host of HOSTS) {
       'A name such as `HEAD` or a branch is not the candidate',
       'ask for the commit id or a snapshot',
       'Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each run as evidence under your actor, failures included.',
-      "Keep the project's declared working directory, paths, flags and selection; a scoped variant is a different check and leaves the declared one unmet.",
+      "Keep the project's declared working directory, paths, flags, environment and selection; a scoped variant is a different check and leaves the declared one unmet.",
       'Name an unclear or unavailable invocation.',
+      'A run of a declared check you made yourself on an earlier candidate of this task you may cite the same way, never one another session recorded under the same actor, nor the producer\'s run alone.',
+    "the invocation is the same, and nothing outside Git it reads, such as installed dependencies, environment settings or a database's state, has changed, and neither its purpose nor the working policy needs a fresh observation; a citation you cannot confirm, where Git or a candidate's objects are unavailable included, leaves it unshown.",
       'When the change alters something other parts rely on, check those parts, or name that gap as a limit.',
       'Try to break it with inputs and conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.',
       'When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the previous candidate, or name that as a limit.',
@@ -550,7 +552,9 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
   all(skill('verification-evidence'), [
     'A snapshot exists only in the clone that took it',
     '`candidate.moving_ref`',
-    "Resolve a declared check to the project's actual invocation: working directory, paths, flags and selection.",
+    "Resolve a declared check to the project's actual invocation: working directory, paths, flags, environment and selection.",
+    'Where an entry claims a particular guard or behaviour, keep the inputs it does not test valid, and say which cases or assertions decided the result and that they ran.',
+    "A pass or a refusal that something else could have produced, such as another check refusing first or the test's own condition, does not show it.",
     'a narrower or modified command is a different check and leaves the declared one unmet.',
     'Matching baseline failures may establish non-introduction; they do not establish the cause.',
     'Do not require a fresh baseline run for every check or silently spend another run allowance.',
@@ -589,8 +593,9 @@ test('generated guidance keeps archives explicit, Current state with the coordin
     for (const content of [entry(host), role(host, 'coordinator')]) assert.ok(!phrase('for a task you will work on over 100 KB run').test(content), `${host} still asks to archive every large record`);
   }
   all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
-  all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'Snapshots leave that folder out, so writing there never changes a candidate.']);
-  all(skill('task-record-contract'), ["written from the roles' reports or assigned to one role at a time", '`task archive [<id>] [--check]`']);
+  all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'A snapshot holds that folder as the base commit has it, without what was written there since, so writing there never changes a candidate.']);
+  all(skill('task-record-contract'), ["written from the roles' reports or assigned to one role at a time", '`task archive [<id>] [--check]`', 'A snapshot holds that folder, as it holds the records, as the base commit has it, without what was written there since']);
+  all(skill('decision-capture'), ["Where it changes what a task may do or does next, that task's `## Current state` says so once the decision is recorded."]);
 });
 
 test('the skill description keeps a role started by name from loading the entry skill', () => {
@@ -691,7 +696,9 @@ for (const host of HOSTS) {
   test(`${host} run output stays on the machine, records close with a fresh state, and briefs fit the host`, () => {
     all(role(host, 'coordinator'), [
       'When a record closes, after its last acceptance or disposition, rewrite its Current state to the closing state, archive it when earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
-      'Where the host limits how long one run may take, size each assignment to fit, from how long its checks took before, and give a check that cannot fit a run of its own;',
+      'Where the host limits how long one run may take, size each assignment to fit, its setup, reading, checks and recording together, from how long they took before, and give a check that cannot fit with its recording a run of its own;',
+      'Uncommitted changes, to task records, decisions and findings included, and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: its brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks, and a copy of the record elsewhere points to that one rather than advancing on its own.',
+      "rewrite it in place from the roles' reports, and from the user's decisions and stops where they change what is authorized or what comes next,",
       'never ask for a verdict before the checks it rests on finish.',
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
       'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
@@ -701,7 +708,24 @@ for (const host of HOSTS) {
     all(role(host, 'thinker'), [
       "Before work that rests on how it will be proven, such as an instrument, a fixture's lifecycle, a time budget, or every consumer of a changed shape, plan the cheapest observation that could show that approach or proof wrong, and have it run first.",
       "Say whether each threshold the plan sets is the user's requirement or the agents' choice, which may change.",
+      'An observation planned to show a behaviour names what a run that never performs it would give, such as a refusal, empty data, or calls made one after another instead of at once, and accepts none of them.',
     ], 'thinker');
+    all(role(host, 'worker'), [
+      "Where a result claims a particular guard or behaviour, say which cases or assertions decided it and that they ran: a pass or refusal that something else could have produced, such as another check refusing first or the test's own condition, does not show it.",
+      'When you change something other code uses, such as a shared helper, fixture or data shape, find its users and run their checks among your focused ones, not only the tests of the files you edited; name any you could not run.',
+      'a snapshot holds that folder as the base commit has it, without what was written there since.',
+    ], 'worker');
+    all(entry(host), [
+      '`--no` stops npx installing anything',
+      'It does not keep npx off the network: in a checkout with no installed copy, such as a worktree, npx still asks the registry for the package.',
+      "Where the network is not allowed, add `--offline`, as in `npx --no --offline castwork report`: it stops npm's network lookup, but may still run a copy installed globally or cached by an earlier npx, not this project's.",
+      'Where the copy matters, as in a checkout with no install of its own, use the launcher a brief or `.castwork/local/setup.md` names, such as `node_modules/castwork/bin/castwork.js` in a checkout that has it, run with `node`.',
+    ], 'entry');
+    assert.doesNotMatch(entry(host), phrase('it runs an installed copy and otherwise fails without a request'), '--offline does not guarantee the project\'s copy');
+    const launcher = "otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.";
+    for (const id of ['thinker', 'worker', 'verifier']) all(role(host, id), ['Run the CLI with the launcher your brief or that file names, if any; ' + launcher], id);
+    all(role(host, 'coordinator'), ['Run the CLI with the launcher that file names, if any; ' + launcher], 'coordinator');
+    assert.doesNotMatch(entry(host), phrase('`--no` keeps npx to the installed copy'), 'npx --no does not keep npx off the registry');
     all(role(host, 'worker'), [
       'What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.',
       'where a failure, an acceptance or a reproduction rests on one, copy it in `.castwork/findings/`',
@@ -903,8 +927,14 @@ for (const host of HOSTS) {
     ], 'worker');
     assert.doesNotMatch(worker, phrase('record it as a new candidate, and run the evidence again.'), 'a new candidate reruns what the change can reach, not every observation');
     all(role(host, 'verifier'), [
-      "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again; the declared checks run on this candidate.",
+      "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again.",
+      'A declared check runs on this candidate, or is cited from its run on an earlier one only where `git diff` between the two shows the difference touches nothing it reads,',
     ], 'verifier');
+    all(worker, [
+      'So can a declared check when the difference touches nothing it reads, such as a plan document no test opens: record its entry for the new candidate with the earlier run\'s result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again.',
+    ], 'worker');
+    all(worker, ["Inputs outside Git count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, never another citation."], 'worker');
+    assert.doesNotMatch(role(host, 'verifier'), phrase('the declared checks run on this candidate.'), 'a declared check may be cited where the difference cannot reach it');
     for (const id of ['worker', 'verifier']) {
       assert.doesNotMatch(role(host, id), phrase('reaches it even when the product is unchanged'), `${id}: a changed instrument affects only the conclusions it could affect`);
     }
@@ -926,10 +956,17 @@ test('the procedure skills rerun what a change could affect and copy into findin
     'record it as a new candidate, and run again for it the declared checks and the earlier observations the change could affect.',
     'the product code an observation ran, or the part of its observer, oracle, classifier or fixture that produced or judged it, can affect it even when the product is unchanged, as a fix to a shared false-pass condition affects every result it judged; a change to a branch only another case uses need not.',
     'An observation the change could not affect can still show a criterion: cite it with its candidate and say why it still stands.',
+    'So can a declared check when the difference between the two candidates touches nothing it reads, such as a plan document no test opens: record an entry for the new candidate with the earlier run\'s `check`, `result` and `command`, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the paths the difference touches and why the check reads none of them.',
+    'A check that reads any of them, or whose inputs you cannot tell, runs again.',
+    "Inputs outside Git count too, such as installed dependencies, environment settings, a database's state, a served image or an external service: cite a check only with the same invocation, where none of those it reads has changed since its run, and never one whose purpose or the working policy needs a fresh observation.",
+    'Cite the entry that ran, by its `at` or linked output where several share a check and candidate, never another citation.',
+    "A verifier confirms the difference with `git diff` before relying on the citation; where Git or either candidate's objects are unavailable, it cannot be confirmed: run the check again within existing authority, or name the gap.",
+    'If you did not run it, on this candidate or, cited as above, on an earlier one, there is no evidence entry.',
     "Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.",
   ], 'verification-evidence');
   all(skill('assessment'), [
-    "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again. The declared checks run on the candidate you assess.",
+    "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again. The declared checks run on the candidate you assess, or one is cited from its run on an earlier candidate, its `output` beginning `cited from <earlier ref>:`: confirm with `git diff` between the two that the difference touches nothing it reads, that the invocation is the same, and that nothing outside Git it reads, such as installed dependencies, environment settings or a database's state, has changed, and that neither its purpose nor the working policy needs a fresh observation, and treat a citation you cannot confirm, where Git or a candidate's objects are unavailable included, as unshown.",
+    "A run of a declared check you made yourself on an earlier candidate you may cite the same way, never one another session recorded under the same actor, nor the producer's run alone.",
   ], 'assessment');
 });
 

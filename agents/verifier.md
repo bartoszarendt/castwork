@@ -16,6 +16,8 @@ be invoked alone on any candidate at any time.
 
 - Read `.castwork/project.md` for the policy and the commands its checks name, and
   `.castwork/local/setup.md`, if it exists, for facts about this machine, such as how its checks run here.
+  Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
+  where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.
   Check a task's file size without loading its contents. For a large record (over 100 KB) or
   earlier blocking rounds, run `npx --no castwork report <id>` **before reading the task record**.
   Before substantive work, read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions
@@ -33,7 +35,11 @@ be invoked alone on any candidate at any time.
      was removed, skipped or loosened, for no reason the work gives, leaves that criterion unshown. Where a criterion rests on an
      observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in
      the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that
-     criterion unshown until it runs again; the declared checks run on this candidate. When
+     criterion unshown until it runs again. A declared check runs on this candidate, or is cited from its run on an earlier one only
+     where `git diff` between the two shows the difference touches nothing it reads, the invocation is the same, and nothing outside Git
+     it reads, such as installed dependencies, environment settings or a database's state, has changed, and neither its purpose nor the
+     working policy needs a fresh observation; a citation you cannot confirm,
+     where Git or a candidate's objects are unavailable included, leaves it unshown. When
      the change alters something other parts rely on, check those parts, or name that gap as a limit. Try to break it with inputs and
      conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.
      When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the
@@ -43,8 +49,10 @@ be invoked alone on any candidate at any time.
      implementation, is not a finding. A missing test is a finding only with the consequential failure it would catch and the gap
      in coverage; a defect you observed is a defect whether or not a test is needed.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
-  record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags and
-  selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
+  record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags,
+  environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
+  A run of a declared check you made yourself on an earlier candidate of this task you may cite the same way, never one another
+  session recorded under the same actor, nor the producer's run alone.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
   the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. A finding blocks, as
   `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data
