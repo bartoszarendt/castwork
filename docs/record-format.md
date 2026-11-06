@@ -336,6 +336,18 @@ its update to one role, avoiding overlapping updates. An agent working alone
 keeps its own. It grants nothing; cited decisions and the user's current
 instructions govern where they disagree. A section with only HTML comments and whitespace is empty.
 
+`## Blockers and decisions` is recorded prose too: what blocks the work now and
+the decisions still in force for it, each written when it happens. An entry is
+rewritten or removed once its blocker clears or its decision is superseded.
+Git keeps an earlier text only once it was committed: where nothing committed
+keeps reasoning that surviving evidence, assessments or decisions rest on, it
+moves to a findings file the record cites before its entry goes. Nothing has to
+be committed for this. It is not a log of rounds: observations are evidence and
+assessments in the frontmatter lists, and what they mean for the next step is
+Current state. `task archive` moves earlier candidates' entries but never body
+prose, so a record whose body keeps every round grows past what archiving can
+relieve.
+
 ## Requirements
 
 A task declares explicit, mechanically checkable requirements. The checks
@@ -557,6 +569,7 @@ errors; the rest are informational and change no outcome.
 | `evidence.lint_as_evidence` | info | an evidence entry's command runs `castwork task lint`; text summarizes earlier-candidate entries, JSON retains all | lint reports on the record, not the candidate; record the project's own checks instead |
 | `evidence.credential_like` | info | a command carries a URL with a literal password, or assigns a literal to a variable or option whose name has `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, or `APIKEY` as a whole segment, quoted or not (`PASSWORD="x"`, `export API_KEY=...`, `$env:API_KEY=...`); a reference (`$NAME`, `${NAME}`, `%NAME%`), a number, a boolean, or `***` is not noted | record the variable's name (`$DATABASE_URL`), never its value; records are repository files, subject to the repository's own secret checks |
 | `evidence.script_outside_snapshot` | info | an evidence entry's command names a script in a folder snapshots leave out (`tasks/`, `findings/`, `reviews/`, `local/` under `.castwork/`); the name alone shows neither that the command runs it nor whether a commit candidate holds it; text summarizes earlier-candidate entries, JSON retains all | if a check runs it, the script is part of the candidate: put it where the project keeps such files and record a new candidate |
+| `identity.bracketed` | info | a candidate's producer, or an evidence or assessment `actor`, contains `[` or `]`, as `producers: ["[worker@pi]"]` does when list brackets were typed into `task add`; such a name matches no actor written without them, so independence compares the wrong names | correct the entry from the evidence of who acted; `task add` refuses brackets in `producers` and `actor` |
 | `record.large` | info | the record file is larger than 100 KB; the text hint names `task archive` (JSON retains its existing note) | `task archive <id> --check` shows what moving earlier candidates' entries would save; the body stays, so keep run output in `.castwork/local/runs/` and observations short |
 | `field.unrecognized` | info | a frontmatter field the format does not define | nothing, if it is the project's own field |
 

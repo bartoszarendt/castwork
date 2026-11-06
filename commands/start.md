@@ -91,7 +91,8 @@ neither discard them nor build on them unexamined.
    here and there, what the rest waits on, and whether recent rounds and
    decisions moved that or only the work around it. Where they may not have,
    the `Movement` line of `report` counts them against the tasks they touched
-   that are now done.
+   that are now done, and its `Changes` line shows how many lines went into
+   `.castwork/` against everything else.
 
 ## Then continue
 
@@ -125,7 +126,8 @@ whose `depends_on` are done; otherwise the next work the project's documents
 name that no record covers yet. When records keep moving and the work's finish
 does not, say so and propose what would move it, such as running the
 acceptance check, a thinker step back from the phase, or asking the user to
-close a task whose further rounds would not. A record that is blocked or waiting for context belongs in the
+close a task whose further rounds would not. A record that is blocked or waiting
+for context belongs in the
 report, with what it waits on. Recommend one step, or several
 that can proceed together, rather than asking what to work on. When that work
 will need the user's calls along the way, ask for the whole path in the same
@@ -145,21 +147,23 @@ with the workspace, needs no permission.
 
 The coordinator role lists the signs of a stall in one task. When they recur
 across a phase's tasks or across the rounds of one task, or the work goes to
-its proof rather than its result,
-such as rounds on an instrument, harness, fixture or permission packet while
-the result it checks stays the same, or the user's decisions keep arriving on
-one gate, ask the thinker to step back from the phase or task rather than to
-diagnose its next blocker. Ask the question as the user would: what is this
-phase or task for,
-what stands between here and a result someone can use, and what is the
-simplest credible route there. Where the host lists levels, it runs at
-`complex`. Start a fresh thinker for it, never one that planned the phase or
-its last re-plan: a step back questions that plan, and one that still holds it
-questions it least. Its answer is one path: take what stays within authority,
-and bring the user's calls it names together, in one request, with its
-recommendations. A step back looks forward from where the work is; a review of
-how the work went is offered at its own occasions, as the coordinator role
-says.
+its proof rather than its result, such as rounds on an instrument, harness,
+fixture or permission packet while the result it checks stays the same, many
+lines in `.castwork/` against few elsewhere in `report`'s Changes, or the
+user's decisions keep arriving on one gate, ask the thinker to step back from
+the phase or task rather than to diagnose its next blocker. Ask the question as
+the user would: what is this phase or task for, what stands between here and a
+result someone can use, and what is the simplest credible route there. Where
+the host lists levels, it runs at `complex`. Start a fresh thinker for it,
+never one that planned the phase or its last re-plan: a step back questions
+that plan, and one that still holds it questions it least. Its answer is one
+path: take what stays within authority, and bring the user's calls it names
+together, in one request, with its recommendations and, where it closes with
+one, its open question about what the work lets someone do now and what they
+want next. Where it finds the outcome settled and its route within authority,
+take the route and say so; nothing waits on the user.
+A step back looks forward from where the work is; a review of how the work went
+is offered at its own occasions, as the coordinator role says.
 
 ## While working
 
@@ -179,17 +183,15 @@ something better than an edit:
 
 The CLI is this project's installed copy of the `castwork` package. It is
 not on the PATH, so a bare `castwork` is not found; run it through `npx`.
-`--no` stops npx installing anything: without it, a non-interactive npx
+`--no` stops npx installing anything; without it, a non-interactive npx
 downloads and runs whatever package of that name the registry holds. It does
 not keep npx off the network: in a checkout with no installed copy, such as a
-worktree, npx still asks the registry for the package. Where the network is
-not allowed, add `--offline`, as in `npx --no --offline castwork report`: it
-stops npm's network lookup, but may still run a copy installed globally or
-cached by an earlier npx, not this project's. Where the copy matters, as in a
-checkout with no install of its own, use the launcher a brief or
-`.castwork/local/setup.md` names, such as `node_modules/castwork/bin/castwork.js`
-in a checkout that has it, run with `node`. If the command is not available, say so and edit the record by hand. Do not install
-anything to get it.
+worktree, npx still asks the registry. Where the network is not allowed, add
+`--offline`, as in `npx --no --offline castwork report`, which may still run a
+copy installed globally or cached by an earlier npx. Where the copy matters, use
+the launcher a brief or `.castwork/local/setup.md` names, such as
+`node node_modules/castwork/bin/castwork.js`. If the command is not available,
+say so and edit the record by hand. Do not install anything to get it.
 
 If the user asks you to update Castwork in this repository, first run
 `npx --no castwork update --check` and tell the user the version and
@@ -206,7 +208,8 @@ The same holds for every change to roles, models, and skills: most hosts read
 them when a session starts, so count on them only in a new session. Claude Code
 reloads role files in an existing `.claude/agents/` for the next role it
 starts; this session's own instructions stay as they were. Never hand-edit a
-generated file to change a role; `update` overwrites it. Do not infer your own model from
+generated file to change a role; `update` overwrites it. Do not infer your own
+model from
 `role_settings`: they describe the agent files, not the session you run in.
 
 ## Pausing
@@ -215,8 +218,8 @@ When the user asks, in whatever words or language, to stop the work for now:
 
 - Start nothing new.
 - As running roles return, bring each record up to date: its status, where the
-  work stands under `## Blockers and decisions`, and no unfinished check
-  claimed as passed.
+  work stands in `## Current state`, and no unfinished check claimed as
+  passed.
 - Check the current candidate is still what was recorded: for a snapshot,
   `task lint` says whether the working tree has drifted from it.
 - Tear down what you and the roles started, such as servers or containers; if
@@ -236,7 +239,8 @@ When the user asks, in whatever words or language, to stop the work for now:
   it again. A fact about this machine
   that will still hold next time belongs in `.castwork/local/setup.md`, not in
   the handoff: add it there, as the other proposals for that file are applied,
-  and point to that file rather than repeating it. Date it from the clock, name the
+  and point to that file rather than repeating it. Date it from the clock, name
+  the
   commit it starts from when there is one, and name task records by id rather
   than copying their state or evidence. Check what it says about a candidate
   against `task lint` before you write it. Replace an earlier handoff there,
@@ -310,7 +314,8 @@ what it does, never by its name or where it is installed; do not search for one
 or install one. Follow its procedure for checking the CLI is ready, running,
 monitoring, and reviewing the result. Give the delegate the task id and the
 listed role file to read first, start the role by name where that CLI can, pass
-the listed settings through the CLI's own model, reasoning, or variant options, and allow
+the listed settings through the CLI's own model, reasoning, or variant options,
+and allow
 writes only where the role writes: the worker within the task's scope, in its
 task record and its findings files, and its run output in
 `.castwork/local/runs/`; the thinker in task records, the decisions it is asked
@@ -338,7 +343,8 @@ for that separate process; it authorizes nothing else.
   that took it, so a routed CLI working in this same checkout can review it and
   a delegate in another clone cannot. There, use a commit the user or the
   working policy authorizes, or send the base commit and
-  `git diff --binary --no-textconv <base> <sha>`: the reviewer applies the diff to a clean checkout of
+  `git diff --binary --no-textconv <base> <sha>`: the reviewer applies the diff
+  to a clean checkout of
   the base and runs `snapshot`, and identical content gives the identical
   `tree:` sha, which proves it holds the candidate. A snapshot is not a general
   way to hand work between hosts.

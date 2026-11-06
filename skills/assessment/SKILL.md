@@ -71,9 +71,11 @@ checks it rests on have finished.
    changed, and that neither its purpose nor the working policy needs a fresh
    observation, and treat a citation you cannot confirm, where Git or a
    candidate's objects are unavailable included, as unshown. A run of a
-   declared check you made yourself on an earlier candidate you may cite the
-   same way, never one another session recorded under the same actor, nor the
-   producer's run alone.
+   declared check an assessing actor recorded on an earlier candidate, yours or
+   another session's, you may cite the same way, never a producer's:
+   independence is your judgement of the evidence, not a repeat of every
+   command. Run again what would settle an uncertainty that matters to the
+   verdict.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
    should be paying for it. A finding names the concrete burden, such as a
@@ -179,8 +181,11 @@ Read the findings before defending anything. Fix what is right, and say clearly
 where you disagree and why rather than silently not doing it. Treat each finding
 as an example of its kind: fix the same defect wherever the candidate has it
 within the scope of the work, and say where you looked; name an occurrence
-outside that scope as a proposal rather than fixing it. Then record a new
-candidate and fresh evidence — the old evidence belongs to the old candidate.
+outside that scope as a proposal rather than fixing it. After `needs_revision`
+or `reject`, or a follow-up someone chose to make, record a new candidate and
+fresh evidence for what changed: the old evidence belongs to the old candidate.
+A finding recorded as not blocking beside an `accept` asks for no new
+candidate: the accepted one stays accepted, and the finding is follow-up work.
 
 ## Be specific
 

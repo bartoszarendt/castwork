@@ -181,7 +181,7 @@ for (const host of HOSTS) {
     assert.match(entry.content, /If there is no argument, report the state, propose the next step, and ask\s+before starting it/);
     assert.match(entry.content, /first a record that can move\s+now, one that is not `done`, `cancelled`, `blocked`, or `needs_context` and\s+whose `depends_on` are done/);
     assert.match(entry.content, /Ask an open\s+question only when neither the records nor the documents name anything/);
-    assert.match(entry.content, /When\s+the\s+work\s+comes\s+from\s+a\s+document,\s+name\s+it\s+and\s+the\s+part:\s+orienting\s+is\s+yours\./);
+    assert.match(entry.content, /When\s+the\s+work\s+comes\s+from\s+a\s+document,\s+name\s+it\s+and\s+the\s+part\./);
     assert.doesNotMatch(entry.content, /report the state and ask what to work on/);
   });
 }
@@ -215,12 +215,12 @@ for (const host of HOSTS) {
   test(`${host} thinker proposes a recurring cause as a project.md edit in the record, without making it`, () => {
     const thinker = generateHost(host).find((file) => /\/agents\/thinker\.(md|toml)$/.test(file.path));
     assert.ok(thinker, 'the thinker role is generated');
-    assert.match(thinker.content, /in\s+the\s+task\s+record,\s+under\s+`## Blockers and decisions`/);
+    assert.match(thinker.content, /propose\s+under\s+`## Blockers and decisions`\s+where\s+it\s+is\s+kept/);
     assert.match(thinker.content, /\(`## Working policy`,\s+`## Checks`,\s+or\s+`## Setup facts`\)/);
     assert.match(thinker.content, /Do\s+not\s+edit\s+`project\.md`\s+unless\s+the\s+user\s+asks/);
-    assert.match(thinker.content, /For\s+this\s+machine\s+only,\s+such\s+as\s+a\s+local\s+path,\s+port,\s+or\s+wrapper,\s+`\.castwork\/local\/setup\.md`,\s+never\s+`project\.md`/);
-    assert.match(thinker.content, /the\s+host's\s+user-level\s+instructions\s+or\s+a\s+user\s+skill,\s+which\s+Castwork\s+does\s+not\s+keep/);
-    assert.match(thinker.content, /the\s+line\s+points\s+to\s+them,\s+saying\s+what\s+they\s+hold\s+and\s+when\s+to\s+read\s+them/);
+    assert.match(thinker.content, /`\.castwork\/local\/setup\.md`\s+for\s+this\s+machine\s+only,\s+such\s+as\s+a\s+local\s+path,\s+port,\s+or\s+wrapper,\s+never\s+`project\.md`/);
+    assert.match(thinker.content, /the\s+host's\s+user-level\s+instructions\s+or\s+a\s+user\s+skill\s+beyond\s+this\s+project/);
+    assert.match(thinker.content, /pointing\s+to\s+the\s+project's\s+own\s+documents\s+when\s+it\s+needs\s+more/);
     assert.match(thinker.content, /[Aa]\s+finding\s+about\s+one\s+candidate\s+stays\s+in\s+its\s+assessment/);
   });
 }
@@ -258,11 +258,11 @@ for (const host of HOSTS) {
   test(`${host} coordinator announces each batch of roles and sets status itself`, () => {
     const coordinator = generateHost(host).find((file) => /\/agents\/coordinator\.(md|toml)$/.test(file.path));
     assert.ok(coordinator, 'the coordinator role is generated');
-    assert.match(coordinator.content, /before\s+each\s+batch\s+of\s+roles/);
+    assert.match(coordinator.content, /Before\s+each\s+batch\s+of\s+roles/);
     assert.match(coordinator.content, /one\s+sentence/);
     assert.match(coordinator.content, /why\s+now/);
-    assert.match(coordinator.content, /When\s+you\s+run\s+the\s+roles,\s+statuses\s+are\s+yours/);
-    assert.match(coordinator.content, /set\s+the\s+rest\s+yourself\s+with\s+`npx --no castwork task set`/);
+    assert.match(coordinator.content, /\*\*Statuses\*\*\s+are\s+yours\s+when\s+you\s+run\s+the\s+roles/);
+    assert.match(coordinator.content, /set\s+the\s+rest\s+with\s+`npx --no castwork task set`/);
   });
 }
 
@@ -273,8 +273,8 @@ for (const host of HOSTS) {
     const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
-    assert.match(entry.content, /Start\s+the\s+host's\s+subagent\s+named\s+after\s+the\s+role,\s+which\s+a\s+plugin\s+install\s+may\s+list\s+with\s+a\s+prefix,\s+such\s+as\s+`castwork:thinker`/);
-    assert.match(entry.content, /not\s+a\s+general-purpose\s+one\s+told\s+which\s+role\s+it\s+plays,\s+which\s+has\s+only\s+the\s+name/);
+    assert.match(entry.content, /the\s+host's\s+subagent\s+named\s+after\s+it,\s+which\s+a\s+plugin\s+may\s+list\s+with\s+a\s+prefix,\s+such\s+as\s+`castwork:thinker`/);
+    assert.match(entry.content, /not\s+a\s+general-purpose\s+one\s+told\s+its\s+role/);
   });
 }
 

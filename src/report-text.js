@@ -157,6 +157,15 @@ function decisionText(report,row) {
   lines.push(gitLine(report,row));
   return lines;
 }
+/** Where the lines changed, never whether anything moved: outside `.castwork/`
+ * is product, tests, documents and tooling alike.
+ * @param {Report['changes']} changes */
+function changesLines(changes) {
+  if (!changes) return [];
+  if ('omitted' in changes) return [`Changes  not observed: ${changes.omitted}`];
+  const {committed: c, uncommitted: u, untracked_files: f} = changes;
+  return [`Changes  committed in that week: ${c.castwork} lines in .castwork/, ${c.elsewhere} elsewhere; uncommitted now: ${u.castwork} and ${u.elsewhere}${f.castwork || f.elsewhere ? `, untracked files ${f.castwork} and ${f.elsewhere}` : ''}. Elsewhere is product, tests, documents and tooling alike.`];
+}
 /** @param {Report} report */
 function projectText(report) {
   const t = report.totals, q = report.quality, m = report.movement;
@@ -165,6 +174,7 @@ function projectText(report) {
     `Tasks  ${Object.entries(t.task_statuses).map(([k,v]) => `${k} ${v}`).join(' · ')}`,
     `  ${t.invalid_tasks} of ${t.tasks} structurally invalid (task lint)`,
     `Movement  ${m ? `${m.from} to ${m.to}, the latest recorded week: ${m.decisions} decisions; ${m.candidates} candidates, ${m.assessments} assessments (${m.blocking_assessments} blocking) on ${m.tasks} tasks, ${m.tasks_done} of them done now${m.tasks_cancelled ? `, ${m.tasks_cancelled} cancelled` : ''}` : 'no dated entries'}`,
+    ...changesLines(report.changes),
     '', 'Attention'];
   const drafts = report.attention.filter((row) => row.status === 'draft' && row.no_candidate);
   // Display priority only: derivation/JSON retain all records and their order.

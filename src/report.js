@@ -52,6 +52,28 @@ function movementOf(recent, records) {
     tasks_cancelled: tasks.filter((task) => task.status === 'cancelled').length};
 }
 
+/** @typedef {{castwork: number, elsewhere: number}} LineCounts */
+/** @typedef {{from: string, to: string, committed: LineCounts, uncommitted: LineCounts, untracked_files: LineCounts}|{omitted: string}} Changes */
+
+/** Lines changed inside `.castwork/` and everywhere else, from `git --numstat -z`
+ * output with paths relative to the project root: NUL-separated, so a path
+ * Git would otherwise quote, such as one with non-ASCII letters, is read as
+ * written. Binary files count no lines. Outside `.castwork/` is product,
+ * tests, documents and tooling alike: a signal of where the work went, never
+ * progress.
+ * @param {string} numstat
+ * @returns {LineCounts}
+ */
+export function changedLines(numstat) {
+  const lines = {castwork: 0, elsewhere: 0};
+  for (const row of numstat.split('\0')) {
+    const match = /^\n*(\d+)\t(\d+)\t([^\n]+)$/.exec(row);
+    if (!match) continue;
+    lines[match[3].startsWith('.castwork/') ? 'castwork' : 'elsewhere'] += Number(match[1]) + Number(match[2]);
+  }
+  return lines;
+}
+
 /** Calendar validity, without Date's rollover of impossible days.
  * @param {string} day
  */
@@ -545,5 +567,5 @@ export function deriveReport(inputs, options = {}) {
       blocking_verdicts: sum('blocking_verdicts'), blocking_records: tasks.length - blockingRecords.zero, blocking_histogram: blockingRecords,
       declared_fails_recorded: sum('declared_fails_recorded'), declared_fail_names: Object.fromEntries([...failNames].sort((a,b) => b[1] - a[1])),
       outcome_triples: totalOutcomes, current_triples: currentOutcomes }, attention, recent, movement: movementOf(recent, records), quality,
-    mentioned_decisions: mentionedDecisions };
+    mentioned_decisions: mentionedDecisions, changes: /** @type {Changes|null} */ (null) };
 }

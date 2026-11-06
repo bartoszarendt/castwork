@@ -47,6 +47,9 @@ test('entries are typed as the record format types them, and only what is given 
   assert.throws(() => entryFromPairs('assessment', ['candidate=a', 'role=reviewer', 'verdict=accept']), /role reviewer is not one of/);
   assert.throws(() => entryFromPairs('evidence', ['check=test', 'candidate=a', 'result=pass', 'exit_code=zero']), /not an integer/);
   assert.throws(() => entryFromPairs('evidence', ['check=test', 'candidate=a', 'result=pass', 'producers=x']), /evidence takes no field producers/);
+  assert.throws(() => entryFromPairs('candidate', ['ref=0123456', 'producers=[worker@pi]']), /producers \[worker@pi\] carries list brackets/);
+  assert.throws(() => entryFromPairs('candidate', ['ref=0123456', 'producers=worker@pi,[worker@codex']), /carries list brackets/);
+  assert.throws(() => entryFromPairs('assessment', ['candidate=0123456', 'role=verifier', 'verdict=accept', 'actor=[verifier@pi]']), /actor \[verifier@pi\] carries list brackets/);
   assert.throws(() => entryFromPairs('candidate', ['ref=a', 'ref=b']), /given twice/);
   assert.throws(() => entryFromPairs('candidate', ['ref=a', 'model=']), /model is empty/);
   assert.throws(() => entryFromPairs('candidate', ['ref']), /not key=value/);

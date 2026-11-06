@@ -2,6 +2,75 @@
 
 ## Unreleased
 
+- `report` shows where the lines went. A `Changes` line under Movement counts
+  the lines changed inside `.castwork/` and everywhere else by the commits of
+  that same recorded week, then the lines uncommitted now and the untracked
+  files, from local Git. The commits are those on the checked-out branch's
+  first-parent line dated in the week, found past any older-dated commit
+  between them, and a merge counts what it brought onto the branch; paths Git
+  would quote, such as non-ASCII names, are read as written. It needs Git 2.37
+  or later, and only the project view reads it. Everywhere else is product,
+  tests, documents and tooling alike, so it is a sign, not progress: in three
+  projects whose work stalled, records outweighed everything else by up to a
+  hundred to one for days before anyone counted, though the coordinator's rule
+  against bookkeeping becoming the work was loaded in every session. The
+  coordinator and the entry command now point at it. JSON has it as `changes`.
+- `## Blockers and decisions` holds what blocks the work now and the decisions
+  still in force. An entry is rewritten or removed once its blocker clears or
+  its decision is superseded; where nothing committed keeps reasoning that
+  surviving evidence, assessments or decisions rest on, it moves to a findings
+  file the record cites first, and nothing is committed just for this.
+  Observations are evidence and assessments, and what they mean next is Current
+  state. A
+  worker reports a costly step's result to the coordinator, or in Current state
+  when it works alone, never as a new entry per run, and a pause says where the
+  work stands in Current state. Before, the section was written "as it
+  happens" and never pruned: it was 829 KB of one 1.27 MB record, and archiving
+  moves no body prose.
+- A verifier may cite a declared check's run on an earlier candidate that an
+  assessing actor recorded, its own or another session's, under the same
+  conditions as before, never the producer's: independence is its judgement of
+  the evidence, not a repeat of every command. It runs again what would settle
+  an uncertainty that matters. Before, a fresh verifier re-ran every declared
+  check after a change to documents alone.
+- A finding recorded as not blocking beside an `accept` asks for no new
+  candidate (`assessment`, "Being assessed"): a new candidate and fresh
+  evidence follow `needs_revision`, `reject`, or a follow-up someone chose.
+- `task add` refuses list brackets in `producers` and `actor`, and lint notes an
+  existing one as `identity.bracketed`. `producers=[worker@pi]` stored the name
+  `[worker@pi]`, which no assessment by `worker@pi` matches, so the
+  independence check compared the wrong names; 274 candidates in three
+  projects carried such names, none accepted by its own producer.
+- A step back names the few obligations that cost the most, each with where it
+  comes from: the user's own words, an option the agents drafted that the user
+  chose, or the agents' choice alone; a change to what the user approved, an
+  outcome, a guarantee or a limit, is their call whichever words carried it.
+  Where the outcome itself is uncertain or needs reconsidering, it closes with
+  one open question for the user in product terms, about what the work lets
+  someone do now and what they want next, which the coordinator brings with the
+  calls; where the outcome is settled and the simpler route lies within
+  authority, the work carries on and nothing waits on the user. A failure
+  recorded on an earlier candidate is measured again on the current one before
+  another round is built on it only where it is uncertain the failure still
+  applies, such as after changes it could reach, or a freshness requirement
+  says so; otherwise its diagnosis is reused.
+- Calls stay numbered so a word answers them, and an option says who a risk
+  could reach in use now; the recommended option is the one judged best, not
+  the strictest by default; where the user's decisions keep arriving on one
+  gate, one option accepts where the work stands and stops. Choosing an option
+  the agents drafted binds what it delivers, not the agents' method, and
+  `decision-capture` records the option's text as the agents' wording beside
+  the user's answer.
+- The coordinator hands reading it cannot do well itself, such as several
+  large records, long documents or unfamiliar code, to whatever read-only
+  exploration the host or its skills offer, several at once where the parts are
+  independent. Their raw answers go in no record; a fact or decision taken from
+  them is recorded with the source it rests on, and they are not roles.
+- The coordinator and thinker presets say each rule once, in lines a reader can
+  follow, and `validate` counts each preset's and the entry command's words
+  against a limit, with lines kept within 160 characters, where it counted
+  lines: the limit on lines had let one coordinator line reach 1,521
+  characters. A new rule replaces one rather than raising a limit.
 - A role starts each round fresh unless a resume is shown to be safe. The
   coordinator starts a fresh agent, given the task id where there is one, and
   resumes one only when the round continues that agent's own last round on the
@@ -29,9 +98,9 @@
   observation, and the citation names the entry that ran, never another
   citation. The verifier and `assessment` confirm the difference with
   `git diff` and treat a citation they cannot confirm as unshown, including
-  where Git or a candidate's objects are unavailable; a verifier cites only a
-  run it made itself, not one another session recorded under the same actor,
-  nor the producer's. Lint does not tell a cited entry from a run.
+  where Git or a candidate's objects are unavailable; a verifier may cite a run
+  an assessing actor recorded, its own or another session's, never the
+  producer's. Lint does not tell a cited entry from a run.
   Before, the rule that a new candidate reruns "the declared checks and the
   earlier observations the change could affect" was meant to cover only
   observations, but it read either way: projects recorded unrun checks as

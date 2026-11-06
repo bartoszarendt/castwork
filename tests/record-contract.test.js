@@ -284,3 +284,12 @@ test('lint prints the current candidate in full and summarises earlier ones', (t
   const report = JSON.parse(capture(['task', 'lint', 'T-001', '--json'], root).out);
   assert.deepEqual(report.records[0].references.map((reference) => reference.ref), ['old-one', 'old-two', 'current-one'], '--json keeps every candidate');
 });
+
+test('an actor written with list brackets is reported where it stands, and independence still compares names as written', () => {
+  const record = parse('status: in_review\nrequirements:\n  independent_review: true\ncandidates:\n  - ref: aaaaaaa\n    producers: ["[worker@pi]"]\nassessments:\n  - { candidate: aaaaaaa, role: verifier, actor: "[verifier@pi]", verdict: accept }\n', '## Intent\nx\n');
+  const notes = codes(record, 'identity.bracketed');
+  assert.deepEqual(notes.map((note) => [note.field, note.index]), [['candidates', 0], ['assessments', 0]]);
+  assert.match(notes[0].message, /candidates\[0\] names the actor \[worker@pi\], brackets included/);
+  assert.deepEqual(record.errors, []);
+  assert.equal(codes(parse('status: draft\ncandidates:\n  - ref: aaaaaaa\n    producers: [worker@pi]\n', '## Intent\nx\n'), 'identity.bracketed').length, 0, 'a YAML flow list is not brackets in a name');
+});

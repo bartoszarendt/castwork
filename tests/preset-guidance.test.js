@@ -89,7 +89,8 @@ for (const host of HOSTS) {
       'A session that produced a candidate never accepts it under any actor; taking this role creates no independence.',
     ]);
     all(role(host, 'coordinator'), [
-      "Give each parallel verifier lens its own actor name. Never rename an actor to make a review independent. Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise.",
+      "Give each parallel lens its own actor; never rename an actor to make a review independent.",
+      "**Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise.",
     ]);
     assert.doesNotMatch(role(host, 'coordinator'), /do not assign an actor/);
   });
@@ -97,7 +98,7 @@ for (const host of HOSTS) {
   test(`${host} role-taking keeps both conditions explicit without manufacturing independence`, () => {
     all(role(host, 'coordinator'), [
       'For a small task where delegation would not help, you may switch to worker.',
-      'Where no subagent or delegation capability can start an agent, you may take any role yourself; being started by another agent is not such a case.',
+      'Where nothing can start an agent, you may take any role yourself; being started by another agent is not such a case.',
       'Announce either change first, follow its preset, and record its actor',
       'Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.',
       'the accepting actor must not be a recorded producer',
@@ -105,7 +106,7 @@ for (const host of HOSTS) {
     // The entry carries the coordinator's own wording rather than a second copy.
     all(entry(host), [
       'For a small task where delegation would not help, you may switch to worker.',
-      'Where no subagent or delegation capability can start an agent, you may take any role yourself; being started by another agent is not such a case.',
+      'Where nothing can start an agent, you may take any role yourself; being started by another agent is not such a case.',
       'Announce either change first, follow its preset, and record its actor',
       'Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.',
       'the accepting actor must not be a recorded producer',
@@ -130,7 +131,7 @@ for (const host of HOSTS) {
     const worker = role(host, 'worker');
     assert.match(worker, phrase('You need no authorization step, delegation, or prior command to begin.'));
     assert.doesNotMatch(worker, /no delegation/, 'what the worker does not need is not a ban on delegating');
-    assert.match(role(host, 'coordinator'), phrase("use the host's own search subagents for your own discovery"));
+    assert.match(role(host, 'coordinator'), phrase("Workers sharing one checkout collide, and disjoint files do not isolate whole-tree checks: give each writer its own copy, such as a git worktree, or run broad checks once they settle."));
   });
 
   test(`${host} statuses belong to whoever runs the roles, and a role working alone closes its own task`, () => {
@@ -139,8 +140,8 @@ for (const host of HOSTS) {
       'Working alone, set status yourself with `npx --no castwork task set`, and `done` only after lint shows the requirements met.',
     ], 'worker');
     all(role(host, 'coordinator'), [
-      'When you run the roles, statuses are yours',
-      'When lint shows the requirements met, set the record `done`.',
+      "Propose separate tasks linked by `depends_on` for independently finishable parts, never a split by size alone.",
+      "**Statuses** are yours when you run the roles: a role records only `blocked` or `needs_context`; set the rest with `npx --no castwork task set`, and `done` when lint shows the requirements met.",
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), /After a satisfying verdict/, 'done is not verdict-gated');
     assert.match(role(host, 'verifier'), phrase('You record a verdict, not a status'));
@@ -163,10 +164,9 @@ for (const host of HOSTS) {
       'If the CLI is not available, say so and record the candidate as a mutable label; never invent a reference.',
       'An authorization covers only the named action.',
       'A prerequisite that changes shared state or widens the scope is a new request: record `needs_context`',
-      'After a step that costs minutes, append a short observation: what was seen, what it means, what is next',
+      'After a step that costs minutes, say in a few lines what was seen, what it means and what is next: in your report to the coordinator, or in `## Current state` when you work alone, never as a new entry or section per run.',
       'A routine successful probe is a sentence in the body, or nothing',
       'an observation supporting acceptance or a finding stays candidate-bound evidence',
-      'not a new narrative section per run or a long paragraph on one line',
       "it is the coordinator's, and you update it only when the coordinator assigns that to you",
       "propose where it is kept, in the record under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds for this repository,",
       "a line for `.castwork/local/setup.md` when it holds only on this machine; or the host's user-level instructions or a user skill when it holds beyond this project.",
@@ -187,7 +187,7 @@ for (const host of HOSTS) {
       'Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each run as evidence under your actor, failures included.',
       "Keep the project's declared working directory, paths, flags, environment and selection; a scoped variant is a different check and leaves the declared one unmet.",
       'Name an unclear or unavailable invocation.',
-      'A run of a declared check you made yourself on an earlier candidate of this task you may cite the same way, never one another session recorded under the same actor, nor the producer\'s run alone.',
+      "A run of a declared check an assessing actor recorded on an earlier candidate of this task, yours or another session's, you may cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command.",
     "the invocation is the same, and nothing outside Git it reads, such as installed dependencies, environment settings or a database's state, has changed, and neither its purpose nor the working policy needs a fresh observation; a citation you cannot confirm, where Git or a candidate's objects are unavailable included, leaves it unshown.",
       'When the change alters something other parts rely on, check those parts, or name that gap as a limit.',
       'Try to break it with inputs and conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.',
@@ -206,7 +206,7 @@ for (const host of HOSTS) {
       '`independent_review: true` where the task must not be done without a second pair of eyes',
       "`assessment_roles: [verifier]` where it must not be done without the verifier's verdict.",
       'A review that would help but is not required needs no requirement: name it in the plan and the coordinator starts it; decide, rather than leaving it optional.',
-      'Say what would unblock it and, if useful, which role should act next, and at which level: a higher level is a remedy only for a cause in the difficulty itself, and an unchanged retry at a higher level is still an unchanged retry.',
+      'Say what would unblock the work, which role should act next and at which level, a higher level being a remedy only for a cause in the difficulty itself, what can proceed independently, and the precise owner decision, if any.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
       'if the plan has phases, give each phase its own task.',
       'The plan says how the tasks fit together; each record says what its part is.',
@@ -219,25 +219,26 @@ for (const host of HOSTS) {
       'Delegate because it helps, not because a protocol asks.',
       'Delegation is one level: a role you start starts no agents.',
       'turns a request into work, plans it, breaks it down,',
-      'A subagent started by name already has its role: do not tell it to read its role file',
-      "Do not restate the worker's claims to the verifier",
-      'do not restrict what the verifier re-runs',
-      'When the work comes from a document, name it and the part: orienting is yours.',
-      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills itself; otherwise the role chooses.",
-      'A verifier can assess only a candidate that resolves; `task lint` shows whether it does.',
-      'When any delegate that may have written files fails or is cancelled, inspect what it changed and reconcile it before anyone else writes.',
-      "Record a decision where it will be found again: one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the task records it governs; one that settles only this task's next step under its `## Blockers and decisions`. Quote the user's words",
-      "Do not just retry; the same goes for a worker's `needs_context`.",
+      'One started by name has its role already; only where the host cannot start one by name, tell it to read its role file first.',
+      "When a delegate that may have written files fails or is cancelled, inspect and reconcile what it changed before anyone else writes.",
+      "**The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.",
+      'When the work comes from a document, name it and the part.',
+      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills; otherwise the role chooses.",
+      'It can assess only a candidate that resolves, as `task lint` shows.',
+      "At the end or a stop: verified state, which usable outcome the work moved or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is recorded: they may overrule the first afterwards, and only the second waits on them.",
+      "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
+      "Do not just retry, a `needs_context` included.",
       'A plain defect goes back to the worker.',
-      "When you report a role's model, effort, or variant, read it from the generated agent file you started.",
+      "Report a role's model, effort, or variant from the generated agent file you started. ## While roles run A running role is no reason to end your turn.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      'Start each round with a fresh agent, given the task id where there is one.',
-      "Resume an agent instead only when both hold: the round continues its own last round on the same task, the worker with the findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing its plan into records; and you read, before resuming it, that its context is under about half of its model's window.",
-      'A resumed agent starts its round holding everything it held before.',
-      "Read how full it is now, its latest turn's context against its model's window, where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier round's figure or a count of tokens spent, and note where in `.castwork/local/setup.md` once you find it; a figure you did not read, or one the host does not report, means a fresh agent.",
+      "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
+      "**Fresh or resumed.** Start each round with a fresh agent, given the task id.",
+      "Resume one only when the round continues its own last round on the same task, the worker with findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing its plan into records, and you read, before resuming, that its context is under about half of its model's window.",
+      'Resume one only when the round continues its own last round on the same task',
+      "Read its latest turn's context against that window where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier round's figure or a count of tokens spent, and note where in `.castwork/local/setup.md`; a figure you did not read, or one the host does not report, means a fresh agent.",
       '## While roles run',
       'A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use:',
-      "update records and Current state from returned roles, prepare the next step and check that what it needs is ready, diagnose open failures, start independent work, gather the user's open decisions into one request.",
+      "Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks use: update records from returned roles, prepare the next step, diagnose open failures, start independent work, gather the user's open decisions into one request.",
       "When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than busy polling.",
     ], 'coordinator');
     assert.doesNotMatch(coordinator, /known not to pick/, 'no guessing from model names');
@@ -248,14 +249,20 @@ for (const host of HOSTS) {
 
   test(`${host} coordinator states when each shape is worth it, not only its name`, () => {
     all(role(host, 'coordinator'), [
-      'Tasks with no `depends_on` between them start together, not one after another.',
+      "A limit or stop the user set or supplied binds as written, whoever drafted it.",
+      "**Straight through.** The default: one worker, and a verifier where its requirements or the thinker's plan name one.",
+      "**Parallel independent work.** Tasks with no `depends_on` between them start together.",
       'Workers sharing one checkout collide, and disjoint files do not isolate whole-tree checks',
       'When the plan turns on an unknown, find out before committing',
       'Investigate independent parts at once; the thinker combines the findings into the plan.',
-      'When several approaches are plausible and trying two costs less than choosing wrong, try each against the same acceptance criteria, then compare once and choose.',
+      "A larger unknown becomes a task whose result is findings.",
+      "**Fan-out, then synthesize.** Investigate independent parts at once; the thinker combines the findings into the plan.",
+      "**Competing alternatives.** When trying two approaches costs less than choosing wrong, try each against the same acceptance criteria, then choose once.",
+      "**Multiple verifier lenses.** Correctness, security, or other lenses on one candidate run as verifiers in parallel, each under its own actor.",
+      "**Adversarial challenge.** When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it.",
       'each under its own actor',
-      'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it: a counterexample, a failure mode, or a hidden assumption. Not a debate, and not for routine work.',
-      "The default: one worker, and a verifier where its requirements or the thinker's plan name one. Use another shape only when its condition holds.",
+      'When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it. Not for routine work.',
+      "The default: one worker, and a verifier where its requirements or the thinker's plan name one.",
       'Hand the work to the worker, a question about the work or its approach to the thinker, and an assessment of the candidate to the verifier.',
     ], 'coordinator');
   });
@@ -270,58 +277,64 @@ for (const host of HOSTS) {
       "Revise unstarted records a finding changes, saying why; changing what was asked is for the user.",
       "try once to break the approach, even of work that passed, and say if it held; breaking the candidate is the verifier's.",
       "For `needs_context`, answer what the repository and documents can, and narrow the rest to the user's decision.",
-      'When a worker and a verifier read a criterion differently, say where they diverge and clarify the record as above.',
-      'Never rewrite an assessment. Clarifying a criterion supersedes none: for one candidate, only a later assessment by the same actor replaces it, and a new candidate needs its own.',
+      'Conflicting verdicts alone do not establish an ambiguous criterion: compare candidates, evidence and findings first; where a worker and a verifier read a criterion differently, say where they diverge and clarify the record.',
+      'Never rewrite an assessment: clarifying a criterion supersedes none, for one candidate only a later assessment by the same actor replaces it, and a new candidate needs its own.',
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
-      'Trace consequential stop claims to the contract, decisions and permitted supporting evidence',
-      'Identify what current authority permits and what only the user can decide.',
-      'choose a cheap, authorized probe whose outcomes distinguish plausible explanations',
+      '**Diagnosing a stall or a dispute.** Trace consequential stop claims to the contract, decisions and permitted evidence, separating observations from summaries and inferred restrictions, and say what current authority permits and what only the user can decide.',
+      'When an uncertain cause changes the next action, inspect the implementation or procedure, compare baseline evidence and outliers, and choose a cheap, authorized probe whose outcomes tell the explanations apart; reuse established evidence, and do not investigate a clear blocker merely to complete a checklist.',
       'do not investigate a clear blocker merely to complete a checklist',
       'Distinguish a contradictory requirement from an unavailable prerequisite or an action not currently authorized',
-      'actual recorded attempts, not candidate counts or a new retry limit',
+      'Count actual recorded attempts, not candidates.',
       'Conflicting verdicts alone do not establish an ambiguous criterion',
-      'Name what can proceed independently and the precise owner decision, if any.',
+      'Say what would unblock the work, which role should act next and at which level, a higher level being a remedy only for a cause in the difficulty itself, what can proceed independently, and the precise owner decision, if any.',
       "Judging the approach is yours; assessing the candidate is the verifier's.",
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('or judge it'), 'judging the approach is not forbidden');
     all(role(host, 'coordinator'), [
-      'A blocking finding that questions the work rather than the candidate',
-      'is a sign of a stall the first time;',
-      'ask it what `Who answers a question` sends it: its fresh context, its own model or route, and the reasoning it keeps in the record are why.',
-      'When progress depends on a cause not established, investigate it.',
-      "A category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
-      'A workflow you write returns unresolved causes and changed approaches to your judgement.',
-      'Its termination returns the problem to you, not a decision to end the work.',
+      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
+      'with its own fresh context and model',
+      'Investigate a cause progress depends on',
+      "Investigate a cause progress depends on; a category or an owner's disposition establishes no mechanism.",
+      'A workflow you write returns unresolved causes and changed approaches to your judgement; its end returns the problem to you, not a decision to end the work.',
       'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
-      'So is work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs: run it once it can tell you something and authorization allows, and where practical reproduce a costly failure cheaply, such as in an offline test, before paying for another run; otherwise say what the evidence shows and take the next authorized step.',
+      'Run that check once it can tell you something and authorization allows; reproduce a costly failure cheaply where practical before paying for another run',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('rather than thinking alone'), 'one rule for when the thinker is asked');
     const start = entry(host);
     all(start, [
-      'A question that needs an argument about the work goes to the thinker, gathered into one request:',
-      "A category or an owner's disposition establishes no mechanism; reuse a documented diagnosis when its evidence applies here.",
-      'A workflow you write returns unresolved causes and changed approaches to your judgement.',
+      "So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker's plan, or lint output, or settle with a quick read-only look; give that answer directly unless the user or working policy asks for another perspective.",
+      "A plain defect goes back to the worker.",
+      "A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.",
+      "A finding the verifier records as not blocking is follow-up work, not another round: name it in the closing state and bring it to the thinker when it next plans.",
+      "A question that needs an argument goes to the thinker, gathered into one request: a cause not established, a criterion read two ways, a choice between approaches with different consequences, a finding that changes later steps, a scope question the request may already settle.",
+      "Investigate a cause progress depends on; a category or an owner's disposition establishes no mechanism.",
+      'A workflow you write returns unresolved causes and changed approaches to your judgement; its end returns the problem to you, not a decision to end the work.',
     ], 'entry');
     assert.doesNotMatch(start, phrase('consider the thinker when deeper investigation'), 'the entry no longer keeps an older copy of when to ask the thinker');
     for (const content of [role(host, 'coordinator'), start]) {
       all(content, [
-        'Diagnosis using information and resources already authorized for the task needs no further approval.',
-        "A proposal grants no authority of its own: a fix or another run within the work's scope is an engineering call, and access and spending keep their existing boundaries.",
-        'Honor explicit stops.',
-        'Give an established answer directly unless the user or working policy asks for another perspective; passing on that answer is coordination, not producing or assessing a candidate.',
-        'A failed check, blocking verdict, or stopped workflow does not itself mean no authorized next step remains: consider permitted diagnosis or independent work',
+        "Diagnosis with information and resources already authorized needs no approval.",
+        "A proposal grants nothing; a fix or another run within scope is an engineering call, and access and spending keep their boundaries.",
+        'Honor explicit stops; an instruction narrows only what it names.',
+        "So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker's plan, or lint output, or settle with a quick read-only look; give that answer directly unless the user or working policy asks for another perspective.",
+        "A plain defect goes back to the worker.",
+        "A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.",
+        "A finding the verifier records as not blocking is follow-up work, not another round: name it in the closing state and bring it to the thinker when it next plans.",
+        "A question that needs an argument goes to the thinker, gathered into one request: a cause not established, a criterion read two ways, a choice between approaches with different consequences, a finding that changes later steps, a scope question the request may already settle.",
+        'A failed check, blocking verdict, or stopped workflow does not mean no authorized next step remains: consider permitted diagnosis or independent work.',
       ], 'diagnosis boundaries');
     }
     assert.doesNotMatch(start, phrase('before another round'), 'the thinker is an option, not a required step');
     all(role(host, 'coordinator'), [
-      "At a stop, report verified state, which usable outcome the work moved or that none did, the obstacle and its cause or remaining uncertainty, what can proceed within existing authorization, and only the user's calls.",
-      "A stop that leaves a choice the thinker's plan does not already settle, such as between ways forward or whether to accept a shortfall, goes to the thinker before the user: ask it for the path, where current authority ends, and a recommendation for what lies beyond.",
-      'When its path stays within authority, take it and tell the user what you are doing; do not ask whether to proceed.',
-      "Bring the thinker's recommendation for each of the user's calls that remains, in their terms: what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record, and their answer adopts them.",
-      'Settle the cause the evidence allows before asking, then ask for the path, not the step: one request for what remains.',
-      'A stop the plan sets, such as a new kind of failure, returns the work to the thinker, and reaches the user only where what follows is their call.',
+      "At the end or a stop: verified state, which usable outcome the work moved or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is recorded: they may overrule the first afterwards, and only the second waits on them.",
+      "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
+      "A stop that leaves a choice the plan does not settle, such as between ways forward or whether to accept a shortfall, goes to the thinker first, for the path, where current authority ends, and a recommendation beyond it.",
+      'A path within authority you take, telling the user; do not ask whether to proceed.',
+      "In their terms, say what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record.",
+      'Settle the cause the evidence allows, then ask for the path, not the step: one request for what remains, up front from the plan where there is one.',
+      'A stop the plan sets returns to the thinker.',
     ], 'stop report');
   });
 
@@ -330,49 +343,56 @@ for (const host of HOSTS) {
     all(coordinator, [
       '## Who answers a question',
       'Traffic is yours: who acts next, in what shape, on which record and when, statuses from lint, and what reaches the user.',
-      'So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker\'s plan, or lint output, or settle with a quick read-only look, such as one file or one command.',
-      'A question that needs an argument about the work goes to the thinker, gathered into one request:',
-      'Its answer covers the steps it names: carry them out, and return when the work departs from it.',
-      'Asking the thinker, even when the user says to let it decide, hands over that question, not the coordination.',
-      'Only what needs the user goes to them: their calls, as Boundaries lists them, such as acceptance or a fact only they hold.',
-      "That the user decides does not make the choice yours to weigh: which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them, except for a call a second reviewer names, as Boundaries says.",
-      "Bring one recommendation, the thinker's, in its wording, citing where it gave it, such as its entry in the record, never a menu of your own; without one, ask the thinker first, and never offer asking the thinker as their choice.",
-      'A permission with no alternative, such as a command only the user can run, and a fact only the user holds need no thinker.',
-      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, such as whether a stop rule applies, or a design to choose goes to the thinker before you reply,",
-      'where the role cannot wait for that, have it stop its round cleanly and resume it with the answer.',
-      "Look for authorization in the decisions and records before asking for it: a brief of yours that contradicts a recorded decision the user has not narrowed since is yours to correct with a new brief, not the user's to authorize again.",
-      "Before relaying a role's finding that would change what you ask, such as a cost or a shortfall, check it once against its source.",
-      "Ask it up front, from the thinker's plan where there is one; a question asked stays asked.",
-      'Before you say where a candidate stands, read it fresh with `task lint` and name it, and correct an earlier claim you find wrong; `report` refreshes the record, not whether the files in front of you are still that candidate.',
-      'At the end or a stop, take the unapplied proposals for where a fact is kept from the records this work touched, and check each claim against its source first: a cause not established stays worded as unresolved.',
-      'Apply those for `.castwork/local/setup.md`, for `## Setup facts` in `.castwork/project.md`, or a `## Checks` line for a check not yet named there, yourself and without asking, replacing a line they correct rather than adding beside it, and say what you added.',
-      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs, applying those the user approves, and those for a place outside this project, such as the repository a role's guidance or a command comes from, which are the user's to take there.",
-      "A user's decision binds what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it; approving a decision that names the agents' method does not make it theirs,",
-      'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment and stays within existing authorization: an engineering call, recorded citing theirs, in the task when it settles only that task and otherwise in a decision record. One that weakens the commitment is theirs.',
+      "So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker's plan, or lint output, or settle with a quick read-only look; give that answer directly unless the user or working policy asks for another perspective.",
+      "A plain defect goes back to the worker.",
+      "A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.",
+      "A finding the verifier records as not blocking is follow-up work, not another round: name it in the closing state and bring it to the thinker when it next plans.",
+      "A question that needs an argument goes to the thinker, gathered into one request: a cause not established, a criterion read two ways, a choice between approaches with different consequences, a finding that changes later steps, a scope question the request may already settle.",
+      'Its answer covers the steps it names; return when the work departs from it.',
+      'Asking the thinker hands over that question, not the coordination.',
+      'Which option to recommend, and whether the user needs asking at all, are the thinker\'s to answer before you ask them',
+      "Which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them, except for a call a second reviewer names.",
+      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, or a design to choose goes to the thinker first, and where the role cannot wait, have it stop its round cleanly and resume it with the answer.",
+      "Bring one recommendation, the thinker's, citing where it gave it, never a menu of your own and never asking the thinker as their option",
+      'a permission with no alternative, or a fact only they hold, needs no thinker.',
+      "Look for it in the decisions and records before asking: a brief of yours that contradicts a recorded decision is yours to correct.",
+      "Check a role's finding against its source once before relaying one that would change what you ask.",
+      "one request for what remains, up front from the plan where there is one. A question asked stays asked.",
+      'Before you say where a candidate stands, read it fresh with `task lint`, name it, and correct an earlier claim you find wrong.',
+      'At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays worded as unresolved.',
+      'Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, replacing a line they correct, and say what you added.',
+      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
+      "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
+      "Dropping a planned review or check no requirement or working policy demands is your choice, told with its risk; a required one stays until the user changes it.",
+      "**What a user's decision binds:** what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it; a method only where they chose it or a declared requirement or the working policy demands it.",
+      "the thinker file says when such a method may change, and the thinker answers where that is unclear.",
       '`.castwork/local/setup.md` if it exists',
-      'at the end, which usable outcome the work moved, or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, and what is blocked on what.',
+      "At the end or a stop: verified state, which usable outcome the work moved or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is recorded: they may overrule the first afterwards, and only the second waits on them.",
+      "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
       'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
       'When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.',
       "If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
-      'An instruction narrows only what it names. Dropping a planned review or check that no requirement or working policy demands is your choice, to tell the user with its risk; a required one stays until the user changes it.',
-      "When the user's instructions exclude delegation, take the roles yourself whatever the task's size, and say how you read an instruction that may exclude it before you start any agent.",
-      'check that the name resolves where you start it, such as the directory the host finds agents from.',
-      "where the thinker's plan names the checks a step needs, the brief carries them.",
-      'where a writer shares its checkout, give it its own copy instead.',
-      'a fix that brings a new defect of the same kind or next to it, even as findings shrink,',
+      "When the user's instructions exclude delegation, take the roles yourself whatever the task's size, and say how you read such an instruction before you start any agent.",
+      'check the name resolves.',
+      "and the checks the thinker's plan names for it.",
+      "When a delegate that may have written files fails or is cancelled, inspect and reconcile what it changed before anyone else writes.",
+      "**The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.",
+      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
       'which a pass in isolation does not explain',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase("the thinker's where judgement went into it"), 'the coordinator does not decide for itself whether a recommendation needed the thinker');
     assert.doesNotMatch(coordinator, phrase('Recommend an answer for each'), 'at a stop the recommendation is the thinker\'s, not the coordinator\'s own');
     all(role(host, 'thinker'), [
-      'Say which checks each step needs: focused ones while a correction is under way, where the working policy allows, and the declared ones on the final candidate.',
+      "When a change can move a runtime or real-data target, check the changed candidate against that target before the final declared checks.",
+      "**Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate.",
       "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call.',
       "When the path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement or changing a gate they approved, recommend it then rather than planning another round around it.",
-      'When fixes keep exposing defects next to the last one, name the rule they share and what depends on it, and frame one correction that covers it.',
+      'When fixes keep exposing defects next to the last one, name the rule they share and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
       'Say whether the path needs the user.',
-      "For each call that remains, give its options with one recommended answer first, in the user's terms, the commitment it changes, what changes for them and the risk and cost, and what proceeds meanwhile, which the coordinator can bring as it is, keeping the technical terms in the record;",
+      "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
+      "**Each call that remains** gets its options with one recommended answer first, in the user's terms: the commitment it changes, what changes for them and the risk and cost, and what proceeds meanwhile, which the coordinator can bring as it is, keeping the technical terms in the record.",
     ], 'thinker');
     all(entry(host), [
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
@@ -392,18 +412,19 @@ for (const host of HOSTS) {
         'what cannot be undone or leaves the project, such as changing real data, deleting what the work did not create, or pushing, publishing or releasing, unless the working policy allows it;',
         'spending or access beyond what is agreed; what only they know or hold; and whatever the working policy reserves.',
         "Everything else is engineering: the approach, a compatibility correction, a fix to an instrument or a test, another round within the work's scope, how to read a condition.",
-        'The thinker decides what needs an argument, as `Who answers a question` says; carry out its decision and tell the user what was decided.',
-        'Where the working policy names a second reviewer for such calls, ask it as well as the thinker; the thinker combines both views and decides where they differ.',
-        'An instruction on how the user wants to be consulted outlives the session only once it is written down: in the reply where they give it, propose it for `## Working policy` in `.castwork/project.md`, in their words, and say that until they approve the line it holds for this session only. Carry on under it meanwhile: the work never waits on that answer.',
+        'The thinker decides what needs an argument; carry out its decision and tell the user what was decided.',
+        "Where their decisions keep arriving on one gate, or its cost has outgrown what it protects, one option accepts where the work stands and stops, with what that leaves unmet.",
+        "**A second reviewer.** Where the working policy names one for such calls, ask it as well as the thinker; the thinker combines both views and decides where they differ.",
+        'An instruction on how the user wants to be consulted outlives the session only once written down: propose it for `## Working policy`, in their words, in the reply where they give it, and carry on under it meanwhile, for this session only until they approve.',
       ], 'coordinator');
       assert.doesNotMatch(content, phrase('Ask the user when the work goes beyond what they asked for'), 'the user is asked for their calls, not for anything not named');
     }
     all(role(host, 'thinker'), [
-      'Their calls are what the work delivers, such as its scope, acceptance or product direction, including dropping or deferring a requirement;',
+      "**The user's calls** are what the work delivers, such as its scope, acceptance or product direction, including dropping or deferring a requirement;",
       'what cannot be undone or leaves the project; spending or access beyond what is agreed; what only they know or hold; and what the working policy reserves.',
       'Everything else is engineering, and yours to decide: decide it rather than turning it into a question,',
       "and weigh a second reviewer's view when you are given one, saying where you differ and why.",
-      "A choice that changes future work is recorded, as a decision record when it outlives the task: how long it lasts decides where it goes, not who makes it, and only the user's calls go to them.",
+      "A choice that changes future work is recorded, as a decision record when it outlives the task.",
     ], 'thinker');
     assert.doesNotMatch(role(host, 'thinker'), phrase('A choice that changes future work is a decision for the user'), 'a durable engineering choice is not the user\'s for being durable');
     assert.doesNotMatch(entry(host), phrase('relay its open questions to the user'), "a delegate's questions are routed like any other");
@@ -437,15 +458,16 @@ for (const host of HOSTS) {
   test(`${host} roles choose a shape before work starts, where the choice is made`, () => {
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
-      'Decide what happens next, which role does it, in what shape, and on which host',
-      'Choose a shape before each batch; shapes combine, and none is a loop to repeat:',
+      "When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.",
+      "**Decide what happens next**, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at once, or none.",
+      '`report`\'s Changes line shows where the lines of the latest recorded week went: many in `.castwork/` against few elsewhere is that sign, though elsewhere holds tests, documents and tooling as well as the product. ## Choosing the shape Choose a shape before each batch; shapes combine, and none is a loop to repeat.',
     ], 'coordinator');
     const shapes = coordinator.indexOf('## Choosing the shape');
     const delegating = coordinator.indexOf('## Delegating');
     assert.ok(shapes >= 0 && delegating >= 0, 'both sections are generated');
     assert.ok(shapes < delegating, 'shapes come before delegating');
     all(role(host, 'thinker'), [
-      'which steps are independent and can proceed in parallel, alternatives worth trying',
+      '**Planning.** Decide how to approach the work before anyone starts on it: the order of the steps, what depends on what, which steps can proceed in parallel, alternatives worth trying, the risks and open questions, and what to try first so a wrong assumption surfaces early.',
     ], 'thinker');
     all(entry(host), [
       'Before anything starts, choose its shape from the `coordinator` role file.',
@@ -465,16 +487,17 @@ for (const host of HOSTS) {
       'If it is missing, empty, or still the scaffold `setup` wrote, in whole or in part, say so and offer to have the `thinker` draft it',
       "what is written there changes only with the user's say-so",
       'ask only when the gap affects the work',
-      'A subagent started by name already has its role: do not tell it to read its role file',
-      "says the role's model does not pick skills itself",
+      'One started by name has its role already; only where the host cannot start one by name, tell it to read its role file first.',
+      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills; otherwise the role chooses.",
       'Delegation is one level: a role you start starts no agents.',
-      'When you run the roles, statuses are yours',
-      'When lint shows the requirements met, set the record `done`.',
+      "Propose separate tasks linked by `depends_on` for independently finishable parts, never a split by size alone.",
+      "**Statuses** are yours when you run the roles: a role records only `blocked` or `needs_context`; set the rest with `npx --no castwork task set`, and `done` when lint shows the requirements met.",
       'a task can go straight from a worker to done when its requirements allow',
-      'Give each parallel verifier lens its own actor name',
+      "Give each parallel lens its own actor; never rename an actor to make a review independent.",
+      "**Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model otherwise.",
       'count on them only in a new session',
       'Claude Code reloads role files in an existing `.claude/agents/` for the next role it starts',
-      'A brief adds only what the record does not say',
+      'Add only what the record does not say: no status but `blocked` or `needs_context`, no Current state update you did not assign, no check broader than the working policy\'s cadence for that step, and the checks the thinker\'s plan names for it.',
       'Never hand-edit a generated file',
       'Do not infer your own model from `role_settings`',
       '## Pausing',
@@ -583,13 +606,13 @@ test('the procedure skills say the same about statuses, pausing, and reading a s
 test('generated guidance keeps archives explicit, Current state with the coordinator and findings bounded', () => {
   for (const host of HOSTS) {
     for (const content of [entry(host), role(host, 'coordinator')]) all(content, [
-      "Archiving is explicit: `task archive <id>` moves earlier candidates' entries to a paired archive when those lists make a record hard to work with.",
-      'review `## Current state` against the record and its archive and refresh it before substantive work',
-      'propose separate tasks linked by `depends_on` for independently finishable parts',
-      'never a mechanical split or by size alone',
+      "`task archive <id>` moves earlier candidates' entries out when those lists make a record hard to work with; after archiving, or resuming an archived task, refresh Current state against both.",
+      'after archiving, or resuming an archived task, refresh Current state against both.',
+      "Propose separate tasks linked by `depends_on` for independently finishable parts, never a split by size alone.",
+      "**Statuses** are yours when you run the roles: a role records only `blocked` or `needs_context`; set the rest with `npx --no castwork task set`, and `done` when lint shows the requirements met.",
     ]);
     all(role(host, 'verifier'), ['the contract item, observation and location, and why it blocks or accepts', 'not every file read or a restatement of earlier rounds']);
-    all(role(host, 'coordinator'), ['Current state is yours', "from the roles' reports", 'or assign its update to one role, never two at once', 'it grants nothing', 'A brief adds only what the record does not say', "no check broader than the working policy's cadence for that step"]);
+    all(role(host, 'coordinator'), ['Current state is yours', "from the roles' reports", 'or assign its update to one role, never two at once', 'It grants nothing.', 'Add only what the record does not say: no status but `blocked` or `needs_context`, no Current state update you did not assign, no check broader than the working policy\'s cadence for that step, and the checks the thinker\'s plan names for it.', "no check broader than the working policy's cadence for that step"]);
     for (const content of [entry(host), role(host, 'coordinator')]) assert.ok(!phrase('for a task you will work on over 100 KB run').test(content), `${host} still asks to archive every large record`);
   }
   all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
@@ -655,14 +678,15 @@ for (const host of HOSTS) {
       "When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, propose the change for the repository it comes from, never as an edit to its generated copy, and say in a workaround kept here meanwhile whose defect it works around.",
     ], 'worker');
     all(role(host, 'thinker'), [
-      "When the cause is a role's or a skill's own guidance, or how a Castwork command behaves, the change is proposed for the repository it comes from, never as an edit to its generated copy here, and a workaround kept here meanwhile says whose defect it works around.",
+      "A cause in a role's or a skill's own guidance, or in a Castwork command, is proposed for the repository it comes from, never as an edit to its generated copy",
       'Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.',
-      'and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it;',
+      "**Grants** of actions, such as changes on a host or live runs, are sized to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.",
+      "**What a decision binds.** The user's decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it or chose an option the agents drafted: a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.",
       'A method the agents chose, which no declared requirement or working policy demands, may change when the replacement keeps or tightens the commitment within existing authorization: that is yours to decide, and a change that weakens the commitment goes back to them.',
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
-      'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`.',
+      'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`, opening with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status. ## Answering If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.',
     ], 'thinker');
-    assert.match(role(host, 'coordinator'), phrase('about fifteen lines, what holds now first and attribution after, which `report` shows,'));
+    assert.match(role(host, 'coordinator'), phrase("Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no candidate, assess nothing and need no actor."));
   });
 }
 
@@ -672,22 +696,24 @@ for (const host of HOSTS) {
       'before, during, or after the work',
       'reviews how completed work went',
       'read session transcripts only when the request names them.',
-      'Distinguish observations from inferred causes, and state material evidence gaps.',
-      'Say what helped as well as what caused avoidable rework, and which causes recur across tasks and earlier reviews.',
-      "An earlier review's cause recurs only where this work's own evidence shows it: being named again, including by work planned around that review, does not confirm it.",
-      'with how later work would show whether it helped;',
-      'Reviewing an active blocker is diagnosis, not this.',
+      'Distinguish observations from inferred causes, state material evidence gaps, and say what helped as well as what caused avoidable rework.',
+      'say what helped as well as what caused avoidable rework.',
+      "An earlier review's cause recurs only where this work's own evidence shows it.",
+      "The verifier's level follows how hard the candidate is to assess and what a wrong acceptance would cost, not the worker's level.",
+      "**Earlier reviews.** Before planning a phase, list `.castwork/reviews/` and read the reviews whose occasion or \"Read when\" fits; cite each that bears on this work in the plan, with the changes this work should use and how it will show whether they helped.",
+      'reviewing an active blocker is diagnosis, not this.',
       'Before planning a phase, list `.castwork/reviews/` and read the reviews whose occasion or "Read when" fits; cite each that bears on this work in the plan',
-      'Read the earlier reviews in `.castwork/reviews/` too; a review of a phase covers the whole phase.',
-      "naming whose it is to make, this project's, Castwork's, the host's, or a user skill's,",
-      'propose a `project.md` line naming that work and the review to read before it. List every source you read, outside the repository included.',
-      'Open it with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status.',
+      'A review of a phase covers the whole phase;',
+      "naming whose it is to make and how later work would show whether it helped",
+      'propose a `project.md` line naming the review to read before it. List every source you read.',
+      'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`, opening with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status. ## Answering If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.',
     ], 'thinker');
     all(role(host, 'coordinator'), [
-      'At the end, when a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial in this project, as far as the records show,',
-      'offer in one line a thinker review of how it went, naming the occasion; start it without asking where the working policy says to, never after ordinary tasks or at an ordinary pause.',
-      "Link a review from the closing record's Current state, the decision that closed the work if one did, and the handoff, and name it in the commit that applies its proposals.",
-      "Bring its proposals in its own wording, never a second reviewer's in their place, those for places outside this project included, and once the user answers, record each one's status in its table.",
+      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
+      "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
+      "Link it from the closing record's Current state, the decision that closed the work, and the handoff, and name it in the commit that applies its proposals.",
+      "Bring its proposals in its own wording, never a second reviewer's in their place, and record each one's status in its table once the user answers. ## Boundaries",
+      "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
     ], 'coordinator');
   });
 }
@@ -695,20 +721,25 @@ for (const host of HOSTS) {
 for (const host of HOSTS) {
   test(`${host} run output stays on the machine, records close with a fresh state, and briefs fit the host`, () => {
     all(role(host, 'coordinator'), [
-      'When a record closes, after its last acceptance or disposition, rewrite its Current state to the closing state, archive it when earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
-      'Where the host limits how long one run may take, size each assignment to fit, its setup, reading, checks and recording together, from how long they took before, and give a check that cannot fit with its recording a run of its own;',
-      'Uncommitted changes, to task records, decisions and findings included, and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: its brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks, and a copy of the record elsewhere points to that one rather than advancing on its own.',
-      "rewrite it in place from the roles' reports, and from the user's decisions and stops where they change what is authorized or what comes next,",
+      'Closing a record, rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
+      "Use one yourself where it fits your step.",
+      "**A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
+      "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
+      "**Fresh or resumed.** Start each round with a fresh agent, given the task id.",
+      "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no candidate, assess nothing and need no actor.",
+      "**Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing restrictions by decision id and source pointer; or assign its update to one role, never two at once.",
       'never ask for a verdict before the checks it rests on finish.',
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
       'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
-      "Where the host lets you name a file for a role's reply, name none for a role that writes to the repository: the host may tell it to ignore every other path the brief names.",
+      "Name no reply file for a role that writes to the repository: the host may tell it to ignore every other path.",
       "A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
     ], 'coordinator');
     all(role(host, 'thinker'), [
-      "Before work that rests on how it will be proven, such as an instrument, a fixture's lifecycle, a time budget, or every consumer of a changed shape, plan the cheapest observation that could show that approach or proof wrong, and have it run first.",
-      "Say whether each threshold the plan sets is the user's requirement or the agents' choice, which may change.",
-      'An observation planned to show a behaviour names what a run that never performs it would give, such as a refusal, empty data, or calls made one after another instead of at once, and accepts none of them.',
+      "Choose the simplest approach that meets the full outcome, and explain a new mechanism where its cost or alternatives materially affect the decision.",
+      "**Probe the proof and the design first.** Before work that rests on how it will be proven, such as an instrument, a fixture's lifecycle, a time budget, or every consumer of a changed shape, have the cheapest observation that could show that approach or proof wrong run first.",
+      "Say whether each threshold is the user's requirement or the agents' choice.",
+      'An observation planned to show a behaviour names what a run that never performs it would give, such as a refusal, empty data, or calls made one after another, and accepts none of them.',
     ], 'thinker');
     all(role(host, 'worker'), [
       "Where a result claims a particular guard or behaviour, say which cases or assertions decided it and that they ran: a pass or refusal that something else could have produced, such as another check refusing first or the test's own condition, does not show it.",
@@ -717,9 +748,9 @@ for (const host of HOSTS) {
     ], 'worker');
     all(entry(host), [
       '`--no` stops npx installing anything',
-      'It does not keep npx off the network: in a checkout with no installed copy, such as a worktree, npx still asks the registry for the package.',
-      "Where the network is not allowed, add `--offline`, as in `npx --no --offline castwork report`: it stops npm's network lookup, but may still run a copy installed globally or cached by an earlier npx, not this project's.",
-      'Where the copy matters, as in a checkout with no install of its own, use the launcher a brief or `.castwork/local/setup.md` names, such as `node_modules/castwork/bin/castwork.js` in a checkout that has it, run with `node`.',
+      'It does not keep npx off the network: in a checkout with no installed copy, such as a worktree, npx still asks the registry.',
+      "Where the network is not allowed, add `--offline`, as in `npx --no --offline castwork report`, which may still run a copy installed globally or cached by an earlier npx.",
+      'Where the copy matters, use the launcher a brief or `.castwork/local/setup.md` names, such as `node node_modules/castwork/bin/castwork.js`.',
     ], 'entry');
     assert.doesNotMatch(entry(host), phrase('it runs an installed copy and otherwise fails without a request'), '--offline does not guarantee the project\'s copy');
     const launcher = "otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.";
@@ -744,13 +775,13 @@ for (const host of HOSTS) {
     for (const id of ['thinker', 'worker', 'verifier']) all(role(host, id), [wrongQuestion], id);
     all(role(host, 'thinker'), [
       "**Stepping back.** Asked to step back, or when a stall's signs recur across a phase's tasks or across the rounds of one task, diagnose the phase or that task, not its next blocker.",
-      "Start from what it is for, in the project's documents and the user's commitments, not from the current gate or proof.",
-      'a dependency the result does not need is a choice, not a commitment.',
+      "Start from what it is for, in the project's documents and the user's commitments, not from the current gate or proof; the documents can be part of the problem, so read them as what was planned, not as what must stand.",
+      'Separate what the user committed to from the method, gates and evidence the agents chose: a dependency the result does not need is a choice, not a commitment, and so is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
       'what to cancel, reorder, cut to a slice that delivers, or prove another way; what was spent is no reason to keep a path.',
       'Keep every criterion not met recorded as not met: nothing is relabelled as passed.',
-      "Give it as one answer, with the user's calls it needs, such as cancelling planned work or accepting a shortfall, each with a recommendation, so they answer once.",
-      "Prove a behaviour on the platform and configuration it runs on in production, with the project's ordinary suites, preferring fixtures made fresh for each run and thrown away to repairing a long-lived one or proving it unchanged;",
-      'build a new instrument only when those cannot show what the user committed to, and weigh its cost against the change it checks.',
+      "Where the outcome itself is uncertain or needs reconsidering, close with one open question for the user in product terms, such as what someone can do with the work now and whether that is what they want next, which the coordinator brings with the calls; where it is settled and the simpler route lies within authority, say so, and the work carries on.",
+      "A probe that ships and enables nothing is investigation, so a sequence that orders the building does not hold it back; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
+      "preferring fixtures made fresh for each run and thrown away to repairing a long-lived one or proving it unchanged, unless the behaviour needs representative existing state, such as an upgrade or a recovery, or the project requires otherwise;",
       "When a phase delivers something people use, end it with a step that uses the assembled result as they would, the running product rather than each task's evidence, against what the phase is for;",
       'what that finds is new work for you to plan, not a reason to reopen accepted tasks.',
     ], 'thinker');
@@ -761,17 +792,21 @@ for (const host of HOSTS) {
       'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work.',
     ], 'verifier');
     all(role(host, 'coordinator'), [
-      "When these signs recur across a phase's tasks or across the rounds of one task, have a fresh thinker step back, as the entry command's `## Stepping back` says.",
-      "A finding the verifier records as not blocking is follow-up work, not another round: name it in the record's closing state and bring it to the thinker when it next plans.",
+      "When the signs recur across a phase's tasks or across the rounds of one task, have a fresh thinker step back, as the entry command's `## Stepping back` says.",
+      "So is a question you can answer by pointing at something written, such as a record, a decision, the working policy, the thinker's plan, or lint output, or settle with a quick read-only look; give that answer directly unless the user or working policy asks for another perspective.",
+      "A plain defect goes back to the worker.",
+      "A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.",
+      "A finding the verifier records as not blocking is follow-up work, not another round: name it in the closing state and bring it to the thinker when it next plans.",
+      "A question that needs an argument goes to the thinker, gathered into one request: a cause not established, a criterion read two ways, a choice between approaches with different consequences, a finding that changes later steps, a scope question the request may already settle.",
       '**Do not let bookkeeping or proof become the work.** If records, or what was built to prove the result, outweigh the result, stop and say so, and have the thinker step back.',
     ], 'coordinator');
     all(entry(host), [
       '## Stepping back',
-      "such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase or task rather than to diagnose its next blocker.",
+      "When they recur across a phase's tasks or across the rounds of one task, or the work goes to its proof rather than its result, such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, many lines in `.castwork/` against few elsewhere in `report`'s Changes, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase or task rather than to diagnose its next blocker.",
       'Ask the question as the user would: what is this phase or task for, what stands between here and a result someone can use, and what is the simplest credible route there.',
       'Where the host lists levels, it runs at `complex`. Start a fresh thinker for it, never one that planned the phase or its last re-plan: a step back questions that plan, and one that still holds it questions it least.',
-      "Its answer is one path: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations.",
-      'the `Movement` line of `report` counts them against the tasks they touched that are now done.',
+      "Its answer is one path: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations and, where it closes with one, its open question about what the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority, take the route and say so; nothing waits on the user.",
+      "and its `Changes` line shows how many lines went into `.castwork/` against everything else.",
       'a thinker diagnosing a difficult stall, or stepping back from a phase or task, is worth `complex`.',
     ], 'entry');
   });
@@ -826,23 +861,28 @@ for (const host of HOSTS) {
   test(`${host} the user is asked only their calls, with the thinker's recommendation, and what was decided kept apart`, () => {
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
-      'Here and at the end, keep what you or the thinker decided without them, where anything was, apart from what needs them, with where it is recorded: they may overrule the first afterwards, and only the second waits on them.',
-      'Number the calls, each with its options, the recommended one first and any precedent of theirs beside it, so that a word answers them, such as "1A, 2B"; name an engineering item as decided rather than bring it for approval.',
-      "**Before you ask the user anything,** check, in order: is it one of their calls, as the point above lists them; does a record, a decision, the working policy or the thinker's plan already answer it; can an agent find it out or do it within the work's access and authorization; where it needs judgement, is the thinker's recommendation in hand; and what carries on meanwhile.",
-      'Ask only what is theirs, that nothing written answers and no agent can settle; settle the rest as `Who answers a question` says, and tell them what was decided.',
-      "Bring one recommendation, the thinker's, in its wording, citing where it gave it, such as its entry in the record, never a menu of your own; without one, ask the thinker first, and never offer asking the thinker as their choice.",
-      'every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it,',
-      "approving a decision that names the agents' method does not make it theirs, and a term the agents wrote that the user never approved or supplied, such as a number of attempts or a one-shot dispatch in an agents' review, a sequence or landing unit, or a frozen design, is engineering however a record words it.",
-      'A stopped assignment does not by itself revoke a grant of theirs: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.',
-      "What only they know or hold is what no agent can find out or do within the work's access and authorization: before asking them for work, data, or contact outside the project, have the thinker name such a route,",
-      'or say why there is none. A route still needs the authorization the action needs: a browser an agent drives can change what it opens.',
-      "Run a second reviewer through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn when it cannot finish in one call.",
-      'An escalation rule the agents wrote in a brief, a plan or a record, such as one after a number of failed attempts or on a stall, returns the work to the thinker to step back or have it reviewed independently, and reaches the user only where what follows is their call; write none that sends work to them.',
-      'A limit or stop the user set or supplied, such as in a brief they gave you, binds as written, whoever drafted it.',
-      'Propose none for an instruction they scoped to the session, such as one that begins "in this session", or for a line they declined before, as the handoff or the records say; a decline goes in the next handoff, so that no later session proposes it again.',
-      'Where the working policy is silent on commits, or on pushes, propose a line for each once, with a request that needs them anyway, rather than asking at each task: a rule for commits grants none for pushing.',
-      'Record execution the user authorizes, such as a phase to implement, in a decision in their words: what they authorized, where they said it, and its scope and limits; what it covers needs no asking again.',
-      'Agreeing a plan is not that authority unless they say so; its commit is a reference, not a freeze on engineering changes, and the calls it foresees are a forecast, so an unforeseen call of theirs still reaches them.',
+      "At the end or a stop: verified state, which usable outcome the work moved or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is recorded: they may overrule the first afterwards, and only the second waits on them.",
+      "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
+      "A question asked stays asked.",
+      "**How to bring a call.** Number the calls, each with its options, the recommended one first and any precedent of theirs beside it, so that a word answers them, such as \"1A, 2B\"; name an engineering item as decided rather than bring it.",
+      "A route still needs the authorization its action needs.",
+      "**Before you ask the user anything,** check, in order: is it one of their calls; does a record, a decision, the working policy or the thinker's plan already answer it; can an agent find it out or do it within the work's access and authorization; where it needs judgement, is the thinker's recommendation in hand; and what carries on meanwhile.",
+      '**Before you ask the user anything,** check, in order: is it one of their calls',
+      "Bring one recommendation, the thinker's, citing where it gave it, never a menu of your own and never asking the thinker as their option",
+      "Dropping a planned review or check no requirement or working policy demands is your choice, told with its risk; a required one stays until the user changes it.",
+      "**What a user's decision binds:** what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it; a method only where they chose it or a declared requirement or the working policy demands it.",
+      "Choosing an option the agents drafted commits them to what it delivers, not to the agents' terms for how",
+      "A stopped assignment does not revoke a grant: continue within every limit and condition they set, and honour an explicit stop or attempt limit even when nothing was charged.",
+      "What only they know or hold is what no agent can find out or do within the work's access and authorization: before asking them for work, data, or contact outside the project, have the thinker name an agent route, such as research, a delegated agent with a browser, or an observation within agreed caps, or say why there is none.",
+      'or say why there is none. A route still needs the authorization its action needs.',
+      "Run a second reviewer through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn.",
+      'An escalation rule the agents wrote, such as one after failed attempts or on a stall, returns the work to the thinker, and reaches the user only where what follows is their call; write none that sends work to them.',
+      'A limit or stop the user set or supplied binds as written, whoever drafted it.',
+      'Propose none for an instruction they scoped to the session, such as one beginning "in this session", or for a line they declined before; a decline goes in the next handoff.',
+      "Where the working policy is silent on commits, or on pushes, propose a line for each once, with a request that needs them anyway: a rule for commits grants none for pushing.",
+      "**Where facts are kept.** At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays worded as unresolved.",
+      'Record execution they authorize, such as a phase to implement, in a decision in their words, with its scope and limits; what it covers needs no asking again.',
+      'Agreeing a plan is not that authority unless they say so; its commit is a reference, not a freeze, and the calls it foresees are a forecast.',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase('a step that can be undone'), 'what carries on is what existing authorization covers, not a step taken on a recommendation');
     assert.doesNotMatch(coordinator, phrase('a request ceiling inside an unchanged budget'), 'an approved cap stays the user\'s');
@@ -854,12 +894,15 @@ for (const host of HOSTS) {
       "Mark which consequential requirements, rules and thresholds are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the agents chose; routine planning needs no such mark.",
       'Name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, or why it cannot:',
       'a requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
-      'Their decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it,',
+      "Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.",
+      "**Grants** of actions, such as changes on a host or live runs, are sized to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.",
+      "**What a decision binds.** The user's decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it or chose an option the agents drafted: a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.",
       'a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.',
       "A stopped assignment does not by itself revoke the user's grant: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.",
       "Before making their work, data, or contact with someone outside the project one of their calls, name the route an agent could take within the work's access and authorization,",
       'a route still needs the authorization the action needs.',
-      'list beside them what you decided without the user, and if none remains, say so plainly.',
+      "List beside the calls what you decided without the user, and if none remains, say so plainly.",
+      "**A risk keeps its conditions:** who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in a test that forced its precondition.",
       'and ask which usable outcome advanced, answering from the records, their acceptance criteria and a focused comparison of what the rounds changed, not from how many rounds ran or lines changed.',
     ], 'thinker');
     const start = entry(host);
@@ -869,7 +912,7 @@ for (const host of HOSTS) {
       'Where a decision records what the user authorized for the current work, read it before you ask them anything: what it authorizes needs no asking again, and agreeing a plan authorizes nothing by itself.',
       'Note there each line the user declined for the working policy, so the next session does not propose it again.',
     ], 'entry');
-    assert.doesNotMatch(start, phrase('`Changes` line'), 'report has no Changes line');
+    assert.match(start, phrase('its `Changes` line shows how many lines went into `.castwork/` against everything else'), 'report has a Changes line beside Movement');
   });
 }
 
@@ -895,9 +938,9 @@ for (const host of HOSTS) {
     ], 'verifier');
     all(role(host, 'thinker'), [
       'Code shows what the system does today, not what the user requires.',
-      'is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name each among the user\'s calls the plan foresees, with a recommendation, so it is asked once.',
+      'A convention the result depends on that is set outside the repository, such as which time zone defines a reporting day, the format a consumer expects, or a retention or quota policy, is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name it among the user\'s calls the plan foresees, with a recommendation.',
     ], 'thinker');
-    all(role(host, 'coordinator'), ['a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy.'], 'coordinator');
+    all(role(host, 'coordinator'), ['Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.'], 'coordinator');
     all(entry(host), [
       'After the conversation was compacted or resumed, orient again from the records, and treat an invocation or request you see only in a summary as history: before creating a record or repeating a write it implies, check `task list` and the record for its effect.',
     ], 'entry');
@@ -907,17 +950,23 @@ for (const host of HOSTS) {
 for (const host of HOSTS) {
   test(`${host} the simplest route is named even when it changes an approved gate, the design-changing step runs first within authorization, and evidence is rerun where a change could affect it`, () => {
     all(role(host, 'thinker'), [
-      'Run early the step whose result could change the design, such as the real operation under its failure conditions, rather than qualifying the instruments around it first.',
-      'A probe that ships and enables nothing, such as a throwaway test of that step, is investigation, not building the step, so a sequence that orders the building does not hold it back; it still stays within existing authorization, approved decisions and the working policy, on resources isolated from shared ones, and a probe outside those is the amendment to recommend.',
-      'By default, run an expensive set, such as every supported platform and version, once on the final candidate and develop against one representative configuration; check a configuration earlier where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built or catch a costly regression.',
+      'Run early the step whose result could change the design, such as the real operation under its failure conditions, rather than qualifying the instruments around it.',
+      "A probe that ships and enables nothing is investigation, so a sequence that orders the building does not hold it back; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
+      "build a new instrument only when those cannot show what the user committed to, weighed against the change it checks.",
+      "Run an expensive set, such as every supported platform and version, once on the final candidate and develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
+      "**The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource.',
       'Name it even where it changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside, and a cheaper version of the same campaign says why it beats changing the gate.',
-      'When a gate keeps blocking, ask what it protects, and check, or have checked, that property in the product itself under the condition the gate excludes, such as a simulated delay or a failing hook, before investigating further what the gate measures: the product may need less than the gate asks, or fail even when it passes.',
-      'Size a grant of actions, such as changes on a host or live runs, to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.',
+      'When a gate keeps blocking, check what it protects in the product itself under the condition the gate excludes, such as a simulated delay or a failing hook, before investigating further what the gate measures: the product may need less than the gate asks, or fail even when it passes.',
+      "Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.",
+      "**Grants** of actions, such as changes on a host or live runs, are sized to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.",
+      "**What a decision binds.** The user's decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it or chose an option the agents drafted: a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.",
     ], 'thinker');
     all(role(host, 'coordinator'), [
-      "When a second reviewer names a call of the user's that the thinker's answer leaves out, such as changing a gate they approved, ask the thinker for it before carrying on.",
-      'A brief for a second reviewer of the approach, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy, within existing authorization and on isolated resources, where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.',
+      "When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again",
+      "Use one yourself where it fits your step.",
+      "**A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
     ], 'coordinator');
     const worker = role(host, 'worker');
     all(worker, [
@@ -966,7 +1015,7 @@ test('the procedure skills rerun what a change could affect and copy into findin
   ], 'verification-evidence');
   all(skill('assessment'), [
     "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again. The declared checks run on the candidate you assess, or one is cited from its run on an earlier candidate, its `output` beginning `cited from <earlier ref>:`: confirm with `git diff` between the two that the difference touches nothing it reads, that the invocation is the same, and that nothing outside Git it reads, such as installed dependencies, environment settings or a database's state, has changed, and that neither its purpose nor the working policy needs a fresh observation, and treat a citation you cannot confirm, where Git or a candidate's objects are unavailable included, as unshown.",
-    "A run of a declared check you made yourself on an earlier candidate you may cite the same way, never one another session recorded under the same actor, nor the producer's run alone.",
+    "A run of a declared check an assessing actor recorded on an earlier candidate, yours or another session's, you may cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command.",
   ], 'assessment');
 });
 
@@ -991,26 +1040,28 @@ for (const host of HOSTS) {
     all(thinker, [
       'A criterion that guards against a harm, such as lost or corrupted data, a leak, or a wrong result someone relies on, names what could bring it about in use, by accident or on purpose, and what that would take.',
       "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside the criterion unless the user, a decision or the project's documents put it in:",
-      "where nothing written settles that boundary, it is among the user's calls the plan foresees, with your recommendation.",
-      'A failure shown only under a condition the run itself arranged is reported with that condition and with how, if at all, it arises in use: it shows the failure possible there, not that it happens, and whether it matters turns on what the criterion covers, not on the condition being arranged.',
+      "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside the criterion unless the user, a decision or the project's documents put it in: say so beside the criterion, and where nothing written settles that boundary, it is among the user's calls the plan foresees.",
+      "it shows the failure possible there, not that it happens, and whether it matters turns on what the criterion covers.",
       'A criterion you add or tighten after a finding is your proposal: mark it as one where it stands, with the finding that prompted it, until the user confirms it.',
       'When a blocking finding rests only on such a criterion, decide whether the work needs it, and narrow or drop it, saying why, where nothing the user committed to does.',
-      'So is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
+      'Separate what the user committed to from the method, gates and evidence the agents chose: a dependency the result does not need is a choice, not a commitment, and so is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
       'Asked to step back from a plan you wrote earlier in this same session, say so in a line and recommend a fresh thinker: one that still holds the plan questions it least.',
       "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
-      'State each risk with what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition: a risk without its conditions reads as certain, and the user may refuse one that would never reach them.',
-      "When you re-plan, rewrite that plan in place, replacing every earlier plan still in the record rather than adding one above them, and say under `## Blockers and decisions` what changed and why: the record holds one current plan, and a superseded plan's reasoning stays in the findings it cites.",
+      'A risk without its conditions reads as certain, and the user may refuse one that would never reach them.',
+      "When you re-plan, rewrite that plan in place, replacing every earlier plan still in the record rather than adding one above them, and say under `## Blockers and decisions` what changed and why, in place of the entry the last re-plan left: the record holds one current plan, and a superseded plan's reasoning stays in the findings it cites.",
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('a value only the work itself chooses'), 'a value the work chooses can still be seen, guessed or met by accident');
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
       'A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the worker: whether the work needs that criterion comes first.',
       'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh whatever its context: resumed, it would question a plan it still holds.',
-      "Its brief gives the task id where there is one, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem; it asks the thinker to judge from `report <id>` whether the rounds since the plan moved the task before it plans the next.",
-      'A risk keeps its conditions: what must hold for it to happen in use, and whether it was seen in use or only made to happen in a test that forced its precondition.',
-      "If the thinker still leaves it out, bring the call to the user with both views, a line each, the thinker's first: whether the user is asked is not the thinker's to settle against a reviewer who says they should be.",
-      'Where a role runs in another checkout than yours, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs: its role files can come from another build, or lag behind its manifest, while the version reads the same, and its own copy compares them only with what that copy generates.',
-      "Where it lists changes, say so before that role starts, and update it there with your copy, as the entry command's `## While working` says, once the user agrees.",
+      "Its brief gives the task id, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem, and asks it to judge from `report <id>` whether the rounds since the plan moved the task.",
+      "**What a brief says.** Give the task id and let the role read the record; a paraphrase is one more thing that can drift.",
+      'A risk keeps its conditions: who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in a test that forced its precondition.',
+      "if it still leaves it out, bring the call with both views, a line each, the thinker's first.",
+      "Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs",
+      "A role routed to another host runs there, as Role routes lists.",
+      "**Another checkout.** Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs, and where it lists changes, say so and update it with your copy once the user agrees.",
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase('the thinker that planned the work for its re-plans'), 'a re-plan after a failing round comes from a fresh thinker');
     const start = entry(host);
@@ -1045,4 +1096,30 @@ test('the procedure skills give a criterion its source and a risk its conditions
     'A failure shown only under a condition the run itself arranged, rather than one that arose in use, is reported with that condition and with how, if at all, it arises in use, and blocks only where the criterion, or what the user committed to, covers that cause; where nothing written settles whether it does, say that the verdict turns on that boundary.',
     'Where a blocking finding rests only on a criterion the agents added or tightened once the work was under way, which the user never confirmed, say so in the finding: it questions that criterion as much as the candidate.',
   ], 'assessment');
+});
+
+for (const host of HOSTS) {
+  test(`${host} a recorded failure is measured again only where it may no longer apply, a step back asks the user only an open outcome, and pruned prose keeps what still rests on it`, () => {
+    const thinker = role(host, 'thinker');
+    const coordinator = role(host, 'coordinator');
+    all(thinker, [
+      'only where it is uncertain the failure still applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis and plan the correction.',
+      'Where the outcome itself is uncertain or needs reconsidering, close with one open question for the user in product terms',
+      'where it is settled and the simpler route lies within authority, say so, and the work carries on.',
+    ], 'thinker');
+    all(coordinator, [
+      'where it is uncertain the failure still applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis.',
+      'where nothing committed keeps reasoning that surviving evidence, assessments or decisions rest on, move it to a findings file the record cites first.',
+      'a copy of the record elsewhere points to that one rather than advancing on its own.',
+    ], 'coordinator');
+    assert.doesNotMatch(coordinator, phrase('since Git keeps the earlier text'), 'Git keeps only what was committed');
+    all(entry(host), ['Where it finds the outcome settled and its route within authority, take the route and say so; nothing waits on the user.'], 'entry');
+  });
+}
+
+test('the record contract keeps reasoning nothing committed holds before an entry goes', () => {
+  all(skill('task-record-contract'), [
+    'where nothing committed keeps reasoning that surviving evidence, assessments or decisions rest on, move it to a findings file the record cites first.',
+  ], 'task-record-contract');
+  assert.doesNotMatch(skill('task-record-contract'), phrase('Git keeps the earlier text'));
 });

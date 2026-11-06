@@ -71,7 +71,7 @@ outlives the task, and distinguish a proposal from an accepted owner decision.
 A pause the user asks for is recorded the same way, so the next session can
 resume from the record rather than from a transcript. Before stopping:
 
-- say where the work stands under `## Blockers and decisions`: what is done,
+- say where the work stands in `## Current state`: what is done,
   what is half done, and what was about to happen next;
 - claim no check that did not finish as passed; an interrupted run is not
   evidence;

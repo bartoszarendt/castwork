@@ -64,7 +64,12 @@ export function entryFromPairs(kind, pairs, now = new Date()) {
     if (key === 'producers') {
       const producers = value.split(',').map((producer) => producer.trim());
       if (producers.some((producer) => producer === '')) throw refuse('producers has a blank entry', 'Separate actors with commas, as in producers=worker@claude,worker@codex. Nothing was written.');
+      // `producers=[worker@pi]` stored the brackets as part of the actor, so
+      // an assessment by `worker@pi` no longer matched its own producer.
+      if (producers.some((producer) => /[[\]]/.test(producer))) throw refuse(`producers ${value} carries list brackets, which would become part of the actor`, 'Write the actors bare, separated by commas, as in producers=worker@pi or producers=worker@claude,worker@codex. Nothing was written.');
       entry[key] = producers;
+    } else if (key === 'actor' && /[[\]]/.test(value)) {
+      throw refuse(`actor ${value} carries list brackets, which would become part of the actor`, 'Write one actor bare, as in actor=verifier@pi. Nothing was written.');
     } else if (key === 'exit_code') {
       if (!/^-?\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw refuse(`exit_code ${value} is not an integer`);
       entry[key] = Number(value);

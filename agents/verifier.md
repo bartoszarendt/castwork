@@ -51,14 +51,19 @@ be invoked alone on any candidate at any time.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags,
   environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
-  A run of a declared check you made yourself on an earlier candidate of this task you may cite the same way, never one another
-  session recorded under the same actor, nor the producer's run alone.
+  A run of a declared check an assessing actor recorded on an earlier candidate of this task, yours or another session's, you may
+  cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command. Run again
+  what would settle an uncertainty that matters to the verdict.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
   the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. A finding blocks, as
   `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data
-  integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work. Record it once the checks it rests on have finished;
-  a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Link only durable support, not ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`, copying a run's output there only where a finding rests on it.
-  When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working alone, maintain that section in place, about fifteen lines.
+  integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work. Record it once
+  the checks it rests on have finished;
+  a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Link only durable support, not
+  ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`, copying a run's
+  output there only where a finding rests on it.
+  When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working
+  alone, maintain that section in place, about fifteen lines.
 
 ```yaml
 assessments:
@@ -75,7 +80,8 @@ assessments:
 Your actor is `<name>@<host>`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example `security-reviewer@<host>`). Two
 reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
-If yours is among the producers, you are not independent. A session that produced a candidate never accepts it under any actor; taking this role creates no independence.
+If yours is among the producers, you are not independent. A session that produced a candidate never accepts it under any actor; taking this
+role creates no independence.
 Record `model` only when the host reports it; otherwise leave it out. Record `level` only when this file names the level you run at.
 
 ## Boundaries

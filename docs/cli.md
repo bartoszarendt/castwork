@@ -17,7 +17,7 @@ better than editing a record by hand.
 | `task lint [<id>] [--json]` | Print structural validity, reference availability, and requirement evaluation. Never writes. Exits non-zero on a structural error, or on `status: done` with a requirement not satisfied. Prints the current candidate in full and earlier ones as one summary line. Text folds undeclared check names found only on earlier candidates and earlier lint-as-evidence notes; mixed names show their current entries. Every credential note remains visible. `--json` keeps every reference and note. Its diagnostic codes are listed in [record-format.md](record-format.md#lint-diagnostics). |
 | `task archive [<id>] [--check] [--json]` | Explicitly move the entries for earlier candidates into `<record>.archive.md` beside the task; the body is never moved. No id selects records over 100 KB. Reports exact proposed list moves and bytes; `--check` writes nothing. Strict in-memory verification refuses any outcome or report-content difference, with a named reason and no writes; the selected record becoming uncommitted, and its size note, are the only exempt differences. Records are processed independently; exit 1 if any failed/refused, 2 for usage. JSON is exactly one document. |
 | `task set <id> <field> <value>` | One safe frontmatter write of a top-level value. `status done` refuses on a structural error, and when a declared requirement is not satisfied; every other value is unrestricted. Refuses a field name that is not plain, a field holding a list or mapping, and any write that would change more than that field. |
-| `task add <id> <kind> <key=value>...` | Append one `candidate`, `evidence`, or `assessment` entry to the record's own list, with only the fields the record format defines for it; `level` takes `simple`, `standard`, or `complex`. An evidence or assessment `candidate` must be a recorded `ref`; nothing is filled in that was not given, except `at=now`. See [record-format.md](record-format.md#command-behavior). |
+| `task add <id> <kind> <key=value>...` | Append one `candidate`, `evidence`, or `assessment` entry to the record's own list, with only the fields the record format defines for it; `level` takes `simple`, `standard`, or `complex`. An evidence or assessment `candidate` must be a recorded `ref`; nothing is filled in that was not given, except `at=now`. `producers` takes actors separated by commas, written bare: `producers=[worker@pi]` is refused, since the brackets would become part of the name. See [record-format.md](record-format.md#command-behavior). |
 | `decision new <title>` | Create a decision record from the template. |
 | `decision list [--json]` | List decision records with their ids, statuses, dates, and titles, superseded ones included. The status is printed as recorded: nothing is validated, and nothing decides which decision governs. A record whose frontmatter cannot be read is listed as `unreadable`, with the reason. `--json` gives each row `id`, `status`, `date`, `title`, `path`, and `error` (`null` when the frontmatter was read). Never writes. |
 | `report [<id>] [--json]` | Read-only project account, or task/decision view selected by declared id. See [Report](#report). |
@@ -227,6 +227,21 @@ many tasks the entries touched, and how many of those tasks are `done` or
 `cancelled` now. Many rounds and decisions on few tasks, few of them done, can
 be work that moves while its finish does not. JSON has it as `movement`, `null`
 when nothing is dated and in a selected record's view.
+
+Changes, beneath it, counts the lines changed inside `.castwork/` and everywhere
+else by the commits of that same week, from local Git, then the lines
+uncommitted now and the untracked files, split the same way. The commits are
+those on the checked-out branch's first-parent line whose commit date falls in
+the week, found past any older-dated commit between them; a merge counts what
+it brought onto the branch, so merged work counts once, in the week it was
+merged. Paths are read as Git stores them, so a name with non-ASCII letters is
+classified like any other. Everywhere else is product, tests, documents and
+tooling alike, so the line says where the work went, not that anything moved:
+thousands of lines in `.castwork/` against a few elsewhere is the sign that
+records and proof are becoming the work. It needs Git 2.37 or later. JSON has
+it as `changes`, with `omitted` and its reason when Git cannot be read, and
+`null` when nothing is dated and in a selected record's view, which does not
+read it.
 
 Wrapped continuation lines are indented under their labels. A recorded scalar
 whose indentation already occupies 100 columns is kept intact, possibly wider,

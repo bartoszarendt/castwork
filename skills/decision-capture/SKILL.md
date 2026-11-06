@@ -105,6 +105,11 @@ propose the line, and it lasts beyond the session once they approve it. An
 instruction they scope to the session, such as one that begins "in this
 session", stays in the session: propose no line for it, nor again one they
 declined.
+When the owner answers by choosing an option the agents drafted, such as "1A",
+quote their answer and the option's text as it was put to them, and say the
+wording is the agents': the choice binds what the option delivers and the
+limits it names, and its method stays the agents' as above. Only words the
+owner wrote themselves are recorded as their own.
 If their answer could select more than one option, ask
 before you record it. An answer that names no option while one of their calls
 is open, such as "proceed" or "continue", selects none: ask which, in one line,

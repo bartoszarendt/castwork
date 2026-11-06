@@ -85,18 +85,21 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   `task lint` is not evidence about the candidate; environment variable names, never their values
   (records are repository files, which its own checks read); a subset of a check under its own name,
   never the declared check's. A failed check is a `fail`: information, not something to tidy away.
-  A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound evidence, under its own name when undeclared.
+  A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound
+  evidence, under its own name when undeclared.
   What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in
   `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.
   Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: where a failure, an acceptance or a reproduction
-  rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; a snapshot holds that folder as the base commit has it, without what was written there since.
+  rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; a snapshot holds that folder as the base
+  commit has it, without what was written there since.
   Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.
   A file the task delivers, or a script a declared check runs, is part of the candidate: never there.
 - Before reporting, go through the acceptance criteria one by one: shown or not shown, with the
   observation. A partial showing is not shown: it goes under `## Blockers and decisions`, never as
   `pass`. Where a result claims a particular guard or behaviour, say which cases or assertions decided it and that they ran: a pass
   or refusal that something else could have produced, such as another check refusing first or the test's own condition, does not show it.
-  After a step that costs minutes, append a short observation: what was seen, what it means, what is next; not a new narrative section per run or a long paragraph on one line.
+  After a step that costs minutes, say in a few lines what was seen, what it means and what is next: in your report to the coordinator, or
+  in `## Current state` when you work alone, never as a new entry or section per run.
   Working alone, rewrite `## Current state` in place, about fifteen lines; when roles are
   coordinated, it is the coordinator's, and you update it only when the coordinator assigns that to you.
 

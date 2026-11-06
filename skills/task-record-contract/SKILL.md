@@ -51,17 +51,27 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Plan** — when the work needs one, the thinker's current plan. A re-plan
   rewrites it in place, like Current state, replacing every earlier plan still
   in the record, with what changed and why under
-  `## Blockers and decisions`: the record holds one current plan, and a
-  superseded plan's reasoning stays in the findings it cites.
+  `## Blockers and decisions`, in place of the entry the last re-plan left: the
+  record holds one current plan, and a superseded plan's reasoning stays in the
+  findings it cites.
 - **Current state** — what holds now: current candidate, unresolved issues,
   restrictions with decision ids and source line pointers, next step. Rewrite
   in place, about fifteen lines. Open with what holds now; who wrote it and
-  when go after, since the first paragraph is what `report` shows. When roles are coordinated it is the
+  when go after, since the first paragraph is what `report` shows. When roles
+  are coordinated it is the
   coordinator's, written from the roles' reports or assigned to one role at a
   time; otherwise the agent working alone keeps it. It grants nothing; cited
   decisions and the user's current instructions govern.
-- **Blockers and decisions** — what got in the way and what was decided, written
-  as it happens rather than reconstructed later.
+- **Blockers and decisions** — what blocks the work now and the decisions still
+  in force for it, each written when it happens rather than reconstructed
+  later. When a blocker clears or a decision is superseded, rewrite or remove
+  its entry, so the record keeps what a reader acts on; where nothing committed
+  keeps reasoning that surviving evidence, assessments or decisions rest on,
+  move it to a findings file the record cites first. It is not a log of rounds:
+  what a round observed is evidence or an
+  assessment in the frontmatter lists, what it means for the next step is
+  Current state, and reasoning that must outlive the record goes in a findings
+  file it cites.
 
 Candidates, evidence, and assessments go in the frontmatter lists, never in a
 fenced block in the body: the checks read only the frontmatter, and lint reports
@@ -82,13 +92,17 @@ Link only durable support, not ignored scratch or `.castwork/tasks/`: write it
 in `.castwork/findings/`, named after the task, such as `T-012-review.md`, and
 copy a run's output there only where a failure, an acceptance or a
 reproduction rests on it, and only the part it rests on, not copied sources,
-archives or a whole run's output the entry already states. A snapshot holds that folder, as it holds
-the records, as the base commit has it, without what was written there since, so a file the task delivers, or a script a declared check runs,
+archives or a whole run's output the entry already states. A snapshot holds that
+folder, as it holds
+the records, as the base commit has it, without what was written there since, so
+a file the task delivers, or a script a declared check runs,
 never goes there: it is part of the candidate. A review of how work went goes
 in `.castwork/reviews/`.
 
-`task archive [<id>] [--check]` explicitly moves the entries for earlier candidates
-into a paired `<record>.archive.md`; the two files remain one logical record, and
+`task archive [<id>] [--check]` explicitly moves the entries for earlier
+candidates
+into a paired `<record>.archive.md`; the two files remain one logical record,
+and
 the body never moves, so keep it short. It never weakens requirements, and a
 named verification refusal writes nothing. After archiving
 or resuming an archived task, read both files when refreshing Current state.
@@ -196,7 +210,8 @@ Who sets it depends on who is working. When a coordinator runs the roles,
 statuses are the coordinator's: a role it started records only `blocked` or
 `needs_context`. An agent working alone sets status itself with
 `npx --no castwork task set`, and `done` only once `task lint` shows the
-declared requirements met. `done` does not wait for a verdict: work that went straight
+declared requirements met. `done` does not wait for a verdict: work that went
+straight
 through may have no verifier, and its requirements decide.
 
 ## Sizing

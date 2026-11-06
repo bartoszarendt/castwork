@@ -64,4 +64,9 @@ Name nearby work that must not be bundled in.
 
 ## Blockers and decisions
 
-Record what blocked the work and what was decided, as it happens.
+<!-- What blocks the work now and the decisions still in force for it, written
+     as each happens. Rewrite or remove an entry once it clears or is
+     superseded, first moving to a cited findings file any reasoning that
+     surviving evidence, assessments or decisions rest on and nothing committed
+     keeps. Not a log of rounds: observations are evidence and assessments, and
+     what they mean next is Current state. -->

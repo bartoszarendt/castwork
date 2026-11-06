@@ -14,7 +14,27 @@ import { PublicError } from './public-error.js';
 import { CONFIG_FILE, HOSTS, LOCAL_CONFIG_FILE } from './layout.js';
 import { parseRecord, ROLE_IDS } from './record.js';
 
-export const ROLE_LINE_LIMIT = 150;
+/**
+ * How much a role preset may say. A limit on lines let a preset grow by
+ * lengthening them, to 1,500 characters at one point, so the words are
+ * counted, and a line is kept readable. A rule added beyond a limit replaces
+ * another rather than raising it.
+ */
+export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4300, thinker: 4250, worker: 2050, verifier: 1900 });
+export const COMMAND_WORD_LIMIT = 4000;
+export const GUIDANCE_LINE_LIMIT = 160;
+
+/** @param {string} text */
+export function wordCount(text) {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/** The first line longer than the guidance line limit, if any. @param {string} text */
+function longLine(text) {
+  const lines = text.split('\n');
+  const index = lines.findIndex((line) => line.length > GUIDANCE_LINE_LIMIT);
+  return index === -1 ? null : { line: index + 1, length: lines[index].length };
+}
 
 /** @typedef {{level: 'error'|'warn', where: string, message: string}} Finding */
 
@@ -95,8 +115,11 @@ export function roleFindings(role, skills) {
   for (const procedure of role.procedures) {
     if (!skills.includes(procedure)) error(findings, where, `names procedure ${procedure}, which is not a skill under skills/`);
   }
-  const lines = role.body.split('\n').length;
-  if (lines >= ROLE_LINE_LIMIT) warn(findings, where, `${lines} body lines; ${role.id} is meant to stay under ${ROLE_LINE_LIMIT}`);
+  const limit = /** @type {Record<string, number>} */ (ROLE_WORD_LIMITS)[role.id];
+  const words = wordCount(role.body);
+  if (limit !== undefined && words > limit) warn(findings, where, `${words} words; ${role.id} is meant to stay within ${limit}, so a new rule replaces one`);
+  const long = longLine(role.body);
+  if (long) warn(findings, where, `body line ${long.line} is ${long.length} characters; wrap it within ${GUIDANCE_LINE_LIMIT}`);
   return findings;
 }
 
@@ -116,6 +139,10 @@ function validateCommand(findings) {
     return;
   }
   const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
+  const words = wordCount(parsed.body);
+  if (words > COMMAND_WORD_LIMIT) warn(findings, where, `${words} words; the entry command is meant to stay within ${COMMAND_WORD_LIMIT}, so a new rule replaces one`);
+  const long = longLine(parsed.body);
+  if (long) warn(findings, where, `body line ${long.line} is ${long.length} characters; wrap it within ${GUIDANCE_LINE_LIMIT}`);
   try {
     commandDescriptions(parsed.frontmatter);
   } catch (refusal) {

@@ -608,6 +608,33 @@ export function parseRecord(text, options = {}) {
       });
     }
   }
+  // `producers: ["[worker@pi]"]` names an actor with brackets in it, which no
+  // assessment by `worker@pi` matches, so independence compares the wrong
+  // names. Say where; the attribution is corrected from evidence, not here.
+  const bracketed = (/** @type {unknown} */ value) => typeof value === 'string' && /[[\]]/.test(value);
+  /** @type {{field: string, index: number, name: string}[]} */
+  const bracketedIdentities = [];
+  // The entry lists hold mappings only; the index reported is the entry's
+  // place in the record, as other diagnostics give it.
+  const place = (/** @type {string} */ field, /** @type {unknown} */ entry) => /** @type {unknown[]} */ (frontmatter[field]).indexOf(entry);
+  for (const entry of candidateEntries) {
+    for (const producer of Array.isArray(entry.producers) ? entry.producers : []) {
+      if (bracketed(producer)) bracketedIdentities.push({ field: 'candidates', index: place('candidates', entry), name: String(producer) });
+    }
+  }
+  for (const [field, entries] of /** @type {const} */ ([['evidence', evidenceEntries], ['assessments', assessmentEntries]])) {
+    for (const entry of entries) {
+      if (bracketed(entry.actor)) bracketedIdentities.push({ field, index: place(field, entry), name: String(entry.actor) });
+    }
+  }
+  for (const { field, index, name } of bracketedIdentities) {
+    info.push({
+      code: 'identity.bracketed',
+      message: `${field}[${index}] names the actor ${name}, brackets included, which matches no actor written without them; correct the entry from the evidence of who acted`,
+      field,
+      index,
+    });
+  }
   for (const source of [{body, path: options.path ?? null}, ...(archive ? [{body: archive.body, path: archive.path}] : [])]) {
     const inBody = bodyEntryKeys(source.body);
     if (inBody.length > 0) info.push({

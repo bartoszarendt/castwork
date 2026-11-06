@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { recordDirectory } from './generated.js';
 import { parseRecord } from './record.js';
-import { deriveReport } from './report.js';
+import { changedLines, deriveReport } from './report.js';
 import { renderReport } from './report-text.js';
 import { out, json, err } from './cli-io.js';
 import {ARCHIVE_SUFFIX} from './layout.js';
@@ -55,6 +55,36 @@ export function reportGit(root) {
       }
     }
     return {records};
+  } catch (error) {
+    const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr).trim() : message(error);
+    return {omitted: `local Git observations unavailable: ${stderr || message(error)}`};
+  }
+}
+/**
+ * Lines changed in Movement's window, inside `.castwork/` and elsewhere, and
+ * what is uncommitted now. Read-only. The commits counted are those on the
+ * checked-out branch's first-parent line whose commit date falls in the week,
+ * a merge counting what it brought onto the branch, so merged work counts once
+ * whenever its own commits were made. `--since-as-filter` keeps walking past an
+ * older commit where `--since` would stop at it and miss the rest of the week.
+ * @param {string} root @param {{from: string, to: string}|null} movement
+ * @returns {import('./report.js').Changes|null}
+ */
+export function reportChanges(root, movement) {
+  if (!movement) return null;
+  const git = (/** @type {string[]} */ args) => execFileSync(
+    'git', ['--no-optional-locks', '-C', root, ...args],
+    {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024, timeout: 20000},
+  );
+  try {
+    const committed = changedLines(git(['log', '-z', '--numstat', '--format=', '--no-renames', '--relative',
+      '--first-parent', '--diff-merges=first-parent',
+      `--since-as-filter=${movement.from}T00:00:00Z`, `--until=${movement.to}T23:59:59Z`]));
+    const uncommitted = changedLines(git(['diff', 'HEAD', '-z', '--numstat', '--no-renames', '--relative']));
+    const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+    const castworkUntracked = untracked.filter((file) => file.startsWith('.castwork/')).length;
+    return {from: movement.from, to: movement.to, committed, uncommitted,
+      untracked_files: {castwork: castworkUntracked, elsewhere: untracked.length - castworkUntracked}};
   } catch (error) {
     const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr).trim() : message(error);
     return {omitted: `local Git observations unavailable: ${stderr || message(error)}`};
@@ -115,6 +145,9 @@ export function reportCommand(root, id, options = {}) {
   const {inputs, problems} = readReportInputs(root);
   const git = reportGit(root);
   const report = deriveReport(inputs, {git, problems, project: path.basename(path.resolve(root))});
+  // Only the project view shows Changes; a task's view, a role's usual way in,
+  // does not pay for a project-wide history scan it would discard.
+  report.changes = id === null && !git.omitted ? reportChanges(root, report.movement) : null;
   let code = problems.length || report.problems.some(problem => problem.code === 'report.archive_invalid') ? 1 : 0;
   let selected = null;
   if (id !== null) {
@@ -134,7 +167,7 @@ export function reportCommand(root, id, options = {}) {
     records: report.records.map((record) => ({
       id: record.id, path: record.path, kind: record.kind, status: record.status, title: record.title,
     })),
-    recent: [], attention: [], movement: null,
+    recent: [], attention: [], movement: null, changes: null,
   };
   if (options.json) {
     json(result);

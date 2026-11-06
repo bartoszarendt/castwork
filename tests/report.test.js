@@ -7,9 +7,9 @@ import {execFileSync, spawnSync} from 'node:child_process';
 import test from 'node:test';
 import {parseRecord} from '../src/record.js';
 import {duplicateIdErrors, requirementEvaluation, structuralValidity} from '../src/checks.js';
-import {deriveReport, mentionedIds, recordedDate, sectionExcerpt} from '../src/report.js';
+import {changedLines, deriveReport, mentionedIds, recordedDate, sectionExcerpt} from '../src/report.js';
 import {renderReport} from '../src/report-text.js';
-import {readReportInputs, reportCommand, reportGit} from '../src/report-cli.js';
+import {readReportInputs, reportChanges, reportCommand, reportGit} from '../src/report-cli.js';
 import {main} from '../src/cli-main.js';
 import {taskLint} from '../src/task-cli.js';
 import {runCli} from './cli-in-process.js';
@@ -565,6 +565,73 @@ test('Movement counts the latest recorded week against the tasks it touched that
     blocking_assessments: 1, tasks: 2, tasks_done: 1, tasks_cancelled: 0});
   assert.match(renderReport(r).replace(/\s+/g, ' '), /\(task lint\) Movement 2026-10-09 to 2026-10-15, the latest recorded week: 2 decisions; 3 candidates, 2 assessments \(1 blocking\) on 2 tasks, 1 of them done now Attention /);
   assert.equal(derive(input({candidates: [{ref: 'aaaaaaa'}]})).movement, null, 'nothing dated, nothing counted');
+});
+
+test('Changes counts lines inside .castwork/ against everything else, and says what elsewhere holds', () => {
+  // `git log -z --numstat --format=`: NUL after each entry, a newline between commits.
+  const numstat = ['10\t2\t.castwork/tasks/T-001.md', '3\t1\tincludes/a.php', '\n-\t-\tlogo.png', '5\t0\ttests/a.php', '2\t0\t.castwork/findings/zażółć.md', ''].join('\0');
+  assert.deepEqual(changedLines(numstat), {castwork: 14, elsewhere: 9});
+  const r = derive(input({candidates: [{ref: 'aaaaaaa', at: '2026-10-15T09:00:00Z'}]}));
+  assert.equal(r.changes, null, 'derivation observes nothing');
+  r.changes = {from: '2026-10-09', to: '2026-10-15', committed: {castwork: 1300, elsewhere: 4}, uncommitted: {castwork: 0, elsewhere: 20}, untracked_files: {castwork: 0, elsewhere: 0}};
+  assert.match(renderReport(r).replace(/\s+/g, ' '), /Changes committed in that week: 1300 lines in \.castwork\/, 4 elsewhere; uncommitted now: 0 and 20\. Elsewhere is product, tests, documents and tooling alike\. Attention /);
+  r.changes = {omitted: 'local Git observations unavailable: x'};
+  assert.match(renderReport(r), /Changes {2}not observed: local Git observations unavailable: x/);
+  assert.equal(reportChanges('.', null), null, 'no recorded week, nothing to count');
+});
+
+/** A disposable repository whose commits carry the dates given. @param {import('node:test').TestContext} t */
+function datedRepository(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'castwork-changes-'));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const git = (/** @type {string} */ date, /** @type {string[]} */ ...args) => execFileSync('git', ['-C', root, ...args],
+    {encoding: 'utf8', env: {...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date}});
+  git('', 'init', '-q'); git('', 'config', 'user.email', 't@example.com'); git('', 'config', 'user.name', 't');
+  git('', 'config', 'core.autocrlf', 'false');
+  const commit = (/** @type {string} */ date, /** @type {Record<string, string>} */ files, message = 'c') => {
+    for (const [file, text] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});
+      fs.appendFileSync(path.join(root, file), text);
+    }
+    git(date, 'add', '-A'); git(date, 'commit', '-qm', message);
+  };
+  return {root, git, commit};
+}
+
+test('Changes reads commits in the recorded week and the uncommitted lines now', (t) => {
+  const {root, commit} = datedRepository(t);
+  commit('2026-10-12T12:00:00Z', {'.castwork/tasks/T-001.md': 'a\nb\nc\n', 'product.js': 'x\n', '.castwork/findings/zażółć.md': 'p\nq\n'});
+  fs.appendFileSync(path.join(root, 'product.js'), 'y\n');
+  fs.writeFileSync(path.join(root, 'new.js'), 'z\n');
+  assert.deepEqual(reportChanges(root, {from: '2026-10-09', to: '2026-10-15'}), {from: '2026-10-09', to: '2026-10-15',
+    committed: {castwork: 5, elsewhere: 1}, uncommitted: {castwork: 0, elsewhere: 1}, untracked_files: {castwork: 0, elsewhere: 1}},
+    'a path Git would quote still counts under .castwork/');
+  assert.deepEqual(reportChanges(root, {from: '2026-10-13', to: '2026-10-15'})?.committed, {castwork: 0, elsewhere: 0}, 'a commit before the week is left out');
+});
+
+test('Changes keeps walking past an older-dated commit, and counts a merge once, by what it brought', (t) => {
+  const {git, commit} = datedRepository(t);
+  commit('2026-10-01T12:00:00Z', {'a.txt': 'base\n'});
+  git('', 'checkout', '-qb', 'side');
+  commit('2026-10-02T12:00:00Z', {'side.txt': 'one\ntwo\n'});
+  git('', 'checkout', '-q', '-');
+  commit('2026-10-12T12:00:00Z', {'a.txt': 'in week\n'});
+  commit('2026-10-03T12:00:00Z', {'a.txt': 'dated earlier\n'});
+  commit('2026-10-13T12:00:00Z', {'a.txt': 'in week again\n'});
+  git('2026-10-14T12:00:00Z', 'merge', '-q', '--no-edit', 'side');
+  // The two in-week commits, both sides of the older-dated one, and the merge's two lines from the side branch.
+  assert.deepEqual(reportChanges(git('', 'rev-parse', '--show-toplevel').trim(), {from: '2026-10-09', to: '2026-10-15'})?.committed,
+    {castwork: 0, elsewhere: 4});
+});
+
+test('a task view does not scan the project for Changes', (t) => {
+  const {root, commit} = datedRepository(t);
+  fs.mkdirSync(path.join(root, '.castwork', 'tasks'), {recursive: true});
+  commit('2026-10-12T12:00:00Z', {'.castwork/tasks/T-001.md': '---\nschema: 1\nid: T-001\ntitle: t\nstatus: draft\ncandidates:\n  - {ref: abcdef0, at: "2026-10-12T09:00:00Z"}\n---\n\n## Intent\nx\n'});
+  const project = reportCommand(root, null, {json: true});
+  assert.ok(project.report.changes && 'committed' in project.report.changes, 'the project view counts');
+  const task = reportCommand(root, 'T-001', {json: true});
+  assert.equal(task.report.changes, null);
 });
 
 test('the most failed declared checks are ranked by count, also for integer-like check names', () => {

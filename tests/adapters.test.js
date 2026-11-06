@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { commandDescriptions, generateHost, readCommand, readRoles, readSkills, skillFrontmatter, readAdapter, renderCommand, renderEntryCoordinator, resolveRoutes } from '../src/adapter-generation.js';
-import { ROLE_LINE_LIMIT } from '../src/validate.js';
+import { COMMAND_WORD_LIMIT, GUIDANCE_LINE_LIMIT, ROLE_WORD_LIMITS, roleFindings, wordCount } from '../src/validate.js';
 import { formatScalar } from '../src/yaml.js';
 import { HOSTS } from '../src/layout.js';
 import { ROLE_IDS } from '../src/record.js';
@@ -20,10 +20,22 @@ test('the four canonical role ids are present and unchanged', () => {
   assert.deepEqual(readRoles().map((role) => role.id).sort(), [...ROLE_IDS].sort());
 });
 
-test('every role preset stays under the shared line limit', () => {
+test('every role preset and the entry command stay within their word limits, in readable lines', () => {
   for (const role of readRoles()) {
-    assert.ok(role.body.split('\n').length < ROLE_LINE_LIMIT, `${role.id} is too long`);
+    const limit = /** @type {Record<string, number>} */ (ROLE_WORD_LIMITS)[role.id];
+    assert.ok(wordCount(role.body) <= limit, `${role.id} has ${wordCount(role.body)} words, over ${limit}`);
+    assert.ok(role.body.split('\n').every((line) => line.length <= GUIDANCE_LINE_LIMIT), `${role.id} has a line over ${GUIDANCE_LINE_LIMIT} characters`);
   }
+  const command = readCommand();
+  assert.ok(command && wordCount(command.body) <= COMMAND_WORD_LIMIT, 'the entry command is within its word limit');
+  assert.ok(command && command.body.split('\n').every((line) => line.length <= GUIDANCE_LINE_LIMIT), 'the entry command keeps readable lines');
+});
+
+test('a role over its word limit, or with a line too long to read, is reported', () => {
+  const role = { id: 'worker', description: 'd', procedures: [], body: `${'word\n'.repeat(ROLE_WORD_LIMITS.worker)}${'x'.repeat(GUIDANCE_LINE_LIMIT + 1)}` };
+  const messages = roleFindings(role, []).map((finding) => finding.message);
+  assert.ok(messages.some((message) => /words; worker is meant to stay within 2050, so a new rule replaces one/.test(message)));
+  assert.ok(messages.some((message) => /body line 2051 is 161 characters; wrap it within 160/.test(message)));
 });
 
 for (const host of HOSTS) {
