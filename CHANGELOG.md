@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.17
 
 - `report` shows where the lines went. A `Changes` line under Movement counts
   the lines changed inside `.castwork/` and everywhere else by the commits of
