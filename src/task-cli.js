@@ -223,7 +223,7 @@ function printReport(report, lintRecord) {
       const paths = reference.drift_paths ?? [];
       const shown = paths.slice(0, 5).join(', ');
       out(`             working tree differs from the snapshot in ${paths.length} path${paths.length === 1 ? '' : 's'}: ${shown}${paths.length > 5 ? ', …' : ''}`);
-      out('             evidence belongs to the snapshot; take a new one and record a new candidate for the changed tree');
+      out('             evidence belongs to the snapshot: assess it with git, not these files; for a change to this work, take a new one and record a new candidate');
     }
   }
 

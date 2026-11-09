@@ -197,13 +197,14 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   conclusion: one that would change something the user approved comes back marked as their call.
 - **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a
   check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish. When a brief limits what a role may write, name
-  each
-  kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; and ask for every file
-  written in the return. Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Name no reply file for a role that writes
-  to the repository: the host may tell it to ignore every other path. When a delegate that may have written files fails or is cancelled, inspect and
-  reconcile what it changed before anyone else writes.
+  each kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; check it against the
+  record's Scope and criteria, new files included, and that named inputs exist; name any required file it omits, and its writer; ask for every file
+  written in the return. Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Name no reply file for a role that
+  writes to the repository: the host may tell it to ignore every other path. When a delegate that may have written files fails or is cancelled, inspect
+  and reconcile what it changed before anyone else writes.
 - **The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy. It can
-  assess only a candidate that resolves, as `task lint` shows. Give each parallel lens its own actor; never rename an actor to make a review independent.
+  assess only a candidate that resolves, as `task lint` shows. A snapshot's `.castwork/tasks/` is the base commit's; the live record
+  governs. Give each parallel lens its own actor; never rename an actor to make a review independent.
 - **Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model
   otherwise. Report a role's model, effort, or variant from the generated agent file you started.
 

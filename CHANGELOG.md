@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- A snapshot's record copy is now described the same way everywhere a role
+  meets it. A snapshot holds `.castwork/tasks/`, `findings/` and `reviews/` as
+  the base commit has them, so its copy of a task record can differ from the
+  live one. The live record is the contract, and a difference there is not
+  drift. The verifier, the assessment skill and the coordinator's verifier
+  brief now say so, and `verification-evidence` no longer says task records
+  are left out of a snapshot. In a field phase, a coordinator's brief told a
+  verifier to block unless the task record was byte-identical to the snapshot,
+  which it never is once evidence is added. The verifier blocked. The next
+  verifier overturned that finding, but on the reasoning that records are
+  excluded from snapshots, which is also wrong.
+- When `task lint` finds the working tree differs from the current snapshot,
+  it now says to assess the snapshot with git rather than the files in front
+  of you, and to take a new snapshot only for a change to this work. Before,
+  it always said to take a new one and record a new candidate. A verifier
+  never records candidates, and other tasks' edits in a shared tree had
+  prompted new candidates for unchanged work.
+- A brief that limits what a role may write is checked against the record's
+  Scope and acceptance criteria, files the role must create included, and the
+  input paths it names must exist. A file the task requires that the limit
+  leaves out is named in the brief, with who writes it. In the same phase, two-file limits left out a task's required
+  scripts and an index entry. Each worker reported it, and each cost a review
+  round.
+- `decision-capture`: a decision that contradicts a document or record still
+  in use, such as a plan, a report's conclusion or the next phase's
+  instructions, updates it in the same change, or names it under
+  Consequences with who updates it. Earlier measurements and assessments stay
+  as history. Decisions there had reached one place while current plans still
+  instructed the opposite, and three assessments of one task found the
+  mismatches one at a time.
+
 ## 0.9.17
 
 - `report` shows where the lines went. A `Changes` line under Movement counts

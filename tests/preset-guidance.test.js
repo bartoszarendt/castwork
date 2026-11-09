@@ -1123,3 +1123,30 @@ test('the record contract keeps reasoning nothing committed holds before an entr
   ], 'task-record-contract');
   assert.doesNotMatch(skill('task-record-contract'), phrase('Git keeps the earlier text'));
 });
+
+for (const host of HOSTS) {
+  test(`${host} a snapshot's record copy is the base commit's, and a brief's write limit is checked against the task`, () => {
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      "check it against the record's Scope and criteria, new files included, and that named inputs exist; name any required file it omits, and its writer; ask for every file written in the return.",
+      "A snapshot's `.castwork/tasks/` is the base commit's; the live record governs.",
+    ], 'coordinator');
+    all(role(host, 'verifier'), [
+      "Its `.castwork/tasks/`, `findings/` and `reviews/` are the base commit's: read the contract from the live record, and a difference there is not drift.",
+    ], 'verifier');
+  });
+}
+
+test("the procedure skills say a snapshot keeps the base commit's records, and a decision reaches the documents it contradicts", () => {
+  all(skill('assessment'), [
+    'A snapshot holds `.castwork/tasks/`, `findings/` and `reviews/` as the base commit has them, so its copy of the record can differ from the live one, which is the contract; lint leaves those folders out of drift, and a difference there is not drift.',
+  ], 'assessment');
+  all(skill('verification-evidence'), [
+    'with ignored files and `.castwork/local/` left out and `.castwork/tasks/`, `findings/` and `reviews/` as the base commit has them',
+  ], 'verification-evidence');
+  assert.doesNotMatch(skill('verification-evidence'), phrase('task records, and `.castwork/local/` left out'));
+  all(skill('decision-capture'), [
+    "Where a decision contradicts a document or record still in use, such as a plan, a report's conclusion or the instructions for the next phase, update it in the same change, within your authorization, or name it under `## Consequences` with who updates it.",
+    'Earlier measurements and assessments stay as they were, as history',
+  ], 'decision-capture');
+});

@@ -94,7 +94,9 @@ Record `model` only when the host reports it; otherwise leave it out. Record `le
 - **Never write `candidates`.** If no candidate is recorded, say so and stop.
 - **Assess the exact candidate.** It resolves when it is a commit, or a
   `tree:<sha>` snapshot, whose object exists here. Assess a snapshot's
-  contents, read with git, not the current working tree. A name such as `HEAD`
+  contents, read with git, not the current working tree. Its `.castwork/tasks/`,
+  `findings/` and `reviews/` are the base commit's: read the contract from the
+  live record, and a difference there is not drift. A name such as `HEAD`
   or a branch is not the candidate, nor is a worktree label: say so and ask for
   the commit id or a snapshot. An unresolved reference is not a defect in the
   work: you are looking at the wrong version, so assess nothing.

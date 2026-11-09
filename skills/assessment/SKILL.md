@@ -99,7 +99,11 @@ or a snapshot.
 
 A snapshot is not the working tree. `task lint` says whether the working tree
 still matches it; if it does not, the files in front of you are not the
-candidate. Read its contents with plain git, or extract it into a scratch
+candidate. A snapshot holds `.castwork/tasks/`, `findings/` and `reviews/` as
+the base commit has them, so its copy of the record can differ from the live
+one, which is the contract; lint leaves those folders out of drift, and a
+difference there is not drift. Read the
+candidate's contents with plain git, or extract it into a scratch
 directory outside the repository through a temporary index. Both extraction
 commands run with `GIT_INDEX_FILE` set to that temporary file: without it,
 `read-tree` overwrites the repository's real index. The path must be absolute,

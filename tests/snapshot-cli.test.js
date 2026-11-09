@@ -35,6 +35,8 @@ test('lint writes nothing to the object store, the index, or the refs', (t) => {
   assert.equal(after.refs, before.refs);
   assert.match(lint.out, /available +candidate +tree:[0-9a-f]+ +\(current\)/);
   assert.match(lint.out, /working tree differs from the snapshot in 1 path: app\.txt/);
+  // A verifier records no candidate: the advice offers reading the snapshot first.
+  assert.match(lint.out, /evidence belongs to the snapshot: assess it with git, not these files; for a change to this work, take a new one and record a new candidate/);
 });
 
 test('lint states that a later commit has the same tree as an earlier snapshot', (t) => {

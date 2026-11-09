@@ -41,6 +41,13 @@ record it governs, so a later reader of the task finds it. Where it changes
 what a task may do or does next, that task's `## Current state` says so once
 the decision is recorded.
 
+Where a decision contradicts a document or record still in use, such as a
+plan, a report's conclusion or the instructions for the next phase, update it
+in the same change, within your authorization, or name it under
+`## Consequences` with who updates it. Earlier measurements and assessments
+stay as they were, as history: a reviewer otherwise finds the decision in one
+place and the opposite still instructed in another.
+
 Before writing one, run `npx --no castwork decision list` and read any
 decision that covers the same ground: the new one may supersede it (see
 [Changing a decision](#changing-a-decision)). Then
