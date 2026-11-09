@@ -182,7 +182,12 @@ what should happen — and the record stays editable throughout.
 ## Being assessed
 
 Read the findings before defending anything. Fix what is right, and say clearly
-where you disagree and why rather than silently not doing it. Treat each finding
+where you disagree and why rather than silently not doing it. A disagreement
+cites something the assessor could have read, such as a file and symbol, a
+criterion, or a recorded decision; that a choice was intended is not that.
+Where the reason is written nowhere, the gap is in the record: say so, for the
+thinker or the user to settle and write down, rather than arguing the finding.
+A dispute settled earlier does not hold against new evidence. Treat each finding
 as an example of its kind: fix the same defect wherever the candidate has it
 within the scope of the work, and say where you looked; name an occurrence
 outside that scope as a proposal rather than fixing it. After `needs_revision`

@@ -94,7 +94,7 @@ file remains, and Codex 0.160.1 accepts the marker.
 
 | | OpenCode | Claude Code | Codex |
 |---|---|---|---|
-| A subagent starts with | its task prompt | its task prompt | a fork of its parent's conversation |
+| A subagent starts with | its task prompt | its task prompt | a fork of its parent's conversation by default; `fork_turns: "none"` on the spawn tool excludes the parent's conversation turns, while host-supplied instructions and configuration still apply |
 | Nesting | `subagent_depth` defaults to 1, so a subagent cannot start one | by default a subagent can start subagents of its own, up to three layers below the main conversation; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` changes that (1 turns nesting off), and a subagent without `Agent` in its tools cannot start one | the runtime tells a spawned agent it may spawn its own; no depth limit is documented, only a cap on concurrent agents |
 | Implicit entry-skill invocation | v2 reads `disable-model-invocation: true`; v1 uses the description; delegated roles also deny `permission.skill` in both | refused by `disable-model-invocation: true` | refused by `allow_implicit_invocation: false` |
 
@@ -103,8 +103,18 @@ handoff, and one level of delegation: a role started by another agent starts
 no agents, since what it delegated would be invisible to the agent that started
 it and recorded under the wrong actor. The hosts differ in what they allow, so
 this is preset guidance, not a host setting, and it holds on every host. On
-Codex a role starts with the conversation it was forked from, so every preset
-says the record is authoritative and an inherited conversation is background.
+Codex a role starts with the conversation it was forked from unless the agent
+starting it passes `fork_turns: "none"`. The coordinator preset asks for a
+start without inherited conversation, and the entry command names this option.
+Nothing enforces that choice, so every preset still says the record is
+authoritative and an inherited conversation is background. On Codex 0.167.0 a
+child started with `fork_turns: "none"` did not have its parent's turns, and one
+started with `"all"` did; the first still received the host's own instructions
+and the user's `AGENTS.md`, and that run used no role files. Codex's spawn tool also
+describes a full-history fork as inheriting the parent's model and reasoning
+effort without accepting overrides. Whether a role file's `model` applies to
+such a fork, and whether a role started by name behaves the same with
+`fork_turns: "none"`, have not been checked in a live session.
 No role needs deeper nesting, so OpenCode's `subagent_depth` can stay at 1.
 
 Pi has no built-in subagents or `--agent` option. The `/castwork` session is the

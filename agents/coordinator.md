@@ -177,8 +177,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is
   the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one
   rather than advancing on its own.
--  **Fresh or resumed.** Start each round with a fresh agent, given the task id. Resume one only when the round continues its own last round on the same
-  task,
+-  **Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id. Resume one only when the round continues its own
+  last round on the same task,
   the worker with findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing
   its plan into records, and you read, before resuming, that its context is under about half of its model's window. Read its latest turn's context against
   that window where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- The coordinator starts each round fresh, without inherited conversation.
+  Where the host's tool for starting a role would otherwise pass the
+  conversation on, as Codex's does, the entry command names the option:
+  `fork_turns: "none"`. `docs/host-adapters.md` said a Codex subagent always
+  starts with a fork of its parent's conversation; that is only the default.
+  On Codex 0.167.0 a child started with `"none"` did not have its parent's
+  turns and one started with `"all"` did, in a run that used no role files.
+  The option excludes the parent's turns only: the host's own instructions and
+  configuration still reach the child.
+  Whether a role started by name behaves the same, and whether a role file's
+  `model` applies to a full-history fork, are not yet checked in a live
+  session. The presets still treat an inherited conversation as background.
+- `assessment`: a disagreement with a finding cites something the assessor
+  could have read, such as a file and symbol, a criterion, or a recorded
+  decision. Where the reason is written nowhere, the gap is in the record, and
+  it goes to the thinker or to you to settle and write down. A dispute settled
+  earlier does not hold against new evidence.
 - A recommendation on one of your calls now says how confident the thinker is
   in it and why: whether one option clearly wins, the options are close, or it
   rests on something not yet established, and what would change it. The

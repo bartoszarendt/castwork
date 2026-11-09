@@ -232,7 +232,7 @@ for (const host of HOSTS) {
       "Report a role's model, effort, or variant from the generated agent file you started. ## While roles run A running role is no reason to end your turn.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
-      "**Fresh or resumed.** Start each round with a fresh agent, given the task id.",
+      "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
       "Resume one only when the round continues its own last round on the same task, the worker with findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing its plan into records, and you read, before resuming, that its context is under about half of its model's window.",
       'Resume one only when the round continues its own last round on the same task',
       "Read its latest turn's context against that window where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier round's figure or a count of tokens spent, and note where in `.castwork/local/setup.md`; a figure you did not read, or one the host does not report, means a fresh agent.",
@@ -398,6 +398,7 @@ for (const host of HOSTS) {
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size",
       "When that work will need the user's calls along the way, ask for the whole path in the same request: what is already authorized and the calls it will need, from the thinker's plan where there is one.",
       'The coordinator role says how to delegate, when to take a role yourself, and who answers which question; this command says how to orient, continue, pause, and route a role to another host.',
+      "Where this host's tool for starting a role passes on your conversation unless told otherwise, as Codex's `fork_turns` does, start each fresh role with none of it: the record and your brief are the handoff.",
       'Date it from the clock',
       'Check what it says about a candidate against `task lint` before you write it.',
       'A working-policy line naming a model or host for a role is not a route: `castwork.json` sets those, through `role_routes`, `role_settings` and `role_levels`, and `.castwork/local/castwork.json` sets one person\'s own. Say so, and offer to move it to the one that fits.',
@@ -725,7 +726,7 @@ for (const host of HOSTS) {
       "**A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
-      "**Fresh or resumed.** Start each round with a fresh agent, given the task id.",
+      "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
       "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no candidate, assess nothing and need no actor.",
       "**Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing restrictions by decision id and source pointer; or assign its update to one role, never two at once.",
       'never ask for a verdict before the checks it rests on finish.',
@@ -827,6 +828,8 @@ test('the assessment skill blocks only on the contract and fixes a finding where
     'A finding blocks, as `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data integrity.',
     'Record any other finding as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work rather than another round.',
     'Treat each finding as an example of its kind: fix the same defect wherever the candidate has it within the scope of the work, and say where you looked; name an occurrence outside that scope as a proposal rather than fixing it.',
+    'A disagreement cites something the assessor could have read, such as a file and symbol, a criterion, or a recorded decision; that a choice was intended is not that.',
+    'Where the reason is written nowhere, the gap is in the record: say so, for the thinker or the user to settle and write down, rather than arguing the finding.',
   ], 'assessment');
 });
 

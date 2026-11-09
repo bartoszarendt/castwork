@@ -19,6 +19,9 @@ other three so you know what you can delegate. The coordinator role says how
 to delegate, when to take a role yourself, and who answers which question;
 this command says how to orient, continue, pause, and route a role to another
 host.
+Where this host's tool for starting a role passes on your conversation unless
+told otherwise, as Codex's `fork_turns` does, start each fresh role with none
+of it: the record and your brief are the handoff.
 Do not adopt the role for a request that never asked for it.
 When you adopt it, name it once at the start of your first message, as
 **Coordinator —**, since the host may show its own agent name instead. Do not
