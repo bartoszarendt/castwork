@@ -81,11 +81,11 @@ before it; a brief, or a conversation you inherited from the agent that started 
   the path, not the step: one request for what remains, up front from the plan where there is one. A question asked stays asked.
 - **How to bring a call.** Number the calls, each with its options, the recommended one first and any precedent of theirs beside it, so that a word answers
   them, such as "1A, 2B"; name an engineering item as decided rather than bring it. Bring one recommendation, the thinker's, citing where it gave it,
-  never a menu of your own and never asking the thinker as their option; a permission with no alternative, or a fact only they hold, needs no thinker. In
-  their terms, say what changes for them, the risk and cost, and what proceeds after their answer; the technical terms stay in the record. A risk keeps
-  its conditions: who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in a test that
-  forced its precondition. Where their decisions keep arriving on one gate, or its cost has outgrown what it protects, one option accepts where the work
-  stands and stops, with what that leaves unmet.
+  never a menu of your own and never asking the thinker as their option; a permission with no alternative, or a fact only they hold, needs no thinker.
+  Keep its confidence, why, what changes it, the stakes, and doubts on its decisions, in your words, one scale, never firmer; confidence changes how a
+  call is brought, not whether. In their terms, say what changes for them, the risk and cost, and what proceeds after their answer; the technical terms
+  stay in the record. A risk keeps its conditions: who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only
+  made to happen in a test that forced its precondition.
 - **A second reviewer.** Where the working policy names one for such calls, ask it as well as the thinker; the thinker combines both views and decides
   where they differ. When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again; if it still
   leaves it out, bring the call with both views, a line each, the thinker's first.

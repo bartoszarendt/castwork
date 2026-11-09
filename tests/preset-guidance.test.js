@@ -413,7 +413,6 @@ for (const host of HOSTS) {
         'spending or access beyond what is agreed; what only they know or hold; and whatever the working policy reserves.',
         "Everything else is engineering: the approach, a compatibility correction, a fix to an instrument or a test, another round within the work's scope, how to read a condition.",
         'The thinker decides what needs an argument; carry out its decision and tell the user what was decided.',
-        "Where their decisions keep arriving on one gate, or its cost has outgrown what it protects, one option accepts where the work stands and stops, with what that leaves unmet.",
         "**A second reviewer.** Where the working policy names one for such calls, ask it as well as the thinker; the thinker combines both views and decides where they differ.",
         'An instruction on how the user wants to be consulted outlives the session only once written down: propose it for `## Working policy`, in their words, in the reply where they give it, and carry on under it meanwhile, for this session only until they approve.',
       ], 'coordinator');
@@ -1149,4 +1148,24 @@ test("the procedure skills say a snapshot keeps the base commit's records, and a
     "Where a decision contradicts a document or record still in use, such as a plan, a report's conclusion or the instructions for the next phase, update it in the same change, within your authorization, or name it under `## Consequences` with who updates it.",
     'Earlier measurements and assessments stay as they were, as history',
   ], 'decision-capture');
+});
+
+for (const host of HOSTS) {
+  test(`${host} a recommendation carries the thinker's confidence and stakes, and a doubtful engineering decision is marked`, () => {
+    const thinker = role(host, 'thinker');
+    all(thinker, [
+      'Say how sure you are, and why: one option clearly wins, the options are close, or it rests on something unestablished, and what would change it; and whether a clear one still commits the user to something costly or hard to undo.',
+      "Where the user's decisions keep arriving on one gate, or its cost has outgrown what it protects, include accepting where the work stands and stopping, with what that leaves unmet.",
+      'Mark any you doubt, here and in the record, with what would reopen it.',
+    ], 'thinker');
+    all(role(host, 'coordinator'), [
+      'Keep its confidence, why, what changes it, the stakes, and doubts on its decisions, in your words, one scale, never firmer; confidence changes how a call is brought, not whether.',
+    ], 'coordinator');
+  });
+}
+
+test("blocked-state says how sure each recommendation is, why, and whether a clear one still costs much", () => {
+  all(skill('blocked-state'), [
+    'Say how sure you are of each and why, what would change it, and whether a clear one still commits them to something costly or hard to undo.',
+  ], 'blocked-state');
 });

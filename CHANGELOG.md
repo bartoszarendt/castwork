@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- A recommendation on one of your calls now says how confident the thinker is
+  in it and why: whether one option clearly wins, the options are close, or it
+  rests on something not yet established, and what would change it. The
+  coordinator words it as it likes, on one scale per request, never firmer
+  than the thinker put it. A clear recommendation that still commits you to
+  something costly or hard to undo says so, since confidence is not stakes.
+  Confidence changes how a call is brought, not whether it is asked. The
+  `blocked-state` skill asks the same when used alone. Recommendations had
+  read alike, so a choice a word settles looked like one that needed thought.
+- Engineering decisions the thinker made without you, and is not sure of, are
+  marked in the record and in its answer, with what would reopen each.
 - A snapshot's record copy is now described the same way everywhere a role
   meets it. A snapshot holds `.castwork/tasks/`, `findings/` and `reviews/` as
   the base commit has them, so its copy of a task record can differ from the
