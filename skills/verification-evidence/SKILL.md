@@ -79,8 +79,18 @@ outside Git count too, such as installed dependencies, environment settings, a
 database's state, a served image or an external service: cite a check only
 with the same invocation, where none of those it reads has changed since its
 run, and never one whose purpose or the working policy needs a fresh
-observation. Cite the entry that ran, by its `at` or linked output where
-several share a check and candidate, never another citation. A verifier
+observation. Judge that from what the run read. State the run created and
+removed for itself, such as a database built fresh for it, carries nothing
+from one candidate to the next. A newer write time alone, such as a rebuild
+of unchanged sources leaves, changes nothing; different contents or build
+inputs do. What blocks a citation is an input you can name that could have
+changed in a way that could affect the result: lacking a full record of the
+machine is not that, but an input the result depends on that nothing
+recorded, and that may have changed, is a gap to name, never an unchanged
+input. Cite the entry that ran, by its `at` or linked output where
+several share a check and candidate, never another citation, and give its
+`command` as that entry records it, adding no value the record must not
+hold. A verifier
 confirms the difference with `git diff` before relying on the citation; where
 Git or either candidate's objects are unavailable, it cannot be confirmed: run
 the check again within existing authority, or name the gap.
@@ -158,6 +168,17 @@ what was seen, what it means, what is next; not a new narrative section per run.
   paths, flags, environment and selection. Run that invocation within existing authority; a
   narrower or modified command is a different check and leaves the declared one
   unmet. If the invocation is unclear or cannot be run, name that gap.
+- **Record what a later citation needs.** A costly run that may be cited for
+  a later candidate records, in its `output` or a linked file, what it read
+  outside Git that could change between candidates: the launcher and tool
+  versions it resolved, the installed dependencies where the result rests on
+  them, and the database, service or image it ran against, with whether the
+  run created and removed it. Record versions and identities, such as an
+  image digest, as they are; for an environment setting or other
+  configuration, record its name and whether it was set, or the file or
+  setup it came from, never its value or a secret. Only what that run read,
+  and no dump of the whole environment. Without it, a later citation names
+  the gap.
 - **Record failures.** A `fail` is information. The later entry for the same
   check and candidate wins, so a `fail` after a `pass` correctly says the check
   is now failing.

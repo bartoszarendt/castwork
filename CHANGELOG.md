@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- Reusing a check's earlier run now has one rule on both ends.
+  - When it runs: a costly run that may be cited for a later candidate
+    records what it read outside Git that could change, such as the launcher
+    and tool versions it resolved, the installed dependencies its result
+    rests on, and the database, service or image it ran against, with whether
+    the run created and removed it. Versions and identities are recorded as
+    they are; an environment setting by its name and whether it was set, or
+    the file or setup it came from, never its value or a secret; no dump of
+    the whole environment.
+  - When it is cited: only an input someone can name, which could have
+    changed in a way that could affect the result, blocks the citation. State
+    the run created and removed for itself carries nothing between
+    candidates, a newer write time alone changes nothing, and lacking a full
+    record of the machine is not by itself an unknown. An input the result
+    depends on that nothing recorded, and that may have changed, is a gap to
+    name, never an unchanged input.
+  - A citation gives the cited entry's command as recorded, adding no value
+    the record must not hold.
+  - `verification-evidence` holds the rule; the worker, the verifier, the
+    `assessment` skill and `docs/record-format.md` say it briefly. In field
+    work it failed both ways. Long runs whose outside inputs nobody recorded
+    could be cited only as a named gap the user had to accept. Elsewhere,
+    verifiers kept asking for proof that a machine had not changed after a
+    change only to a document no check reads.
+- A coordinator's correction brief limits what the worker may write by file
+  or kind, never to the lines a finding cites, so the worker can fix each
+  finding's kind as its preset says. Briefs that said "touch nothing else"
+  had cost a task four review rounds, each finding one more sentence of the
+  same wrong kind.
+- A round that returns with neither its work nor a stated blocker is now a
+  sign of a stall: find why it stopped before sending the same assignment
+  again.
+- The thinker accepts a tool given its own task, such as a grader, only once
+  its output on one real, representative input serves what the tool is for,
+  and puts any grant that input needs among the calls its plan foresees. A grader had passed over a
+  hundred fixture tests and then refused every real answer, because the small
+  grant that would have produced one real answer was never asked for.
 - The coordinator starts each round fresh, without inherited conversation.
   Where the host's tool for starting a role would otherwise pass the
   conversation on, as Codex's does, the entry command names the option:

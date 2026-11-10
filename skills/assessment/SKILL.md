@@ -70,7 +70,11 @@ checks it rests on have finished.
    installed dependencies, environment settings or a database's state, has
    changed, and that neither its purpose nor the working policy needs a fresh
    observation, and treat a citation you cannot confirm, where Git or a
-   candidate's objects are unavailable included, as unshown. A run of a
+   candidate's objects are unavailable included, as unshown. An input outside
+   Git blocks a citation only where you can name it and how its change could
+   have affected the result; state the run created and removed for itself is
+   not one, nor is a newer write time alone. An input the result depends on
+   that nothing recorded, and that may have changed, is a gap to name. A run of a
    declared check an assessing actor recorded on an earlier candidate, yours or
    another session's, you may cite the same way, never a producer's:
    independence is your judgement of the evidence, not a repeat of every

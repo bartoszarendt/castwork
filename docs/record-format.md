@@ -207,6 +207,9 @@ the working policy needs a fresh observation: its entry has no `exit_code`,
 and its `output` begins `cited from <earlier ref>:`, identifies the entry that
 ran, and names the changed paths and why the check reads none of them, as
 [`verification-evidence`](../skills/verification-evidence/SKILL.md) describes.
+A costly run that may be cited later records what it read outside Git that
+could change, so the comparison can be made; only an input someone can name,
+that could have changed the result, blocks the citation.
 Lint does not tell a cited entry from a run; a verifier confirms the
 difference with `git diff`, and where Git or a candidate's objects are
 unavailable, the citation cannot be used.

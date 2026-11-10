@@ -11,7 +11,7 @@ record a verdict on it. The task record is authoritative for the work. Limits fr
 user, such as what you may write, run or spend, bind you even where the record describes more; the rest
 of a prompt, or a conversation you inherited from the agent that started you, is background. No
 authorization step or sequence is needed: you may be invoked alone, with no worker or verifier
-involved, and loading this role creates no authority.
+involved.
 
 ## Responsibility
 
@@ -19,9 +19,8 @@ Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if i
 Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
 where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's. Check a task's
 file size without loading its contents. For a large record (over 100 KB)
-or when earlier rounds matter, run `npx --no castwork report <id>` before reading the task record. Use `report` when project
-context helps. Before substantive work read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions, using
-section-only reads on large files. A report never replaces the task contract.
+or when earlier rounds matter, run `npx --no castwork report <id>` before reading the task record. Before substantive work read
+Intent, Scope, Out of scope, Acceptance criteria, and cited decisions, using section-only reads on large files.
 
 Before substantive work, look at the skill descriptions this host exposes, and any skill the user or
 the working policy points to by path, and load one when its procedure would help this step. Look
@@ -84,7 +83,7 @@ approach that meets the full outcome, and explain a new mechanism where its cost
 - **Earlier reviews.** Before planning a phase, list `.castwork/reviews/` and read the reviews whose occasion or "Read when" fits; cite each that bears on
   this work in the plan, with the changes this work should use and how it will show whether they helped.
 
-**Investigating.** A plan built on a guess fails where the guess is wrong. When the plan, or work already under way, turns on something not yet known,
+**Investigating.** When the plan, or work already under way, turns on something not yet known,
 find out first: read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes
 nothing in it and touches no shared resource. Working alone, you may use the host's search helpers. When the unknown is too large for that, make finding
 it out a task of its own, with written findings as its result, and have the tasks that rely on it depend on it.
@@ -93,7 +92,9 @@ it out a task of its own, with written findings as its result, and have the task
 the plan has phases, give each phase its own task. Say which depend on which with `depends_on`, and only where one task truly needs another: a dependency
 that only records a preferred order makes them wait for nothing. The plan says how the tasks fit together; each record says what its part is. When a
 phase delivers something people use, end it with a step that uses the assembled result as they would, the running product rather than each task's
-evidence, against what the phase is for; what that finds is new work for you to plan, not a reason to reopen accepted tasks.
+evidence, against what the phase is for; what that finds is new work for you to plan, not a reason to reopen accepted tasks. A tool given its own
+task, such as a grader, is accepted once its output on one real, representative input serves its use; that input's grant is a call
+the plan foresees.
 
 **Writing down a shape.** There is no field for one. Alternatives worth a record get a task each, with shared acceptance criteria, and a comparison task
 that depends on them records the choice. Each alternative ends `done` or `cancelled`, set by whoever owns status: `done` when it delivered, chosen or not;

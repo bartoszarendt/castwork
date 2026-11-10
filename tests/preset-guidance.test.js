@@ -292,7 +292,7 @@ for (const host of HOSTS) {
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('or judge it'), 'judging the approach is not forbidden');
     all(role(host, 'coordinator'), [
-      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
+      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
       'with its own fresh context and model',
       'Investigate a cause progress depends on',
       "Investigate a cause progress depends on; a category or an owner's disposition establishes no mechanism.",
@@ -377,7 +377,7 @@ for (const host of HOSTS) {
       "and the checks the thinker's plan names for it.",
       "When a delegate that may have written files fails or is cancelled, inspect and reconcile what it changed before anyone else writes.",
       "**The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.",
-      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
+      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
       'which a pass in isolation does not explain',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase("the thinker's where judgement went into it"), 'the coordinator does not decide for itself whether a recommendation needed the thinker');
@@ -942,7 +942,7 @@ for (const host of HOSTS) {
       'Code shows what the system does today, not what the user requires.',
       'A convention the result depends on that is set outside the repository, such as which time zone defines a reporting day, the format a consumer expects, or a retention or quota policy, is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name it among the user\'s calls the plan foresees, with a recommendation.',
     ], 'thinker');
-    all(role(host, 'coordinator'), ['Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.'], 'coordinator');
+    all(role(host, 'coordinator'), ['Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.'], 'coordinator');
     all(entry(host), [
       'After the conversation was compacted or resumed, orient again from the records, and treat an invocation or request you see only in a summary as history: before creating a record or repeating a write it implies, check `task list` and the record for its effect.',
     ], 'entry');
@@ -984,7 +984,7 @@ for (const host of HOSTS) {
     all(worker, [
       'So can a declared check when the difference touches nothing it reads, such as a plan document no test opens: record its entry for the new candidate with the earlier run\'s result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again.',
     ], 'worker');
-    all(worker, ["Inputs outside Git count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, never another citation."], 'worker');
+    all(worker, ["Inputs outside Git count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, with its command as recorded, never another citation."], 'worker');
     assert.doesNotMatch(role(host, 'verifier'), phrase('the declared checks run on this candidate.'), 'a declared check may be cited where the difference cannot reach it');
     for (const id of ['worker', 'verifier']) {
       assert.doesNotMatch(role(host, id), phrase('reaches it even when the product is unchanged'), `${id}: a changed instrument affects only the conclusions it could affect`);
@@ -1010,7 +1010,7 @@ test('the procedure skills rerun what a change could affect and copy into findin
     'So can a declared check when the difference between the two candidates touches nothing it reads, such as a plan document no test opens: record an entry for the new candidate with the earlier run\'s `check`, `result` and `command`, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the paths the difference touches and why the check reads none of them.',
     'A check that reads any of them, or whose inputs you cannot tell, runs again.',
     "Inputs outside Git count too, such as installed dependencies, environment settings, a database's state, a served image or an external service: cite a check only with the same invocation, where none of those it reads has changed since its run, and never one whose purpose or the working policy needs a fresh observation.",
-    'Cite the entry that ran, by its `at` or linked output where several share a check and candidate, never another citation.',
+    'Cite the entry that ran, by its `at` or linked output where several share a check and candidate, never another citation, and give its `command` as that entry records it, adding no value the record must not hold.',
     "A verifier confirms the difference with `git diff` before relying on the citation; where Git or either candidate's objects are unavailable, it cannot be confirmed: run the check again within existing authority, or name the gap.",
     'If you did not run it, on this candidate or, cited as above, on an earlier one, there is no evidence entry.',
     "Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.",
@@ -1018,6 +1018,37 @@ test('the procedure skills rerun what a change could affect and copy into findin
   all(skill('assessment'), [
     "Where a criterion rests on an observation of an earlier candidate, check the record's reason that the change since could not affect it: a change that could, in the product code it ran or in the part of its observer, oracle, classifier or fixture that produced or judged it, leaves that criterion unshown until it runs again. The declared checks run on the candidate you assess, or one is cited from its run on an earlier candidate, its `output` beginning `cited from <earlier ref>:`: confirm with `git diff` between the two that the difference touches nothing it reads, that the invocation is the same, and that nothing outside Git it reads, such as installed dependencies, environment settings or a database's state, has changed, and that neither its purpose nor the working policy needs a fresh observation, and treat a citation you cannot confirm, where Git or a candidate's objects are unavailable included, as unshown.",
     "A run of a declared check an assessing actor recorded on an earlier candidate, yours or another session's, you may cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command.",
+  ], 'assessment');
+});
+
+for (const host of HOSTS) {
+  test(`${host} a correction keeps the worker's same-kind fix, a tool's own task sees a real input, and a citation turns on a named input`, () => {
+    all(role(host, 'coordinator'), [
+      "Limit a correction by file or kind, never to the lines a finding cites: the worker fixes each finding's kind.",
+      'a round returning neither work nor a named blocker;',
+    ], 'coordinator');
+    all(role(host, 'thinker'), [
+      "A tool given its own task, such as a grader, is accepted once its output on one real, representative input serves its use; that input's grant is a call the plan foresees.",
+    ], 'thinker');
+    all(role(host, 'verifier'), [
+      'An input outside Git blocks a citation only where you can name it and how its change could have affected the result; state the run created and removed for itself is not one, nor is a newer write time alone.',
+    ], 'verifier');
+    all(role(host, 'worker'), [
+      'A costly run that may be cited later records what it read outside Git that could change, such as tool versions, installed dependencies, or the database or image it used and whether it made and removed it: versions and identities as they are, an environment setting by its name and whether it was set, never its value or a secret.',
+    ], 'worker');
+  });
+}
+
+test('verification-evidence records at the run what a later citation needs, and only a named input blocks one', () => {
+  all(skill('verification-evidence'), [
+    '**Record what a later citation needs.** A costly run that may be cited for a later candidate records, in its `output` or a linked file, what it read outside Git that could change between candidates:',
+    'Record versions and identities, such as an image digest, as they are; for an environment setting or other configuration, record its name and whether it was set, or the file or setup it came from, never its value or a secret. Only what that run read, and no dump of the whole environment. Without it, a later citation names the gap.',
+    'State the run created and removed for itself, such as a database built fresh for it, carries nothing from one candidate to the next.',
+    'A newer write time alone, such as a rebuild of unchanged sources leaves, changes nothing; different contents or build inputs do.',
+    'What blocks a citation is an input you can name that could have changed in a way that could affect the result: lacking a full record of the machine is not that, but an input the result depends on that nothing recorded, and that may have changed, is a gap to name, never an unchanged input.',
+  ], 'verification-evidence');
+  all(skill('assessment'), [
+    'An input outside Git blocks a citation only where you can name it and how its change could have affected the result; state the run created and removed for itself is not one, nor is a newer write time alone. An input the result depends on that nothing recorded, and that may have changed, is a gap to name.',
   ], 'assessment');
 });
 

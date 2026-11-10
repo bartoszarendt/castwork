@@ -79,7 +79,10 @@ Record candidate attributes when known; take recorded-at from an observed clock,
   begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or
   whose inputs you cannot tell, runs again. Inputs outside Git count too, such as installed dependencies, environment settings or a
   database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy
-  needs a fresh observation, and cite the entry that ran, by its `at`, never another citation. If the CLI is not
+  needs a fresh observation, and cite the entry that ran, by its `at`, with its command as recorded, never another citation. A costly run that
+  may be cited later records what it read outside Git that could change, such as tool versions, installed dependencies, or the database or
+  image it used and whether it made and removed it: versions and identities as they are, an environment setting by its name and whether it
+  was set, never its value or a secret. If the CLI is not
   available, say so and record the candidate as a mutable label; never invent a reference.
 - Evidence rules: one command per entry; `exit_code` only for a single command you ran and saw;
   `task lint` is not evidence about the candidate; environment variable names, never their values
