@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- A skill is loaded, never started. The coordinator starts a role by name,
+  never a copy of a skill's document that a host lists as an agent, and the
+  entry command says such a copy is neither a role nor a delegation
+  capability, whatever it is named. Reading the coordinator cannot do well
+  itself goes to the host's read-only helpers, and where the host has none, to
+  a thinker. A brief names a skill when the assignment is what that skill
+  describes, such as an investigation. In field work a host listed copies of
+  skills beside the roles, and coordinators started them: a scoping
+  investigation ran for eighty minutes on the coordinator's own model before a
+  thinker planned from it.
+- Work in another CLI that no route covers, such as research, a diagnosis or a
+  second reviewer, is run by the role responsible for its result, the thinker
+  where that is a judgement or a synthesis. Its brief assigns the run, with
+  its limits, and names the capability; the role follows that capability's
+  procedure until the run ends, reviews the result and returns it, and its
+  return wakes the coordinator. This is the one exception to a started role
+  starting no agents, and the coordinator, the three role presets and
+  `docs/host-adapters.md` now state it the same way. For a second reviewer the
+  thinker forms its own view before reading the report and keeps the report
+  unchanged in a file it cites. Routed roles start as before. The coordinator
+  no longer runs a second reviewer through the host's delegation or in its own
+  shell.
+- Fan-out, then synthesize now says when and how: when a question splits into
+  parts answerable apart, start a reader for each in one turn, the host's
+  helper or a thinker, each with one question; the thinker then combines the
+  findings. Coordinators had sent every investigation to one agent, one part
+  after another.
+- To stay within their word limits, the coordinator and thinker presets say a
+  few things more briefly; no other rule changed.
+
 - Reusing a check's earlier run now has one rule on both ends.
   - When it runs: a costly run that may be cited for a later candidate
     records what it read outside Git that could change, such as the launcher

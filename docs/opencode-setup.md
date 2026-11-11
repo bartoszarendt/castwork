@@ -148,4 +148,5 @@ When a session does not behave as the presets say:
 - **Check the skills OpenCode exposes** to the session and to each agent. A role
   can only pick a skill its host lists.
 - Castwork needs no `subagent_depth` above 1: a role started by another
-  agent starts no agents of its own.
+  agent starts no subagents of its own. A run in another CLI that its brief
+  assigns goes through the shell, not a subagent.

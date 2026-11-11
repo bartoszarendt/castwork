@@ -217,13 +217,13 @@ for (const host of HOSTS) {
     const coordinator = role(host, 'coordinator');
     all(coordinator, [
       'Delegate because it helps, not because a protocol asks.',
-      'Delegation is one level: a role you start starts no agents.',
+      'Delegation is one level: a role you start starts no agents, except a run in another CLI its brief assigns.',
       'turns a request into work, plans it, breaks it down,',
       'One started by name has its role already; only where the host cannot start one by name, tell it to read its role file first.',
       "When a delegate that may have written files fails or is cancelled, inspect and reconcile what it changed before anyone else writes.",
       "**The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.",
       'When the work comes from a document, name it and the part.',
-      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills; otherwise the role chooses.",
+      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses.",
       'It can assess only a candidate that resolves, as `task lint` shows.',
       "At the end or a stop: verified state, which usable outcome the work moved or that none did, what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is recorded: they may overrule the first afterwards, and only the second waits on them.",
       "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
@@ -254,9 +254,9 @@ for (const host of HOSTS) {
       "**Parallel independent work.** Tasks with no `depends_on` between them start together.",
       'Workers sharing one checkout collide, and disjoint files do not isolate whole-tree checks',
       'When the plan turns on an unknown, find out before committing',
-      'Investigate independent parts at once; the thinker combines the findings into the plan.',
+      'each with one question; the thinker combines the findings into the plan.',
       "A larger unknown becomes a task whose result is findings.",
-      "**Fan-out, then synthesize.** Investigate independent parts at once; the thinker combines the findings into the plan.",
+      "**Fan-out, then synthesize.** When a question splits into parts answerable apart, start a reader for each in one turn, the host's helper or a thinker, each with one question; the thinker combines the findings into the plan.",
       "**Competing alternatives.** When trying two approaches costs less than choosing wrong, try each against the same acceptance criteria, then choose once.",
       "**Multiple verifier lenses.** Correctness, security, or other lenses on one candidate run as verifiers in parallel, each under its own actor.",
       "**Adversarial challenge.** When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it.",
@@ -488,8 +488,8 @@ for (const host of HOSTS) {
       "what is written there changes only with the user's say-so",
       'ask only when the gap affects the work',
       'One started by name has its role already; only where the host cannot start one by name, tell it to read its role file first.',
-      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills; otherwise the role chooses.",
-      'Delegation is one level: a role you start starts no agents.',
+      "Name a skill, with what it is for, when the working policy asks for one or says the role's model does not pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses.",
+      'Delegation is one level: a role you start starts no agents, except a run in another CLI its brief assigns.',
       "Propose separate tasks linked by `depends_on` for independently finishable parts, never a split by size alone.",
       "**Statuses** are yours when you run the roles: a role records only `blocked` or `needs_context`; set the rest with `npx --no castwork task set`, and `done` when lint shows the requirements met.",
       'a task can go straight from a worker to done when its requirements allow',
@@ -686,7 +686,7 @@ for (const host of HOSTS) {
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`, opening with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status. ## Answering If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.',
     ], 'thinker');
-    assert.match(role(host, 'coordinator'), phrase("Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no candidate, assess nothing and need no actor."));
+    assert.match(role(host, 'coordinator'), phrase("Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles and need no actor."));
   });
 }
 
@@ -727,7 +727,7 @@ for (const host of HOSTS) {
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
-      "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no candidate, assess nothing and need no actor.",
+      "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles and need no actor.",
       "**Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing restrictions by decision id and source pointer; or assign its update to one role, never two at once.",
       'never ask for a verdict before the checks it rests on finish.',
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
@@ -877,7 +877,7 @@ for (const host of HOSTS) {
       "A stopped assignment does not revoke a grant: continue within every limit and condition they set, and honour an explicit stop or attempt limit even when nothing was charged.",
       "What only they know or hold is what no agent can find out or do within the work's access and authorization: before asking them for work, data, or contact outside the project, have the thinker name an agent route, such as research, a delegated agent with a browser, or an observation within agreed caps, or say why there is none.",
       'or say why there is none. A route still needs the authorization its action needs.',
-      "Run a second reviewer through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit, polling its exit with bounded waits within the same turn.",
+      'Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.',
       'An escalation rule the agents wrote, such as one after failed attempts or on a stall, returns the work to the thinker, and reaches the user only where what follows is their call; write none that sends work to them.',
       'A limit or stop the user set or supplied binds as written, whoever drafted it.',
       'Propose none for an instruction they scoped to the session, such as one beginning "in this session", or for a line they declined before; a decline goes in the next handoff.',
@@ -1203,3 +1203,33 @@ test("blocked-state says how sure each recommendation is, why, and whether a cle
     'Say how sure you are of each and why, what would change it, and whether a clear one still commits them to something costly or hard to undo.',
   ], 'blocked-state');
 });
+
+for (const host of HOSTS) {
+  test(`${host} a skill is loaded and never started, reading goes to the host's helper or a thinker, and a role runs the work its brief assigns in another CLI`, () => {
+    const coordinator = role(host, 'coordinator');
+    all(coordinator, [
+      "hand it to the host's read-only helpers.",
+      'They are not roles and need no actor. Where the host has none, ask a thinker.',
+      'find out before committing: ask the thinker. A larger unknown becomes a task whose result is findings.',
+      "not a general-purpose one told its role, nor a skill's document listed as an agent; check the name resolves.",
+      'Delegation is one level: a role you start starts no agents, except a run in another CLI its brief assigns.',
+      'Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.',
+    ], 'coordinator');
+    assert.doesNotMatch(coordinator, phrase('exploration the host or its skills offer'), 'a skill is not something to hand reading to');
+    assert.doesNotMatch(coordinator, phrase("through the host's delegation where that wakes you"), 'the coordinator does not wrap a reviewer in an agent of its own');
+    all(role(host, 'thinker'), [
+      "A run in another CLI that your brief assigns is not that: follow the capability's procedure until the run ends, review the result and return it. For a second reviewer, form your view before reading its report, and keep that unchanged in a file you cite.",
+    ], 'thinker');
+    for (const id of ['thinker', 'worker', 'verifier']) {
+      all(role(host, id), [
+        "A run in another CLI that your brief assigns is not that: follow the capability's procedure until the run ends, review the result and return it.",
+      ], id);
+    }
+    all(entry(host), [
+      "A skill is loaded and followed, never started: a copy of a skill's document that the host lists as an agent is neither a role nor such a capability, and a matching name alone settles neither.",
+      'Work in another CLI that no route covers, such as research, a diagnosis or a second reviewer, is run by the role responsible for its result, the thinker where that is a judgement or a synthesis.',
+      "Its brief assigns the run, with its limits, and names the capability; the role follows that capability's procedure until the run ends, reviews the result and returns it.",
+      "Follow the capability's procedure for checking the CLI is ready, running, monitoring, and reviewing the result.",
+    ], 'entry');
+  });
+}

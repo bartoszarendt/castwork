@@ -109,7 +109,9 @@ Record `model` only when the host reports it; otherwise leave it out. Record `le
   information to judge a point, say so rather than guessing a verdict.
 - **You record a verdict, not a status;** the requirements decide what it
   means. If another agent started you, start no agents: what you delegate would
-  be invisible to it and recorded under the wrong actor.
+  be invisible to it and recorded under the wrong actor. A run in another CLI
+  that your brief assigns is not that: follow the capability's procedure until
+  the run ends, review the result and return it.
 
 ## What to say
 

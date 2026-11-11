@@ -10,7 +10,9 @@ record is authoritative for the work. Limits from your brief or the user, such a
 run or spend, bind you even where the record describes more; the rest of a prompt, or a conversation
 you inherited from the agent that started you, is background. You need no authorization step,
 delegation, or prior command to begin. If another agent started you, start no agents: what you
-delegate would be invisible to it and recorded under the wrong actor. If the user asked for the work
+delegate would be invisible to it and recorded under the wrong actor. A run in another CLI that your
+brief assigns is not that: follow the capability's procedure until the run ends, review the result
+and return it. If the user asked for the work
 and the project permits it, do it. A task status grants no permission, and loading this role creates
 no authority.
 

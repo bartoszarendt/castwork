@@ -273,7 +273,7 @@ for (const host of HOSTS) {
     const entry = generateHost(host).find((file) => /castwork(\.md|\/SKILL\.md)$/.test(file.path) && file.content.includes('## Then continue'));
     assert.ok(entry, 'the entry procedure is generated');
     assert.ok(entry.content.includes(`\`${roleDir}\``), `names ${roleDir}`);
-    assert.match(entry.content, /the\s+host's\s+subagent\s+named\s+after\s+it,\s+which\s+a\s+plugin\s+may\s+list\s+with\s+a\s+prefix,\s+such\s+as\s+`castwork:thinker`/);
+    assert.match(entry.content, /the\s+host's\s+subagent\s+named\s+after\s+it,\s+which\s+a\s+plugin\s+may\s+prefix,\s+such\s+as\s+`castwork:thinker`/);
     assert.match(entry.content, /not\s+a\s+general-purpose\s+one\s+told\s+its\s+role/);
   });
 }

@@ -314,8 +314,11 @@ delegation capability: a skill, command, subagent, or tool this host exposes, or
 one the working policy points to by path, whose description says it runs a
 bounded task in a separate agent CLI process and returns the result. Match it by
 what it does, never by its name or where it is installed; do not search for one
-or install one. Follow its procedure for checking the CLI is ready, running,
-monitoring, and reviewing the result. Give the delegate the task id and the
+or install one. A skill is loaded and followed, never started: a copy of a
+skill's document that the host lists as an agent is neither a role nor such a
+capability, and a matching name alone settles neither. Follow the capability's
+procedure for checking the CLI is ready, running, monitoring, and reviewing the
+result. Give the delegate the task id and the
 listed role file to read first, start the role by name where that CLI can, pass
 the listed settings through the CLI's own model, reasoning, or variant options,
 and allow
@@ -326,6 +329,12 @@ to record, and a review it is asked for in `.castwork/reviews/`; the verifier in
 its task record, any findings file its assessment references, and its run
 output. The route is the project's, or this machine's, standing request
 for that separate process; it authorizes nothing else.
+
+Work in another CLI that no route covers, such as research, a diagnosis or a
+second reviewer, is run by the role responsible for its result, the thinker
+where that is a judgement or a synthesis. Its brief assigns the run, with its
+limits, and names the capability; the role follows that capability's procedure
+until the run ends, reviews the result and returns it.
 
 - **Say it first.** Before the capability runs, tell the user in a line which
   role you are handing to which host's CLI, such as "Routing worker to Codex

@@ -101,7 +101,10 @@ file remains, and Codex 0.160.1 accepts the marker.
 Castwork's design wants fresh context, since the task record is the
 handoff, and one level of delegation: a role started by another agent starts
 no agents, since what it delegated would be invisible to the agent that started
-it and recorded under the wrong actor. The hosts differ in what they allow, so
+it and recorded under the wrong actor. The one exception is a run in another
+CLI that the role's brief assigns, such as research or a second reviewer: the
+agent that started the role asked for it, the role carries it out through a
+delegation capability and returns its result, and it coordinates no roles. The hosts differ in what they allow, so
 this is preset guidance, not a host setting, and it holds on every host. On
 Codex a role starts with the conversation it was forked from unless the agent
 starting it passes `fork_turns: "none"`. The coordinator preset asks for a

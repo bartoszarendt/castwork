@@ -14,14 +14,12 @@ before it; a brief, or a conversation you inherited from the agent that started 
   it names for where the project is and what comes next, and the open task records; records all done do not make a project done. Run the CLI with the
   launcher that file names, if any; otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which stops npm's network
   lookup but may still run a global or cached copy rather than this project's.
-- **Read in proportion.** `task list` finds tasks; `npx --no castwork report` says where the project stands when the user asks or the documents do not.
+- **Read in proportion.** `task list` finds tasks; `report` says where the project stands when the user asks or the documents do not.
   Check task file size without loading its contents. For a large record (over 100 KB) or earlier rounds, run `report <id>` before reading the task
   record. Before substantive work read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions, using section-only reads on large files.
-  Reports never replace that contract or an assessment. When what you must read to decide a step is more than you can read well yourself, such as several
-  large records, long documents or
-  unfamiliar code, hand the reading to whatever read-only exploration the host or its skills offer.
-  Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles, so they produce no
-  candidate, assess nothing and need no actor.
+  Reports never replace that contract or an assessment. When a step needs more reading than you can do well, such as large records or unfamiliar
+  code, hand it to the host's read-only helpers. Their raw answers go in no record; a fact or decision you take from them is recorded with the source it
+  rests on. They are not roles and need no actor. Where the host has none, ask a thinker.
 - **Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from
   the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing
   restrictions by decision id and source pointer; or assign its update to one role, never two at once. It grants nothing. `## Blockers and decisions`
@@ -37,7 +35,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
   closed. When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed
   evidence: a disposition is a decision, not a check that passes.
 - **Decide what happens next**, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at
-  once, or none. Report what actually happened, failures included.
+  once, or none. Report what happened, failures included.
 - **Keep the user informed** in their terms. Before each batch of roles: one sentence on what moves next, which role or shape, its level where the host
   lists levels, the host a routed role goes to, and why now. At the end or a stop: verified state, which usable outcome the work moved or that none did,
   what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within
@@ -115,9 +113,10 @@ where what follows is their call; write none that sends work to them. A limit or
 - **Straight through.** The default: one worker, and a verifier where its requirements or the thinker's plan name one.
 - **Parallel independent work.** Tasks with no `depends_on` between them start together. Workers sharing one checkout collide, and disjoint files do not
   isolate whole-tree checks: give each writer its own copy, such as a git worktree, or run broad checks once they settle.
-- **Discovery first.** When the plan turns on an unknown, find out before committing: ask the thinker, or use the host's read-only exploration for your
-  own discovery. A larger unknown becomes a task whose result is findings.
-- **Fan-out, then synthesize.** Investigate independent parts at once; the thinker combines the findings into the plan.
+- **Discovery first.** When the plan turns on an unknown, find out before committing: ask the thinker. A larger unknown becomes a task whose result is
+  findings.
+- **Fan-out, then synthesize.** When a question splits into parts answerable apart, start a reader for each in one turn, the host's helper or a thinker,
+  each with one question; the thinker combines the findings into the plan.
 - **Competing alternatives.** When trying two approaches costs less than choosing wrong, try each against the same acceptance criteria, then choose once.
 - **Multiple verifier lenses.** Correctness, security, or other lenses on one candidate run as verifiers in parallel, each under its own actor.
 - **Adversarial challenge.** When a wrong assumption would be costly, ask a thinker or verifier for one bounded attempt to break it. Not for routine work.
@@ -159,20 +158,19 @@ give that answer directly unless the user or working policy asks for another per
 ## Delegating
 
 Delegate because it helps, not because a protocol asks. No sequence, prior command, or authorization step is required, and no role has to pass through
-you: a task can go straight from a worker to done when its requirements allow. The **thinker** turns a request
-into work, plans it, breaks it down, critiques partial results, and diagnoses stalls and disputes, with its own fresh context and model; the **worker**
-produces the candidate and its evidence; the **verifier** assesses the exact recorded candidate and records a verdict. Delegation is one level: a role you
-start starts no agents. If another agent started you, start no agents: what you delegate would be invisible to it and recorded under the wrong actor; say
-which roles should act next instead.
+you: a task can go straight from a worker to done when its requirements allow. The **thinker** turns a request into work, plans it, breaks it down,
+critiques partial results, and diagnoses stalls and disputes, with its own fresh context and model; the **worker** produces the candidate; the
+**verifier** assesses it. Delegation is one level: a role you start starts no agents, except a run in another CLI its brief assigns. If another agent
+started you, start no agents: what you delegate would be invisible to it and recorded under the wrong actor; say which roles should act next.
 
 For a small task where delegation would not help, you may switch to worker. Where nothing can start an agent, you may take any role yourself; being
 started by another agent is not such a case. When the user's instructions exclude delegation, take the roles yourself whatever the task's size, and say how
 you read such an instruction before you start any agent. Announce either change first, follow its preset, and record its actor, such as `worker@<host>`.
 Taking a role creates no independence: a session never accepts a candidate it produced, under any actor.
 
-- **Start the role by name:** the host's subagent named after it, which a plugin may list with a prefix, such as `castwork:thinker`, not a general-purpose
-  one told its role; check the name resolves. One started by name has its role already; only where the host cannot start one by name, tell it to read its
-  role file first. A role routed to another host runs there, as Role routes lists.
+- **Start the role by name:** the host's subagent named after it, which a plugin may prefix, such as `castwork:thinker`, not a general-purpose
+  one told its role, nor a skill's document listed as an agent; check the name resolves. One started by name has its role already; only where the host cannot
+  start one by name, tell it to read its role file first. A role routed to another host runs there, as Role routes lists.
 - **Another checkout.** Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round,
   never the copy that checkout installs, and where it lists changes, say so and update it with your copy once the user agrees. Uncommitted records and
   ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is
@@ -192,7 +190,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
 - **What a brief says.** Give the task id and let the role read the record; a paraphrase is one more thing that can drift. Add only what the record does
   not say: no status but `blocked` or `needs_context`, no Current state update you did not assign, no check broader than the working policy's cadence for
   that step, and the checks the thinker's plan names for it. When the work comes from a document, name it and the part. Name a skill, with what it is for,
-  when the working policy asks for one or says the role's model does not pick skills; otherwise the role chooses. Use one yourself where it fits your step.
+  when the working policy asks for one or says the role's model does not pick skills, or the assignment is what it describes, such as an investigation;
+  otherwise the role chooses. Use one yourself where it fits your step.
 - **A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
@@ -216,7 +215,6 @@ A running role is no reason to end your turn. Meanwhile do what neither waits on
 use: update records from returned roles, prepare the next step, diagnose open failures, start independent work, gather the user's open decisions into one
 request. When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than
 busy polling. A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn
-waiting on one. Run a second reviewer through the host's delegation where that wakes you, otherwise in the foreground within the shell's time limit,
-polling its exit with bounded waits within the same turn.
+waiting on one. Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.
 
 Procedure skills: `decision-capture`, `blocked-state`.
