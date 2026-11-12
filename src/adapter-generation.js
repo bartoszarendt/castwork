@@ -765,18 +765,33 @@ function renderCoordinatorLevels(levels, adapter) {
 }
 
 /**
- * The file kinds a `roles` host leaves out: the entry and what only the entry
- * needs. Its role files and the procedures they link stay.
+ * The file kinds a `roles` host leaves out: the entry, what only the entry
+ * needs, and the procedures, which are record procedures and would sit in a
+ * directory the host scans for skills.
  */
-const ENTRY_KINDS = Object.freeze(['command', 'index', 'literal']);
+const ROLES_OMIT_KINDS = Object.freeze(['command', 'index', 'literal', 'skill']);
+
+/**
+ * The host whose procedure files a `roles` host's roles link: the first host
+ * with the full install that generates them, or null when there is none.
+ *
+ * @param {string[]} hosts
+ * @param {Record<string, string>} [profiles]
+ * @returns {string|null}
+ */
+export function procedureHost(hosts, profiles = {}) {
+  return hosts.find((host) => profiles[host] !== 'roles'
+    && /** @type {{kind: string}[]} */ (readAdapter(host).files).some((entry) => entry.kind === 'skill')) ?? null;
+}
 
 /**
  * Plan every file one host's adapter would generate. A `roles` profile
- * generates the thinker, worker and verifier and their procedures, and leaves
- * out the coordinator and the entry, so the host starts the roles as ordinary
- * subagents.
+ * generates the thinker, worker and verifier alone, and leaves out the
+ * coordinator, the entry and the procedures, so the host starts the roles as
+ * ordinary subagents. Their procedure links point at the copies
+ * `procedureHost` generates, and with none, a role has no procedures section.
  * @param {string} host
- * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[], levels?: Record<string, Record<string, Record<string, unknown>>>, profile?: string}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[], levels?: Record<string, Record<string, Record<string, unknown>>>, profile?: string, procedureHost?: string|null}} [options]
  * @returns {{path: string, content: string}[]}
  */
 export function generateHost(host, options = {}) {
@@ -792,8 +807,9 @@ export function generateHost(host, options = {}) {
   const files = [];
 
   const rolesOnly = options.profile === 'roles';
+  const procedureAdapter = !rolesOnly ? adapter : options.procedureHost ? readAdapter(options.procedureHost) : null;
   for (const entry of /** @type {{kind: string, to: string, format: string, content?: string, arguments?: unknown}[]} */ (adapter.files)) {
-    if (rolesOnly && ENTRY_KINDS.includes(entry.kind)) continue;
+    if (rolesOnly && ROLES_OMIT_KINDS.includes(entry.kind)) continue;
     if (entry.kind === 'role') {
       for (const canonical of roles) {
         if (rolesOnly && canonical.id === 'coordinator') continue;
@@ -801,7 +817,7 @@ export function generateHost(host, options = {}) {
         // `user@hostname` is, so records carried computer names instead of
         // the host id. Each host's roles get their own id written in.
         const role = { ...canonical, body: canonical.body.replace(PROCEDURE_LINE, '').replaceAll('<host>', String(adapter.id)) };
-        const procedures = renderProcedures(canonical.procedures, adapter, skills.map((skill) => skill.id));
+        const procedures = procedureAdapter === null ? null : renderProcedures(canonical.procedures, procedureAdapter, skills.map((skill) => skill.id));
         if (procedures !== null) role.body = `${role.body}\n\n${procedures}`;
         if (role.id === 'coordinator' && routes.length > 0) {
           role.body = `${role.body}\n\n${renderCoordinatorRoutes(routes, adapter)}`;
@@ -890,12 +906,14 @@ function assertNoAbsolutePaths(host, file) {
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
+  const procedures = procedureHost(hosts, options.profiles);
   for (const host of hosts) {
     files.push(...generateHost(host, {
       roleSettings: options.roleSettings?.[host],
       routes: resolveRoutes(host, options.roleRoutes, options.roleSettings, hosts, options.roleLevels),
       levels: options.roleLevels?.[host],
       profile: options.profiles?.[host],
+      procedureHost: procedures,
     }));
   }
   return files;

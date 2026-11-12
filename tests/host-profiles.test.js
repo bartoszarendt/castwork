@@ -19,23 +19,27 @@ function fixture(t) {
 /** @param {string} root */
 const config = (root) => JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'));
 
+/** The procedure paths a generated role links. @param {string} content */
+const links = (content) => [...content.matchAll(/^- `[a-z-]+`: `([^`]+)`$/gm)].map(([, linked]) => linked);
+
 for (const host of HOSTS) {
-  test(`${host} roles profile generates the thinker, worker and verifier and their procedures, and no entry or coordinator`, () => {
-    const full = generateHost(host);
+  test(`${host} roles profile generates the thinker, worker and verifier alone: no entry, coordinator or procedures`, () => {
     const roles = generateHost(host, { profile: 'roles' });
-    const paths = roles.map((file) => file.path);
-    for (const id of ['thinker', 'worker', 'verifier']) {
-      assert.ok(paths.some((file) => file.includes(`agents/${id}.`)), id);
+    assert.deepEqual(roles.map((file) => path.posix.parse(file.path).name), ['thinker', 'worker', 'verifier']);
+    for (const file of roles) {
+      assert.match(file.path, /\/agents\//);
+      assert.doesNotMatch(file.content, /^## Procedures$/m, file.path);
+      assert.doesNotMatch(file.content, /skills\/castwork/, file.path);
     }
-    assert.ok(!paths.some((file) => file.includes('agents/coordinator.')), 'no coordinator');
-    assert.ok(!paths.some((file) => file.endsWith('SKILL.md') || file.endsWith('castwork.md') || file.endsWith('openai.yaml')), 'no entry');
-    // Each role is the same file the full install writes, so the procedures it links are there.
-    const byPath = new Map(full.map((file) => [file.path, file.content]));
-    for (const file of roles) assert.equal(file.content, byPath.get(file.path), file.path);
-    for (const file of roles.filter((entry) => entry.path.includes('/agents/'))) {
-      for (const [, linked] of file.content.matchAll(/^- `[a-z-]+`: `([^`]+)`$/gm)) {
-        assert.ok(paths.includes(linked), `${file.path} links ${linked}`);
-      }
+  });
+
+  test(`${host} roles profile links the procedures a full host generates`, () => {
+    const other = host === 'pi' ? 'opencode' : 'pi';
+    const procedures = generateHost(other).map((file) => file.path);
+    for (const file of generateHost(host, { profile: 'roles', procedureHost: other })) {
+      const linked = links(file.content);
+      assert.ok(linked.length > 0, file.path);
+      for (const target of linked) assert.ok(procedures.includes(target), `${file.path} links ${target}`);
     }
   });
 }
@@ -57,9 +61,13 @@ test('setup --roles beside a full host records the profile, keeps the records, a
   assert.ok(fs.existsSync(path.join(root, '.pi/prompts/castwork.md')));
   assert.ok(fs.existsSync(path.join(root, '.codex/agents/worker.toml')));
   assert.ok(!fs.existsSync(path.join(root, '.codex/agents/coordinator.toml')));
-  assert.ok(!fs.existsSync(path.join(root, '.agents/skills/castwork/SKILL.md')));
-  assert.ok(fs.existsSync(path.join(root, '.agents/skills/castwork/references/assessment.md')));
-  assert.ok(!fs.existsSync(path.join(root, '.claude/skills/castwork/SKILL.md')));
+  assert.ok(!fs.existsSync(path.join(root, '.agents')));
+  assert.ok(!fs.existsSync(path.join(root, '.claude/skills')));
+  // A roles host's procedure links reach the copies the full host generated.
+  for (const role of ['.codex/agents/verifier.toml', '.claude/agents/worker.md']) {
+    const linked = links(fs.readFileSync(path.join(root, role), 'utf8'));
+    assert.ok(linked.length > 0 && linked.every((target) => target.startsWith('.pi/') && fs.existsSync(path.join(root, target))), role);
+  }
   assert.ok(fs.existsSync(path.join(root, PROJECT_FILE)));
   assert.ok(installed.created.includes(TASKS_DIRECTORY));
   assert.deepEqual(update(root).changed, []);
@@ -78,17 +86,41 @@ test('a repository whose every host is roles seeds no records or project prose',
   assert.ok(!report.findings.some((finding) => finding.message.includes(PROJECT_FILE)), JSON.stringify(report.findings));
 });
 
-test('switching a host from full to roles in castwork.json removes only its entry and coordinator', (t) => {
+test('switching a host from full to roles in castwork.json removes its entry, coordinator and procedures', (t) => {
   const root = fixture(t);
   setup(root, { hosts: ['opencode', 'claude'] });
   const written = config(root);
+  const claudeOnly = ['.claude/agents/coordinator.md', '.claude/skills/castwork/SKILL.md'];
   fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify({ ...written, host_profiles: { claude: 'roles' } }));
   const result = update(root);
-  assert.deepEqual(result.removed.sort(), ['.claude/agents/coordinator.md', '.claude/skills/castwork/SKILL.md']);
+  assert.deepEqual(result.removed.filter((file) => !file.includes('/references/')).sort(), claudeOnly);
+  assert.ok(result.removed.some((file) => file.startsWith('.claude/skills/castwork/references/')));
+  // The roles now link OpenCode's copies.
+  assert.deepEqual(result.changed.sort(), ['.claude/agents/thinker.md', '.claude/agents/verifier.md', '.claude/agents/worker.md']);
   assert.ok(fs.existsSync(path.join(root, '.opencode/commands/castwork.md')));
   // And back: a host the map leaves out is full again.
   fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify(written));
-  assert.deepEqual(update(root).added.sort(), ['.claude/agents/coordinator.md', '.claude/skills/castwork/SKILL.md']);
+  assert.deepEqual(update(root).added.filter((file) => !file.includes('/references/')).sort(), claudeOnly);
+});
+
+test('a roles host relinks its procedures when the full host they come from changes', (t) => {
+  const root = fixture(t);
+  const write = (/** @type {object} */ value) => fs.writeFileSync(path.join(root, CONFIG_FILE), JSON.stringify(value));
+  const linked = () => links(fs.readFileSync(path.join(root, '.codex/agents/worker.toml'), 'utf8'));
+  write({ hosts: ['pi', 'opencode', 'codex'], host_profiles: { codex: 'roles' } });
+  setup(root);
+  assert.ok(linked().every((target) => target.startsWith('.pi/')));
+  // Pi becomes roles too: the first full host is now OpenCode.
+  write({ hosts: ['pi', 'opencode', 'codex'], host_profiles: { pi: 'roles', codex: 'roles' } });
+  const relinked = update(root);
+  assert.ok(relinked.changed.includes('.codex/agents/worker.toml'));
+  assert.ok(relinked.removed.some((file) => file.startsWith('.pi/skills/castwork/references/')));
+  assert.ok(linked().length > 0 && linked().every((target) => target.startsWith('.opencode/') && fs.existsSync(path.join(root, target))));
+  // No full host left: the roles carry no procedures section.
+  write({ hosts: ['pi', 'opencode', 'codex'], host_profiles: { pi: 'roles', opencode: 'roles', codex: 'roles' } });
+  update(root);
+  assert.deepEqual(linked(), []);
+  assert.equal(validate(root).ok, true);
 });
 
 test('a route to a roles host still reaches its role file', (t) => {

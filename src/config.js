@@ -387,8 +387,8 @@ export const HOST_PROFILES = Object.freeze(['full', 'roles']);
 /**
  * Read `host_profiles`: how much of Castwork each host gets. A `full` host
  * gets every file its adapter declares; a `roles` host gets the thinker,
- * worker and verifier, with the procedures they link, and no coordinator or
- * entry, so its sessions start them as ordinary subagents. A host the map
+ * worker and verifier, and no coordinator, entry or procedure files, so its
+ * sessions start them as ordinary subagents. A host the map
  * leaves out, or every host when there is no map, is `full`.
  *
  * @param {Record<string, unknown>} raw

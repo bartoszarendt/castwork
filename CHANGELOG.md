@@ -4,9 +4,11 @@
 
 - A host can be installed with its roles alone. The optional
   `host_profiles` map in `castwork.json` gives a listed host the `roles`
-  profile: it gets the thinker, worker, and verifier, their level variants
-  and the procedure files they link, and no coordinator, entry command, skill
-  index, or invocation policy. Its sessions start the roles as ordinary
+  profile: it gets the thinker, worker, and verifier and their level
+  variants, and no coordinator, entry command, skill index, invocation policy,
+  or procedure files. Their procedure links point at the copies the first full
+  host generates, so a recorded task routed to them still reaches them, and
+  with no full host they have none. Its sessions start the roles as ordinary
   subagents, while another host keeps the full method, such as Pi or OpenCode
   in full beside Codex and Claude Code with roles only. A host the map leaves
   out is `full`, so an existing `castwork.json` generates what it did.

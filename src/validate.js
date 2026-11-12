@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { commandDescriptions, generateHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
+import { commandDescriptions, generateHost, procedureHost, readAdapter, readRoles, resolveRoutes, skillFrontmatter, toolkitRoot } from './adapter-generation.js';
 import { bindingProblem, levelOmissions, readConfig, settingsFor } from './config.js';
 import { containedPath, digest, diskDigest, readLocalManifest, readManifest } from './generated.js';
 import { PublicError } from './public-error.js';
@@ -270,6 +270,7 @@ function validateGeneratedOutput(findings, root) {
         routes: resolveRoutes(host, effective.role_routes, effective.role_settings, config.hosts, effective.role_levels),
         levels: effective.role_levels[host],
         profile: config.host_profiles[host],
+        procedureHost: procedureHost(config.hosts, config.host_profiles),
       });
     } catch (generationError) {
       // A refusal reads as setup would print it; anything else keeps its type.

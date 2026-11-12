@@ -257,8 +257,8 @@ and routes only.
 
 A host gets the full install unless `host_profiles` says otherwise. A `roles`
 host gets the `thinker`, `worker`, and `verifier`, with their level
-variants and the procedure files their `## Procedures` sections link, and no
-`coordinator`, entry command, skill index, or invocation policy file. Its
+variants, and no `coordinator`, entry command, skill index, invocation policy
+file, or procedure files. Its
 sessions start the roles as ordinary subagents, which take a brief that
 assigns no task record as the work itself, and nothing offers the Castwork
 method there. A host with the full install can still route a role to it, since
@@ -291,11 +291,12 @@ a route needs only the target's role file.
   finding or review directory and no `project.md`. The roles read
   `project.md` where it exists. Adding a full host and running `setup` seeds
   them.
-- The procedure files sit where the full install puts them, such as
-  `.agents/skills/castwork/references/`, with no `SKILL.md` beside them, so a
-  host is expected not to list them as a skill, since Codex and Claude Code
-  define a skill by its `SKILL.md`. Whether each host ignores such a directory,
-  without a warning, has not been checked in a live session.
+- The procedures are for work on task records, and a `roles` host would
+  carry them in a directory it scans for skills, so it gets none. Its roles'
+  `## Procedures` sections link the copies the first host with the full
+  install generates, such as `.pi/skills/castwork/references/`, so a recorded
+  task routed to a `roles` host still reaches them. With no full host, the
+  roles have no `## Procedures` section.
 
 On Codex a role file named `worker` takes the place of Codex's built-in agent
 of that name, on either profile.

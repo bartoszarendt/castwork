@@ -280,7 +280,7 @@ const HANDOFF = [
   'Review the files listed above and commit them together, with whatever caused them (an',
   `${CONFIG_FILE} edit, or a package or lockfile upgrade), apart from task work.`,
   'Running host sessions keep the instructions and model settings they started with:',
-  'start a new session, then run the entry command again (/castwork, or $castwork in Codex).',
+  'start a new session, then run the entry command again where the host has one (/castwork, or $castwork in Codex).',
 ].join('\n');
 
 /**
