@@ -35,12 +35,25 @@ import { PublicError } from './public-error.js';
 const STATE_DIRECTORIES = Object.freeze([STATE_DIRECTORY, TASKS_DIRECTORY, DECISIONS_DIRECTORY, FINDINGS_DIRECTORY, REVIEWS_DIRECTORY, LOCAL_DIRECTORY]);
 
 /**
+ * What a repository whose every host is `roles` keeps: the manifest's
+ * directory and the machine's own. Records and project prose are for a host
+ * with the full install, so none is seeded until one has it.
+ */
+const ROLES_STATE_DIRECTORIES = Object.freeze([STATE_DIRECTORY, LOCAL_DIRECTORY]);
+
+/** @param {import('./config.js').Config} config */
+function hasFullHost(config) {
+  return config.hosts.some((host) => config.host_profiles[host] !== 'roles');
+}
+
+/**
  * A file where a state directory belongs would be kept and the directory never
  * made, so refuse before anything is written.
  * @param {string} root
+ * @param {boolean} records whether the record directories are seeded too
  */
-function refuseStateConflicts(root) {
-  const conflicts = STATE_DIRECTORIES.filter((directory) => {
+function refuseStateConflicts(root, records) {
+  const conflicts = (records ? STATE_DIRECTORIES : ROLES_STATE_DIRECTORIES).filter((directory) => {
     const stat = fs.statSync(installPath(root, directory), { throwIfNoEntry: false });
     return stat !== undefined && !stat.isDirectory();
   });
@@ -59,16 +72,18 @@ function refuseStateConflicts(root) {
  * followed out of the repository.
  *
  * @param {string} root
+ * @param {boolean} records whether to seed the record directories and project.md
  */
-function seedState(root) {
+function seedState(root, records) {
   const created = [];
-  for (const directory of STATE_DIRECTORIES) {
+  for (const directory of records ? STATE_DIRECTORIES : ROLES_STATE_DIRECTORIES) {
     const full = installPath(root, directory);
     if (!fs.existsSync(full)) {
       fs.mkdirSync(full, { recursive: true });
       created.push(directory);
     }
   }
+  if (!records) return created;
   const project = installPath(root, PROJECT_FILE);
   if (!fs.existsSync(project)) {
     fs.copyFileSync(path.join(toolkitRoot(), 'memory', 'scaffold', 'project.md'), project);
@@ -174,11 +189,12 @@ function ensureGitignore(root) {
  * @param {import('./config.js').Config} config
  */
 function generatedFiles(config) {
-  const shared = generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels });
+  const profiles = config.host_profiles;
+  const shared = generateAll(config.hosts, { roleSettings: config.role_settings, roleRoutes: config.role_routes, roleLevels: config.role_levels, profiles });
   if (config.local === null) return { files: shared, shared };
   try {
     return {
-      files: generateAll(config.hosts, { roleSettings: config.local.role_settings, roleRoutes: config.local.role_routes, roleLevels: config.local.role_levels }),
+      files: generateAll(config.hosts, { roleSettings: config.local.role_settings, roleRoutes: config.local.role_routes, roleLevels: config.local.role_levels, profiles }),
       shared,
     };
   } catch (error) {
@@ -425,17 +441,37 @@ function applyPlan(root, plan) {
  * `update`, which removes what it no longer generates.
  *
  * @param {string} root
- * @param {{hosts?: string[], force?: string[]}} [options]
+ * `roles` names hosts to add with the `roles` profile. Like `hosts`, it adds and
+ * never substitutes: a host already installed in full keeps its profile until
+ * `castwork.json` changes it.
+ *
+ * @param {string} root
+ * @param {{hosts?: string[], roles?: string[], force?: string[]}} [options]
  */
 export function setup(root, options = {}) {
   // The project's hosts alone: the local file is checked below, against the
   // hosts with any added, so `setup --host` can add the host a local route names.
   const existing = readConfig(root, { local: false });
+  const roles = options.roles ?? [];
+  for (const host of roles) {
+    if ((options.hosts ?? []).includes(host)) {
+      throw new PublicError(`${host} is named with both --host and --roles`, {
+        hint: 'Name it once: --host installs it in full, --roles installs only its thinker, worker and verifier.',
+      });
+    }
+    if (existing.hosts.includes(host) && existing.host_profiles[host] !== 'roles') {
+      throw new PublicError(`${host} is already installed in full`, {
+        hint: `setup adds hosts and never changes one. To install only its roles, set host_profiles.${host} to "roles" in ${CONFIG_FILE}, then run setup.`,
+      });
+    }
+  }
   const added = [];
-  for (const host of options.hosts ?? []) {
+  for (const host of [...(options.hosts ?? []), ...roles]) {
     if (!existing.hosts.includes(host) && !added.includes(host)) added.push(host);
   }
   const hosts = [...existing.hosts, ...added];
+  /** @type {Record<string, string>} */
+  const profiles = Object.fromEntries(roles.filter((host) => added.includes(host)).map((host) => [host, 'roles']));
   if (hosts.length === 0) {
     throw new PublicError('no hosts selected', {
       hint: `Pass --host <name> (one or more of ${HOSTS.join(', ')}), or list them under "hosts" in ${CONFIG_FILE}.`,
@@ -443,16 +479,17 @@ export function setup(root, options = {}) {
   }
 
   // Planned before anything is seeded, so a refusal leaves the tree as it was.
-  const config = readConfig(root, { hosts });
+  const config = readConfig(root, { hosts, profiles });
   const { files, shared } = generatedFiles(config);
   const plan = planGenerated(root, files, { force: options.force, shared });
   refuseBlocked(plan);
-  refuseStateConflicts(root);
+  const records = hasFullHost(config);
+  refuseStateConflicts(root, records);
 
-  const created = seedState(root);
-  writeConfig(root, hosts);
+  const created = seedState(root, records);
+  writeConfig(root, hosts, profiles);
   const ignored = ensureGitignore(root);
-  return { hosts, added_hosts: added, created, ignored, version: plan.version, ...applyPlan(root, plan), ...gitReview(root, plan), reapply: false };
+  return { hosts, host_profiles: config.host_profiles, added_hosts: added, created, ignored, version: plan.version, ...applyPlan(root, plan), ...gitReview(root, plan), reapply: false };
 }
 
 /**
@@ -739,13 +776,17 @@ export function doctor(root) {
     }
   }
   if (manifest !== null) findings.push(...identityFindings(manifest));
-  const project = projectFinding(root);
+  // A repository whose every host is `roles` need not have project prose, but
+  // its roles read one that is there, so an existing file is still checked.
+  const rolesOnly = config.hosts.length > 0 && !hasFullHost(config);
+  const project = rolesOnly && !fs.existsSync(path.join(root, PROJECT_FILE)) ? null : projectFinding(root);
   if (project) findings.push(project);
   findings.push(...writtenFindings(root));
 
   return {
     ok: findings.every((finding) => finding.level !== 'error'),
     hosts: config.hosts,
+    host_profiles: config.host_profiles,
     version: manifest?.version ?? null,
     source_digest: manifest?.source_digest ?? null,
     toolkit_version: packageVersion(),

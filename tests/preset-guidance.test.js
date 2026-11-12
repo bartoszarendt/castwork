@@ -186,7 +186,7 @@ for (const host of HOSTS) {
       "propose where it is kept, in the record under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds for this repository,",
       "a line for `.castwork/local/setup.md` when it holds only on this machine; or the host's user-level instructions or a user skill when it holds beyond this project.",
       'Edit none of them unless the user asks.',
-      'Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts about this machine.',
+      'Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine, where they exist.',
     ], 'worker');
   });
 
@@ -678,7 +678,7 @@ test('no preset or entry command phrases a stall or a retry as a count', () => {
 for (const host of HOSTS) {
   test(`${host} every role finds this machine's setup facts, and support goes in .castwork/findings/`, () => {
     for (const id of ['thinker', 'worker', 'verifier']) {
-      assert.match(role(host, id), phrase('`.castwork/local/setup.md`, if it exists, for facts about this machine'), id);
+      assert.match(role(host, id), phrase('`.castwork/local/setup.md` for facts about this machine'), id);
     }
     assert.match(role(host, 'verifier'), phrase('Read `.castwork/project.md` for the policy and the commands its checks name'));
     for (const id of ['worker', 'verifier']) {

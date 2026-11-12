@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- A host can be installed with its roles alone. The optional
+  `host_profiles` map in `castwork.json` gives a listed host the `roles`
+  profile: it gets the thinker, worker, and verifier, their level variants
+  and the procedure files they link, and no coordinator, entry command, skill
+  index, or invocation policy. Its sessions start the roles as ordinary
+  subagents, while another host keeps the full method, such as Pi or OpenCode
+  in full beside Codex and Claude Code with roles only. A host the map leaves
+  out is `full`, so an existing `castwork.json` generates what it did.
+  `setup --roles <host>` adds a host with the profile; switching a listed host
+  is an edit to `host_profiles` and a `setup`, which removes or adds only
+  the files that change and seeds the records a newly full host needs. When every host is `roles`, setup creates no record
+  directories or `project.md`, and the thinker, worker, and verifier now read
+  `project.md` and the machine's setup facts where they exist. A route to a
+  `roles` host works as before. `.castwork/local/castwork.json` cannot set a
+  profile.
 - The thinker, worker, and verifier take ordinary work as a host's subagents.
   When a brief neither assigns a task record nor asks for records, a role
   looks for none and makes none: the brief is the work, guidance in the role

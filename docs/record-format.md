@@ -20,8 +20,8 @@ YAML frontmatter; the body is prose.
   local/            gitignored machine-specific state: setup.md for facts
                     about this machine, a pause handoff, runs/ for what runs
                     produce
-castwork.json    project configuration: hosts, per-host role settings,
-                    role routes
+castwork.json    project configuration: hosts, host profiles, per-host
+                    role settings, role routes
 ```
 
 A task can also have `<record>.archive.md` beside it in `tasks/`, carrying its

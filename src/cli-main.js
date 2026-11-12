@@ -29,6 +29,7 @@ import { reportCommand } from './report-cli.js';
 export const FLAGS = Object.freeze({
   json: { value: false, summary: 'Machine-readable output.' },
   host: { value: '<name>', summary: 'Add a project-supported host. Repeatable.' },
+  roles: { value: '<name>', summary: 'Add a host with only its thinker, worker and verifier, no entry or coordinator. Repeatable.' },
   'force-generated': { value: '<path>', summary: 'Replace or delete one generated file that would otherwise be refused. Repeatable.' },
   check: { value: false, summary: 'Write nothing: update checks generated output; task archive checks exact proposed moves.' },
   shared: { value: false, summary: `Generate the project's output alone, without ${LOCAL_CONFIG_FILE}, to commit it.` },
@@ -45,7 +46,7 @@ export const GLOBAL_FLAGS = Object.freeze(['debug', 'help']);
  * or a value). The help output and the usage refusal are both generated from it.
  */
 export const COMMAND_PATHS = Object.freeze([
-  { path: 'setup', flags: ['host', 'force-generated', 'json'], args: 0, summary: 'Install for the selected hosts and record what was generated.' },
+  { path: 'setup', flags: ['host', 'roles', 'force-generated', 'json'], args: 0, summary: 'Install for the selected hosts and record what was generated.' },
   { path: 'update', flags: ['check', 'shared', 'force-generated', 'json'], args: 0, summary: 'Regenerate owned files; refuse before writing on a conflict. --check writes nothing.' },
   { path: 'remove', flags: ['json'], args: 0, summary: 'Remove generated files we still own. Records are kept.' },
   { path: 'doctor', flags: ['json'], args: 0, summary: 'Read-only diagnosis of the installation.' },
@@ -91,7 +92,7 @@ export function parseArgs(argv) {
   const flags = {};
   /** Every flag named, in order, so a command can refuse one it does not take. */
   const named = /** @type {string[]} */ ([]);
-  const repeated = { host: /** @type {string[]} */ ([]), 'force-generated': /** @type {string[]} */ ([]) };
+  const repeated = { host: /** @type {string[]} */ ([]), roles: /** @type {string[]} */ ([]), 'force-generated': /** @type {string[]} */ ([]) };
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -117,7 +118,7 @@ export function parseArgs(argv) {
       throw usageError(`unknown flag --${name}`, `Known flags: ${Object.keys(FLAGS).map(spell).join(', ')}. ${DASH_ARGUMENT} Nothing was read or written.`);
     }
     named.push(name);
-    if (name === 'host' || name === 'force-generated') {
+    if (name === 'host' || name === 'roles' || name === 'force-generated') {
       const value = inline ?? argv[++i];
       if (value === undefined || value === '') throw usageError(`--${name} needs a value`);
       // `update --force-generated --check` read `--check` as the path, and the
@@ -133,7 +134,7 @@ export function parseArgs(argv) {
     if (inline !== undefined) throw usageError(`--${name} takes no value`, `Write --${name} on its own. Nothing was read or written.`);
     flags[name] = true;
   }
-  return { positionals, flags, named, hosts: repeated.host, force: repeated['force-generated'] };
+  return { positionals, flags, named, hosts: repeated.host, roles: repeated.roles, force: repeated['force-generated'] };
 }
 
 /**
@@ -195,7 +196,7 @@ function help() {
   out('\nFlags:');
   const flagWidth = Math.max(...Object.keys(FLAGS).map((name) => spell(name).length));
   for (const [name, flag] of Object.entries(FLAGS)) {
-    const hosts = name === 'host' ? ` One of ${HOSTS.join(', ')}.` : '';
+    const hosts = name === 'host' || name === 'roles' ? ` One of ${HOSTS.join(', ')}.` : '';
     const scope = GLOBAL_FLAGS.includes(name) ? ' Any command.' : '';
     out(`  ${spell(name).padEnd(flagWidth)}  ${flag.summary}${hosts}${scope}`);
   }
@@ -289,7 +290,7 @@ const HANDOFF = [
  */
 export function run(argv, options = {}) {
   const root = options.cwd ?? process.cwd();
-  const { positionals, flags, named, hosts, force } = parseArgs(argv);
+  const { positionals, flags, named, hosts, roles, force } = parseArgs(argv);
   checkUsage(positionals, named);
   const asJson = flags.json === true;
   const command = positionals[0];
@@ -313,9 +314,9 @@ export function run(argv, options = {}) {
     }
 
     case 'setup': {
-      const result = setup(root, { hosts, force });
+      const result = setup(root, { hosts, roles, force });
       if (asJson) { json(result); return 0; }
-      out(`installed for ${result.hosts.join(', ')}`);
+      out(`installed for ${result.hosts.map((host) => (result.host_profiles[host] === 'roles' ? `${host} (roles)` : host)).join(', ')}`);
       // Only worth saying when something was already there to add to.
       if (result.added_hosts.length > 0 && result.added_hosts.length !== result.hosts.length) {
         out(`  host    ${result.added_hosts.join(', ')}`);
@@ -384,7 +385,7 @@ export function run(argv, options = {}) {
       if (asJson) { json(report); return report.ok ? 0 : 1; }
       out(`running: castwork ${report.toolkit_version} at ${report.toolkit_location} (${report.toolkit_source_digest})`);
       out(`manifest: ${report.version === null ? 'none' : `castwork ${report.version || 'unknown'} (${report.source_digest ?? 'no source_digest'})`}`);
-      out(`hosts: ${report.hosts.length > 0 ? report.hosts.join(', ') : 'none configured'}`);
+      out(`hosts: ${report.hosts.length > 0 ? report.hosts.map((host) => (report.host_profiles[host] === 'roles' ? `${host} (roles)` : host)).join(', ') : 'none configured'}`);
       out(`generated files: ${report.generated_files}${report.generated ? ` (${report.generated}; toolkit ${report.toolkit_version})` : ''}`);
       if (report.local_models.length > 0) {
         out(`local models and routes: ${report.local_models.length} generated file(s) carry ${LOCAL_CONFIG_FILE}`);
@@ -485,7 +486,7 @@ export function main(argv, runOptions = {}) {
       requestCommand = argv[index + 1];
       break;
     }
-    if (token === '--host' || token === '--force-generated') {
+    if (token === '--host' || token === '--roles' || token === '--force-generated') {
       index += 1;
       continue;
     }

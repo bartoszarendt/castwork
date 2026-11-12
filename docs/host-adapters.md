@@ -162,7 +162,7 @@ negotiation, and no repair path.
 ## Portable project host-generation configuration
 
 `castwork.json` at the target root holds which hosts to generate for, any
-per-host role settings, any [role routes](#role-routes), and any
+[host profiles](#host-profiles), any per-host role settings, any [role routes](#role-routes), and any
 [role levels](#role-levels). It describes the
 repository, not the machine it is checked out on: `hosts` names the hosts the
 project supports, and every `role_settings` value and `role_routes` entry is a
@@ -252,6 +252,53 @@ The project's configuration lives here and nowhere else.
 space for machine-local state. The one file there that changes generation is
 `.castwork/local/castwork.json`, for a single machine, and it chooses models
 and routes only.
+
+## Host profiles
+
+A host gets the full install unless `host_profiles` says otherwise. A `roles`
+host gets the `thinker`, `worker`, and `verifier`, with their level
+variants and the procedure files their `## Procedures` sections link, and no
+`coordinator`, entry command, skill index, or invocation policy file. Its
+sessions start the roles as ordinary subagents, which take a brief that
+assigns no task record as the work itself, and nothing offers the Castwork
+method there. A host with the full install can still route a role to it, since
+a route needs only the target's role file.
+
+```json
+{
+  "hosts": ["pi", "opencode", "codex", "claude"],
+  "host_profiles": { "codex": "roles", "claude": "roles" }
+}
+```
+
+- `host_profiles` is optional. With no map, or for a host the map leaves out,
+  the host is `full`, so an existing `castwork.json` generates what it always
+  did. The values are `full` and `roles`.
+- A profile is for a host in `hosts`. One naming another host, or another
+  value, is refused.
+- It is the project's choice, so `.castwork/local/castwork.json` cannot set it.
+- `setup --roles <host>` adds a host with the `roles` profile. Like
+  `--host`, it adds and never changes a host already listed: to switch one,
+  edit `host_profiles` and run `setup`, which removes the files the host no
+  longer gets and adds the ones it now does, under the usual
+  [ownership](#ownership) rules, and seeds the record directories and
+  `project.md` when a host becomes `full` in a repository that had none.
+  `update` regenerates the same files but seeds nothing.
+- Dropping a host with a profile means removing it from `hosts` and from
+  `host_profiles`; a profile for a host no longer listed is refused.
+- When every host is `roles`, `setup` creates `.castwork/` and
+  `.castwork/local/` for the manifest and machine state, and no task, decision,
+  finding or review directory and no `project.md`. The roles read
+  `project.md` where it exists. Adding a full host and running `setup` seeds
+  them.
+- The procedure files sit where the full install puts them, such as
+  `.agents/skills/castwork/references/`, with no `SKILL.md` beside them, so a
+  host is expected not to list them as a skill, since Codex and Claude Code
+  define a skill by its `SKILL.md`. Whether each host ignores such a directory,
+  without a warning, has not been checked in a live session.
+
+On Codex a role file named `worker` takes the place of Codex's built-in agent
+of that name, on either profile.
 
 ## Role routes
 

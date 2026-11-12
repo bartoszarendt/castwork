@@ -48,7 +48,7 @@ authoritative copy for one host.
   `.castwork/local/`.
 - **Configuration lives in `castwork.json`** at the target root, and it
   describes the repository rather than the machine: `hosts` are the hosts the
-  project supports, and role settings, role routes and role levels are its deliberate
+  project supports, and host profiles, role settings, role routes and role levels are its deliberate
   choices. `project.md` is prose; `.castwork/local/` is machine-local state.
   The one exception is `.castwork/local/castwork.json`, gitignored with that
   state, which chooses one machine's models and reasoning, the model-choice

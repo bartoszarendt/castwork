@@ -765,9 +765,18 @@ function renderCoordinatorLevels(levels, adapter) {
 }
 
 /**
- * Plan every file one host's adapter would generate.
+ * The file kinds a `roles` host leaves out: the entry and what only the entry
+ * needs. Its role files and the procedures they link stay.
+ */
+const ENTRY_KINDS = Object.freeze(['command', 'index', 'literal']);
+
+/**
+ * Plan every file one host's adapter would generate. A `roles` profile
+ * generates the thinker, worker and verifier and their procedures, and leaves
+ * out the coordinator and the entry, so the host starts the roles as ordinary
+ * subagents.
  * @param {string} host
- * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[], levels?: Record<string, Record<string, Record<string, unknown>>>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, unknown>>, routes?: ResolvedRoute[], levels?: Record<string, Record<string, Record<string, unknown>>>, profile?: string}} [options]
  * @returns {{path: string, content: string}[]}
  */
 export function generateHost(host, options = {}) {
@@ -782,9 +791,12 @@ export function generateHost(host, options = {}) {
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
+  const rolesOnly = options.profile === 'roles';
   for (const entry of /** @type {{kind: string, to: string, format: string, content?: string, arguments?: unknown}[]} */ (adapter.files)) {
+    if (rolesOnly && ENTRY_KINDS.includes(entry.kind)) continue;
     if (entry.kind === 'role') {
       for (const canonical of roles) {
+        if (rolesOnly && canonical.id === 'coordinator') continue;
         // A bare `<host>` placeholder was read as the machine's name, the way
         // `user@hostname` is, so records carried computer names instead of
         // the host id. Each host's roles get their own id written in.
@@ -873,7 +885,7 @@ function assertNoAbsolutePaths(host, file) {
  * host and the role's own home in another.
  *
  * @param {string[]} hosts
- * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, string>, roleLevels?: Record<string, Record<string, Record<string, Record<string, unknown>>>>}} [options]
+ * @param {{roleSettings?: Record<string, Record<string, Record<string, unknown>>>, roleRoutes?: Record<string, string>, roleLevels?: Record<string, Record<string, Record<string, Record<string, unknown>>>>, profiles?: Record<string, string>}} [options]
  */
 export function generateAll(hosts, options = {}) {
   /** @type {{path: string, content: string}[]} */
@@ -883,6 +895,7 @@ export function generateAll(hosts, options = {}) {
       roleSettings: options.roleSettings?.[host],
       routes: resolveRoutes(host, options.roleRoutes, options.roleSettings, hosts, options.roleLevels),
       levels: options.roleLevels?.[host],
+      profile: options.profiles?.[host],
     }));
   }
   return files;

@@ -6,7 +6,7 @@ better than editing a record by hand.
 
 | Command path | What it does |
 |---|---|
-| `setup` | Install for the selected hosts: create `.castwork/`, write `castwork.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. |
+| `setup` | Install for the selected hosts: create `.castwork/`, write `castwork.json` and the generated host files, and record them in `generated.json`. A named host is added to the recorded set, never substituted for it. `--roles <host>` adds a host with only its thinker, worker, and verifier; see [host profiles](host-adapters.md#host-profiles). |
 | `update` | Regenerate for the recorded hosts and report every path written, `.castwork/generated.json` included. Writes nothing while a generated file is modified locally or a file of yours stands where one is generated, unless `--force-generated` names it. `--check` lists what would change, writes nothing, and exits 1 unless the installation is current. `--shared` leaves out `.castwork/local/castwork.json`, writing the project's output to commit. |
 | `remove` | Delete only manifest entries whose digest still matches. Never touches `project.md`, `tasks/`, `decisions/`, `findings/`, or `reviews/`. |
 | `doctor` | Read-only diagnosis of the installation and what to do next, including whether the generated files are current for the toolkit that ran it, whether `project.md` is unwritten or has grown past 12 KB, since every role reads it, whether Git ignores files in `.castwork/findings/` or `.castwork/reviews/`, and whether findings have grown past 20 MB, usually with run output that belongs in `.castwork/local/runs/`. Exits non-zero only on an error-level finding. |
@@ -275,12 +275,14 @@ than guessing.
 Naming a host adds it; it never replaces the set. `setup --host claude` in a
 repository that already generates for Codex leaves `hosts` as
 `["codex", "claude"]` and leaves every Codex file where it is. Dropping a host
-is deliberate: remove it from `hosts` in `castwork.json` and run `update`,
-which deletes what it no longer generates and still owns.
+is deliberate: remove it from `hosts` in `castwork.json`, and from
+`host_profiles` if it is there, and run `update`, which deletes what it no
+longer generates and still owns.
 
 `castwork.json` is the project's configuration, and it is a property of the
 repository rather than of your machine. It holds `hosts` — the hosts this
-project supports, not the one you personally run — optional per-host
+project supports, not the one you personally run — optional
+`host_profiles`, which install a host with its roles alone, optional per-host
 `role_settings`, optional `role_routes`, which name another host a role
 runs in, and optional `role_levels`, which give a role `simple` or `complex`
 variants with their own model settings. All are the project's deliberate

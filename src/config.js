@@ -381,9 +381,53 @@ export function levelOmissions(host, settings) {
     .filter((key) => settings[key] === undefined);
 }
 
+/** What a host can be installed as. `full` is the default. */
+export const HOST_PROFILES = Object.freeze(['full', 'roles']);
+
+/**
+ * Read `host_profiles`: how much of Castwork each host gets. A `full` host
+ * gets every file its adapter declares; a `roles` host gets the thinker,
+ * worker and verifier, with the procedures they link, and no coordinator or
+ * entry, so its sessions start them as ordinary subagents. A host the map
+ * leaves out, or every host when there is no map, is `full`.
+ *
+ * @param {Record<string, unknown>} raw
+ * @param {string[]} hosts the hosts being generated
+ * @returns {Record<string, 'full'|'roles'>} every host's profile
+ */
+function readHostProfiles(raw, hosts) {
+  const declared = raw.host_profiles === undefined ? {} : raw.host_profiles;
+  const where = `${CONFIG_FILE} host_profiles`;
+  if (typeof declared !== 'object' || declared === null || Array.isArray(declared)) {
+    throw new PublicError(`${where} must be a map of host to profile`, {
+      hint: 'For example: "host_profiles": { "codex": "roles" }. A host it leaves out is full.',
+    });
+  }
+  for (const [host, profile] of Object.entries(declared)) {
+    if (!HOSTS.includes(host)) {
+      throw new PublicError(`${where} names unknown host ${host}`, { hint: `Known hosts: ${HOSTS.join(', ')}.` });
+    }
+    if (!hosts.includes(host)) {
+      throw new PublicError(`${where} names ${host}, which is not in hosts`, {
+        hint: `A profile says how a listed host is installed. Add ${host} to hosts, or remove host_profiles.${host}.`,
+      });
+    }
+    if (typeof profile !== 'string' || !HOST_PROFILES.includes(profile)) {
+      throw new PublicError(`${where}.${host} must be one of ${HOST_PROFILES.join(', ')}`, {
+        hint: 'full installs every file the host gets; roles installs only the thinker, worker and verifier.',
+      });
+    }
+  }
+  /** @type {Record<string, 'full'|'roles'>} */
+  const profiles = {};
+  for (const host of hosts) profiles[host] = /** @type {'full'|'roles'} */ (/** @type {Record<string, unknown>} */ (declared)[host] ?? 'full');
+  return profiles;
+}
+
 /**
  * `hosts` resolves settings for a host set other than the recorded one, so
- * `setup` can plan for a host it is about to add before it writes anything.
+ * `setup` can plan for a host it is about to add before it writes anything,
+ * and `profiles` gives a profile to a host it is about to add.
  *
  * `role_settings` and `role_levels` are the project's, from `castwork.json`.
  * `local` is null, or the same two with `.castwork/local/castwork.json` over them: what
@@ -394,7 +438,7 @@ export function levelOmissions(host, settings) {
  * output can be generated whatever that file holds.
  *
  * @param {string} root
- * @param {{hosts?: string[], local?: boolean}} [options]
+ * @param {{hosts?: string[], profiles?: Record<string, string>, local?: boolean}} [options]
  * @returns {Config}
  */
 export function readConfig(root, options = {}) {
@@ -405,20 +449,20 @@ export function readConfig(root, options = {}) {
 /**
  * @typedef {Record<string, Record<string, Record<string, unknown>>>} RoleSettings host, role, settings
  * @typedef {Record<string, Record<string, Record<string, Record<string, unknown>>>>} RoleLevels host, role, level, settings
- * @typedef {{hosts: string[], role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels, raw: Record<string, unknown>|null, overrides: RoleSettings}} SharedConfig
+ * @typedef {{hosts: string[], host_profiles: Record<string, 'full'|'roles'>, role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels, raw: Record<string, unknown>|null, overrides: RoleSettings}} SharedConfig
  * @typedef {SharedConfig & {local: {role_settings: RoleSettings, role_routes: Record<string, string>, role_levels: RoleLevels}|null}} Config
  */
 
 /**
  * @param {string} root
- * @param {{hosts?: string[]}} options
+ * @param {{hosts?: string[], profiles?: Record<string, string>}} options
  * @returns {SharedConfig}
  */
 function readSharedConfig(root, options) {
   const file = path.join(root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
     const hosts = options.hosts ?? [];
-    return { hosts, role_settings: shippedSettings(hosts, {}), role_routes: {}, role_levels: {}, raw: null, overrides: {} };
+    return { hosts, host_profiles: readHostProfiles({ host_profiles: options.profiles }, hosts), role_settings: shippedSettings(hosts, {}), role_routes: {}, role_levels: {}, raw: null, overrides: {} };
   }
   /** @type {Record<string, unknown>} */
   let raw;
@@ -449,7 +493,15 @@ function readSharedConfig(root, options) {
   const routes = /** @type {Record<string, string>} */ (readRoleRoutes(raw));
   const levels = readRoleLevels(raw);
   const hosts = options.hosts ?? recorded;
-  return { hosts, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw, overrides };
+  // A declared value that is not a map is read as written, so it is refused
+  // rather than merged away under the profiles setup adds.
+  const declared = raw.host_profiles;
+  const mergeable = declared === undefined || (typeof declared === 'object' && declared !== null && !Array.isArray(declared));
+  const profiles = readHostProfiles(
+    options.profiles === undefined || !mergeable ? raw : { host_profiles: { ...(/** @type {object} */ (declared ?? {})), ...options.profiles } },
+    hosts,
+  );
+  return { hosts, host_profiles: profiles, role_settings: shippedSettings(hosts, overrides), role_routes: routes, role_levels: levels, raw, overrides };
 }
 
 /** What `.castwork/local/castwork.json` may hold. */
@@ -551,8 +603,12 @@ function shippedSettings(hosts, overrides) {
   return roleSettings;
 }
 
-/** @param {string} root @param {string[]} hosts */
-export function writeConfig(root, hosts) {
+/**
+ * @param {string} root
+ * @param {string[]} hosts
+ * @param {Record<string, string>} [profiles] profiles to record beside the ones already there
+ */
+export function writeConfig(root, hosts, profiles = {}) {
   // Contained, so a link left where the config belongs is refused rather than
   // followed to whatever it names.
   const file = installPath(root, CONFIG_FILE);
@@ -565,6 +621,7 @@ export function writeConfig(root, hosts) {
     ...existing,
     hosts,
   };
+  if (Object.keys(profiles).length > 0) next.host_profiles = { ...(existing.host_profiles ?? {}), ...profiles };
   delete next.extends;
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   return next;

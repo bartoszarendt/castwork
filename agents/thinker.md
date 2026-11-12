@@ -19,7 +19,7 @@ findings or report; change nothing else.
 
 ## Responsibility
 
-Read `.castwork/project.md` for the policy, and `.castwork/local/setup.md`, if it exists, for facts about this machine.
+Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine, where they exist.
 Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
 where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's. Check a task's
 file size without loading its contents. For a large record (over 100 KB)

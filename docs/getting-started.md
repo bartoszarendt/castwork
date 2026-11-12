@@ -27,8 +27,8 @@ guessing if you name none and none are recorded. It writes:
   reviews/
   generated.json    tracked ownership manifest
   local/            gitignored
-castwork.json    project configuration: hosts, per-host role settings,
-                    role routes
+castwork.json    project configuration: hosts, host profiles, per-host
+                    role settings, role routes
 ```
 
 plus the host directories for the hosts you named. They are recorded under

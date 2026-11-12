@@ -269,6 +269,7 @@ function validateGeneratedOutput(findings, root) {
         roleSettings: effective.role_settings[host],
         routes: resolveRoutes(host, effective.role_routes, effective.role_settings, config.hosts, effective.role_levels),
         levels: effective.role_levels[host],
+        profile: config.host_profiles[host],
       });
     } catch (generationError) {
       // A refusal reads as setup would print it; anything else keeps its type.
