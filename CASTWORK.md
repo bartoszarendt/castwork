@@ -92,7 +92,10 @@ readable and editable in every state.
 ## Roles
 
 Four responsibility and boundary presets. Each is independently usable; none
-requires a delegation sequence. They are based on the role model of *TRINITY:
+requires a delegation sequence. The thinker, worker, and verifier also work
+without a task record: when a brief neither assigns one nor asks for records,
+the brief is the work, guidance that needs a record does not apply, and the
+result comes back in the reply. They are based on the role model of *TRINITY:
 An Evolved LLM Coordinator* (Xu et al., arXiv:2512.04695); see
 [docs/background.md](docs/background.md) for what the project takes from the
 paper and what it does not.

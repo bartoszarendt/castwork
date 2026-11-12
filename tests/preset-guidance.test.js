@@ -53,6 +53,21 @@ for (const host of HOSTS) {
     assert.match(role(host, 'coordinator'), phrase("The task record is authoritative, and the user's current instructions come before it; a brief, or a conversation you inherited from the agent that started you, is background."));
   });
 
+  test(`${host} roles work from the brief when it assigns no task record`, () => {
+    for (const id of ['thinker', 'worker', 'verifier']) {
+      all(role(host, id), [
+        '**Without a task record.** Unless your brief assigns a record or asks for records, seek and make none:',
+        'the brief is the work, what here or in a procedure needs a record does not apply, and what you would record, a blocker included, goes in your reply or a file it names.',
+      ], id);
+    }
+    all(role(host, 'thinker'), ['That holds your plan, findings or report; change nothing else.'], 'thinker');
+    all(role(host, 'worker'), ['Report what you changed and, for each outcome asked for, whether it was shown and by what.'], 'worker');
+    all(role(host, 'verifier'), [
+      'Assess what it names (files, a diff or a document) against what it asks or, lacking criteria, what the result claims,',
+      'name the version read: a commit or paths, saying when uncommitted.',
+    ], 'verifier');
+  });
+
   test(`${host} producing and assessing roles consult the host's skills as part of their responsibility`, () => {
     for (const id of ['thinker', 'worker', 'verifier']) {
       const content = role(host, id);

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- The thinker, worker, and verifier take ordinary work as a host's subagents.
+  When a brief neither assigns a task record nor asks for records, a role
+  looks for none and makes none: the brief is the work, guidance in the role
+  or a procedure that needs a record does not apply, and what it would have
+  recorded, a blocker included, comes back in the reply or a file the brief
+  names. A brief asking for records to be made, such as a plan to turn into
+  tasks, works with records as before. The role still reads
+  `.castwork/project.md` and the machine's setup facts, and keeps its
+  boundaries. The thinker writes its plan, findings or report and changes
+  nothing else; on a task record, a deliverable synthesis stays the worker's.
+  The worker reports what it changed and how each asked-for outcome was shown.
+  The verifier assesses what the brief names, such as files, a diff or a
+  document, says which version it read and whether it was uncommitted, and
+  changes nothing. The worker's and verifier's descriptions now
+  name ordinary work, so a host can choose them for it. A brief that assigns a
+  task record works as before. To keep each preset within its word limit,
+  wording elsewhere in the three presets is tighter, and a few sentences that
+  repeated another rule are gone.
 - A skill is loaded, never started. The coordinator starts a role by name,
   never a copy of a skill's document that a host lists as an agent, and the
   entry command says such a copy is neither a role nor a delegation

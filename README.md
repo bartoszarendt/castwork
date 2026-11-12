@@ -175,7 +175,10 @@ learned coordinator.
 | `verifier` | assesses the exact candidate: responsive, complete, correct |
 
 Each role is usable on its own, with no required order, and loading one grants
-no authority. The thinker, worker, and verifier can each have their own model
+no authority. The thinker, worker, and verifier also take ordinary work as a
+host's subagents: when a brief neither assigns a task record nor asks for
+records, the brief is the work and the result comes back in the reply, with no
+record written. The thinker, worker, and verifier can each have their own model
 and settings per host under `role_settings` in `castwork.json`, and one
 machine can choose its own, and its own routes, in the gitignored `.castwork/local/castwork.json`. The
 coordinator uses the settings of the session in which you invoke Castwork.
