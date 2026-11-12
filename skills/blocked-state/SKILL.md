@@ -56,8 +56,9 @@ spending or access beyond what is agreed, what only they know or hold, and what
 the working policy reserves. Everything else is an engineering call, settled
 without them. Give a recommended answer for each of their calls in their terms,
 what changes for them and the risk and cost, and keep the technical terms in
-the record. Say how sure you are of each and why, what would change it, and
-whether a clear one still commits them to something costly or hard to undo.
+the record. Label each `Confidence: high`, `medium` or `low`, per part where
+parts differ, with why and what would change it, and whether a clear one still
+commits them to something costly or hard to undo.
 State a risk with what must hold for it to happen in use, and
 whether it was seen in use or only made to happen in a test that forced its
 precondition. When a coordinator runs the roles, a choice reaches the user with the thinker's

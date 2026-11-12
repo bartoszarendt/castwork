@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- A recommendation brought to the user carries a labelled confidence. The
+  thinker gives each recommended option a `Confidence: high`, `medium` or
+  `low` line, a level per part where parts differ, with why (a clear winner,
+  close options, or something unestablished) and what would change it. The
+  coordinator brings that level per part and never firmer, with its why and
+  what would change it, writes `Confidence: not stated` where the thinker gave
+  none, and asks the thinker for it when it asks for calls; `blocked-state` labels its recommendations the same way.
+  In field sessions the earlier wording reached the user with about one call
+  in five: thinkers often left it out, coordinators dropped it, and one relay
+  turned "high on the engineering, medium on the trade-off" into "high".
 - A host can be installed with its roles alone. The optional
   `host_profiles` map in `castwork.json` gives a listed host the `roles`
   profile: it gets the thinker, worker, and verifier and their level

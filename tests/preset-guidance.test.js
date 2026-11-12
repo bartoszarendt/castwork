@@ -1105,7 +1105,7 @@ for (const host of HOSTS) {
       'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh whatever its context: resumed, it would question a plan it still holds.',
       "Its brief gives the task id, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem, and asks it to judge from `report <id>` whether the rounds since the plan moved the task.",
       "**What a brief says.** Give the task id and let the role read the record; a paraphrase is one more thing that can drift.",
-      'A risk keeps its conditions: who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in a test that forced its precondition.',
+      'A risk keeps its conditions: who it reaches in use now, what must hold, and whether it was seen in use or only in a test that forced it.',
       "if it still leaves it out, bring the call with both views, a line each, the thinker's first.",
       "Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs",
       "A role routed to another host runs there, as Role routes lists.",
@@ -1200,22 +1200,23 @@ test("the procedure skills say a snapshot keeps the base commit's records, and a
 });
 
 for (const host of HOSTS) {
-  test(`${host} a recommendation carries the thinker's confidence and stakes, and a doubtful engineering decision is marked`, () => {
+  test(`${host} a recommendation carries a labelled confidence the coordinator keeps, and a doubtful engineering decision is marked`, () => {
     const thinker = role(host, 'thinker');
     all(thinker, [
-      'Say how sure you are, and why: one option clearly wins, the options are close, or it rests on something unestablished, and what would change it; and whether a clear one still commits the user to something costly or hard to undo.',
+      'Label it `Confidence: high`, `medium` or `low`, per part where parts differ, saying why (clear winner, close options, or something unestablished) and what would change it; and whether a clear one still commits the user to something costly or hard to undo.',
       "Where the user's decisions keep arriving on one gate, or its cost has outgrown what it protects, include accepting where the work stands and stopping, with what that leaves unmet.",
       'Mark any you doubt, here and in the record, with what would reopen it.',
     ], 'thinker');
     all(role(host, 'coordinator'), [
-      'Keep its confidence, why, what changes it, the stakes, and doubts on its decisions, in your words, one scale, never firmer; confidence changes how a call is brought, not whether.',
+      "Each recommendation carries the thinker's `Confidence:` level per part, never firmer, with why, what would change it, stakes, doubts, or `Confidence: not stated`; ask the thinker for it with calls.",
+      'Confidence changes how a call is brought, not whether.',
     ], 'coordinator');
   });
 }
 
-test("blocked-state says how sure each recommendation is, why, and whether a clear one still costs much", () => {
+test("blocked-state labels each recommendation's confidence, why, and whether a clear one still costs much", () => {
   all(skill('blocked-state'), [
-    'Say how sure you are of each and why, what would change it, and whether a clear one still commits them to something costly or hard to undo.',
+    'Label each `Confidence: high`, `medium` or `low`, per part where parts differ, with why and what would change it, and whether a clear one still commits them to something costly or hard to undo.',
   ], 'blocked-state');
 });
 

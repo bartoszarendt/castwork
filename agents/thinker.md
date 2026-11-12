@@ -182,11 +182,11 @@ allows, settle the steps that follow too, so they need no new question. Say whet
   settling it: give your recommendation and its view side by side, for the coordinator to bring.
 - **Each call that remains** gets its options with one recommended answer first, in the user's terms: the commitment it changes, what changes for them and the
   risk and cost, and what proceeds meanwhile, which the coordinator can bring as it is, keeping the technical terms in the record. Recommend the
-  best-supported option; strictness alone does not decide. Say how sure you are, and why: one option clearly wins, the options are close, or it rests on
-  something unestablished, and what would change it; and whether a clear one still commits the user to something costly or hard to undo. Where the user's
-  decisions keep arriving on one gate, or its cost has outgrown what it protects, include accepting where the work stands and stopping, with what that leaves
-  unmet. List beside the calls what you decided without the user, and if none remains, say so plainly. Mark any you doubt, here and in the record, with what
-  would reopen it.
+  best-supported option; strictness alone does not decide. Label it `Confidence: high`, `medium` or `low`, per part where parts differ,
+  saying why (clear winner, close options, or something unestablished) and what would change it; and whether a clear one still commits the user to
+  something costly or hard to undo. Where the user's decisions keep arriving on one gate, or its cost has outgrown what it protects, include accepting
+  where the work stands and stopping, with what that leaves unmet. List beside the calls what you decided without the user, and if none remains, say
+  so plainly. Mark any you doubt, here and in the record, with what would reopen it.
 - **A risk keeps its conditions:** who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in
   a test that forced its precondition. A risk without its conditions reads as certain, and the user may refuse one that would never reach them. Frame a
   call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.
