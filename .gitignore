@@ -9,7 +9,8 @@ node_modules/
 
 # Host configuration, local to each machine
 .claude/
-.codex/
+.codex/*
+!.codex/agents/
 .opencode/
 opencode.json
 opencode.jsonc
@@ -26,3 +27,4 @@ tmp/
 # OS files
 .DS_Store
 Thumbs.db
+.castwork/local/

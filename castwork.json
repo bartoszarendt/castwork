@@ -1,0 +1,8 @@
+{
+  "hosts": [
+    "codex"
+  ],
+  "host_profiles": {
+    "codex": "roles"
+  }
+}
