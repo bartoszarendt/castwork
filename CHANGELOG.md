@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- A coordinator's brief no longer works against the task it assigns. A
+  limit on what a role may run or start, such as a server or an install, is
+  checked against the record's Scope and criteria and the plan's probes and
+  checks, like a write limit, and none is added that blocks a required step.
+  How often a check runs is capped only where the user supplied or approved
+  the cap; after a correction the proof it affects is renewed within existing
+  authorization, and where a cap stops required verification, that is
+  reported unmet. Implementation advice the plan does not give is a
+  suggestion to check, never a limit; a partial assignment is named as
+  partial, with what remains and who has it, and the next round continues
+  from the boundary the last returned, rechecking facts that changed or are
+  uncertain rather than repeating completed discovery. A worker whose run will end first keeps the authorized changes
+  that hold and returns them as partial, with its focused checks and the
+  next edit, instead of discarding them or reverting an authorized amendment
+  because the rest is unfinished. In a field milestone, one brief forbade
+  starting servers where the task's plan required a probe in a running dev
+  build, others capped the gate at one or two runs so a correction went
+  ungated, stated "no consumer change" as fact, and asked
+  for a "complete slice", which led a worker to delete its own draft.
+- The role presets' word budgets are raised: 4500 for the coordinator and
+  the thinker, 2250 for the worker and the verifier.
 - A recommendation brought to the user carries a labelled confidence. The
   thinker gives each recommended option a `Confidence: high`, `medium` or
   `low` line, a level per part where parts differ, with why (a clear winner,

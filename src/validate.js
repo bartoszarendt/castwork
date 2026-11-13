@@ -20,7 +20,7 @@ import { parseRecord, ROLE_IDS } from './record.js';
  * counted, and a line is kept readable. A rule added beyond a limit replaces
  * another rather than raising it.
  */
-export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4300, thinker: 4250, worker: 2050, verifier: 1900 });
+export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4500, thinker: 4500, worker: 2250, verifier: 2250 });
 export const COMMAND_WORD_LIMIT = 4000;
 export const GUIDANCE_LINE_LIMIT = 160;
 

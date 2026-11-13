@@ -1249,3 +1249,17 @@ for (const host of HOSTS) {
     ], 'entry');
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} a brief's limits and advice are reconciled with the task, and a run cut short keeps its partial work`, () => {
+    all(role(host, 'coordinator'), [
+      "Cap a check's runs only where the user supplied or approved the cap; after a correction, renew the proof it affects within existing authorization, and where a cap stops required verification, report it unmet.",
+      "Check a limit on what it may run or start, such as a server or an install, against the same Scope and criteria and the plan's probes and checks: add none that blocks a step they require.",
+      'Implementation advice the plan does not give, such as that a consumer needs no change, is a suggestion to check, never a limit.',
+      'Name a partial assignment as partial, with what remains and who has it; the next round continues from the boundary the last one returned, rechecking facts that changed or are uncertain rather than repeating completed discovery.',
+    ], 'coordinator');
+    all(role(host, 'worker'), [
+      'When the run will end before the assignment does, keep the authorized changes that hold and return them as partial, with what the focused checks showed and the next edit; never discard work, or revert an authorized amendment, only because the rest is unfinished. Correct or remove what you found wrong, and say so.',
+    ], 'worker');
+  });
+}

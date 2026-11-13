@@ -142,6 +142,10 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
   which widens nothing you may do.
 - When you are stuck, record `blocked` or `needs_context`, with what you tried under `## Blockers
   and decisions`, and say so.
+- When the run will end before the assignment does, keep the authorized changes that hold and return
+  them as partial, with what the focused checks showed and the next edit; never discard work, or
+  revert an authorized amendment, only because the rest is unfinished. Correct or remove what you
+  found wrong, and say so.
 - For a setup fact, or a host or tool quirk, others will hit, propose where it is kept, in the record
   under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds
   for this repository, pointing to the project's own documents when it needs more than a line and

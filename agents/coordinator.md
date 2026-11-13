@@ -189,17 +189,23 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   `report <id>` whether the rounds since the plan moved the task.
 - **What a brief says.** Give the task id and let the role read the record; a paraphrase is one more thing that can drift. Add only what the record does
   not say: no status but `blocked` or `needs_context`, no Current state update you did not assign, no check broader than the working policy's cadence for
-  that step, and the checks the thinker's plan names for it. When the work comes from a document, name it and the part. Name a skill, with what it is for,
-  when the working policy asks for one or says the role's model does not pick skills, or the assignment is what it describes, such as an investigation;
-  otherwise the role chooses. Use one yourself where it fits your step.
+  that step, and the checks the thinker's plan names for it. Implementation advice the plan does not give, such as that a consumer needs no change, is
+  a suggestion to check, never a limit. Name a partial assignment as partial, with what remains and who has it; the next round continues from
+  the boundary the last one returned, rechecking facts that changed or are uncertain rather than repeating completed discovery. When the work comes
+  from a document, name it and the part. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
+  pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses. Use one yourself where it fits your step.
 - **A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
 - **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a
-  check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish. When a brief limits what a role may write, name
+  check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish. Cap a check's runs only where the
+  user supplied or approved the cap; after a correction, renew the proof it affects within existing authorization, and where a cap stops required
+  verification, report it unmet. When a brief limits what a role may write, name
   each kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; check it against the
   record's Scope and criteria, new files included, and that named inputs exist; name any required file it omits, and its writer; ask for every file
-  written in the return. Limit a correction by file or kind, never to the lines a finding cites: the worker fixes each finding's kind.
+  written in the return. Check a limit on what it may run or start, such as a server or an install, against the same Scope and criteria and the plan's
+  probes and checks: add none that blocks a step they require. Limit a correction by file or kind, never to the lines a finding cites: the worker fixes
+  each finding's kind.
   Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Name no reply file for a role that
   writes to the repository: the host may tell it to ignore every other path. When a delegate that may have written files fails or is cancelled, inspect
   and reconcile what it changed before anyone else writes.
