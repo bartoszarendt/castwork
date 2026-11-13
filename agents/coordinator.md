@@ -42,8 +42,10 @@ before it; a brief, or a conversation you inherited from the agent that started 
   existing authorization, and only the user's calls; keep what you or the thinker decided without them apart from what needs them, with where each is
   recorded: they may overrule the first afterwards, and only the second waits on them.
 - **Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the
-  records it governs; one that settles only this task's next step under its `## Blockers and decisions`. Quote the user's words, as `decision-capture`
-  says. An instruction on how the user wants to be consulted outlives the session only once written down: propose it for `## Working policy`, in their
+  records it governs; one that settles only this task's next step under its `## Blockers and decisions`. Quote the user's words and, before sending work
+  that relies on it, update what it contradicts, or give that work
+  the decision as controlling and name who updates the rest, as `decision-capture` says. An instruction on how the user wants to be consulted
+  outlives the session only once written down: propose it for `## Working policy`, in their
   words, in the reply where they give it, and carry on under it meanwhile, for this session only until they approve. Propose none for an instruction they
   scoped to the session, such as one beginning "in this session", or for a line they declined before; a decline goes in the next handoff. Where the
   working policy is silent on commits, or on pushes, propose a line for each once, with a request that needs them anyway: a rule for commits grants none
@@ -194,7 +196,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   the boundary the last one returned, rechecking facts that changed or are uncertain rather than repeating completed discovery. When the work comes
   from a document, name it and the part. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
   pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses. Use one yourself where it fits your step.
-- **A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a
+- **A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are
+  context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
 - **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a

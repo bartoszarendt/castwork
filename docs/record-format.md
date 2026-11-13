@@ -175,7 +175,10 @@ A `ref` is one of three kinds, and they differ in what can be checked later:
    normally the whole repository, minus ignored files and `.castwork/local/`,
    with `.castwork/tasks/`, `.castwork/findings/` and `.castwork/reviews/` as
    the base commit has them, and with the repository's own line-ending rules
-   applied. It needs no commit and moves no ref. It is `available` while the
+   applied; it lists the changes there that it leaves out. So a change to what it keeps from the base, such as
+   committing records, can give another `tree:` sha for the same result files. To ask whether the work still matches a candidate, read `task lint`'s
+   drift, which compares the files outside those directories, rather than
+   taking a new snapshot and comparing shas. It needs no commit and moves no ref. It is `available` while the
    tree object exists in this clone: it exists only in the clone where it was
    taken, and since nothing refers to it, `git gc` may prune it once it is
    older than `gc.pruneExpire` (two weeks by default). For the current
@@ -234,8 +237,10 @@ that took it: another clone reports it `unavailable`. It can be reviewed in
 that clone, including by an agent CLI working in the same checkout. For a
 reviewer anywhere else, use a commit the project authorizes, or send the base
 commit and `git diff --binary --no-textconv <base> <sha>`: the reviewer applies the diff to a clean
-checkout of the base and runs `snapshot`, and identical content gives the
-identical `tree:` sha, which proves they hold the candidate. A snapshot is not
+checkout of the base and runs `snapshot`, and identical content on the same
+base gives the identical `tree:` sha, which proves they hold the candidate. The
+diff carries no record or finding changes, since the snapshot holds those as
+the base has them; send those separately where the reviewer needs them. A snapshot is not
 a general way to hand work between hosts or clones.
 
 ### Evidence entry

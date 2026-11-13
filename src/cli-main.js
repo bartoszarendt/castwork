@@ -445,6 +445,11 @@ export function run(argv, options = {}) {
       out(`base: ${snapshot.base ?? 'none (no commit yet)'}`);
       out(`differs from base in ${snapshot.paths.length} path${snapshot.paths.length === 1 ? '' : 's'}`);
       for (const relative of snapshot.paths) out(`  ${relative}`);
+      if (snapshot.left_out.length > 0) {
+        const count = snapshot.left_out.length;
+        out(`leaves out ${count} working change${count === 1 ? '' : 's'} in tasks/, findings/ or reviews/, held as the base has them`);
+        for (const relative of snapshot.left_out) out(`  ${relative}`);
+      }
       return 0;
     }
 

@@ -20,7 +20,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { SNAPSHOT_EXCLUDES, STATE_DIRECTORY } from './layout.js';
+import { LOCAL_DIRECTORY, SNAPSHOT_EXCLUDES, STATE_DIRECTORY } from './layout.js';
 import { PublicError } from './public-error.js';
 
 export { SNAPSHOT_EXCLUDES };
@@ -195,7 +195,9 @@ function seedIndex(top, env, file, tree, reuse) {
  * Snapshot the working tree under the project root.
  * @param {string} root the project root
  * @param {{reuseIndex?: boolean}} [options] reuseIndex false always starts from an empty index
- * @returns {{ref: string, tree: string, base: string|null, paths: string[]}}
+ * @returns {{ref: string, tree: string, base: string|null, paths: string[], left_out: string[]}}
+ * left_out: working changes in tasks/, findings/ and reviews/ that the snapshot
+ * holds as the base has them, so nobody takes them to be in it
  */
 export function takeSnapshot(root, options = {}) {
   const top = workTreeTop(root);
@@ -225,6 +227,12 @@ export function takeSnapshot(root, options = {}) {
     // tracked files makes it refuse. Everything is added, then each excluded
     // path is put back as the base has it.
     indexGit(top, ['add', '-A', '--', scope.covered], env);
+    // Before they are put back: what the working tree has there that the
+    // snapshot will not. Machine-local state is not reported.
+    const reported = scope.excludes.filter((_, index) => SNAPSHOT_EXCLUDES[index] !== LOCAL_DIRECTORY);
+    const leftOut = reported.length === 0 ? '' : indexGit(top, base === null
+      ? ['ls-files', '-z', '--', ...reported.map((excluded) => `:(literal)${excluded}`)]
+      : ['diff', '--cached', '--name-only', '-z', '--no-renames', base, '--', ...reported.map((excluded) => `:(literal)${excluded}`)], env);
     for (const excluded of scope.excludes) {
       indexGit(top, base === null
         ? ['rm', '--cached', '-r', '-q', '--ignore-unmatch', '--', `:(literal)${excluded}`]
@@ -235,7 +243,8 @@ export function takeSnapshot(root, options = {}) {
       ? git(top, ['ls-tree', '-r', '-z', '--name-only', tree])
       : git(top, ['diff', '--name-only', '-z', '--no-renames', base, tree]);
     const paths = changed.split('\0').filter((entry) => entry !== '');
-    return { ref: `${TREE_PREFIX}${tree}`, tree, base, paths };
+    const left_out = leftOut.split('\0').filter((entry) => entry !== '');
+    return { ref: `${TREE_PREFIX}${tree}`, tree, base, paths, left_out };
   });
 }
 

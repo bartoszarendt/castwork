@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+- A step back can question the premise of what it was asked. The thinker
+  reads the plan, intended outcome and acceptance conditions of the work the
+  question belongs to, such as a phase and its gate, and the records that
+  depend on it, where they exist, whatever its brief asks or lists; it answers
+  a narrower question last, widens to that work within authority where the
+  evidence shows the problem exceeds the question, and asks what ties the
+  result to its costliest proof, such as where it runs, on what, or with
+  which tool, and whether the result can be shown without it. Its one answer
+  is the conclusion it recommends after weighing the alternatives, those
+  needing the user included. A step back's or a second reviewer's brief gives
+  the outcome and the user's commitments; options it names are context, not
+  the conclusions allowed, unless the user bounded the question. A stop,
+  deferral or reordering the thinker recommends says what it permits and
+  prevents next, through to finishing the work it belongs to, with a credible
+  continuation or a plain statement that it halts the work. Before a capped
+  or one-shot live action, the thinker plans to exercise the smallest
+  assembled part of its runbook or packet that could show a consequential
+  failure, on disposable resources where cheapest and authorized, reusing
+  evidence that already covers a step and saying what stays unexercised; a
+  verifier names consequential steps read but never run as unexercised, and
+  blocks only where that leaves a criterion unshown. Before sending work that
+  relies on a recorded decision, the coordinator updates what it contradicts,
+  or gives that work the decision as controlling and names who updates the
+  rest. In a field phase, a step back asked only for a proof campaign's
+  minimum row set, with continue-or-stop options, answered inside that frame;
+  the route that let the phase close, showing the result where the costly
+  proof was not needed, came from outside Castwork, and the recommended stop
+  would have left no phase able to start. Two live attempts were spent on
+  defects one local run would have shown, and a reviewed packet held a step
+  that could never have run.
+- `snapshot` lists the working changes in `.castwork/tasks/`, `findings/`
+  and `reviews/` that it leaves out, holding those as the base commit has
+  them, and `--json` gives them as `left_out`. The record format now says that
+  a change to what a snapshot keeps from the base, such as committing records,
+  can give another `tree:` sha for the same result files, and that `task
+  lint`'s drift, not a new snapshot's sha, says whether the work still matches
+  a candidate. In the field, a candidate rebuilt on another host from a patch
+  carrying records did not match, and a review stopped on a record that the
+  snapshot had never held.
 - A coordinator's brief no longer works against the task it assigns. A
   limit on what a role may run or start, such as a server or an install, is
   checked against the record's Scope and criteria and the plan's probes and

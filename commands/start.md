@@ -148,7 +148,7 @@ with the workspace, needs no permission.
 
 ## Stepping back
 
-The coordinator role lists the signs of a stall in one task. When they recur
+The coordinator role lists a stall's signs in one task. When they recur
 across a phase's tasks or across the rounds of one task, or the work goes to
 its proof rather than its result, such as rounds on an instrument, harness,
 fixture or permission packet while the result it checks stays the same, many
@@ -156,15 +156,16 @@ lines in `.castwork/` against few elsewhere in `report`'s Changes, or the
 user's decisions keep arriving on one gate, ask the thinker to step back from
 the phase or task rather than to diagnose its next blocker. Ask the question as
 the user would: what is this phase or task for, what stands between here and a
-result someone can use, and what is the simplest credible route there. Where
-the host lists levels, it runs at `complex`. Start a fresh thinker for it,
-never one that planned the phase or its last re-plan: a step back questions
-that plan, and one that still holds it questions it least. Its answer is one
-path: take what stays within authority, and bring the user's calls it names
+result someone can use, and what is the simplest credible route there, giving
+it the outcome and the user's commitments; options named are context, not limits.
+Where the host lists levels, it runs at `complex`. Start a fresh thinker for
+it, never one that planned the phase or its last re-plan, which questions that
+plan least. Its answer is one recommended route: take what stays within
+authority, and bring the user's calls it names
 together, in one request, with its recommendations and, where it closes with
 one, its open question about what the work lets someone do now and what they
 want next. Where it finds the outcome settled and its route within authority,
-take the route and say so; nothing waits on the user.
+take it and say so; nothing waits on the user.
 A step back looks forward from where the work is; a review of how the work went
 is offered at its own occasions, as the coordinator role says.
 

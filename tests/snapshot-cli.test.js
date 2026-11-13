@@ -76,6 +76,30 @@ test('the snapshot command prints the reference first, then the base and the pat
   assert.equal(fs.readdirSync(path.join(root, '.castwork', 'tasks')).length, 0, 'no record is written');
 });
 
+test('the snapshot command names the record and finding changes it leaves out, and machine-local state not at all', (t) => {
+  // Field case: an operator rebuilt a candidate from a patch that carried task
+  // records and findings, and the trees differed: the snapshot holds those as
+  // the base commit has them, which its output never said.
+  const root = repository(t);
+  fs.writeFileSync(path.join(root, 'app.txt'), 'two\n', 'utf8');
+  writeTask(root, '  - ref: 0123abc\n');
+  fs.mkdirSync(path.join(root, '.castwork', 'findings'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.castwork', 'findings', 'T-001-review.md'), '# Review\n', 'utf8');
+  fs.mkdirSync(path.join(root, '.castwork', 'local', 'runs'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.castwork', 'local', 'runs', 'out.log'), 'run\n', 'utf8');
+  const printed = cli(root, 'snapshot');
+  assert.equal(printed.code, 0, printed.err);
+  assert.match(printed.out, /differs from base in 1 path\n {2}app\.txt\n/);
+  assert.match(printed.out, /leaves out 2 working changes in tasks\/, findings\/ or reviews\/, held as the base has them\n {2}\.castwork\/findings\/T-001-review\.md\n {2}\.castwork\/tasks\/T-001\.md/);
+  assert.doesNotMatch(printed.out, /out\.log/);
+  const data = JSON.parse(cli(root, 'snapshot', '--json').out);
+  assert.deepEqual(data.left_out, ['.castwork/findings/T-001-review.md', '.castwork/tasks/T-001.md']);
+
+  const clean = repository(t);
+  assert.doesNotMatch(cli(clean, 'snapshot').out, /leaves out/);
+  assert.deepEqual(JSON.parse(cli(clean, 'snapshot', '--json').out).left_out, []);
+});
+
 test('a reader that keeps only the first line, as `snapshot | head -1` does, ends the command quietly', async (t) => {
   const root = repository(t);
   // More output than a pipe buffers, so the command is still writing when the

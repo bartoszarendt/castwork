@@ -738,7 +738,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       'Closing a record, rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
       "Use one yourself where it fits your step.",
-      "**A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
@@ -818,9 +818,9 @@ for (const host of HOSTS) {
     all(entry(host), [
       '## Stepping back',
       "When they recur across a phase's tasks or across the rounds of one task, or the work goes to its proof rather than its result, such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, many lines in `.castwork/` against few elsewhere in `report`'s Changes, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase or task rather than to diagnose its next blocker.",
-      'Ask the question as the user would: what is this phase or task for, what stands between here and a result someone can use, and what is the simplest credible route there.',
-      'Where the host lists levels, it runs at `complex`. Start a fresh thinker for it, never one that planned the phase or its last re-plan: a step back questions that plan, and one that still holds it questions it least.',
-      "Its answer is one path: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations and, where it closes with one, its open question about what the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority, take the route and say so; nothing waits on the user.",
+      "Ask the question as the user would: what is this phase or task for, what stands between here and a result someone can use, and what is the simplest credible route there, giving it the outcome and the user's commitments; options named are context, not limits.",
+      'Where the host lists levels, it runs at `complex`. Start a fresh thinker for it, never one that planned the phase or its last re-plan, which questions that plan least.',
+      "Its answer is one recommended route: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations and, where it closes with one, its open question about what the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority, take it and say so; nothing waits on the user.",
       "and its `Changes` line shows how many lines went into `.castwork/` against everything else.",
       'a thinker diagnosing a difficult stall, or stepping back from a phase or task, is worth `complex`.',
     ], 'entry');
@@ -982,7 +982,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       "When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again",
       "Use one yourself where it fits your step.",
-      "**A second reviewer's brief**, such as beside a step back, names the outcome it serves, points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
     ], 'coordinator');
     const worker = role(host, 'worker');
@@ -1161,7 +1161,7 @@ for (const host of HOSTS) {
       'a copy of the record elsewhere points to that one rather than advancing on its own.',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase('since Git keeps the earlier text'), 'Git keeps only what was committed');
-    all(entry(host), ['Where it finds the outcome settled and its route within authority, take the route and say so; nothing waits on the user.'], 'entry');
+    all(entry(host), ['Where it finds the outcome settled and its route within authority, take it and say so; nothing waits on the user.'], 'entry');
   });
 }
 
@@ -1261,5 +1261,31 @@ for (const host of HOSTS) {
     all(role(host, 'worker'), [
       'When the run will end before the assignment does, keep the authorized changes that hold and return them as partial, with what the focused checks showed and the next edit; never discard work, or revert an authorized amendment, only because the rest is unfinished. Correct or remove what you found wrong, and say so.',
     ], 'worker');
+  });
+}
+
+for (const host of HOSTS) {
+  test(`${host} a step back reads the phase whatever its brief asks, a stop says what it leaves runnable, and a capped live attempt is rehearsed in proportion first`, () => {
+    // Field case: a coordinator asked a step back only for a campaign's minimum row set, with continue-or-stop options; the thinker
+    // answered inside that frame, and the route that let the phase close (running the result where the costly proof was not needed)
+    // came from outside Castwork. A recommended stop would also have left no phase able to start.
+    const thinker = role(host, 'thinker');
+    all(thinker, [
+      'Whatever the brief asks or lists, read the plan, intended outcome and acceptance conditions of the work this belongs to, such as a phase and its gate, and the records that depend on it, where they exist, and answer a narrower question it asks last; widen to that work, within authority, where the evidence shows the problem exceeds the question, such as an earlier step back on the same obstacle.',
+      'Ask what ties the result to its costliest proof, such as where it runs, on what, or with which tool, and whether the result can be shown without it.',
+      "Give it as one answer, the conclusion you recommend after weighing the alternatives, those needing the user included, with the user's calls it needs, each with a recommendation.",
+      'A stop, deferral or reordering you recommend says what it permits and prevents next, through to finishing the work it belongs to, such as closing a phase, and gives a credible continuation or says plainly that it halts the work.',
+      'Before a capped or one-shot live action, plan to exercise the smallest assembled part of its runbook or packet that could show a consequential failure, on disposable resources through the real local interfaces where that is cheapest and authorized, reusing evidence that already covers a step, and say what stays unexercised; a rehearsal, not a general executor.',
+    ], 'thinker');
+    all(role(host, 'verifier'), [
+      'For a runbook or packet behind a capped or one-shot live action, name each consequential step read but never run, nor covered by other evidence, as unexercised, and block only where that gap leaves a criterion unshown.',
+    ], 'verifier');
+    all(role(host, 'coordinator'), [
+      "Quote the user's words and, before sending work that relies on it, update what it contradicts, or give that work the decision as controlling and name who updates the rest, as `decision-capture` says.",
+    ], 'coordinator');
+    assert.doesNotMatch(entry(host), phrase('Its answer is one path'));
+    // The narrowing was the problem, not alternatives: a comparison brief stays legitimate, and a project need not have phases.
+    assert.doesNotMatch(role(host, 'coordinator'), phrase('never options to choose between'));
+    assert.doesNotMatch(thinker, phrase("read the phase's plan and gate"));
   });
 }

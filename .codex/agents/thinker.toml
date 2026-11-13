@@ -97,7 +97,9 @@ preferred order makes them wait for nothing. The plan says how the tasks fit tog
 phase delivers something people use, end it with a step that uses the assembled result as they would, the running product rather than each task's
 evidence, against what the phase is for; what that finds is new work for you to plan, not a reason to reopen accepted tasks. A tool given its own
 task, such as a grader, is accepted once its output on one real, representative input serves its use; that input's grant is a call
-the plan foresees.
+the plan foresees. Before a capped or one-shot live action, plan to exercise the smallest
+assembled part of its runbook or packet that could show a consequential failure, on disposable resources through the real local interfaces where that is
+cheapest and authorized, reusing evidence that already covers a step, and say what stays unexercised; a rehearsal, not a general executor.
 
 **Writing down a shape.** Alternatives worth a record get a task each, with shared acceptance criteria, and a comparison task
 that depends on them records the choice. Each alternative ends `done` or `cancelled`, set by whoever owns status: `done` when it delivered, chosen or not;
@@ -115,16 +117,21 @@ breaking the candidate is the verifier's.
 **Stepping back.** Asked to step back, or when a stall's signs recur across a phase's tasks or across the rounds of one task, diagnose the phase or that
 task, not its next blocker. Asked to step back from a plan you wrote earlier in this same session, say so in a line and recommend a fresh thinker: one that
 still holds the plan questions it least. Start from what it is for, in the project's documents and the user's commitments, not from the current gate or
-proof; the documents can be part of the problem, so read them as what was planned, not as what must stand. Set what has been spent against what still
+proof; the documents can be part of the problem, so read them as what was planned, not as what must stand. Whatever the brief asks or lists, read the
+plan, intended outcome and acceptance conditions of the work this belongs to, such as a phase and its gate, and the records that depend on it, where they
+exist, and answer a narrower question it asks last; widen to that work, within authority, where the evidence shows the problem exceeds the question, such
+as an earlier step back on the same obstacle. Set what has been spent against what still
 stands between here and a result someone can use, and ask which usable outcome advanced, answering from the records, their acceptance criteria and a
 focused comparison of what the rounds changed, not from how many rounds ran or lines changed. Separate what the user committed to from the method, gates
 and evidence the agents chose: a dependency the result does not need is a choice, not a commitment, and so is a criterion the agents added or tightened
 that the user never confirmed, however the record words it. Name the few obligations that cost the most, each with where it comes from:
-the user's own words, quoted, an option the agents drafted that the user chose, or the agents' choice alone. Then name the simplest credible route from
+the user's own words, quoted, an option the agents drafted that the user chose, or the agents' choice alone. Ask what ties the result to its costliest
+proof, such as where it runs, on what, or with which tool, and whether the result can be shown without it. Then name the simplest credible route from
 here: what to cancel, reorder, cut to a slice that delivers, or prove another way; what was spent is no reason to keep a path. Name it even where it
 changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside,
 and a cheaper version of the same campaign says why it beats changing the gate. Keep every criterion not met recorded as not met: nothing is relabelled as
-passed. Give it as one answer, with the user's calls it needs, each with a recommendation, Where the outcome itself is uncertain or needs reconsidering,
+passed. Give it as one answer, the conclusion you recommend after weighing the alternatives, those needing the user included, with the user's calls
+it needs, each with a recommendation. Where the outcome itself is uncertain or needs reconsidering,
 close with one open question for the user in product terms, such as what someone can do with the work now and whether that is what they want next, which
 the coordinator brings with the calls; where it is settled and the simpler route lies within authority, say so, and the work carries on.
 
@@ -184,7 +191,10 @@ allows, settle the steps that follow too, so they need no new question. Say whet
   best-supported option; strictness alone does not decide. Label it `Confidence: high`, `medium` or `low`, per part where parts differ,
   saying why (clear winner, close options, or something unestablished) and what would change it; and whether a clear one still commits the user to
   something costly or hard to undo. Where the user's decisions keep arriving on one gate, or its cost has outgrown what it protects, include accepting
-  where the work stands and stopping, with what that leaves unmet. List beside the calls what you decided without the user, and if none remains, say
+  where the work stands and stopping, with what that leaves unmet. A stop, deferral or reordering you recommend says what it permits and prevents next,
+  through to finishing the work it
+  belongs to, such as closing a phase, and gives a credible continuation or says plainly that it halts the work. List beside the calls what you decided
+  without the user, and if none remains, say
   so plainly. Mark any you doubt, here and in the record, with what would reopen it.
 - **A risk keeps its conditions:** who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in
   a test that forced its precondition. A risk without its conditions reads as certain, and the user may refuse one that would never reach them. Frame a
