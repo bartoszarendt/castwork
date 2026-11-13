@@ -710,7 +710,7 @@ for (const host of HOSTS) {
     all(role(host, 'thinker'), [
       'before, during, or after the work',
       'reviews how completed work went',
-      'read session transcripts only when the request names them.',
+      "read session transcripts only when the request names them, or, where the host keeps them, the parts that show why guidance covering a failure did not hold: a brief's word that they are unavailable is a claim to check.",
       'Distinguish observations from inferred causes, state material evidence gaps, and say what helped as well as what caused avoidable rework.',
       'say what helped as well as what caused avoidable rework.',
       "An earlier review's cause recurs only where this work's own evidence shows it.",

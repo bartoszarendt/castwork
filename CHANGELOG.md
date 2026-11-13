@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- A review of how work went may read the parts of session transcripts that
+  show why guidance covering a failure did not hold, where the host keeps
+  them, without the request naming them. A brief that calls them unavailable
+  is a claim to check. In a field phase, a coordinator told the reviewing
+  thinker that the session history was unavailable while the session and
+  every delegate's transcript were on disk. The review then could not say
+  whether the workers had read the guidance it found missed.
 - A step back can question the premise of what it was asked. The thinker
   reads the plan, intended outcome and acceptance conditions of the work the
   question belongs to, such as a phase and its gate, and the records that
