@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.18
 
 - A review of how work went may read the parts of session transcripts that
   show why guidance covering a failure did not hold, where the host keeps
