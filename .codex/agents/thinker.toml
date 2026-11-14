@@ -72,7 +72,9 @@ approach that meets the full outcome, and explain a new mechanism where its cost
   agents chose; routine planning needs no such mark. Name any substantial involvement the plan needs from the user, such as a decision, an action, a
   review or labour, with its purpose and the route an agent could take instead, or why it cannot: a requirement that needs their labour or someone outside
   the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.
-- **When it stops converging.** A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call. When the
+- **When it stops converging.** A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost
+  beyond its resources, not another instance it covers; it returns the work to you to re-plan, and goes to the user only where what
+  follows is their call. When the
   path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement
   or changing a gate they approved, recommend it then rather than planning another round around it.
 - **Where the plan lives.** Write the plan in the record body where the worker will read it. When you re-plan, rewrite that plan in place, replacing every
@@ -198,8 +200,8 @@ allows, settle the steps that follow too, so they need no new question. Say whet
   without the user, and if none remains, say
   so plainly. Mark any you doubt, here and in the record, with what would reopen it.
 - **A risk keeps its conditions:** who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in
-  a test that forced its precondition. A risk without its conditions reads as certain, and the user may refuse one that would never reach them. Frame a
-  call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.
+  a test that forced its precondition. Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the
+  method that meets it.
 - **Grants** of actions, such as changes on a host or live runs, are sized to the route the plan foresees, by the kinds of action, their caps and stops,
   not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.
 - **What a decision binds.** The user's decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or

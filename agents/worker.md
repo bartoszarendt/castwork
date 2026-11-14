@@ -75,28 +75,31 @@ it out. Record `level` only when this file names the level you run at. Never wri
 or levels, omit the mixed attributes instead of picking one. `at` is RFC 3339, in
 UTC with `Z` or with an explicit offset, and a candidate's is when it was recorded, from an observed clock, never a guess.
 
-- When the work is not committed, run `npx --no castwork snapshot` after your last change and before
-  your final evidence, and record the `tree:<sha>` it prints. If you change anything afterwards,
-  take a new snapshot, record it as a new candidate, and run again the declared checks and the earlier observations the change could
-  affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged
-  it, even when the product is unchanged. An observation the change could not affect can still show its criterion: cite it with its
-  candidate and say why it still stands. So can a declared check when the difference touches nothing it reads, such as a plan document
-  no test opens: record its entry for the new candidate with the earlier run's result and command, no `exit_code`, and an `output` that
-  begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or
-  whose inputs you cannot tell, runs again. Inputs outside Git count too, such as installed dependencies, environment settings or a
-  database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy
-  needs a fresh observation, and cite the entry that ran, by its `at`, with its command as recorded, never another citation. A costly run that
-  may be cited later records what it read outside Git that could change, such as tool versions, installed dependencies, or the database or
-  image it used and whether it made and removed it: versions and identities as they are, an environment setting by its name and whether it
-  was set, never its value or a secret. If the CLI is not
+- When the work is not committed, run `npx --no castwork snapshot` after your last change and before your final evidence, and record the
+  `tree:<sha>` it prints. If you change anything afterwards, take a new snapshot, record it as a new candidate, and run again the declared
+  checks and the earlier observations the change could affect, through the product code an observation ran or the part of its observer,
+  oracle, classifier or fixture that produced or judged it, even when the product is unchanged. An observation the change could not affect
+  can still show its criterion: cite it with its candidate and say why it still stands. So can a declared check when the difference touches
+  nothing it reads, such as a plan document no test opens or a test tool only another check runs: record its entry for the new candidate
+  with the earlier run's result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed
+  paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again. Inputs outside Git
+  count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those
+  has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, with
+  its command as recorded, never another citation. A costly run that may be cited later records what it read outside Git that could change,
+  such as tool versions, installed dependencies, or the database or image it used and whether it made and removed it: versions and
+  identities as they are, an environment setting by its name and whether it was set, never its value or a secret. If the CLI is not
   available, say so and record the candidate as a mutable label; never invent a reference.
 - Evidence rules: one command per entry; `exit_code` only for a single command you ran and saw;
   `task lint` is not evidence about the candidate; environment variable names, never their values; a subset of a check under its own name,
-  never the declared check's. A failed check is a `fail`, not something to tidy away.
+  never the declared check's. A declared check that a larger command ran unchanged as a stage, such as a full gate running `check` first, takes its
+  entry from that run where the output shows the stage finished: the same command, with `exit_code` only where the whole command passed; never run it
+  again for the name. A failed check is a `fail`, not something to tidy away.
   A routine successful probe is a sentence in the body, or nothing; an observation supporting acceptance or a finding stays candidate-bound
   evidence, under its own name when undeclared.
   What your runs produce, such as logs, exit and pid files, dumps, captures and one-off probe scripts, goes in
   `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; an entry says what the run showed, so it reads without the file.
+  Capture a check's whole output there, not only a tail, and keep a failing run's before you summarize or rerun it: a later pass does not
+  recover it.
   Link supporting files only where they last, not ignored scratch or `.castwork/tasks/`: where a failure, an acceptance or a reproduction
   rests on one, copy it in `.castwork/findings/`, named after the task, such as `T-012-run.log`; a snapshot holds that folder as the base
   commit has it, without what was written there since.
@@ -143,7 +146,10 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
   which widens nothing you may do.
 - When you are stuck, record `blocked` or `needs_context`, with what you tried under `## Blockers
   and decisions`, and say so.
-- When the run will end before the assignment does, keep the authorized changes that hold and return
+- Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already
+  complete. Leave time to record and clean up, and start no step the run cannot finish unless the brief arranges for a later round to
+  collect it, such as a detached long check with its log and exit marker.
+  When the run will end before the assignment does, keep the authorized changes that hold and return
   them as partial, with what the focused checks showed and the next edit; never discard work, or
   revert an authorized amendment, only because the rest is unfinished. Correct or remove what you
   found wrong, and say so.

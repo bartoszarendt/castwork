@@ -70,7 +70,9 @@ condition affects every result it judged; a change to a branch only another
 case uses need not. An observation the change could not affect can still show
 a criterion: cite it with its candidate and say why it still stands. So can a
 declared check when the difference between the two candidates touches nothing
-it reads, such as a plan document no test opens: record an entry for the new
+it reads, such as a plan document no test opens, or a test tool only another
+check runs, as when only browser instruments changed and the unit and server
+suites never load them: record an entry for the new
 candidate with the earlier run's `check`, `result` and `command`, no
 `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names
 the paths the difference touches and why the check reads none of them. A check
@@ -143,7 +145,10 @@ Do not retain routine successful output. The entry's command, exit code and a
 short observed result are normally enough. What a run produces, such as logs,
 exit and pid files, dumps, captures, and the scripts of one-off probes, goes in
 `.castwork/local/runs/<task>/`, which Git ignores and snapshots leave out; the
-entry says what the run showed, so it reads without the file. When long output
+entry says what the run showed, so it reads without the file. Capture a
+check's whole output there, not only a tail, and keep a failing run's before
+you summarize or rerun it: a later pass does not recover what failed, while a
+passing run's need not be kept. When long output
 materially supports a failure, reproduction, or review finding, put it in a
 linked file named under `output` rather than pasting a transcript into the
 record. Link only where it lasts, not ignored scratch or `.castwork/tasks/`:
@@ -203,6 +208,11 @@ what was seen, what it means, what is next; not a new narrative section per run.
   without the pipe.
 - **Name the check honestly.** A subset of a declared check, such as some of
   the tests, goes under its own name, never under the declared check's name.
+  A declared check that a larger command ran unchanged as a stage, such as a
+  full gate that runs `check` first, takes its entry from that run where the
+  output shows the stage finished: the larger command as `command`, and
+  `exit_code` only where the whole command passed. Running it again only to
+  have an entry under its name repeats work without adding evidence.
   `task lint` reports on the record, so it is not evidence about the candidate.
 - **Say what decided the result.** Where an entry claims a particular guard or
   behaviour, keep the inputs it does not test valid, and say which cases or

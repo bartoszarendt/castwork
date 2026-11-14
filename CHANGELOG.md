@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+- A declared check that a larger command ran unchanged as a stage, such as a
+  full gate that runs `check` first, takes its evidence entry from that run
+  where the output shows the stage finished: the larger command, with an
+  `exit_code` only where the whole command passed. The worker, the verifier,
+  `verification-evidence`, `assessment` and the record format say so. The
+  citation example now includes a test tool only another check runs, as when
+  only browser instruments changed and the unit and server suites never load
+  them. Before ordering a run only for a missing evidence entry, the
+  coordinator has it cited where `verification-evidence` allows. A correction
+  is limited by file or kind, never to the lines or folder a finding cites. In
+  field phases, a worker reran a four-minute check only so an entry bore its
+  name, though the passing full gate had just run it, and a coordinator judged
+  citing unchanged checks dishonest and reran a whole matrix after changes to
+  browser instruments alone, about an hour more. A correction searched for
+  one stale assertion only within one instrument folder, so another consumer
+  surfaced only after another long aggregate run.
+- A worker records the candidate and the checks and decisive observations
+  already complete before optional proof, such as more measurements or
+  captures, leaves time to record and clean up, and starts no step its run
+  cannot finish unless the brief arranges for a later round to collect it,
+  such as a detached long check with its log and exit marker. It captures a
+  check's whole output in `.castwork/local/runs/<task>/`, not only a tail, and
+  keeps a failing run's before it summarizes or reruns it; a passing run's
+  need not be kept. In field phases, workers hit a host's 30-minute run limit
+  21 times in three projects; two were killed with finished work unrecorded,
+  one while extending measurements, one after launching its gate with no time
+  left, and two projects lost a failure's output to a filtered tail.
+- A stop the thinker sets names what would show the approach wrong, such as a
+  case it misses, a contract it breaks or a cost beyond its resources, not
+  another instance it already covers. The user's own stops and caps bind as
+  before. In a field phase, a step back's stop on finding "another" defect of
+  one kind fired on an instance its proposed design already covered, and cost
+  a second step back to authorize the same design.
+- The coordinator passes no separate reply path to a role writing repository
+  files, since a host may tell the role to write its result only there. In
+  two field projects every launch set Pi's `output`, and reviews
+  and findings landed in the host's artifact folders instead of the checkout;
+  one brief cited a findings file that never reached it.
+- The thinker's word budget is kept by dropping an explanatory sentence after
+  its rule that a risk keeps its conditions. This repository's Codex roles are
+  regenerated.
+
 ## 0.9.18
 
 - A review of how work went may read the parts of session transcripts that

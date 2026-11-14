@@ -49,7 +49,7 @@ uncommitted.
      working policy needs a fresh observation; a citation you cannot confirm,
      where Git or a candidate's objects are unavailable included, leaves it unshown. An input outside Git blocks a citation only where you
      can name it and how its change could have affected the result; state the run created and removed for itself is not one, nor is a
-     newer write time alone. When
+     newer write time alone. A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished. When
      the change alters something other parts rely on, check those parts, or name that gap as a limit. Try to break it with inputs and
      conditions its evidence does not cover, such as malformed, hostile, or real data, where the risk warrants and authorization allows.
      When a test is the evidence that a defect is fixed, confirm in an extracted copy that it fails without the fix, such as on the

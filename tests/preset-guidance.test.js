@@ -401,7 +401,7 @@ for (const host of HOSTS) {
       "When a change can move a runtime or real-data target, check the changed candidate against that target before the final declared checks.",
       "**Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate.",
       "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
-      'A stop you set returns the work to you to re-plan, and goes to the user only where what follows is their call.',
+      'A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost beyond its resources, not another instance it covers; it returns the work to you to re-plan, and goes to the user only where what follows is their call.',
       "When the path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement or changing a gate they approved, recommend it then rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too, so they need no new question.',
@@ -475,7 +475,7 @@ for (const host of HOSTS) {
     all(coordinator, [
       "When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.",
       "**Decide what happens next**, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at once, or none.",
-      '`report`\'s Changes line shows where the lines of the latest recorded week went: many in `.castwork/` against few elsewhere is that sign, though elsewhere holds tests, documents and tooling as well as the product. ## Choosing the shape Choose a shape before each batch; shapes combine, and none is a loop to repeat.',
+      '`report`\'s Changes line shows where the latest recorded week\'s lines went: many in `.castwork/` against few elsewhere is that sign, though elsewhere holds tests and documents. Before ordering a run only for a missing evidence entry, have it cited where `verification-evidence` allows, such as an unaffected earlier run or a larger run\'s stage. ## Choosing the shape Choose a shape before each batch; shapes combine, and none is a loop to repeat.',
     ], 'coordinator');
     const shapes = coordinator.indexOf('## Choosing the shape');
     const delegating = coordinator.indexOf('## Delegating');
@@ -747,7 +747,7 @@ for (const host of HOSTS) {
       'never ask for a verdict before the checks it rests on finish.',
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
       'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
-      "Name no reply file for a role that writes to the repository: the host may tell it to ignore every other path.",
+      "Pass no separate reply path to a role writing repository files: the host may tell it to write its result only there.",
       "A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
     ], 'coordinator');
     all(role(host, 'thinker'), [
@@ -997,7 +997,7 @@ for (const host of HOSTS) {
       'A declared check runs on this candidate, or is cited from its run on an earlier one only where `git diff` between the two shows the difference touches nothing it reads,',
     ], 'verifier');
     all(worker, [
-      'So can a declared check when the difference touches nothing it reads, such as a plan document no test opens: record its entry for the new candidate with the earlier run\'s result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again.',
+      'So can a declared check when the difference touches nothing it reads, such as a plan document no test opens or a test tool only another check runs: record its entry for the new candidate with the earlier run\'s result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again.',
     ], 'worker');
     all(worker, ["Inputs outside Git count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, with its command as recorded, never another citation."], 'worker');
     assert.doesNotMatch(role(host, 'verifier'), phrase('the declared checks run on this candidate.'), 'a declared check may be cited where the difference cannot reach it');
@@ -1022,7 +1022,7 @@ test('the procedure skills rerun what a change could affect and copy into findin
     'record it as a new candidate, and run again for it the declared checks and the earlier observations the change could affect.',
     'the product code an observation ran, or the part of its observer, oracle, classifier or fixture that produced or judged it, can affect it even when the product is unchanged, as a fix to a shared false-pass condition affects every result it judged; a change to a branch only another case uses need not.',
     'An observation the change could not affect can still show a criterion: cite it with its candidate and say why it still stands.',
-    'So can a declared check when the difference between the two candidates touches nothing it reads, such as a plan document no test opens: record an entry for the new candidate with the earlier run\'s `check`, `result` and `command`, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the paths the difference touches and why the check reads none of them.',
+    'So can a declared check when the difference between the two candidates touches nothing it reads, such as a plan document no test opens, or a test tool only another check runs, as when only browser instruments changed and the unit and server suites never load them: record an entry for the new candidate with the earlier run\'s `check`, `result` and `command`, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the paths the difference touches and why the check reads none of them.',
     'A check that reads any of them, or whose inputs you cannot tell, runs again.',
     "Inputs outside Git count too, such as installed dependencies, environment settings, a database's state, a served image or an external service: cite a check only with the same invocation, where none of those it reads has changed since its run, and never one whose purpose or the working policy needs a fresh observation.",
     'Cite the entry that ran, by its `at` or linked output where several share a check and candidate, never another citation, and give its `command` as that entry records it, adding no value the record must not hold.',
@@ -1039,7 +1039,7 @@ test('the procedure skills rerun what a change could affect and copy into findin
 for (const host of HOSTS) {
   test(`${host} a correction keeps the worker's same-kind fix, a tool's own task sees a real input, and a citation turns on a named input`, () => {
     all(role(host, 'coordinator'), [
-      "Limit a correction by file or kind, never to the lines a finding cites: the worker fixes each finding's kind.",
+      "Limit a correction by file or kind, never to the lines or folder a finding cites: the worker fixes each finding's kind.",
       'a round returning neither work nor a named blocker;',
     ], 'coordinator');
     all(role(host, 'thinker'), [
@@ -1095,7 +1095,6 @@ for (const host of HOSTS) {
       'Separate what the user committed to from the method, gates and evidence the agents chose: a dependency the result does not need is a choice, not a commitment, and so is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
       'Asked to step back from a plan you wrote earlier in this same session, say so in a line and recommend a fresh thinker: one that still holds the plan questions it least.',
       "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
-      'A risk without its conditions reads as certain, and the user may refuse one that would never reach them.',
       "When you re-plan, rewrite that plan in place, replacing every earlier plan still in the record rather than adding one above them, and say under `## Blockers and decisions` what changed and why, in place of the entry the last re-plan left: the record holds one current plan, and a superseded plan's reasoning stays in the findings it cites.",
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('a value only the work itself chooses'), 'a value the work chooses can still be seen, guessed or met by accident');
@@ -1289,3 +1288,34 @@ for (const host of HOSTS) {
     assert.doesNotMatch(thinker, phrase("read the phase's plan and gate"));
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} a stage of a larger run is evidence, finished proof is recorded first, a failure keeps its output, and a repository writer gets no output path`, () => {
+    all(role(host, 'worker'), [
+      'A declared check that a larger command ran unchanged as a stage, such as a full gate running `check` first, takes its entry from that run where the output shows the stage finished: the same command, with `exit_code` only where the whole command passed; never run it again for the name.',
+      'Capture a check\'s whole output there, not only a tail, and keep a failing run\'s before you summarize or rerun it: a later pass does not recover it.',
+      'Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already complete. Leave time to record and clean up, and start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a detached long check with its log and exit marker.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished.',
+    ], 'verifier');
+    all(role(host, 'coordinator'), [
+      "Pass no separate reply path to a role writing repository files: the host may tell it to write its result only there.",
+      'Before ordering a run only for a missing evidence entry, have it cited where `verification-evidence` allows,',
+    ], 'coordinator');
+    assert.doesNotMatch(role(host, 'coordinator'), phrase('Name no reply file'), 'the reply destination is named as a path the launch takes');
+    all(role(host, 'thinker'), [
+      'A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost beyond its resources, not another instance it covers;',
+    ], 'thinker');
+  });
+}
+
+test('the procedure skills take a stage of a larger run as its check and keep a failing run whole', () => {
+  all(skill('verification-evidence'), [
+    'A declared check that a larger command ran unchanged as a stage, such as a full gate that runs `check` first, takes its entry from that run where the output shows the stage finished: the larger command as `command`, and `exit_code` only where the whole command passed.',
+    "Capture a check's whole output there, not only a tail, and keep a failing run's before you summarize or rerun it: a later pass does not recover what failed, while a passing run's need not be kept.",
+  ], 'verification-evidence');
+  all(skill('assessment'), [
+    'A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished.',
+  ], 'assessment');
+});

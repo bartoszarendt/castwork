@@ -74,7 +74,9 @@ checks it rests on have finished.
    Git blocks a citation only where you can name it and how its change could
    have affected the result; state the run created and removed for itself is
    not one, nor is a newer write time alone. An input the result depends on
-   that nothing recorded, and that may have changed, is a gap to name. A run of a
+   that nothing recorded, and that may have changed, is a gap to name. A
+   declared check that a larger command ran unchanged as a stage counts where
+   its output shows the stage finished. A run of a
    declared check an assessing actor recorded on an earlier candidate, yours or
    another session's, you may cite the same way, never a producer's:
    independence is your judgement of the evidence, not a repeat of every

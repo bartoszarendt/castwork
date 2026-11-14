@@ -102,8 +102,9 @@ before it; a brief, or a conversation you inherited from the agent that started 
   they authorize, such as a phase to implement, in a decision in their words, with its scope and limits; what it covers needs no asking again. Agreeing a
   plan is not that authority unless they say so; its commit is a reference, not a freeze, and the calls it foresees are a forecast.
 - **Do not let bookkeeping or proof become the work.** If records, or what was built to prove the result, outweigh the result, stop and say so, and have
-  the thinker step back. `report`'s Changes line shows where the lines of the latest recorded week went: many in `.castwork/` against few elsewhere is that
-  sign, though elsewhere holds tests, documents and tooling as well as the product.
+  the thinker step back. `report`'s Changes line shows where the latest recorded week's lines went: many in `.castwork/` against few elsewhere is that
+  sign, though elsewhere holds tests and documents. Before ordering a run only for a missing evidence entry, have it cited where
+  `verification-evidence` allows, such as an unaffected earlier run or a larger run's stage.
 
 ## Choosing the shape
 
@@ -207,10 +208,10 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   each kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; check it against the
   record's Scope and criteria, new files included, and that named inputs exist; name any required file it omits, and its writer; ask for every file
   written in the return. Check a limit on what it may run or start, such as a server or an install, against the same Scope and criteria and the plan's
-  probes and checks: add none that blocks a step they require. Limit a correction by file or kind, never to the lines a finding cites: the worker fixes
-  each finding's kind.
-  Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Name no reply file for a role that
-  writes to the repository: the host may tell it to ignore every other path. When a delegate that may have written files fails or is cancelled, inspect
+  probes and checks: add none that blocks a step they require. Limit a correction by file or kind, never to the lines or folder a finding cites: the
+  worker fixes each finding's kind.
+  Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Pass no separate reply path to a role
+  writing repository files: the host may tell it to write its result only there. When a delegate that may have written files fails or is cancelled, inspect
   and reconcile what it changed before anyone else writes.
 - **The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy. It can
   assess only a candidate that resolves, as `task lint` shows. A snapshot's `.castwork/tasks/` is the base commit's; the live record

@@ -213,6 +213,10 @@ ran, and names the changed paths and why the check reads none of them, as
 A costly run that may be cited later records what it read outside Git that
 could change, so the comparison can be made; only an input someone can name,
 that could have changed the result, blocks the citation.
+A declared check that a larger command ran unchanged as a stage, such as a
+full gate that runs `check` first, takes its entry from that run where the
+output shows the stage finished, with the larger command and an `exit_code`
+only where the whole command passed.
 Lint does not tell a cited entry from a run; a verifier confirms the
 difference with `git diff`, and where Git or a candidate's objects are
 unavailable, the citation cannot be used.
