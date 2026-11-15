@@ -20,7 +20,7 @@ import path from 'node:path';
 import { CONFIG_FILE, HOSTS, LOCAL_CONFIG_FILE } from './layout.js';
 import { PublicError } from './public-error.js';
 import { installPath } from './generated.js';
-import { LEVELS, PERMISSION_SETTINGS, toolkitRoot, readAdapter } from './adapter-generation.js';
+import { LEVELS, ROLE_FILE_SETTINGS, toolkitRoot, readAdapter } from './adapter-generation.js';
 import { ROLE_IDS } from './record.js';
 
 /** Shipped defaults. */
@@ -69,8 +69,12 @@ const RETIRED_EFFORT = Object.freeze({
   opencode: 'reasoning_effort was retired: remove it, and choose a variant the model supports beside an explicit model. A variant is not an effort level.',
 });
 
+/** The largest Pi run limit: the longest delay a Node timer accepts. */
+const PI_TIMEOUT_MS_MAX = 2147483647;
+
 /**
- * The problem with one role's resolved OpenCode settings, or null.
+ * The problem with one role's resolved OpenCode settings, or a Pi run limit
+ * Pi would refuse, or null.
  *
  * OpenCode v1 and v2 both read the shared agent format, but only as a separate
  * `model` and `variant`: v1 takes `provider/model#high` for a literal model id,
@@ -82,6 +86,19 @@ const RETIRED_EFFORT = Object.freeze({
  * @returns {{key: string, problem: string, hint: string}|null}
  */
 export function bindingProblem(host, settings) {
+  if (host === 'pi') {
+    // Pi refuses a role file whose timeoutMs is not a positive integer, and a
+    // launch whose limit exceeds the largest delay a Node timer takes.
+    const timeout = settings.timeout_ms;
+    if (typeof timeout === 'string' && (!/^[1-9][0-9]*$/.test(timeout) || Number(timeout) > PI_TIMEOUT_MS_MAX)) {
+      return {
+        key: 'timeout_ms',
+        problem: `is not a whole number of milliseconds from 1 to ${PI_TIMEOUT_MS_MAX}`,
+        hint: `Write it as digits, such as "3600000" for an hour. Pi refuses a timeoutMs that is not a positive integer, and a launch whose limit is over ${PI_TIMEOUT_MS_MAX}, the largest delay a Node timer takes (about 24.8 days).`,
+      };
+    }
+    return null;
+  }
   if (host !== 'opencode') return null;
   const { model, variant } = settings;
   if (typeof model === 'string' && model.includes('#')) {
@@ -156,9 +173,9 @@ function readRoleSettings(raw, file = CONFIG_FILE, shared = null) {
       /** @type {Record<string, unknown>} */
       const checked = {};
       for (const [key, value] of Object.entries(settings)) {
-        if (shared !== null && PERMISSION_SETTINGS.includes(key)) {
+        if (shared !== null && ROLE_FILE_SETTINGS.includes(key)) {
           throw new PublicError(`${file} role_settings.${host}.${role}.${key}: ${file} chooses models only`, {
-            hint: `A permission is the project's choice. Set it in ${CONFIG_FILE} role_settings.${host}.${role}.`,
+            hint: `${key} is the project's choice, not a model choice. Set it in ${CONFIG_FILE} role_settings.${host}.${role}.`,
           });
         }
         if (!accepted.includes(key)) {
@@ -297,7 +314,7 @@ function readRoleLevels(raw, file = CONFIG_FILE, shared = null) {
     if (typeof roles !== 'object' || roles === null || Array.isArray(roles)) {
       throw new PublicError(`${where}.${host} must be a map of role to levels`);
     }
-    const accepted = settingsFor(host).filter((key) => !PERMISSION_SETTINGS.includes(key));
+    const accepted = settingsFor(host).filter((key) => !ROLE_FILE_SETTINGS.includes(key));
     /** @type {Record<string, Record<string, Record<string, unknown>>>} */
     const byRole = {};
     for (const [role, levels] of Object.entries(roles)) {
@@ -336,8 +353,8 @@ function readRoleLevels(raw, file = CONFIG_FILE, shared = null) {
         /** @type {Record<string, unknown>} */
         const checked = { ...base };
         for (const [key, value] of Object.entries(settings)) {
-          if (PERMISSION_SETTINGS.includes(key)) {
-            throw new PublicError(`${at}.${key}: a level does not set permissions`, {
+          if (ROLE_FILE_SETTINGS.includes(key)) {
+            throw new PublicError(`${at}.${key}: a level sets only model settings`, {
               hint: `The level's variant takes ${key} from role_settings.${host}.${role}; a level chooses only the model settings.`,
             });
           }
@@ -377,7 +394,7 @@ function readRoleLevels(raw, file = CONFIG_FILE, shared = null) {
  */
 export function levelOmissions(host, settings) {
   return settingsFor(host)
-    .filter((key) => key !== 'model' && key !== 'variant' && !PERMISSION_SETTINGS.includes(key))
+    .filter((key) => key !== 'model' && key !== 'variant' && !ROLE_FILE_SETTINGS.includes(key))
     .filter((key) => settings[key] === undefined);
 }
 

@@ -129,10 +129,11 @@ Signs of a stall: a blocking finding that questions the work rather than the can
 repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round
 returning neither work nor a named blocker; an intermittent failure
 several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known,
-pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs. Run that
-check once it can tell you something and authorization allows; reproduce a costly failure cheaply where practical before paying for another run; and
-measure a failure recorded on an earlier candidate again on the current one before building another round on it where it is uncertain the failure still
-applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis. When the signs recur across a phase's
+pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check, or the phase's use
+of its result, that never runs. Run that check once it can tell you something and authorization allows, and reproduce a costly failure cheaply where
+practical before paying for another run. Measure a failure recorded on an earlier candidate again before building another round on it only where it is
+uncertain the failure still applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis. When
+the signs recur across a phase's
 tasks or across the rounds of one task, have a fresh thinker step back, as the entry command's `## Stepping back` says. Investigate a cause progress
 depends on; a category or an owner's disposition establishes no mechanism. A failed check, blocking verdict, or stopped workflow does not mean no
 authorized next step remains: consider permitted diagnosis or independent work. If a task declares
@@ -155,9 +156,9 @@ give that answer directly unless the user or working policy asks for another per
 - Which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them, except for a call a second
   reviewer names.
 - A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to
-  read one way, or a design to choose goes to the thinker first, and where the role cannot wait, have it stop its round cleanly and resume it with the
-  answer. Check a role's finding against its source once before relaying one that would change what you ask. Do not just retry, a `needs_context`
-  included.
+  read one way, or a design to choose goes to the thinker first, asked whether the outcome needs it before how to build it, and never designed by you;
+  where the role cannot wait, have it stop its round cleanly and resume it with the answer. Check a role's finding against its source once before
+  relaying one that would change what you ask. Do not just retry, a `needs_context` included.
 
 ## Delegating
 
@@ -198,8 +199,9 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   the boundary the last one returned, rechecking facts that changed or are uncertain rather than repeating completed discovery. When the work comes
   from a document, name it and the part. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
   pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses. Use one yourself where it fits your step.
-- **A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are
-  context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a
+- **A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding
+  them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the
+  conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
 - **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give

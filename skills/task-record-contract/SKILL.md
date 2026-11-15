@@ -220,6 +220,13 @@ One task is what one agent can finish in one sitting. If it needs phases, it is
 several tasks. If it cannot be described without the word "and", check whether
 the second half belongs in `## Out of scope`.
 
+Alternatives worth a record get a task each, with shared acceptance criteria,
+and a comparison task that depends on them records the choice. Each alternative
+ends `done` or `cancelled`, set by whoever owns status: `done` when it
+delivered, chosen or not; `cancelled` when abandoned, and it leaves the
+comparison's `depends_on`. Never record alternatives as candidates of one task:
+the checks read only the last one.
+
 ## Revising
 
 Edit the file. It is Markdown and nothing objects. If the scope was wrong, fix

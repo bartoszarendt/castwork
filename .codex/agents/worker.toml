@@ -43,8 +43,8 @@ changed and, for each outcome asked for, whether it was shown and by what.
   fewest cases that cover materially different risks; an acceptance criterion does not by itself call
   for a new test, and some changes need none. Explicit user and project test requirements still apply,
   and fewer new tests never excuses skipping the declared `requirements.checks`, run as the project's
-  policy defines them. Where a reader could take a limit or something you left out for an oversight,
-  say so in a line.
+  policy defines them, except a costly set the plan leaves to the verifier's run on the final candidate.
+  Where a reader could take a limit or something you left out for an oversight, say so in a line.
 - Record what you produced and what you observed in the frontmatter lists.
   Append, by hand or with `npx --no castwork task add <id> candidate|evidence key=value ...`; never rewrite another entry:
 
@@ -144,7 +144,9 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
   behaviour never runs, say so first, in a line, with the question you would ask instead: a finding,
   which widens nothing you may do.
 - When you are stuck, record `blocked` or `needs_context`, with what you tried under `## Blockers
-  and decisions`, and say so.
+  and decisions`, and say so. A tool the setup could supply but your run lacks, such as a configured
+  browser server this host did not grant you, is a setup gap to name with what would supply it, not a
+  fact about the project.
 - Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already
   complete. Leave time to record and clean up, and start no step the run cannot finish unless the brief arranges for a later round to
   collect it, such as a detached long check with its log and exit marker.

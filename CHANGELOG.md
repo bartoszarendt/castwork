@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+- A step back ends in changed records and a first construction assignment,
+  not a document. The thinker names the assignment that builds what its route
+  still lacks and, where its brief lets it write, applies what lies within
+  authority in the records the route changes: their plans, `depends_on` and
+  the agents' criteria, with the route and the user's calls under
+  `## Blockers and decisions`. The coordinator applies what the thinker could
+  not and launches that assignment next, not another round of what the route
+  replaces; a pause records a route not yet applied, with its calls, as written
+  or by path. In field phases, a step back that recommended removing the
+  agents' own recovery mechanisms, with one owner call, was reduced at a pause
+  to "split into six tasks", and the split carried every mechanism; another
+  step back titled "finish the product" was applied as additions only and was
+  followed by more price measurement.
+- Evidence that could change the design runs early; proof that only qualifies
+  the finished result for release runs once, on the final candidate, in the
+  verifier's run where one will assess, and holds back no building. Using the
+  assembled result on a disposable instance behind a development-only switch
+  is a probe, not the activation a gate forbids, and a phase's use step runs
+  first on its thinnest path and again at its end. A worker may leave a costly
+  declared set the plan assigns to the verifier. A stall sign now names the
+  phase's use of its result, not only an acceptance check, never running.
+- A step back's brief lists the user's commitments in their own words, apart
+  from the options the agents drafted that the user chose, which bind what they
+  deliver, not how. The thinker keeps the mark between the user's words and
+  the agents' proposals on text it carries into another record. In field
+  phases, one-word approvals of drafted options were briefed as "the user's
+  commitments that bound any route", and contracts labelled as the agents'
+  proposals lost the label when copied into a task's scope.
+- Compatibility, migration, keeping old data or behaviour, and parity where the
+  release does not ship are needed only where the user or the project's
+  documents say so, otherwise a call for the user with its cost; a criterion's
+  reach, such as every supported path, comes from what ships and its runbooks.
+  A design question from a running role goes to the thinker asked whether the
+  outcome needs it before how to build it, and the coordinator designs none.
+  In field phases, half of one task was parity for a script the release never
+  shipped, and an owner dropped a legacy-history scope in one answer.
+- Pi roles take `tools` and `timeout_ms` role settings, written as `tools` and
+  `timeoutMs`, so a project can grant a role pi-subagents starts an MCP server,
+  such as a browser driver, and a run limit beyond pi-subagents' 30 minutes.
+  Like `permission_mode`, both stay in the role file: a level's variant takes
+  them from the role, and `.castwork/local/castwork.json` refuses them. Routes
+  do not list them, since a route to Pi starts a separate Pi session, which
+  keeps its configured MCP tools and has no child run limit: the delegation
+  capability enforces any deadline itself and keeps monitoring a Pi process
+  still running when a wait returns. A
+  `timeout_ms` outside 1 to 2147483647 milliseconds, the largest delay a Node
+  timer takes, is refused, as Pi would refuse the role file or the launch. Pi
+  setup now says how MCP exposure differs between Pi's built-in MCP and
+  pi-mcp-adapter. A worker or verifier that lacks a tool the setup could supply
+  reports a setup gap, not a fact about the project. In field phases, no Castwork role on Pi could reach
+  the configured browser server, which a decision recorded as "no browser
+  control exists here", and runs were sized to 25 minutes.
+- How alternatives are recorded and which requirement keys exist now live in
+  `task-record-contract`, which the thinker loads, rather than in the thinker
+  file. The coordinator and thinker word limits are 4,550, the worker's 2,300
+  and the entry command's 4,100, so these rules fit without dropping others.
 - A declared check that a larger command ran unchanged as a stage, such as a
   full gate that runs `check` first, takes its evidence entry from that run
   where the output shows the stage finished: the larger command, with an

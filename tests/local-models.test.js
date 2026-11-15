@@ -446,6 +446,14 @@ test('the local file sets no permission', (t) => {
   assert.equal(error.message, `${LOCAL_CONFIG_FILE} role_settings.claude.worker.permission_mode: ${LOCAL_CONFIG_FILE} chooses models only`);
 });
 
+test('the local file sets no tools or run limit for a role', (t) => {
+  for (const key of ['tools', 'timeout_ms']) {
+    const error = refusal(t, { role_settings: { pi: { worker: { [key]: key === 'tools' ? 'read, bash' : '3600000' } } } }, ['pi']);
+    assert.equal(error.message, `${LOCAL_CONFIG_FILE} role_settings.pi.worker.${key}: ${LOCAL_CONFIG_FILE} chooses models only`);
+    assert.match(/** @type {{hint: string}} */ (/** @type {unknown} */ (error)).hint, /the project's choice, not a model choice/);
+  }
+});
+
 test('the local file is checked like castwork.json and named in its refusals', (t) => {
   assert.equal(refusal(t, { role_settings: { nope: {} } }).message, `${LOCAL_CONFIG_FILE} role_settings names unknown host nope`);
   assert.match(refusal(t, { role_settings: { claude: { coordinator: { model: 'x' } } } }).message, /cannot configure the coordinator/);

@@ -42,14 +42,36 @@ function read(root, relative) {
 /* Each host's own spelling                                            */
 /* ------------------------------------------------------------------ */
 
-test('Pi accepts model only and preserves provider/id:thinking suffixes', (t) => {
-  assert.deepEqual(settingsFor('pi'), ['model']);
+test('Pi accepts model, tools and a run limit, and preserves provider/id:thinking suffixes', (t) => {
+  assert.deepEqual(settingsFor('pi'), ['model', 'tools', 'timeout_ms']);
   const root = fixture(t, ['pi'], {
-    role_settings: { pi: { verifier: { model: 'provider/id:high' } } },
+    role_settings: { pi: { verifier: { model: 'provider/id:high', tools: 'read, bash, edit, write, mcp:playwright', timeout_ms: '3600000' } } },
+    role_levels: { pi: { verifier: { complex: { model: 'provider/strong:high' } } } },
   });
   update(root);
-  assert.match(read(root, '.pi/agents/verifier.md'), /^model: "provider\/id:high"$/m);
+  const verifier = read(root, '.pi/agents/verifier.md');
+  assert.match(verifier, /^model: "provider\/id:high"$/m);
+  assert.match(verifier, /^tools: "read, bash, edit, write, mcp:playwright"$/m);
+  assert.match(verifier, /^timeoutMs: "3600000"$/m);
+  // A level is the whole choice of model; what the host grants the role stays.
+  const complex = read(root, '.pi/agents/verifier_complex.md');
+  assert.match(complex, /^model: "provider\/strong:high"$/m);
+  assert.match(complex, /^tools: "read, bash, edit, write, mcp:playwright"$/m);
+  assert.match(complex, /^timeoutMs: "3600000"$/m);
   assert.deepEqual(validate(root).findings, []);
+});
+
+test('a Pi run limit that is not a whole number of milliseconds Pi accepts is refused before generation', (t) => {
+  const largest = fixture(t, ['pi'], { role_settings: { pi: { worker: { timeout_ms: '2147483647' } } } });
+  assert.equal(readConfig(largest).role_settings.pi.worker.timeout_ms, '2147483647');
+  for (const value of ['1h', '0', '-5', '3600000.5', '2147483648', '9'.repeat(400)]) {
+    const root = fixture(t, ['pi'], { role_settings: { pi: { worker: { timeout_ms: value } } } });
+    assert.throws(() => readConfig(root), (error) => {
+      assert.match(/** @type {Error} */ (error).message, /role_settings\.pi\.worker\.timeout_ms is not a whole number of milliseconds from 1 to 2147483647/);
+      assert.match(/** @type {{hint: string}} */ (/** @type {unknown} */ (error)).hint, /largest delay a Node timer takes/);
+      return true;
+    }, value);
+  }
 });
 
 test('Claude effort reaches its role file under the native key', (t) => {

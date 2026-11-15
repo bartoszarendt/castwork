@@ -210,15 +210,23 @@ Each host declares which settings it accepts, in its adapter's
 | `model_reasoning_effort` | `model_reasoning_effort` | — | — | — |
 | `effort` | — | `effort` | — | — |
 | `variant` | — | — | `variant` | — |
+| `tools` | — | — | — | `tools` |
+| `timeout_ms` | — | — | — | `timeoutMs` |
 
-Pi accepts only `model`, including an unchanged `provider/id:high` thinking
-suffix. There is no Castwork `thinking` setting. Routes to Pi list only this
-model setting, not the inheritance keys.
+Pi accepts `model`, including an unchanged `provider/id:high` thinking
+suffix, and two settings that stay in the role file for a role pi-subagents
+starts inside Pi: `tools`, the role's tool allowlist, and `timeout_ms`, its run
+limit in milliseconds. There is no Castwork `thinking` setting. Routes to Pi
+list only the model setting, not the inheritance keys, `tools` or
+`timeout_ms`: a route starts a separate Pi process, which neither applies to.
+See [Pi setup](pi-setup.md#tools-and-run-limit) for what `tools` replaces.
 
 A setting a host does not declare is refused with a hint listing what it does
 accept, rather than written into a file the host will ignore.
 
-Values are passed through and never interpreted. Castwork does not know
+Values are passed through and never interpreted, except that a Pi
+`timeout_ms` must be a whole number from 1 to 2147483647, since Pi refuses a
+role file or launch outside that range. Castwork does not know
 which efforts a host accepts, does not translate one host's vocabulary into
 another's, and does not treat two hosts' `high` as the same thing. A value the
 host rejects fails there, not here.
@@ -347,8 +355,10 @@ Generation writes the routes into each host's entry command, under
 actor it records (`<role>@<route host>`), and the
 settings to pass: every setting the route's host declares, under its names —
 `model`, `model_reasoning_effort` (Codex), `effort` (Claude Code), or `variant`
-(OpenCode) — except `permission_mode`, because the delegation capability
-chooses the run's permissions from what the role has to write. The same routes close the
+(OpenCode) — except the settings that stay in the role file: `permission_mode`,
+because the delegation capability chooses the run's permissions from what the
+role has to write, and Pi's `tools` and `timeout_ms`, which are what Pi grants
+the role. The same routes close the
 generated coordinator role, with the path of the entry file that holds the
 procedure, so a coordinator started directly as the host's agent sees them too.
 The other role files are unchanged. The entry command's `## Role routes`
@@ -421,8 +431,9 @@ for `simple` or `complex` assignments beside the role itself, which is
   an effort chosen for another: Codex, for one, resolves an effort an agent file
   omits from the spawn, its defaults, or the parent session. `validate` warns
   when a level omits an effort setting its host declares.
-- **Permissions stay with the role.** `permission_mode` in a level is refused;
-  the variant takes it from the role's `role_settings`.
+- **Permissions, tools and run limits stay with the role.** `permission_mode`,
+  `tools` and `timeout_ms` in a level are refused; the variant takes them from
+  the role's `role_settings`.
 - **Refused:** a `standard` entry (that is `role_settings`), a `coordinator`
   entry, an unknown level, role, host or setting, a level without `model`, and
   any value that is neither a string nor `null`. `null` leaves a setting out,
@@ -505,8 +516,8 @@ already declares can take another model in `role_levels`:
 ```
 
 - It holds `role_settings`, `role_routes`, and `role_levels` and nothing else.
-  Hosts and permissions stay the project's; `hosts` and `permission_mode` are
-  refused.
+  Hosts, permissions, tools and run limits stay the project's; `hosts`,
+  `permission_mode`, `tools` and `timeout_ms` are refused.
 - A route here replaces the project's route for that role, and `null` drops
   it, so the role runs in the host that routes it. The project need not route
   anything first, but the route's host must be one `castwork.json` lists in

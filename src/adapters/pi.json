@@ -2,7 +2,9 @@
   "id": "pi",
   "label": "Pi",
   "role_frontmatter": {
-    "model": "model"
+    "model": "model",
+    "tools": "tools",
+    "timeout_ms": "timeoutMs"
   },
   "delegated_role_frontmatter": {
     "systemPromptMode": "append",

@@ -16,7 +16,7 @@ import test from 'node:test';
 
 import { CONFIG_FILE } from '../src/layout.js';
 import { readConfig, settingsFor } from '../src/config.js';
-import { generateHost } from '../src/adapter-generation.js';
+import { generateHost, ROLE_FILE_SETTINGS } from '../src/adapter-generation.js';
 import { setup, update } from '../src/setup.js';
 import { validate } from '../src/validate.js';
 
@@ -137,9 +137,10 @@ test('a route lists model and reasoning only, never a permission setting', (t) =
   assert.doesNotMatch(opencode, /permission_mode/);
 });
 
-test('a route lists every non-permission setting its host declares', (t) => {
+test('a route lists every setting its host declares but those that stay in the role file', (t) => {
+  const values = { permission_mode: 'acceptEdits', timeout_ms: '3600000' };
   for (const [target, from] of [['codex', 'claude'], ['claude', 'codex'], ['opencode', 'claude'], ['pi', 'claude']]) {
-    const worker = Object.fromEntries(settingsFor(target).map((key) => [key, key === 'permission_mode' ? 'acceptEdits' : `${key}-value`]));
+    const worker = Object.fromEntries(settingsFor(target).map((key) => [key, values[/** @type {keyof typeof values} */ (key)] ?? `${key}-value`]));
     const root = fixture(t, [from, target], {
       role_routes: { worker: target },
       role_settings: { [target]: { worker } },
@@ -148,7 +149,7 @@ test('a route lists every non-permission setting its host declares', (t) => {
     const entry = { claude: '.claude/skills/castwork/SKILL.md', codex: '.agents/skills/castwork/SKILL.md' }[from];
     const section = routesSection(read(root, entry));
     for (const key of Object.keys(worker)) {
-      if (key === 'permission_mode') assert.doesNotMatch(section, /permission_mode/, target);
+      if (ROLE_FILE_SETTINGS.includes(key)) assert.doesNotMatch(section, new RegExp(key), `${target} ${key}`);
       else assert.match(section, new RegExp(`${key} \`${key}-value\``), `${target} ${key}`);
     }
   }

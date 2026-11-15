@@ -166,7 +166,8 @@ Four behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
   with fresh context: where `defaultSubagentContext` is set to `fork`, a launch
   that omits `context` inherits the coordinator's conversation, so pass
   `options.context: "fresh"`.
-- A run stops after 30 minutes unless the call raises `options.timeoutMs`.
+- A run stops after 30 minutes unless the call raises `options.timeoutMs` or
+  the role file sets `timeoutMs`, which `timeout_ms` in `role_settings` writes.
   Size each run from how long its checks took before, and raise the limit for
   one that needs longer. A check that may still outlast it runs detached and
   writes its output and exit status under `.castwork/local/runs/<task>/`, so
@@ -197,7 +198,7 @@ from a Pi session is omitted, because it would start no separate process.
 
 ## Model and thinking
 
-Pi supports only `model` in Castwork role settings:
+For the model, Pi supports only `model` in Castwork role settings:
 
 ```json
 {
@@ -213,6 +214,53 @@ the thinking suffix, passes through unchanged into the role and a route to Pi.
 There is no Castwork `thinking` setting. Retired `reasoning_effort` is refused
 with a hint to put thinking in the model suffix. Omit model to use host defaults;
 coordinator settings are refused because it is the invoking session.
+
+## Tools and run limit
+
+These two settings govern a role that pi-subagents starts inside a Pi session.
+`tools` writes the role's tool allowlist and `timeout_ms` writes `timeoutMs`,
+its run limit in milliseconds, in place of pi-subagents' 30-minute default:
+
+```json
+{
+  "role_settings": {
+    "pi": {
+      "worker": {
+        "model": "provider/id:high",
+        "tools": "read, bash, edit, write, mcp:playwright",
+        "timeout_ms": "3600000"
+      }
+    }
+  }
+}
+```
+
+Which MCP tools such a role gets depends on the MCP provider. With Pi's
+built-in MCP, a child gets a server's tools only through an `mcp:<server>` or
+`mcp:<server>/<tool>` entry in `tools`, so a server in `~/.pi/agent/mcp.json`,
+such as a browser driver, stays out of a Castwork role's reach until the
+project grants it here. With pi-mcp-adapter installed, a background child that
+sets no `tools` uses the adapter's configured direct tools, and one that sets
+`tools` needs the `mcp:` entries as well. A server that an extension registers,
+rather than `mcp.json`, needs a background child, unless the agent loads that
+extension in its foreground child through `extensions` or
+`subagentOnlyExtensions`. pi-subagents' agent documentation for the installed
+version is the reference for these cases.
+
+`tools` is a strict allowlist: list the built-in tools the role still needs
+beside the MCP entries. `timeout_ms` is a whole number from 1 to 2147483647,
+the largest delay a Node timer takes; Pi refuses a role file or launch outside
+that range. Both stay in the role file: each level's variant takes them from
+the role, and `.castwork/local/castwork.json` cannot set them. A role that
+finds a configured tool missing reports it as a setup gap; a grant here is the
+fix, not a note that the project has no such tool.
+
+A route to Pi does not apply either setting. It starts a separate Pi process,
+not a pi-subagents child: that session keeps the MCP tools its configuration
+gives a Pi session, and no child run limit applies to it, so routes do not list
+`tools` or `timeout_ms`. A wait in the delegating tool does not end the
+process: the delegation capability enforces any run deadline itself, and keeps
+monitoring a Pi process still running when a wait returns.
 
 ## Routes and the write boundary
 

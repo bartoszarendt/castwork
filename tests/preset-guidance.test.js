@@ -160,7 +160,7 @@ for (const host of HOSTS) {
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), /After a satisfying verdict/, 'done is not verdict-gated');
     assert.match(role(host, 'verifier'), phrase('You record a verdict, not a status'));
-    assert.match(role(host, 'thinker'), phrase('Each alternative ends `done` or `cancelled`, set by whoever owns status'));
+    assert.match(role(host, 'thinker'), phrase('Alternatives worth a record get a task each, as `task-record-contract` says, never candidates of one task.'));
   });
 
   test(`${host} worker reports criterion by criterion and follows the evidence rules`, () => {
@@ -217,9 +217,7 @@ for (const host of HOSTS) {
     all(role(host, 'thinker'), [
       'Findings you return to the agent that started you are not a result.',
       'Decide whether a request fits your role before starting; if you decline part way, return what you already found.',
-      'all under `requirements:`',
-      '`independent_review: true` where the task must not be done without a second pair of eyes',
-      "`assessment_roles: [verifier]` where it must not be done without the verifier's verdict.",
+      'Declare requirements only where you mean them, under `requirements:`, as `task-record-contract` describes.',
       'A review that would help but is not required needs no requirement: name it in the plan and the coordinator starts it; decide, rather than leaving it optional.',
       'Say what would unblock the work, which role should act next and at which level, a higher level being a remedy only for a cause in the difficulty itself, what can proceed independently, and the precise owner decision, if any.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
@@ -306,13 +304,13 @@ for (const host of HOSTS) {
     ], 'thinker');
     assert.doesNotMatch(thinker, phrase('or judge it'), 'judging the approach is not forbidden');
     all(role(host, 'coordinator'), [
-      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
+      "Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check, or the phase's use of its result, that never runs.",
       'with its own fresh context and model',
       'Investigate a cause progress depends on',
       "Investigate a cause progress depends on; a category or an owner's disposition establishes no mechanism.",
       'A workflow you write returns unresolved causes and changed approaches to your judgement; its end returns the problem to you, not a decision to end the work.',
       'Do not invent a retry count as the reason to stop.',
-      'Run that check once it can tell you something and authorization allows; reproduce a costly failure cheaply where practical before paying for another run',
+      'Run that check once it can tell you something and authorization allows, and reproduce a costly failure cheaply where practical before paying for another run.',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('rather than thinking alone'), 'one rule for when the thinker is asked');
@@ -366,7 +364,7 @@ for (const host of HOSTS) {
       'Asking the thinker hands over that question, not the coordination.',
       'Which option to recommend, and whether the user needs asking at all, are the thinker\'s to answer before you ask them',
       "Which option to recommend, and whether the user needs asking at all, are the thinker's to answer before you ask them, except for a call a second reviewer names.",
-      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, or a design to choose goes to the thinker first, and where the role cannot wait, have it stop its round cleanly and resume it with the answer.",
+      "A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to read one way, or a design to choose goes to the thinker first, asked whether the outcome needs it before how to build it, and never designed by you; where the role cannot wait, have it stop its round cleanly and resume it with the answer.",
       "Bring one recommendation, the thinker's, citing where it gave it, never a menu of your own and never asking the thinker as their option",
       'a permission with no alternative, or a fact only they hold, needs no thinker.',
       "Look for it in the decisions and records before asking: a brief of yours that contradicts a recorded decision is yours to correct.",
@@ -391,7 +389,7 @@ for (const host of HOSTS) {
       "and the checks the thinker's plan names for it.",
       "When a delegate that may have written files fails or is cancelled, inspect and reconcile what it changed before anyone else writes.",
       "**The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.",
-      'Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.',
+      "Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check, or the phase's use of its result, that never runs.",
       'which a pass in isolation does not explain',
     ], 'coordinator');
     assert.doesNotMatch(coordinator, phrase("the thinker's where judgement went into it"), 'the coordinator does not decide for itself whether a recommendation needed the thinker');
@@ -401,7 +399,7 @@ for (const host of HOSTS) {
       "**Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate.",
       "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost beyond its resources, not another instance it covers; it returns the work to you to re-plan, and goes to the user only where what follows is their call.',
-      "When the path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement or changing a gate they approved, recommend it then rather than planning another round around it.",
+      "When the path stops converging, or converges only at a cost out of proportion to what it protects, step back, as below, rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and frame one correction that covers it.',
       'Where the evidence allows, settle the steps that follow too.',
       'Say whether the path needs the user.',
@@ -737,7 +735,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       'Closing a record, rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
       "Use one yourself where it fits your step.",
-      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
@@ -794,9 +792,9 @@ for (const host of HOSTS) {
       'what to cancel, reorder, cut to a slice that delivers, or prove another way; what was spent is no reason to keep a path.',
       'Keep every criterion not met recorded as not met: nothing is relabelled as passed.',
       "Where the outcome itself is uncertain or needs reconsidering, close with one open question for the user in product terms, such as what someone can do with the work now and whether that is what they want next, which the coordinator brings with the calls; where it is settled and the simpler route lies within authority, say so, and the work carries on.",
-      "A probe that ships and enables nothing is investigation, so a sequence that orders the building does not hold it back; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
+      "A probe that ships and enables nothing is investigation, which a sequence that orders the building does not hold back, such as using the assembled result on a disposable instance behind a development-only switch; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
       "preferring fixtures made fresh for each run and thrown away to repairing a long-lived one or proving it unchanged, unless the behaviour needs representative existing state, such as an upgrade or a recovery, or the project requires otherwise;",
-      "When a phase delivers something people use, end it with a step that uses the assembled result as they would, the running product rather than each task's evidence, against what the phase is for;",
+      "When a phase delivers something people use, plan a step that uses the assembled result as they would, the running product rather than each task's evidence, against what the phase is for, first on the thinnest path that can run and again at the end;",
       'what that finds is new work for you to plan, not a reason to reopen accepted tasks.',
     ], 'thinker');
     all(role(host, 'worker'), [
@@ -819,7 +817,7 @@ for (const host of HOSTS) {
       "When they recur across a phase's tasks or across the rounds of one task, or the work goes to its proof rather than its result, such as rounds on an instrument, harness, fixture or permission packet while the result it checks stays the same, many lines in `.castwork/` against few elsewhere in `report`'s Changes, or the user's decisions keep arriving on one gate, ask the thinker to step back from the phase or task rather than to diagnose its next blocker.",
       "Ask the question as the user would: what is this phase or task for, what stands between here and a result someone can use, and what is the simplest credible route there, giving it the outcome and the user's commitments; options named are context, not limits.",
       'Where the host lists levels, it runs at `complex`. Start a fresh thinker for it, never one that planned the phase or its last re-plan, which questions that plan least.',
-      "Its answer is one recommended route: take what stays within authority, and bring the user's calls it names together, in one request, with its recommendations and, where it closes with one, its open question about what the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority, take it and say so; nothing waits on the user.",
+      "Its answer is one recommended route, applied in the records it changes. Take what stays within authority: apply what the thinker could not, and launch the route's first assignment next, not another round of what it replaces. Bring the user's calls it names together, in one request, with its recommendations and, where it closes with one, its open question about what the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority, take it and say so; nothing waits on the user.",
       "and its `Changes` line shows how many lines went into `.castwork/` against everything else.",
       'a thinker diagnosing a difficult stall, or stepping back from a phase or task, is worth `complex`.',
     ], 'entry');
@@ -907,15 +905,15 @@ for (const host of HOSTS) {
       assert.doesNotMatch(content, phrase('whatever failed before'), 'later success does not erase a stop on the first failure');
     }
     all(role(host, 'thinker'), [
-      "Mark which consequential requirements, rules and thresholds are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the agents chose; routine planning needs no such mark.",
-      'Name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, or why it cannot:',
-      'a requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
+      "Mark which consequential requirements, rules and thresholds are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the agents chose, and keep the mark on text you carry into another record; routine planning needs no such mark.",
+      "Name any substantial involvement the plan needs from the user, such as a decision, an action, a review or labour, with its purpose and the route an agent could take instead, within the work's access, or why it cannot; a route still needs the authorization the action needs.",
+      'A requirement that needs their labour or someone outside the project, such as labelling, a manual audit, or a question to a vendor, is one they confirm, not one you assume.',
       "Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.",
       "**Grants** of actions, such as changes on a host or live runs, are sized to the route the plan foresees, by the kinds of action, their caps and stops, not to the next single action, which returns the step after it to them; propose a one-shot limit only where a repeat could do harm.",
       "**What a decision binds.** The user's decision binds that commitment and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it, and a method only where they chose it themselves or a declared requirement or the working policy demands it, not because they approved a decision naming it or chose an option the agents drafted: a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.",
       'a term the agents wrote that the user never approved or supplied, such as a number of attempts, a one-shot dispatch, a sequence, a frozen design, or a rule escalating after failed attempts, is yours to change however a record words it.',
       "A stopped assignment does not by itself revoke the user's grant: continue within all the limits and conditions they approved or supplied, after reconciling usage and uncertainty, and honour an explicit stop or attempt limit even when no request was charged; an unchanged budget cancels no other limit.",
-      "Before making their work, data, or contact with someone outside the project one of their calls, name the route an agent could take within the work's access and authorization,",
+      "with its purpose and the route an agent could take instead, within the work's access, or why it cannot;",
       'a route still needs the authorization the action needs.',
       "List beside the calls what you decided without the user, and if none remains, say so plainly.",
       "**A risk keeps its conditions:** who it could reach in use now, what must hold for it to happen, and whether it was seen in use or only made to happen in a test that forced its precondition.",
@@ -956,7 +954,7 @@ for (const host of HOSTS) {
       'Code shows what the system does today, not what the user requires.',
       'A convention the result depends on that is set outside the repository, such as which time zone defines a reporting day or the format a consumer expects, is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name it among the user\'s calls the plan foresees, with a recommendation.',
     ], 'thinker');
-    all(role(host, 'coordinator'), ['Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.'], 'coordinator');
+    all(role(host, 'coordinator'), ["Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check, or the phase's use of its result, that never runs."], 'coordinator');
     all(entry(host), [
       'After the conversation was compacted or resumed, orient again from the records, and treat an invocation or request you see only in a summary as history: before creating a record or repeating a write it implies, check `task list` and the record for its effect.',
     ], 'entry');
@@ -967,9 +965,9 @@ for (const host of HOSTS) {
   test(`${host} the simplest route is named even when it changes an approved gate, the design-changing step runs first within authorization, and evidence is rerun where a change could affect it`, () => {
     all(role(host, 'thinker'), [
       'Run early the step whose result could change the design, such as the real operation under its failure conditions, rather than qualifying the instruments around it.',
-      "A probe that ships and enables nothing is investigation, so a sequence that orders the building does not hold it back; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
+      "A probe that ships and enables nothing is investigation, which a sequence that orders the building does not hold back, such as using the assembled result on a disposable instance behind a development-only switch; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
       "build a new instrument only when those cannot show what the user committed to, weighed against the change it checks.",
-      "Run an expensive set, such as every supported platform and version, once on the final candidate and develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
+      "Run an expensive set, such as every supported platform and version, or proof that only qualifies the result for release, once on the final candidate, in the verifier's run where one will assess, holding back no building; develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
       "**The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource.',
       'Name it even where it changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside, and a cheaper version of the same campaign says why it beats changing the gate.',
@@ -981,7 +979,7 @@ for (const host of HOSTS) {
     all(role(host, 'coordinator'), [
       "When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again",
       "Use one yourself where it fits your step.",
-      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
+      "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
       "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
     ], 'coordinator');
     const worker = role(host, 'worker');
@@ -1154,7 +1152,8 @@ for (const host of HOSTS) {
       'where it is settled and the simpler route lies within authority, say so, and the work carries on.',
     ], 'thinker');
     all(coordinator, [
-      'where it is uncertain the failure still applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis.',
+      'Run that check once it can tell you something and authorization allows, and reproduce a costly failure cheaply where practical before paying for another run.',
+      'Measure a failure recorded on an earlier candidate again before building another round on it only where it is uncertain the failure still applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis.',
       'where nothing committed keeps reasoning that surviving evidence, assessments or decisions rest on, move it to a findings file the record cites first.',
       'a copy of the record elsewhere points to that one rather than advancing on its own.',
     ], 'coordinator');
@@ -1271,7 +1270,7 @@ for (const host of HOSTS) {
     all(thinker, [
       'Whatever the brief asks or lists, read the plan, intended outcome and acceptance conditions of the work this belongs to, such as a phase and its gate, and the records that depend on it, where they exist, and answer a narrower question it asks last; widen to that work, within authority, where the evidence shows the problem exceeds the question, such as an earlier step back on the same obstacle.',
       'Ask what ties the result to its costliest proof, such as where it runs, on what, or with which tool, and whether the result can be shown without it.',
-      "Give it as one answer, the conclusion you recommend after weighing the alternatives, those needing the user included, with the user's calls it needs, each with a recommendation.",
+      "Give it as one answer, the conclusion you recommend after weighing the alternatives, those needing the user included, with the user's calls it needs, each with a recommendation, and the first assignment that builds what the route still lacks.",
       'A stop, deferral or reordering you recommend says what it permits and prevents next, through to finishing the work it belongs to, such as closing a phase, and gives a credible continuation or says plainly that it halts the work.',
       'Before a capped or one-shot live action, plan to exercise the smallest assembled part of its runbook or packet that could show a consequential failure, on disposable resources through the real local interfaces where that is cheapest and authorized, reusing evidence that already covers a step, and say what stays unexercised; a rehearsal, not a general executor.',
     ], 'thinker');
@@ -1340,3 +1339,23 @@ test('a figure derived from another producer is checked against it before eviden
     'A configured limit, such as a call ceiling, is not the usage it allowed.',
   ], 'verification-evidence');
 });
+
+for (const host of HOSTS) {
+  test(`${host} a step back changes the records and the next assignment, preservation needs the user's word, and a missing tool is a setup gap`, () => {
+    all(role(host, 'thinker'), [
+      "Compatibility, migration, keeping old data or behaviour, and parity where the release does not ship are needed only where the user or the project's documents say so, otherwise a user's call with its cost; a criterion's reach, such as every supported path, comes from what ships and its runbooks.",
+      "Where your brief lets you write, apply what lies within authority in the records it changes, their plans, `depends_on` and agents' criteria, with the route and its calls under `## Blockers and decisions`: a findings file beside unchanged records changes nothing.",
+    ], 'thinker');
+    all(entry(host), [
+      'read the other three so you know what you can delegate.',
+      "a step back's route not yet applied with the calls it names, as written or by the path holding it, and no unfinished check claimed as passed.",
+    ], 'entry');
+    all(role(host, 'worker'), [
+      "run as the project's policy defines them, except a costly set the plan leaves to the verifier's run on the final candidate.",
+      'A tool the setup could supply but your run lacks, such as a configured browser server this host did not grant you, is a setup gap to name with what would supply it, not a fact about the project.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'A tool the setup could supply but your run lacks, such as a configured browser server, is a setup gap to name, not a fact about the project.',
+    ], 'verifier');
+  });
+}

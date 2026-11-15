@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { generateHost, readAdapter } from '../src/adapter-generation.js';
+import { generateHost, readAdapter, readSkills } from '../src/adapter-generation.js';
 import { requirementEvaluation } from '../src/checks.js';
 import { HOSTS, PROJECT_FILE, TASKS_DIRECTORY } from '../src/layout.js';
 import { parseRecord, ROLE_IDS } from '../src/record.js';
@@ -231,7 +231,9 @@ for (const host of HOSTS) {
     const thinker = files.find((file) => /\/agents\/thinker\.(md|toml)$/.test(file.path));
     const verifier = files.find((file) => /\/agents\/verifier\.(md|toml)$/.test(file.path));
     assert.ok(thinker && verifier, 'the thinker and verifier roles are generated');
-    assert.match(thinker.content, /Never\s+record\s+alternatives\s+as\s+candidates\s+of\s+one\s+task/);
+    assert.match(thinker.content, /Alternatives\s+worth\s+a\s+record\s+get\s+a\s+task\s+each,\s+as\s+`task-record-contract`\s+says,\s+never\s+candidates\s+of\s+one\s+task/);
+    const contract = readSkills().find((skill) => skill.id === 'task-record-contract');
+    assert.match(contract?.body ?? '', /Never\s+record\s+alternatives\s+as\s+candidates\s+of\s+one\s+task/);
     assert.match(verifier.content, /record\s+`accept`\s+only\s+if\s+you\s+also\s+assessed\s+it/);
   });
 }

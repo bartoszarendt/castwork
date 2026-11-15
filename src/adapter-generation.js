@@ -550,14 +550,16 @@ export function resolveRoutes(host, roleRoutes = {}, roleSettings = {}, hosts = 
 }
 
 /**
- * Settings a route never lists. Every other setting the route's host declares
- * is one the coordinator passes through the target CLI's model, reasoning, or
- * variant options, so a setting an adapter adds reaches routes without a second
- * list to keep in step. Permission settings stay in the route host's own role
- * file, because the delegation capability chooses the permissions for the run
- * from what the role has to write.
+ * Settings that stay in a role's own file: the project's choices rather than a
+ * model choice. A route never lists them, a level's variant takes them from the
+ * role, and the machine-local file cannot set them. Every other setting a
+ * route's host declares is one the coordinator passes through the target CLI's
+ * model, reasoning, or variant options, so a setting an adapter adds reaches
+ * routes without a second list to keep in step. Permissions stay because the
+ * delegation capability chooses them for the run from what the role has to
+ * write; a Pi role's tools and run limit are what its host grants that role.
  */
-export const PERMISSION_SETTINGS = Object.freeze(['permission_mode']);
+export const ROLE_FILE_SETTINGS = Object.freeze(['permission_mode', 'tools', 'timeout_ms']);
 
 /**
  * The levels a role can run at beside its own binding, which is `standard`.
@@ -664,7 +666,7 @@ function renderLevels(levels, host) {
  */
 function routeSettings(host) {
   return Object.keys(/** @type {Record<string, string>} */ (readAdapter(host).role_frontmatter ?? {}))
-    .filter((key) => !PERMISSION_SETTINGS.includes(key));
+    .filter((key) => !ROLE_FILE_SETTINGS.includes(key));
 }
 
 /**
@@ -835,7 +837,7 @@ export function generateHost(host, options = {}) {
         // role's permissions and none of its model settings, so the level is
         // the whole choice of model.
         for (const level of own) {
-          const permissions = Object.fromEntries(PERMISSION_SETTINGS.filter((key) => settings[key] != null).map((key) => [key, settings[key]]));
+          const permissions = Object.fromEntries(ROLE_FILE_SETTINGS.filter((key) => settings[key] != null).map((key) => [key, settings[key]]));
           const variant = { ...role, id: level.agent, body: underTitle(role.body, levelLine(role.id, level.level)) };
           files.push({ path: entry.to.replace('{role}', level.agent), content: render(variant, { ...permissions, ...level.settings }) });
         }

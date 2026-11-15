@@ -160,11 +160,12 @@ result someone can use, and what is the simplest credible route there, giving
 it the outcome and the user's commitments; options named are context, not limits.
 Where the host lists levels, it runs at `complex`. Start a fresh thinker for
 it, never one that planned the phase or its last re-plan, which questions that
-plan least. Its answer is one recommended route: take what stays within
-authority, and bring the user's calls it names
-together, in one request, with its recommendations and, where it closes with
-one, its open question about what the work lets someone do now and what they
-want next. Where it finds the outcome settled and its route within authority,
+plan least. Its answer is one recommended route, applied in the records it
+changes. Take what stays within authority: apply what the thinker could not,
+and launch the route's first assignment next, not another round of what it
+replaces. Bring the user's calls it names together, in one request, with its
+recommendations and, where it closes with one, its open question about what
+the work lets someone do now and what they want next. Where it finds the outcome settled and its route within authority,
 take it and say so; nothing waits on the user.
 A step back looks forward from where the work is; a review of how the work went
 is offered at its own occasions, as the coordinator role says.
@@ -222,8 +223,9 @@ When the user asks, in whatever words or language, to stop the work for now:
 
 - Start nothing new.
 - As running roles return, bring each record up to date: its status, where the
-  work stands in `## Current state`, and no unfinished check claimed as
-  passed.
+  work stands in `## Current state`, a step back's route not yet applied with
+  the calls it names, as written or by the path holding it, and no unfinished
+  check claimed as passed.
 - Check the current candidate is still what was recorded: for a snapshot,
   `task lint` says whether the working tree has drifted from it.
 - Tear down what you and the roles started, such as servers or containers; if
