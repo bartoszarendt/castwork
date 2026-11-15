@@ -220,6 +220,13 @@ what was seen, what it means, what is next; not a new narrative section per run.
   something else could have produced, such as another check refusing first or
   the test's own condition, does not show it. That a test passes now shows
   present behaviour; that it fails without the change is a separate showing.
+- **Check what you derived.** A figure or class you built from another
+  producer's output, by joining, classifying or totalling it, is checked
+  against that producer before an entry or finding rests on it: the join
+  matches the cardinality it intends and keeps each source's identity, totals
+  reconcile over the population you state, and real examples try to falsify
+  each materially different class. Name the cases left ambiguous or unmatched.
+  A configured limit, such as a call ceiling, is not the usage it allowed.
 - **Compare when attribution matters.** Reuse applicable baseline or batch
   evidence, or make a proportionate comparison within existing authority, using
   comparable commands, inputs and conditions. Matching baseline failures may

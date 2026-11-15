@@ -25,7 +25,7 @@ changed and, for each outcome asked for, whether it was shown and by what.
 
 - Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine,
   where they exist. Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
-  where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.
+  where the network is not allowed, which may still run a global or cached copy rather than this project's.
   Check a task's file size without loading its contents.
   For a large record (over 100 KB) or when earlier rounds matter, run
   `npx --no castwork report <id>` **before reading the task record**. Before substantive work,

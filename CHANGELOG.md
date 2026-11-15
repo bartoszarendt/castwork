@@ -40,8 +40,42 @@
   two field projects every launch set Pi's `output`, and reviews
   and findings landed in the host's artifact folders instead of the checkout;
   one brief cited a findings file that never reached it.
+- The coordinator runs no role's checks even where a setup fact or a plan
+  says to, and corrects that line. What it already ran stays under its own
+  actor, and nothing is run again only so that another actor ran it. Where the
+  host limits a run's length, a check that cannot fit beside the other work
+  gets a run of its own, with its limit raised where launches allow (on Pi,
+  `options.timeoutMs`, as the Pi setup guide says), or a detached start that a
+  later round collects. The thinker's plans give
+  checks to the worker or the verifier however long they run. In a field
+  phase, a host's 30-minute role limit led a machine fact and two plans to say
+  the coordinator runs the long checks, and no launch raised the limit. The
+  user corrected the coordinator for running them; the next day it ran the
+  whole closing gate campaign itself, and wrote the citations a verifier
+  rejected. In between, it had four groups of checks run again only to put
+  them under the worker's name.
+- An instrument's total, such as findings reaching zero, becomes a target only
+  once its extraction, selection, exclusion and matching limits are read and a
+  real example of each failure kind has gone through the producer that owns
+  it, and the plan says what reaching the total would and would not show. In a
+  field phase,
+  several repair rounds aimed at zero findings before a step back showed that
+  the audit left out some evidence, capped what it selected and matched
+  literal text, so wording edits could not get there.
+- `verification-evidence` checks a figure or class built from another
+  producer's output against that producer before an entry or finding rests on
+  it: the join matches the cardinality it intends and keeps each source's
+  identity, totals reconcile over the stated population, real examples try to
+  falsify each materially different class, and ambiguous or unmatched cases are
+  named; a configured limit is not the usage it allowed. In a field
+  phase, a classifier joined entries by path alone, one tier's entry replaced
+  another's, and a false cause was recorded for 35 findings.
 - The thinker's word budget is kept by dropping an explanatory sentence after
-  its rule that a risk keeps its conditions. This repository's Codex roles are
+  its rule that a risk keeps its conditions, an opening sentence its
+  Boundaries repeat, and its own account of a failure under an arranged
+  condition, which `verification-evidence` gives. The `--offline` note in every role no longer describes
+  npm's lookup, and the coordinator drops sentences that other rules or its
+  `blocked-state` procedure already state. This repository's Codex roles are
   regenerated.
 
 ## 0.9.18

@@ -224,7 +224,7 @@ for (const host of HOSTS) {
       'Say what would unblock the work, which role should act next and at which level, a higher level being a remedy only for a cause in the difficulty itself, what can proceed independently, and the precise owner decision, if any.',
       'A small task needs no written plan; a plan longer than its work is bookkeeping.',
       'if the plan has phases, give each phase its own task.',
-      'The plan says how the tasks fit together; each record says what its part is.',
+      'The plan says how tasks fit together; each record, its part.',
     ], 'thinker');
   });
 
@@ -286,7 +286,6 @@ for (const host of HOSTS) {
     const thinker = role(host, 'thinker');
     all(thinker, [
       'before it starts and whenever that comes into question: is this the right problem, and is the approach sound?',
-      'You do not produce the result or record a verdict on it.',
       'When the plan, or work already under way, turns on something not yet known, find out first',
       'When a worker returns `blocked` or `needs_context`, a blocking finding questions the work rather than the candidate, or a plan is half done,',
       "Revise unstarted records a finding changes, saying why; changing what was asked is for the user.",
@@ -312,7 +311,7 @@ for (const host of HOSTS) {
       'Investigate a cause progress depends on',
       "Investigate a cause progress depends on; a category or an owner's disposition establishes no mechanism.",
       'A workflow you write returns unresolved causes and changed approaches to your judgement; its end returns the problem to you, not a decision to end the work.',
-      'Honor explicit owner budgets; do not invent a retry count as the reason to stop.',
+      'Do not invent a retry count as the reason to stop.',
       'Run that check once it can tell you something and authorization allows; reproduce a costly failure cheaply where practical before paying for another run',
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('with the thinker or the user rather than retrying'), 'the coordinator may resolve a stall itself');
@@ -386,7 +385,7 @@ for (const host of HOSTS) {
       "**Record a decision where it will be found again:** one that outlives the task in a decision record (`npx --no castwork decision new`), cited by the records it governs; one that settles only this task's next step under its `## Blockers and decisions`.",
       'If the last assessment was blocking and the current candidate has none, say so with the risk as you close it.',
       'When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.',
-      "If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
+      "If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor, rerunning none just for another.",
       "When the user's instructions exclude delegation, take the roles yourself whatever the task's size, and say how you read such an instruction before you start any agent.",
       'check the name resolves.',
       "and the checks the thinker's plan names for it.",
@@ -404,7 +403,7 @@ for (const host of HOSTS) {
       'A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost beyond its resources, not another instance it covers; it returns the work to you to re-plan, and goes to the user only where what follows is their call.',
       "When the path stops converging, or converges only at a cost out of proportion to what it protects, and the way out is the user's, such as deferring a requirement or changing a gate they approved, recommend it then rather than planning another round around it.",
       'When fixes keep exposing defects next to the last one, name the rule they share and frame one correction that covers it.',
-      'Where the evidence allows, settle the steps that follow too, so they need no new question.',
+      'Where the evidence allows, settle the steps that follow too.',
       'Say whether the path needs the user.',
       "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
       "**Each call that remains** gets its options with one recommended answer first, in the user's terms: the commitment it changes, what changes for them and the risk and cost, and what proceeds meanwhile, which the coordinator can bring as it is, keeping the technical terms in the record.",
@@ -475,7 +474,7 @@ for (const host of HOSTS) {
     all(coordinator, [
       "When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed evidence: a disposition is a decision, not a check that passes.",
       "**Decide what happens next**, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at once, or none.",
-      '`report`\'s Changes line shows where the latest recorded week\'s lines went: many in `.castwork/` against few elsewhere is that sign, though elsewhere holds tests and documents. Before ordering a run only for a missing evidence entry, have it cited where `verification-evidence` allows, such as an unaffected earlier run or a larger run\'s stage. ## Choosing the shape Choose a shape before each batch; shapes combine, and none is a loop to repeat.',
+      '`report`\'s Changes line shows it: many lines in `.castwork/`, few elsewhere, tests and documents included. Before ordering a run only for a missing evidence entry, have it cited where `verification-evidence` allows, such as an unaffected earlier run or a larger run\'s stage. ## Choosing the shape Choose a shape before each batch; shapes combine, and none is a loop to repeat.',
     ], 'coordinator');
     const shapes = coordinator.indexOf('## Choosing the shape');
     const delegating = coordinator.indexOf('## Delegating');
@@ -728,7 +727,7 @@ for (const host of HOSTS) {
       "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
       "Link it from the closing record's Current state, the decision that closed the work, and the handoff, and name it in the commit that applies its proposals.",
       "Bring its proposals in its own wording, never a second reviewer's in their place, and record each one's status in its table once the user answers. ## Boundaries",
-      "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so.",
+      "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor, rerunning none just for another.",
     ], 'coordinator');
   });
 }
@@ -739,16 +738,16 @@ for (const host of HOSTS) {
       'Closing a record, rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
       "Use one yourself where it fits your step.",
       "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
-      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
+      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
       "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
       "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles and need no actor.",
       "**Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing restrictions by decision id and source pointer; or assign its update to one role, never two at once.",
-      'never ask for a verdict before the checks it rests on finish.',
+      'Never ask for a verdict before the checks it rests on finish.',
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
       'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
       "Pass no separate reply path to a role writing repository files: the host may tell it to write its result only there.",
-      "A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
+      "A process started outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
     ], 'coordinator');
     all(role(host, 'thinker'), [
       "Choose the simplest approach that meets the full outcome, and explain a new mechanism where its cost or alternatives materially affect the decision.",
@@ -768,7 +767,7 @@ for (const host of HOSTS) {
       'Where the copy matters, use the launcher a brief or `.castwork/local/setup.md` names, such as `node node_modules/castwork/bin/castwork.js`.',
     ], 'entry');
     assert.doesNotMatch(entry(host), phrase('it runs an installed copy and otherwise fails without a request'), '--offline does not guarantee the project\'s copy');
-    const launcher = "otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which stops npm's network lookup but may still run a global or cached copy rather than this project's.";
+    const launcher = "otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which may still run a global or cached copy rather than this project's.";
     for (const id of ['thinker', 'worker', 'verifier']) all(role(host, id), ['Run the CLI with the launcher your brief or that file names, if any; ' + launcher], id);
     all(role(host, 'coordinator'), ['Run the CLI with the launcher that file names, if any; ' + launcher], 'coordinator');
     assert.doesNotMatch(entry(host), phrase('`--no` keeps npx to the installed copy'), 'npx --no does not keep npx off the registry');
@@ -955,7 +954,7 @@ for (const host of HOSTS) {
     ], 'verifier');
     all(role(host, 'thinker'), [
       'Code shows what the system does today, not what the user requires.',
-      'A convention the result depends on that is set outside the repository, such as which time zone defines a reporting day, the format a consumer expects, or a retention or quota policy, is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name it among the user\'s calls the plan foresees, with a recommendation.',
+      'A convention the result depends on that is set outside the repository, such as which time zone defines a reporting day or the format a consumer expects, is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a guess: name it among the user\'s calls the plan foresees, with a recommendation.',
     ], 'thinker');
     all(role(host, 'coordinator'), ['Signs of a stall: a blocking finding that questions the work rather than the candidate, such as a criterion read two ways, the first time it appears; repeated `needs_revision` on one criterion; a fix that brings a new defect of the same kind or next to it, even as findings shrink; a round returning neither work nor a named blocker; an intermittent failure several roles have seen, which a pass in isolation does not explain; a cause explained only by a category such as environmental, flaky, known, pre-existing, or busy; and work that moves while what it should reach does not, such as rounds spent around an acceptance check that never runs.'], 'coordinator');
     all(entry(host), [
@@ -983,7 +982,7 @@ for (const host of HOSTS) {
       "When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again",
       "Use one yourself where it fits your step.",
       "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments, with the documents holding them; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
-      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish.",
+      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
     ], 'coordinator');
     const worker = role(host, 'worker');
     all(worker, [
@@ -1089,11 +1088,11 @@ for (const host of HOSTS) {
       'A criterion that guards against a harm, such as lost or corrupted data, a leak, or a wrong result someone relies on, names what could bring it about in use, by accident or on purpose, and what that would take.',
       "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside the criterion unless the user, a decision or the project's documents put it in:",
       "A cause that ordinary use, concurrent use included, would not produce by accident, and that someone could produce on purpose only with access that already lets them do the harm directly, lies outside the criterion unless the user, a decision or the project's documents put it in: say so beside the criterion, and where nothing written settles that boundary, it is among the user's calls the plan foresees.",
-      "it shows the failure possible there, not that it happens, and whether it matters turns on what the criterion covers.",
+      "A failure shown only under a condition the run arranged is reported with that condition, as `verification-evidence` says; whether it matters turns on what the criterion covers.",
       'A criterion you add or tighten after a finding is your proposal: mark it as one where it stands, with the finding that prompted it, until the user confirms it.',
       'When a blocking finding rests only on such a criterion, decide whether the work needs it, and narrow or drop it, saying why, where nothing the user committed to does.',
       'Separate what the user committed to from the method, gates and evidence the agents chose: a dependency the result does not need is a choice, not a commitment, and so is a criterion the agents added or tightened that the user never confirmed, however the record words it.',
-      'Asked to step back from a plan you wrote earlier in this same session, say so in a line and recommend a fresh thinker: one that still holds the plan questions it least.',
+      'Asked to step back from a plan you wrote earlier in this session, say so in a line and recommend a fresh thinker: one that still holds the plan questions it least.',
       "Where that reviewer names a call of the user's that you would not bring, keep it a call rather than settling it: give your recommendation and its view side by side, for the coordinator to bring.",
       "When you re-plan, rewrite that plan in place, replacing every earlier plan still in the record rather than adding one above them, and say under `## Blockers and decisions` what changed and why, in place of the entry the last re-plan left: the record holds one current plan, and a superseded plan's reasoning stays in the findings it cites.",
     ], 'thinker');
@@ -1318,4 +1317,26 @@ test('the procedure skills take a stage of a larger run as its check and keep a 
   all(skill('assessment'), [
     'A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished.',
   ], 'assessment');
+});
+
+for (const host of HOSTS) {
+  test(`${host} the coordinator runs no role's checks whatever a setup fact or plan says, and a long check outlasts no role's run`, () => {
+    all(role(host, 'coordinator'), [
+      "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor, rerunning none just for another.",
+      "and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects.",
+    ], 'coordinator');
+    assert.doesNotMatch(role(host, 'coordinator'), phrase('options.timeoutMs'), 'the preset names no host API; host documentation does');
+    all(role(host, 'thinker'), [
+      "Checks are the worker's or verifier's, however long, never the coordinator's.",
+      "An instrument's total, such as findings at zero, becomes a target only once its extraction, selection, exclusion and matching limits are read and a real example per failure kind has gone through its producer; say what reaching it would and wouldn't show.",
+    ], 'thinker');
+  });
+}
+
+test('a figure derived from another producer is checked against it before evidence rests on it', () => {
+  all(skill('verification-evidence'), [
+    "**Check what you derived.** A figure or class you built from another producer's output, by joining, classifying or totalling it, is checked against that producer before an entry or finding rests on it: the join matches the cardinality it intends and keeps each source's identity, totals reconcile over the population you state, and real examples try to falsify each materially different class.",
+    'Name the cases left ambiguous or unmatched.',
+    'A configured limit, such as a call ceiling, is not the usage it allowed.',
+  ], 'verification-evidence');
 });

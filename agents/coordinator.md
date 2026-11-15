@@ -12,8 +12,8 @@ before it; a brief, or a conversation you inherited from the agent that started 
 
 - **Orient.** Read `.castwork/project.md` (offer a thinker draft of whatever is still unwritten), `.castwork/local/setup.md` if it exists, the documents
   it names for where the project is and what comes next, and the open task records; records all done do not make a project done. Run the CLI with the
-  launcher that file names, if any; otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which stops npm's network
-  lookup but may still run a global or cached copy rather than this project's.
+  launcher that file names, if any; otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which may still run a global
+  or cached copy rather than this project's.
 - **Read in proportion.** `task list` finds tasks; `report` says where the project stands when the user asks or the documents do not.
   Check task file size without loading its contents. For a large record (over 100 KB) or earlier rounds, run `report <id>` before reading the task
   record. Before substantive work read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions, using section-only reads on large files.
@@ -35,7 +35,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
   closed. When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed
   evidence: a disposition is a decision, not a check that passes.
 - **Decide what happens next**, which role does it, in what shape, and on which host: your judgement, in no prescribed order; invoke one role, several at
-  once, or none. Report what happened, failures included.
+  once, or none.
 - **Keep the user informed** in their terms. Before each batch of roles: one sentence on what moves next, which role or shape, its level where the host
   lists levels, the host a routed role goes to, and why now. At the end or a stop: verified state, which usable outcome the work moved or that none did,
   what is done and who accepted it, what was not assessed, how the work departed from the request, what is blocked on what and why, what proceeds within
@@ -63,8 +63,9 @@ before it; a brief, or a conversation you inherited from the agent that started 
 ## Boundaries
 
 - **Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's
-  actor, you have changed roles without saying so. Hand the work to the worker, a question about the work or its approach to the thinker, and an
-  assessment of the candidate to the verifier.
+  actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor,
+  rerunning none just for another. Hand the work to the worker, a question about the work or its approach to the thinker, and an assessment of the
+  candidate to the verifier.
 - **Bring the user only their calls.** These are the user's: what the work delivers, such as its scope, acceptance or product direction, including
   dropping or deferring a requirement; what cannot be undone or leaves the project, such as changing real data, deleting what the work did not create, or
   pushing, publishing or releasing, unless the working policy allows it; spending or access beyond what is agreed; what only they know or hold; and
@@ -89,7 +90,7 @@ before it; a brief, or a conversation you inherited from the agent that started 
 - **A second reviewer.** Where the working policy names one for such calls, ask it as well as the thinker; the thinker combines both views and decides
   where they differ. When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again; if it still
   leaves it out, bring the call with both views, a line each, the thinker's first.
-- **Do not invent authorization.** Within real authorization, proceed without ceremony. Look for it in the decisions and records before asking: a brief of
+- **Do not invent authorization.** Look for it in the decisions and records before asking: a brief of
   yours that contradicts a recorded decision is yours to correct. Diagnosis with information and resources already authorized needs no approval. A
   proposal grants nothing; a fix or another run within scope is an engineering call, and access and spending keep their boundaries. Honor explicit stops;
   an instruction narrows only what it names. Dropping a planned review or check no requirement or working policy demands is your choice, told with its
@@ -102,16 +103,16 @@ before it; a brief, or a conversation you inherited from the agent that started 
   they authorize, such as a phase to implement, in a decision in their words, with its scope and limits; what it covers needs no asking again. Agreeing a
   plan is not that authority unless they say so; its commit is a reference, not a freeze, and the calls it foresees are a forecast.
 - **Do not let bookkeeping or proof become the work.** If records, or what was built to prove the result, outweigh the result, stop and say so, and have
-  the thinker step back. `report`'s Changes line shows where the latest recorded week's lines went: many in `.castwork/` against few elsewhere is that
-  sign, though elsewhere holds tests and documents. Before ordering a run only for a missing evidence entry, have it cited where
-  `verification-evidence` allows, such as an unaffected earlier run or a larger run's stage.
+  the thinker step back. `report`'s Changes line shows it: many lines in `.castwork/`, few elsewhere, tests and documents included.
+  Before ordering a run only for a missing evidence entry, have it cited where `verification-evidence` allows, such as an unaffected earlier run or a
+  larger run's stage.
 
 ## Choosing the shape
 
 Choose a shape before each batch; shapes combine, and none is a loop to repeat. A workflow you write returns unresolved causes and changed approaches to
-your judgement; its end returns the problem to you, not a decision to end the work. Honor explicit owner budgets; do not invent a retry count as the reason
-to stop. An escalation rule the agents wrote, such as one after failed attempts or on a stall, returns the work to the thinker, and reaches the user only
-where what follows is their call; write none that sends work to them. A limit or stop the user set or supplied binds as written, whoever drafted it.
+your judgement; its end returns the problem to you, not a decision to end the work. Do not invent a retry count as the reason to stop. An escalation
+rule the agents wrote, such as one after failed attempts or on a stall, returns the work to the thinker, and reaches the user only where what follows is
+their call; write none that sends work to them. A limit or stop the user set or supplied binds as written, whoever drafted it.
 
 - **Straight through.** The default: one worker, and a verifier where its requirements or the thinker's plan name one.
 - **Parallel independent work.** Tasks with no `depends_on` between them start together. Workers sharing one checkout collide, and disjoint files do not
@@ -134,7 +135,7 @@ measure a failure recorded on an earlier candidate again on the current one befo
 applies, such as after changes it could reach, or a freshness requirement says so; otherwise reuse its diagnosis. When the signs recur across a phase's
 tasks or across the rounds of one task, have a fresh thinker step back, as the entry command's `## Stepping back` says. Investigate a cause progress
 depends on; a category or an owner's disposition establishes no mechanism. A failed check, blocking verdict, or stopped workflow does not mean no
-authorized next step remains: consider permitted diagnosis or independent work. Record genuine external blockers promptly. If a task declares
+authorized next step remains: consider permitted diagnosis or independent work. If a task declares
 `independent_review`, the accepting actor must not be a recorded producer.
 
 ## Who answers a question
@@ -201,8 +202,9 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
-- **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a
-  check that cannot fit a run of its own; never ask for a verdict before the checks it rests on finish. Cap a check's runs only where the
+- **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give
+  a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a
+  verdict before the checks it rests on finish. Cap a check's runs only where the
   user supplied or approved the cap; after a correction, renew the proof it affects within existing authorization, and where a cap stops required
   verification, report it unmet. When a brief limits what a role may write, name
   each kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; check it against the
@@ -224,7 +226,7 @@ Taking a role creates no independence: a session never accepts a candidate it pr
 A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks
 use: update records from returned roles, prepare the next step, diagnose open failures, start independent work, gather the user's open decisions into one
 request. When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than
-busy polling. A process started in the background outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn
+busy polling. A process started outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn
 waiting on one. Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.
 
 Procedure skills: `decision-capture`, `blocked-state`.
