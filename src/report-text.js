@@ -109,6 +109,13 @@ function taskText(report, row) {
         : excerpt(str(assessment.findings).split('\n')[0]);
       lines.push(`  ${str(assessment.actor) || `${str(assessment.role)} (no actor)`}  ${str(assessment.verdict)}  ${findings}`);
     }
+    const latest = task.entries.assessments.at(-1);
+    // As lint's note: a current entry with no ref gets none. The earlier ref
+    // is printed whole, since History may not show its entry.
+    if (current.valid_ref && !current.assessments.length && latest) {
+      const round = task.rounds.find((r) => r.ref === recordValueText(latest.candidate));
+      lines.push(`  no assessment of this candidate; the latest, ${str(latest.actor) || `${str(latest.role)} (no actor)`} ${str(latest.verdict)}, is of ${round ? `#${round.last_entry} ` : ''}${str(latest.candidate)}`);
+    }
   }
   lines.push('', 'Requirements');
   if (!task.requirements.length) lines.push('  no requirements declared');

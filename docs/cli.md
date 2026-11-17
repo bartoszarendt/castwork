@@ -164,7 +164,9 @@ and are reported separately when timestamps coexist; no midnight is invented.
 
 Task text targets about 60 lines at 100 columns, but current candidate details,
 declared-check results, effective assessments, requirement results with reason
-codes, and dependencies both ways are never cut to fit. History shows at most
+codes, and dependencies both ways are never cut to fit. A current candidate
+with no assessment, in a record that has some, names the latest one and the
+candidate it is of. History shows at most
 five earlier assessed refs, mentions at most five each way, with omissions
 counted. Optional candidate notes are excerpts with an explicit omission indication;
 maximum-candidate ties show at most five records, naming the total and omitted count.

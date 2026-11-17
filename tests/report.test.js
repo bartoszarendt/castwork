@@ -169,6 +169,29 @@ test('D42-6: entries, per-file refs, every rerun fail, outcome base, current tri
   assert.equal((text.match(/test  pass/g)||[]).length,1);
   assert.match(text,/2 candidate entries shown, 1 omitted/);
 });
+test('a current candidate with no assessment names the latest one on an earlier candidate', () => {
+  const data = {candidates: [{ref: 'aaaaaaa'}, {ref: 'bbbbbbb'}], assessments: [{candidate: 'aaaaaaa', actor: 'v@pi', role: 'verifier', verdict: 'needs_revision'}]};
+  let r = derive(input(data));
+  assert.match(renderReport(r, r.records[0]), /\n {2}no assessment of this candidate; the latest, v@pi needs_revision, is of #1 aaaaaaa\n/);
+  r = derive(input({...data, assessments: [...data.assessments, {candidate: 'bbbbbbb', actor: 'v@pi', role: 'verifier', verdict: 'accept'}]}));
+  assert.doesNotMatch(renderReport(r, r.records[0]), /no assessment of this candidate/);
+  r = derive(input({candidates: data.candidates}));
+  assert.doesNotMatch(renderReport(r, r.records[0]), /no assessment of this candidate/);
+  // History shows five earlier assessed refs: the cited one is outside them, and the notice still names it.
+  const refs = ['1111111', '2222222', '3333333', '4444444', '5555555', '6666666', '7777777'];
+  const many = input({candidates: refs.map((ref) => ({ref})),
+    assessments: [...refs.slice(1, 6).map((candidate) => ({candidate, actor: 'v@pi', role: 'verifier', verdict: 'accept'})),
+      {candidate: '1111111', actor: 'v@pi', role: 'verifier', verdict: 'needs_revision'}]});
+  r = derive(many);
+  const text = renderReport(r, r.records[0]);
+  assert.match(text, /is of #1 1111111\n/);
+  assert.doesNotMatch(text, /\n {2}#1 1111111/);
+  // A current entry with no ref gets the notice in neither view.
+  const blank = {candidates: [{ref: 'aaaaaaa'}, {note: 'ref not recorded'}], assessments: data.assessments};
+  r = derive(input(blank));
+  assert.doesNotMatch(renderReport(r, r.records[0]), /no assessment of this candidate/);
+  assert.deepEqual(input(blank).record.info.filter((note) => note.code === 'assessment.none_on_current'), []);
+});
 test('duplicate otherwise-ready tasks match corpus lint validity and remain separate counting units', t => {
   const dir = root(t);
   const data = {schema: 1, id: 'A', title: 'Ready except duplicate', status: 'in_review',

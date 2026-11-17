@@ -62,6 +62,16 @@ test('an accepting actor named as a producer of the same ref earlier is noted, a
   assert.equal(requirementEvaluation(parsed)[0].status, 'satisfied');
 });
 
+test('a record whose assessments are all of earlier candidates names the latest one', () => {
+  const parsed = record('candidates:\n  - ref: abc1234\n  - ref: def5678\nassessments:\n  - {candidate: abc1234, role: verifier, actor: v@pi, verdict: needs_revision}\n');
+  const notes = parsed.info.filter((note) => note.code === 'assessment.none_on_current');
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].message, 'no assessment is of the current candidate def5678; the latest, v@pi needs_revision, is of abc1234');
+  for (const text of ['candidates:\n  - ref: abc1234\n', 'candidates:\n  - ref: abc1234\n  - ref: def5678\nassessments:\n  - {candidate: abc1234, role: verifier, verdict: reject}\n  - {candidate: def5678, role: verifier, verdict: needs_revision}\n']) {
+    assert.deepEqual(record(text).info.filter((note) => note.code === 'assessment.none_on_current'), []);
+  }
+});
+
 test('reordered or repeated producers raise no note', () => {
   const parsed = record('candidates:\n  - ref: abc1234\n    producers: [a@claude, b@codex]\n  - ref: abc1234\n    producers: [b@codex, a@claude]\nassessments:\n  - {candidate: abc1234, role: verifier, actor: c@pi, verdict: accept}\n');
   assert.deepEqual(parsed.info.filter((note) => note.code === 'candidate.producers_changed'), []);

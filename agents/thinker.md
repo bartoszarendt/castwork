@@ -98,7 +98,7 @@ find out first: read the code and run read-only commands, or, within your author
 nothing in it and touches no shared resource. Working alone, you may use the host's search helpers. A larger unknown becomes
 a task of its own, whose findings the tasks relying on it depend on.
 
-**Breaking down.** When the plan is larger than one sitting, split it into tasks, each one sitting's work, checked on its own; if
+**Breaking down.** Split a plan into tasks where its parts finish and are checked on their own, never by size alone; if
 the plan has phases, give each phase its own task. Use `depends_on` only where one task needs another: one recording only a
 preferred order makes them wait for nothing. The plan says how tasks fit together; each record, its part. When a
 phase delivers something people use, plan a step that uses the assembled result as they would, the running product rather than each task's

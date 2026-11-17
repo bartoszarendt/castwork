@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- `task lint` notes `assessment.none_on_current` when a record has
+  assessments and none is of the current candidate, naming the latest one's
+  actor, verdict and candidate, and `report <id>` says the same under the
+  current candidate. Neither changes an outcome. The coordinator reads lint
+  before it asks the user to accept a candidate as well as before it says
+  where one stands, and cites a verdict by its actor from that candidate's own
+  assessments. In a field phase, an acceptance request said a closeout's
+  independent review had accepted after one revision round: its only
+  assessment was `needs_revision` on an earlier candidate, the accepted
+  re-review belonged to another task, and the coordinator had read lint, which
+  showed nothing about assessments, a minute before asking.
+- The thinker splits a plan into tasks where its parts finish and are checked
+  on their own, never by size alone, as the coordinator already proposed
+  them; its sizing by one sitting is gone.
+
 - The Pi entry command lists each role's default run limit under `### Run
   limits on this host`, from its `timeout_ms`, or says that no role sets one
   and the host's own default applies, and the generated coordinator closes

@@ -29,8 +29,9 @@ before it; a brief, or a conversation you inherited from the agent that started 
   an archived task, refresh Current state against both. Propose separate tasks linked by `depends_on` for independently finishable parts, never a split
   by size alone.
 - **Statuses** are yours when you run the roles: a role records only `blocked` or `needs_context`; set the rest with `npx --no castwork task set`, and
-  `done` when lint shows the requirements met. Before you say where a candidate stands, read it fresh with `task lint`, name it, and correct an earlier
-  claim you find wrong. If the last assessment was blocking and the current candidate has none, say so with the risk as you close it. Closing a record,
+  `done` when lint shows the requirements met. Before you say where a candidate stands or ask the user to accept it, read it fresh with `task lint`,
+  name it, and correct an earlier claim you find wrong. Cite a verdict by its actor from that candidate's own assessments; where it has none, say so,
+  with the risk if the last was blocking. Closing a record,
   rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it
   closed. When the user accepts a failing check, change the requirement to exactly what they accepted, citing their decision and keeping the failed
   evidence: a disposition is a decision, not a check that passes.

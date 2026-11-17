@@ -608,6 +608,20 @@ export function parseRecord(text, options = {}) {
       });
     }
   }
+  // A verdict on an earlier candidate is not one on this candidate, and a
+  // report citing it reports a review of this candidate that never happened.
+  // Say so where the record has assessments and none is of this candidate.
+  if (current !== undefined && currentRef !== '' && assessmentEntries.length > 0
+    && !assessmentEntries.some((entry) => recordValueText(entry.candidate) === currentRef)) {
+    const latest = assessmentEntries[assessmentEntries.length - 1];
+    const who = typeof latest.actor === 'string' && latest.actor.trim() !== '' ? latest.actor.trim() : `${recordValueText(latest.role)} (no actor)`;
+    info.push({
+      code: 'assessment.none_on_current',
+      message: `no assessment is of the current candidate ${currentRef}; the latest, ${who} ${recordValueText(latest.verdict)}, is of ${recordValueText(latest.candidate)}`,
+      field: 'assessments',
+      index: /** @type {unknown[]} */ (frontmatter.assessments).lastIndexOf(latest),
+    });
+  }
   // `producers: ["[worker@pi]"]` names an actor with brackets in it, which no
   // assessment by `worker@pi` matches, so independence compares the wrong
   // names. Say where; the attribution is corrected from evidence, not here.
