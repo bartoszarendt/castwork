@@ -58,15 +58,18 @@ the end of the work or at a stop, the coordinator checks each claim against
 its source and applies those for `.castwork/local/setup.md`, for
 `## Setup facts` in `project.md`, and for a `## Checks` line naming a new
 check, saying what it added. It brings the user those for `## Working policy`,
-those that change what a named check runs, since that changes what every task
-requiring the check accepts, and those for places outside the project.
+including any line on who runs what or how work is split, sized or briefed,
+even one a measurement prompted; those that change what a named check runs,
+since that changes what every task requiring the check accepts; and those for
+places outside the project.
 
 | What it is | Where it is kept |
 |---|---|
 | a finding about one candidate | that candidate's assessment |
 | a fact for this repository's tasks | a line in `project.md` (`## Working policy`, `## Checks`, or `## Setup facts`); longer detail in the project's own documents, the line saying what they hold and when to read them |
 | a choice that changes future work | a decision record |
-| a fact about this machine, such as a local path, port, or wrapper | `.castwork/local/setup.md`, which stays on the machine; a handoff points to it |
+| a fact about this machine, such as a local path, port, wrapper, or how long a check takes here | `.castwork/local/setup.md`, which stays on the machine; a handoff points to it |
+| how the agents split, size, brief or assign work, even where a measurement on this machine prompted it | `## Working policy` in `project.md`, which the user approves; the measurement stays in `.castwork/local/setup.md` |
 | a quirk of a host, model, or operating system beyond this project | the host's user-level instructions or a user skill; Castwork does not keep it |
 | a cause in a role's or a skill's own guidance, or in how a Castwork command behaves | the repository it comes from, never its generated copy; a workaround kept meanwhile says whose defect it is |
 | a supporting file a record links to, such as review notes, a synthesis, or the run output a failure, an acceptance or a reproduction rests on | `.castwork/findings/`, named after the task: tracked, never ignored scratch or `tasks/` |

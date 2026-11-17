@@ -232,8 +232,14 @@ what was seen, what it means, what is next; not a new narrative section per run.
   comparable commands, inputs and conditions. Matching baseline failures may
   establish non-introduction; they do not establish the cause. A pass in
   isolation shows a failure did not reproduce; it does not explain it either.
-  Do not require a fresh baseline run for every check or silently spend another
-  run allowance.
+  A comparison that turns on which version ran shows it only where the run
+  executed that version. A checkout, directory, version header or recorded
+  commit names what was meant, while an installed or linked package, a path
+  setting, or a counterpart copied in can run other code, child processes
+  included: say how you know what ran, such as the path a module loaded from
+  or the counterpart's files checked against their tag, and keep it with the
+  entry. Do not require a fresh baseline run for every check or silently spend
+  another run allowance.
 - **Names, not secrets.** Record an environment variable's name, never its
   value: records are repository files, and the repository's own checks read
   them.

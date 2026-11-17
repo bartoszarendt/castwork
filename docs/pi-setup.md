@@ -251,7 +251,13 @@ version is the reference for these cases.
 beside the MCP entries. `timeout_ms` is a whole number from 1 to 2147483647,
 the largest delay a Node timer takes; Pi refuses a role file or launch outside
 that range. Both stay in the role file: each level's variant takes them from
-the role, and `.castwork/local/castwork.json` cannot set them. A role that
+the role, and `.castwork/local/castwork.json` cannot set them. The entry
+command lists each role's default limit under `### Run limits on this host`,
+or says that none is set and the host's default applies, and a role file with
+a limit gives that default under its title, so assignments are sized to the
+limit in force rather than to a default recorded as fixed. A launch's own
+`options.timeoutMs` comes first, so a launch that sets one names it in its
+brief. A role that
 finds a configured tool missing reports it as a setup gap; a grant here is the
 fix, not a note that the project has no such tool.
 

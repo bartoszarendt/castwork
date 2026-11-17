@@ -386,8 +386,9 @@ function renderReference(skill) {
  * @param {ResolvedRoute[]} routes
  * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
  * @param {ResolvedLevel[]} [levels] this host's levels
+ * @param {string|null} [limits] this host's run limits, from `renderRunLimits`
  */
-function renderSkillIndex(command, skills, roles, adapter, routes, coordinator = null, levels = []) {
+function renderSkillIndex(command, skills, roles, adapter, routes, coordinator = null, levels = [], limits = null) {
   const lines = [
     '---',
     'name: castwork',
@@ -400,7 +401,7 @@ function renderSkillIndex(command, skills, roles, adapter, routes, coordinator =
     '# Castwork',
     '',
     command ? command.body : '',
-    ...(command ? ['', renderRouting(routes, levels, String(adapter.id))] : []),
+    ...(command ? ['', renderRouting(routes, levels, String(adapter.id), limits)] : []),
     ...(command && coordinator !== null ? ['', coordinator] : []),
     '',
     '## Roles',
@@ -446,8 +447,9 @@ export function renderEntryCoordinator(coordinator, adapter, available) {
  * @param {string|null} [coordinator] the coordinator role's text, from `renderEntryCoordinator`
  * @param {ResolvedLevel[]} [levels] this host's levels
  * @param {string} [host] the host the command is generated for, which names the levels' settings
+ * @param {string|null} [limits] this host's run limits, from `renderRunLimits`
  */
-export function renderCommand(command, routes, entry = {}, coordinator = null, levels = [], host = '') {
+export function renderCommand(command, routes, entry = {}, coordinator = null, levels = [], host = '', limits = null) {
   const declared = Object.hasOwn(entry, 'arguments');
   const source = entry.source ?? 'adapter command';
   if (declared && (typeof entry.arguments !== 'string' || entry.arguments.trim() === '')) {
@@ -493,7 +495,7 @@ export function renderCommand(command, routes, entry = {}, coordinator = null, l
     }
     lines.push(`argument-hint: ${yamlString(command.argument_hint)}`);
   }
-  lines.push('---', '', command.body, '', renderRouting(routes, levels, host), ...(coordinator === null ? [] : ['', coordinator]));
+  lines.push('---', '', command.body, '', renderRouting(routes, levels, host, limits), ...(coordinator === null ? [] : ['', coordinator]));
   const content = `${lines.join('\n')}\n`;
   if (!declared) return content;
   if (content.includes('$')) throw new PublicError(`${source} produced a dollar sign outside its arguments from generated command text`);
@@ -660,6 +662,85 @@ function renderLevels(levels, host) {
 }
 
 /**
+ * A run limit in milliseconds, in the largest unit that divides it.
+ *
+ * @param {string} ms
+ */
+function runDuration(ms) {
+  const value = Number(ms);
+  const unit = (/** @type {number} */ count, /** @type {string} */ name) => `${count} ${name}${count === 1 ? '' : 's'}`;
+  if (value % 3600000 === 0) return unit(value / 3600000, 'hour');
+  if (value % 60000 === 0) return unit(value / 60000, 'minute');
+  if (value % 1000 === 0) return unit(value / 1000, 'second');
+  return unit(value, 'millisecond');
+}
+
+/**
+ * The run limit a role's settings give it on a host whose role files carry one,
+ * as Pi's `timeoutMs` does, or null.
+ *
+ * @param {Record<string, unknown>} adapter @param {Record<string, unknown>|undefined} settings
+ * @returns {string|null}
+ */
+function runLimit(adapter, settings) {
+  if (!Object.hasOwn(/** @type {Record<string, string>} */ (adapter.role_frontmatter ?? {}), 'timeout_ms')) return null;
+  const value = settings?.timeout_ms;
+  return value === undefined || value === null || value === '' ? null : String(value);
+}
+
+/**
+ * The run limits of the roles this host starts as its own subagents, closing the
+ * routing sections on a host whose role files carry a limit. A coordinator sizes
+ * each assignment to it. Without this list it saw only the host's default, which
+ * agents' own setup notes had recorded as a fixed bound, and it never raised it.
+ * The role file's value is a default: Pi takes a launch's own limit first, so a
+ * launch that sets one names it in its brief, which the role reads first.
+ * A routed role runs as a separate process, which no child limit governs.
+ *
+ * @param {Record<string, unknown>} adapter
+ * @param {Record<string, Record<string, unknown>>} roleSettings
+ * @param {ResolvedRoute[]} routes
+ * @param {ResolvedLevel[]} levels
+ * @param {string} heading the heading's level, `###` in the entry command and `##` in a coordinator
+ * @returns {string|null}
+ */
+function renderRunLimits(adapter, roleSettings, routes, levels, heading = '###') {
+  if (!Object.hasOwn(/** @type {Record<string, string>} */ (adapter.role_frontmatter ?? {}), 'timeout_ms')) return null;
+  const routed = new Set(routes.map((route) => route.role));
+  const roles = ROLE_IDS.filter((role) => role !== 'coordinator' && !routed.has(role));
+  if (roles.length === 0) return null;
+  const lines = [`${heading} Run limits on this host`, ''];
+  const launch = 'A launch that sets its own limit overrides the default: its brief names the limit it set.';
+  if (roles.every((role) => runLimit(adapter, roleSettings[role]) === null)) {
+    lines.push("No role sets `timeout_ms`, so a run stops at the host's own default limit. A role's `timeout_ms` in",
+      "`castwork.json` `role_settings` sets another default.", launch);
+    return lines.join('\n');
+  }
+  for (const role of roles) {
+    const value = runLimit(adapter, roleSettings[role]);
+    const everyLevel = levels.some((level) => level.role === role) ? ', at every level' : '';
+    lines.push(`- \`${role}\`: ${value === null ? "the host's own default limit" : `${runDuration(value)} by default${everyLevel}`}.`);
+  }
+  lines.push('', "A role's `timeout_ms` in `castwork.json` `role_settings` sets its default.", launch);
+  return lines.join('\n');
+}
+
+/**
+ * The line a role file carries under its title where its settings give it a run
+ * limit, so the role knows how long it has.
+ *
+ * @param {string} role @param {Record<string, unknown>} adapter @param {Record<string, unknown>} settings
+ * @returns {string|null}
+ */
+function runLimitLine(role, adapter, settings) {
+  const value = role === 'coordinator' ? null : runLimit(adapter, settings);
+  return value === null
+    ? null
+    : `Started as a subagent here, a run of this role stops after ${runDuration(value)}, the default this repository's \`castwork.json\` sets, ` +
+        'unless your brief names another limit its launch set.';
+}
+
+/**
  * The settings a route to `host` lists, in its adapter's order.
  *
  * @param {string} host
@@ -704,9 +785,13 @@ function renderRoutes(routes) {
  * host's levels where it has any.
  *
  * @param {ResolvedRoute[]} routes @param {ResolvedLevel[]} levels @param {string} host
+ * @param {string|null} [limits] this host's run limits, from `renderRunLimits`
  */
-function renderRouting(routes, levels, host) {
-  return levels.length > 0 ? `${renderRoutes(routes)}\n\n${renderLevels(levels, host)}` : renderRoutes(routes);
+function renderRouting(routes, levels, host, limits = null) {
+  const parts = [renderRoutes(routes)];
+  if (levels.length > 0) parts.push(renderLevels(levels, host));
+  if (limits !== null) parts.push(limits);
+  return parts.join('\n\n');
 }
 
 /**
@@ -805,6 +890,7 @@ export function generateHost(host, options = {}) {
   const routes = options.routes ?? [];
   const levels = resolveLevels(options.levels);
   const coordinator = renderEntryCoordinator(roles.find((role) => role.id === 'coordinator'), adapter, skills.map((skill) => skill.id));
+  const limits = renderRunLimits(adapter, roleSettings, routes, levels);
   /** @type {{path: string, content: string}[]} */
   const files = [];
 
@@ -827,19 +913,27 @@ export function generateHost(host, options = {}) {
         if (role.id === 'coordinator' && levels.length > 0) {
           role.body = `${role.body}\n\n${renderCoordinatorLevels(levels, adapter)}`;
         }
+        const coordinatorLimits = role.id === 'coordinator' ? renderRunLimits(adapter, roleSettings, routes, levels, '##') : null;
+        if (coordinatorLimits !== null) role.body = `${role.body}\n\n${coordinatorLimits}`;
         const settings = roleSettings[role.id] ?? {};
         const own = levels.filter((level) => level.role === role.id);
         const render = (/** @type {typeof role} */ variant, /** @type {Record<string, unknown>} */ values) =>
           entry.format === 'toml' ? renderRoleToml(variant, adapter, values) : renderRoleMarkdown(variant, adapter, values);
-        const base = own.length > 0 ? { ...role, body: underTitle(role.body, levelLine(role.id, 'standard')) } : role;
+        // The level line sits directly under the title, the run limit after it.
+        const limited = (/** @type {Record<string, unknown>} */ values) => {
+          const line = runLimitLine(role.id, adapter, values);
+          return line === null ? role.body : underTitle(role.body, line);
+        };
+        const base = { ...role, body: own.length > 0 ? underTitle(limited(settings), levelLine(role.id, 'standard')) : limited(settings) };
         files.push({ path: entry.to.replace('{role}', role.id), content: render(base, settings) });
         // A variant is the role with a level's model settings. It keeps the
         // role's permissions and none of its model settings, so the level is
         // the whole choice of model.
         for (const level of own) {
           const permissions = Object.fromEntries(ROLE_FILE_SETTINGS.filter((key) => settings[key] != null).map((key) => [key, settings[key]]));
-          const variant = { ...role, id: level.agent, body: underTitle(role.body, levelLine(role.id, level.level)) };
-          files.push({ path: entry.to.replace('{role}', level.agent), content: render(variant, { ...permissions, ...level.settings }) });
+          const values = { ...permissions, ...level.settings };
+          const variant = { ...role, id: level.agent, body: underTitle(limited(values), levelLine(role.id, level.level)) };
+          files.push({ path: entry.to.replace('{role}', level.agent), content: render(variant, values) });
         }
       }
       continue;
@@ -858,13 +952,13 @@ export function generateHost(host, options = {}) {
       files.push({
         path: entry.to,
         content: entry.format === 'skill'
-          ? renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels)
-          : renderCommand(command, routes, commandEntry, coordinator, levels, host),
+          ? renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels, limits)
+          : renderCommand(command, routes, commandEntry, coordinator, levels, host, limits),
       });
       continue;
     }
     if (entry.kind === 'index') {
-      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels) });
+      files.push({ path: entry.to, content: renderSkillIndex(command, skills, roles, adapter, routes, coordinator, levels, limits) });
       continue;
     }
     if (entry.kind === 'literal') {

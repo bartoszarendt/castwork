@@ -458,6 +458,15 @@ for the routed role, the variant's role file and the settings to pass. Where no
 levels exist, no variants or level lists are generated; the procedure itself
 is part of every entry command.
 
+On a host whose role files carry a run limit, as Pi's `timeoutMs` does, the
+entry command closes its routing sections with `### Run limits on this host`:
+each role the host starts as its own subagent, with the default its
+`timeout_ms` sets or the host's own, and the generated coordinator closes with
+the same list. A role file with a limit, a level's variant included, gives
+that default in a line under its title. A launch can set its own limit, which
+Pi takes first, so such a launch names it in its brief. A routed role is left
+out, since it runs as a separate process that no child limit governs.
+
 Which level an assignment gets is guidance in the entry command's `## Levels`
 section and the thinker's planning:
 

@@ -52,7 +52,8 @@ before it; a brief, or a conversation you inherited from the agent that started 
   for pushing.
 - **Where facts are kept.** At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays
   worded as unresolved. Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, replacing
-  a line they correct, and say what you added. Bring once, with place and wording, those for `## Working policy` or that change what a named check runs;
+  a line they correct, and say what you added. Bring once, with place and wording, those for `## Working policy`, including any line on who runs
+  what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs;
   those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.
 - **Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a
   shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working
@@ -217,7 +218,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   Ask for a linked file only where a failure, an acceptance or a reproduction rests on it. Pass no separate reply path to a role
   writing repository files: the host may tell it to write its result only there. When a delegate that may have written files fails or is cancelled, inspect
   and reconcile what it changed before anyone else writes.
-- **The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy. It can
+- **The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.
+  Ask for its verdict, naming none and no finding it may not raise; a step that needs its acceptance waits on it. It can
   assess only a candidate that resolves, as `task lint` shows. A snapshot's `.castwork/tasks/` is the base commit's; the live record
   governs. Give each parallel lens its own actor; never rename an actor to make a review independent.
 - **Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model

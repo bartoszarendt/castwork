@@ -61,6 +61,49 @@ test('Pi accepts model, tools and a run limit, and preserves provider/id:thinkin
   assert.deepEqual(validate(root).findings, []);
 });
 
+test('a Pi run limit is stated where the coordinator sizes work and in the role files it governs', (t) => {
+  // Field coordinators sized every assignment to pi-subagents' default and
+  // never raised it: none of 48 launches in one session, none of 53 in
+  // another. A configured limit reached only the role file's frontmatter.
+  const root = fixture(t, ['pi'], {
+    role_settings: { pi: { worker: { timeout_ms: '3600000' }, verifier: { timeout_ms: '5400000' } } },
+    role_levels: { pi: { worker: { complex: { model: 'provider/strong:high' } } } },
+  });
+  update(root);
+  const command = read(root, '.pi/prompts/castwork.md');
+  const limits = command.split('### Run limits on this host')[1].split('\n## Coordinator\n')[0];
+  assert.ok(command.indexOf('### Levels on this host') < command.indexOf('### Run limits on this host'), 'the limits follow the levels');
+  assert.match(limits, /^- `thinker`: the host's own default limit\.$/m);
+  assert.match(limits, /^- `worker`: 1 hour by default, at every level\.$/m);
+  assert.match(limits, /^- `verifier`: 90 minutes by default\.$/m);
+  // Pi takes a launch's own limit before the role file's, so the listed value
+  // is a default and the brief carries any other.
+  assert.match(limits, /A launch that sets its own limit overrides the default: its brief names the limit it set\./);
+  assert.match(read(root, '.pi/agents/coordinator.md'), /^## Run limits on this host$/m);
+  const line = /a run of this role stops after 1 hour, the default this repository's `castwork\.json` sets, unless your brief names another limit its launch set\./;
+  assert.match(read(root, '.pi/agents/worker.md'), line);
+  assert.match(read(root, '.pi/agents/worker_complex.md'), line, 'a variant keeps the role\'s limit');
+  assert.match(read(root, '.pi/agents/verifier.md'), /stops after 90 minutes/);
+  assert.doesNotMatch(read(root, '.pi/agents/thinker.md'), /Started as a subagent here/);
+  assert.deepEqual(validate(root).findings, []);
+});
+
+test('without a Pi run limit the command says the host default applies, and a routed role or another host lists none', (t) => {
+  const root = fixture(t, ['pi', 'claude']);
+  update(root);
+  const command = read(root, '.pi/prompts/castwork.md');
+  assert.match(command, /^No role sets `timeout_ms`, so a run stops at the host's own default limit\./m);
+  assert.match(command, /`role_settings` sets another default\.\nA launch that sets its own limit overrides the default/);
+  assert.doesNotMatch(read(root, '.pi/agents/worker.md'), /Started as a subagent here/);
+  assert.doesNotMatch(read(root, '.claude/skills/castwork/SKILL.md'), /Run limits on this host/);
+
+  const routed = fixture(t, ['pi', 'codex'], { role_routes: { worker: 'codex' }, role_settings: { pi: { verifier: { timeout_ms: '600000' } } } });
+  update(routed);
+  const limits = read(routed, '.pi/prompts/castwork.md').split('### Run limits on this host')[1].split('\n## Coordinator\n')[0];
+  assert.doesNotMatch(limits, /`worker`/, 'a routed role runs as its own process, which no child limit governs');
+  assert.match(limits, /^- `verifier`: 10 minutes by default\.$/m);
+});
+
 test('a Pi run limit that is not a whole number of milliseconds Pi accepts is refused before generation', (t) => {
   const largest = fixture(t, ['pi'], { role_settings: { pi: { worker: { timeout_ms: '2147483647' } } } });
   assert.equal(readConfig(largest).role_settings.pi.worker.timeout_ms, '2147483647');

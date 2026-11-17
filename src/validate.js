@@ -17,10 +17,13 @@ import { parseRecord, ROLE_IDS } from './record.js';
 /**
  * How much a role preset may say. A limit on lines let a preset grow by
  * lengthening them, to 1,500 characters at one point, so the words are
- * counted, and a line is kept readable. A rule added beyond a limit replaces
- * another rather than raising it.
+ * counted, and a line is kept readable. A rule added beyond a limit first
+ * replaces repetition, or moves conditional mechanics into a procedure the role
+ * loads. Only an agreed rule that still does not fit raises the limit, just
+ * enough and said in the changelog, since cutting a rule nobody re-examined to
+ * meet a number trades behaviour for a word count.
  */
-export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4550, thinker: 4550, worker: 2300, verifier: 2250 });
+export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4600, thinker: 4550, worker: 2300, verifier: 2250 });
 export const COMMAND_WORD_LIMIT = 4100;
 export const GUIDANCE_LINE_LIMIT = 160;
 

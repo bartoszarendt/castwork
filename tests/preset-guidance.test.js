@@ -294,7 +294,7 @@ for (const host of HOSTS) {
       'Asked for an audit, or a review of how completed work went, such as a phase or an abandoned attempt, review the work, not a candidate',
       'Answer with the question, the evidence, your conclusion or what is uncertain, and the next step.',
       '**Diagnosing a stall or a dispute.** Trace consequential stop claims to the contract, decisions and permitted evidence, separating observations from summaries and inferred restrictions, and say what current authority permits and what only the user can decide.',
-      'When an uncertain cause changes the next action, inspect the implementation or procedure, compare baseline evidence and outliers, and choose a cheap, authorized probe whose outcomes tell the explanations apart; reuse established evidence, and do not investigate a clear blocker merely to complete a checklist.',
+      'When an uncertain cause changes the next action, inspect the implementation or procedure, compare outliers and baseline evidence, checking that a baseline ran the code it names, and choose a cheap, authorized probe whose outcomes tell the explanations apart; reuse established evidence, and do not investigate a clear blocker merely to complete a checklist.',
       'do not investigate a clear blocker merely to complete a checklist',
       'Distinguish a contradictory requirement from an unavailable prerequisite or an action not currently authorized',
       'Count actual recorded attempts, not candidates.',
@@ -373,7 +373,7 @@ for (const host of HOSTS) {
       'Before you say where a candidate stands, read it fresh with `task lint`, name it, and correct an earlier claim you find wrong.',
       'At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays worded as unresolved.',
       'Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, replacing a line they correct, and say what you added.',
-      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
+      "Bring once, with place and wording, those for `## Working policy`, including any line on who runs what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
       "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
       "Dropping a planned review or check no requirement or working policy demands is your choice, told with its risk; a required one stays until the user changes it.",
       "**What a user's decision binds:** what they committed to, such as an outcome, a guarantee, a risk they accepted, or a scope, and every limit they approved or supplied, such as a cap, a coverage requirement or a stop on failure, cited where they set it; a method only where they chose it or a declared requirement or the working policy demands it.",
@@ -721,7 +721,7 @@ for (const host of HOSTS) {
       'The report goes in `.castwork/reviews/`, named for its date and occasion, such as `2026-10-20-phase-51.md`, opening with what it covers, a "Read when" line, the conclusion in a few lines, and a table of your proposals in the wording to apply, each with its place, whose approval it needs, and its status. ## Answering If what you find shows that the question you were given, or the step it serves, stands between the work and its outcome, such as a gate whose cost outweighs what it protects, or a proof run where the behaviour never runs, say so first, in a line, with the question you would ask instead: a finding, which widens nothing you may do.',
     ], 'thinker');
     all(role(host, 'coordinator'), [
-      "Bring once, with place and wording, those for `## Working policy` or that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
+      "Bring once, with place and wording, those for `## Working policy`, including any line on who runs what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
       "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
       "Link it from the closing record's Current state, the decision that closed the work, and the handoff, and name it in the commit that applies its proposals.",
       "Bring its proposals in its own wording, never a second reviewer's in their place, and record each one's status in its table once the user answers. ## Boundaries",
@@ -1339,6 +1339,26 @@ test('a figure derived from another producer is checked against it before eviden
     'A configured limit, such as a call ceiling, is not the usage it allowed.',
   ], 'verification-evidence');
 });
+
+test('a comparison of versions shows only the version that executed', () => {
+  // A baseline worktree imported the main checkout's code through an editable
+  // install, and its failures were brought to the owner twice as pre-existing.
+  all(skill('verification-evidence'), [
+    'A comparison that turns on which version ran shows it only where the run executed that version.',
+    'A checkout, directory, version header or recorded commit names what was meant, while an installed or linked package, a path setting, or a counterpart copied in can run other code, child processes included:',
+    "say how you know what ran, such as the path a module loaded from or the counterpart's files checked against their tag, and keep it with the entry.",
+  ], 'verification-evidence');
+});
+
+for (const host of HOSTS) {
+  test(`${host} the coordinator names no verdict for an assessor and brings a line on how work is divided as working policy`, () => {
+    all(role(host, 'coordinator'), [
+      'Ask for its verdict, naming none and no finding it may not raise; a step that needs its acceptance waits on it.',
+      'Bring once, with place and wording, those for `## Working policy`, including any line on who runs what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs;',
+    ], 'coordinator');
+    all(role(host, 'thinker'), ['compare outliers and baseline evidence, checking that a baseline ran the code it names,'], 'thinker');
+  });
+}
 
 for (const host of HOSTS) {
   test(`${host} a step back changes the records and the next assignment, preservation needs the user's word, and a missing tool is a setup gap`, () => {

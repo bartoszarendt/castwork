@@ -144,8 +144,9 @@ coordinator brings with the calls; where it is settled and the simpler route lie
 
 **Diagnosing a stall or a dispute.** Trace consequential stop claims to the contract, decisions and permitted evidence, separating observations from
 summaries and inferred restrictions, and say what current authority permits and what only the user can decide. When an uncertain cause changes the next
-action, inspect the implementation or procedure, compare baseline evidence and outliers, and choose a cheap, authorized probe whose outcomes tell the
-explanations apart; reuse established evidence, and do not investigate a clear blocker merely to complete a checklist. A failure recorded on an earlier
+action, inspect the implementation or procedure, compare outliers and baseline evidence, checking that a baseline ran the code it names, and choose
+a cheap, authorized probe whose outcomes tell the explanations apart; reuse established evidence, and do not investigate a clear blocker merely to
+complete a checklist. A failure recorded on an earlier
 candidate is measured again on the current one before you plan around it only where it is uncertain the failure still applies, such as after changes it
 could reach, or a freshness requirement says so; otherwise reuse its diagnosis and plan the correction. When a gate keeps blocking, check what it protects
 in the product itself under

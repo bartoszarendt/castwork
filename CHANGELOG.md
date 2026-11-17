@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- The Pi entry command lists each role's default run limit under `### Run
+  limits on this host`, from its `timeout_ms`, or says that no role sets one
+  and the host's own default applies, and the generated coordinator closes
+  with the same list. A role file with a limit, a level's variant included,
+  gives that default under its title. Pi takes a launch's own limit first, so
+  a launch that sets one names it in its brief, and the role takes the brief's
+  limit. A routed role is left out, since it runs as a separate process. In
+  field phases, coordinators sized every assignment to
+  pi-subagents' default, which their setup notes recorded as a fixed bound:
+  none of 48 launches in one session raised it, nor any of 53 in another, and
+  no project set `timeout_ms`, which reached only the role file's frontmatter.
+- A comparison that turns on which version ran shows it only where that
+  version executed. `verification-evidence` says a checkout, directory,
+  version header or recorded commit names what was meant, while an installed
+  or linked package, a path setting, or a counterpart copied in can run other
+  code, child processes included, and asks how the run's identity is known;
+  the thinker checks that a baseline ran the code it names. In field phases,
+  baseline worktrees imported the main checkout's code through an editable
+  install, and their failures were brought to the owner twice as
+  pre-existing until a run on the baseline's own source reversed the result;
+  another phase's released-pair results ran a counterpart carrying phase code
+  under the released version header.
+- The coordinator asks an assessor for its verdict and names none, nor a
+  finding it may not raise; only a step that needs its acceptance waits on it,
+  and a record still closes on its declared requirements. In field phases, a confirmation brief told the verifier
+  to record an `accept` with no blocking findings, and another told it to
+  treat a narrowing as decided and spend no time on the failing cases.
+- A line on who runs what, or how work is split, sized or briefed, is a
+  `## Working policy` line the coordinator brings to the user, even where a
+  measurement on this machine prompted it; the measurement stays in
+  `.castwork/local/setup.md`. In a field project, a coordinator wrote "run it
+  as a coordinator lane" into its setup file unasked, and later coordinators
+  kept running declared checks under their own actor, which the coordinator
+  role forbids whatever a setup fact says.
+
 - A step back ends in changed records and a first construction assignment,
   not a document. The thinker names the assignment that builds what its route
   still lacks and, where its brief lets it write, applies what lies within
@@ -56,8 +91,9 @@
   control exists here", and runs were sized to 25 minutes.
 - How alternatives are recorded and which requirement keys exist now live in
   `task-record-contract`, which the thinker loads, rather than in the thinker
-  file. The coordinator and thinker word limits are 4,550, the worker's 2,300
-  and the entry command's 4,100, so these rules fit without dropping others.
+  file. The coordinator's word limit is 4,600, the thinker's 4,550, the
+  worker's 2,300 and the entry command's 4,100, so these rules fit without
+  dropping others.
 - A declared check that a larger command ran unchanged as a stage, such as a
   full gate that runs `check` first, takes its evidence entry from that run
   where the output shows the stage finished: the larger command, with an
