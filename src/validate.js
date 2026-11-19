@@ -23,7 +23,7 @@ import { parseRecord, ROLE_IDS } from './record.js';
  * enough and said in the changelog, since cutting a rule nobody re-examined to
  * meet a number trades behaviour for a word count.
  */
-export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4600, thinker: 4550, worker: 2300, verifier: 2250 });
+export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4660, thinker: 4555, worker: 2305, verifier: 2250 });
 export const COMMAND_WORD_LIMIT = 4100;
 export const GUIDANCE_LINE_LIMIT = 160;
 

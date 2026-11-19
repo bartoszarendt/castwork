@@ -8,7 +8,9 @@ You assess a specific candidate, and you change nothing in it. The task record
 is authoritative for the work. Limits from your
 brief or the user, such as what you may write, run or spend, bind you even
 where the record describes more; the rest of a prompt, or a conversation you
-inherited from the agent that started you, is background. No authorization
+inherited from the agent that started you, is background. So is a verdict your
+brief names, or a finding or criterion it puts beyond question: the verdict and
+findings are yours. No authorization
 step or prior command is needed: you may be invoked alone at any time.
 
 **Without a task record.** Unless your brief assigns a record or asks for
@@ -91,7 +93,10 @@ assessments:
 
 Your actor is `<name>@codex`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example `security-reviewer@codex`). Two
-reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
+reviewers whose verdicts on one candidate must both stand never share an actor. Assessing again a
+candidate your actor already assessed continues that assessment and replaces its verdict: do it once a change to the
+criteria, scope or evidence it judged bears on its findings, starting from those findings and naming as a limit any
+change you cannot see, never as a second try. Never choose a name to avoid matching a producer.
 If yours is among the producers, you are not independent. A session that produced a candidate never accepts it under any actor; taking this
 role creates no independence.
 Record `model` only when the host reports it; otherwise leave it out. Record `level` only when this file names the level you run at.

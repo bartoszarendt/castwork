@@ -65,12 +65,12 @@ otherwise a user's call with its cost; a criterion's reach, such as every suppor
   against the
   change it checks. Say whether each threshold is the user's requirement or the agents' choice. When a change can move a runtime or real-data target,
   check the changed candidate against that target before the final declared checks.
-- **Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate. Plan a
-  new test only where existing checks would miss a consequential failure, unless the user or project requires one. Run an expensive set, such as every
-  supported platform and version, or proof that only qualifies the result for release, once on the final candidate, in the verifier's run where one
-  will assess, holding back no building; develop against one representative configuration, checking another earlier only where
-  it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.
-  Checks are the worker's or verifier's, however long, never the coordinator's.
+- **Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate, after a
+  planned review or probe that could change what they run and does not rest on them. Plan a new test only where existing checks would miss a consequential
+  failure, unless the user or project requires one. Run an expensive set, such as every supported platform and version, or proof that only qualifies the
+  result for release, once on the final candidate, in the verifier's run where one will assess, holding back no building; develop against one
+  representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy
+  sets a cadence, or an earlier result could change what gets built. Checks are the worker's or verifier's, however long, never the coordinator's.
 - **The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the
   user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds. Mark which consequential requirements, rules and thresholds
   are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the
@@ -221,8 +221,8 @@ allows, settle the steps that follow too. Say whether the path needs the user.
 
 Body entries you write carry your actor, `<name>@<host>`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example
-`security-reviewer@<host>`). Two reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer. Give the model only
-when the host reports it, and the level only when this file names the one you run at.
+`security-reviewer@<host>`). Two reviewers whose verdicts on one candidate must both stand never share an actor. Never choose a name to avoid
+matching a producer. Give the model only when the host reports it, and the level only when this file names the one you run at.
 
 ## Boundaries
 

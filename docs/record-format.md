@@ -311,13 +311,14 @@ specialist's name such as `security-reviewer@codex`. The toolkit compares
 strings and reports them as **asserted**. It has no way to verify that the
 actor named is the actor that wrote the entry, and it never claims to.
 
-Two reviewers of one candidate never share an actor. The checks keep the last
-assessment per candidate and actor, so a second reviewer, such as a second
-verifier lens, writing under the same string replaces the first one's verdict:
-a `needs_revision` from one lens followed by an `accept` from another would
-read as a changed mind. An actor that does change its own verdict is reported:
-a satisfied requirement then carries the fact that it recorded a blocking
-verdict earlier.
+Two reviewers whose verdicts on one candidate must both stand never share an
+actor. The checks keep the last assessment per candidate and actor, so a second
+reviewer writing under the same string replaces the first one's verdict: a
+`needs_revision` from one followed by an `accept` from another would read as a
+changed mind. An actor that does change its own verdict, as it may once a change
+to the criteria, scope or evidence it judged bears on its findings, from
+whichever session records it, is reported: a satisfied requirement then carries
+the fact that it recorded a blocking verdict earlier.
 
 A blank identity is not somebody. `producers: [""]` does not make a reviewer
 independent of nobody: it leaves `independent_review` `unknown`, and the blank

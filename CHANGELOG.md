@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- Before routing a blocking finding on a consequential criterion, one that
+  shapes the design or its cost, the coordinator names where that criterion
+  came from: the user's words or decision, a project document, or the agents;
+  the record that holds it is not a source. One the agents added or tightened,
+  which the user never confirmed, goes to a fresh thinker even when the same
+  assessment holds plain defects, which go to the worker meanwhile unless the
+  thinker's answer could change them. It is asked whether the work needs that
+  criterion and the cheapest observation that would show it does not. In a
+  field task, an assessment blocked on two plain defects and on a selection
+  signal the agents had written into the task, which its consumer did not
+  need. The coordinator sent all three to the worker as "the record's
+  criterion" and told the next verifier to hold the criteria as facts. When the
+  signal alone blocked, its brief called the remedy bounded and launched a
+  round it designed itself. The old rule, loaded both times, already applied to
+  each finding resting only on such a criterion; the mixed assessment showed how
+  easily that was missed when nothing asked where the criterion came from.
+- The actor rule in the thinker, worker and verifier, the assessment skill and
+  the record format now reads: two reviewers whose verdicts on one candidate
+  must both stand never share an actor. The verifier and the assessment skill
+  add that assessing again a candidate your actor already assessed, from
+  whichever session, continues that assessment and replaces its verdict: once a
+  change to the criteria, scope or evidence it judged bears on its findings,
+  starting from those findings and naming as a limit any change it cannot see,
+  never as a second try, so an unrelated edit to the record justifies none. A
+  finding answered by correcting the task record alone asks for no new
+  candidate: the record says what the correction changed and when, with no
+  evidence entry, since nothing ran. The coordinator may also resume a verifier
+  on the same candidate after only its record changed. After
+  a correction to a task record left the candidate unchanged, as a snapshot
+  leaves task records out, a fresh verifier agreed with the work but refused to
+  record a verdict, reading the old sentence as forbidding it, although the
+  checks and the thinker already let the same actor replace its own verdict.
+- The verifier treats a verdict its brief names, or a finding or criterion the
+  brief puts beyond question, as background: the verdict and findings are its
+  own. After the coordinator rule against such briefs shipped, briefs in field
+  sessions still told a verifier to hold the record's criteria as facts, not to
+  reopen, and to record `accept` if its finding was resolved.
+- The thinker runs the declared checks on the final candidate after a planned
+  review or probe that could change what they run and does not rest on them;
+  the assessment that rests on those checks still follows them. In field phases a full gate passed before an already commissioned review
+  found that its tests lacked required assertions, and a task re-ran its full
+  gate while a design question that would change it stayed open.
+- The coordinator's word limit rises from 4600 to 4660, the thinker's from 4550
+  to 4555 and the worker's from 2300 to 2305, to fit the agreed rules above; the coordinator's duplicate
+  "give each parallel lens its own actor" is gone, since choosing the shape
+  already says so.
+
 - `task lint` notes `assessment.none_on_current` when a record has
   assessments and none is of the current candidate, naming the latest one's
   actor, verdict and candidate, and `report <id>` says the same under the

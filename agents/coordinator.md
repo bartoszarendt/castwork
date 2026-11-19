@@ -148,8 +148,10 @@ pointing at something written, such as a record, a decision, the working policy,
 give that answer directly unless the user or working policy asks for another perspective.
 
 - A plain defect goes back to the worker.
-- A blocking finding that rests only on a criterion the agents added or tightened, which the user never confirmed, goes to a fresh thinker before the
-  worker: whether the work needs that criterion comes first.
+- Before routing a blocking finding on a consequential criterion, one that shapes the design or its cost, name where that criterion came from: the
+  user's words or decision, a project document, or the agents; the record that holds it is not a source. One the agents added or tightened, which the
+  user never confirmed, goes to a fresh thinker before the worker, even beside plain defects: whether the work needs that criterion, and the cheapest
+  observation that would show it does not, come first. The plain defects go to the worker meanwhile, unless that answer could change them.
 - A finding the verifier records as not blocking is follow-up work, not another round: name it in the closing state and bring it to the thinker when it
   next plans.
 - A question that needs an argument goes to the thinker, gathered into one request: a cause not established, a criterion read two ways, a choice between
@@ -185,7 +187,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   rather than advancing on its own.
 -  **Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id. Resume one only when the round continues its own
   last round on the same task,
-  the worker with findings on the candidate it built, the verifier with the next candidate of that task, the thinker answering its own question or writing
+  the worker with findings on the candidate it built, the verifier with the next candidate of that task, or the same one after only its record changed,
+  the thinker answering its own question or writing
   its plan into records, and you read, before resuming, that its context is under about half of its model's window. Read its latest turn's context against
   that window where the host reports it for its latest round, such as that run's status or a state file beside its output, never its peak, an earlier
   round's figure or a count of tokens spent, and note where in `.castwork/local/setup.md`; a figure you did not read, or one the host does not report,
@@ -222,7 +225,7 @@ Taking a role creates no independence: a session never accepts a candidate it pr
 - **The verifier.** Do not restate the worker's claims to it or restrict what it re-runs: where a writer shares its checkout, give it its own copy.
   Ask for its verdict, naming none and no finding it may not raise; a step that needs its acceptance waits on it. It can
   assess only a candidate that resolves, as `task lint` shows. A snapshot's `.castwork/tasks/` is the base commit's; the live record
-  governs. Give each parallel lens its own actor; never rename an actor to make a review independent.
+  governs. Never rename an actor to make a review independent.
 - **Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model
   otherwise. Report a role's model, effort, or variant from the generated agent file you started.
 

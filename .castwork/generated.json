@@ -1,10 +1,10 @@
 {
   "layout_version": 4,
   "version": "0.9.18",
-  "source_digest": "sha256:b89eda7cef5e5b707c0bd8a7cd786ee3009c1c1acc7a754d8c8127f63e329300",
+  "source_digest": "sha256:e8bfe14929e768e1e7ba995ca6665eec9ce3e2c9ff35fd087a15796f2289dd29",
   "files": {
-    ".codex/agents/thinker.toml": "sha256:0f23fc15d2b4261d8e36487f92e919a9d723d49128a7a0ca8f5df31fe728631e",
-    ".codex/agents/verifier.toml": "sha256:f38a41c3eddade9fc0e99de9d0fb70b4942104a912e5d8809bd7700d5e5a7da3",
-    ".codex/agents/worker.toml": "sha256:bf81af1402de06be843315341ba2601c89e2542a04cfcc74ae2e3b86c2577017"
+    ".codex/agents/thinker.toml": "sha256:13f8ecf4a31968d04173e6aad876e07d15d28914ca614c03b68f46e35f0ba0e4",
+    ".codex/agents/verifier.toml": "sha256:c238f616b402a0311bbe198c1c959ce32908fe7cce3f5c25fae9077aedefb87d",
+    ".codex/agents/worker.toml": "sha256:e7abcc9ed7ba358b2b25ea2b229b50f1aa552927e24cfb41ec4a0037945171f7"
   }
 }

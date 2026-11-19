@@ -68,7 +68,7 @@ evidence:
 
 Your actor is `<name>@codex`: the id of the agent host you run in, never the machine's name, and
 your role, or the specialist name you were started as (for example `security-reviewer@codex`). Two
-reviewers of one candidate never share an actor. Never choose a name to avoid matching a producer.
+reviewers whose verdicts on one candidate must both stand never share an actor. Never choose a name to avoid matching a producer.
 `host`, `model`, `level` and `at` are optional. Record `model` only when the host reports it; otherwise leave
 it out. Record `level` only when this file names the level you run at. Never write a placeholder such as `unknown`. For candidates from mixed hosts, models
 or levels, omit the mixed attributes instead of picking one. `at` is RFC 3339, in

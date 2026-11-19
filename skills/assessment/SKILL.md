@@ -155,9 +155,14 @@ you produced the candidate, do not record the verifier's verdict on it.
 
 Write an actor string that identifies you honestly, for example
 `verifier@codex`, or the specialist name you were started as, such as
-`security-reviewer@codex`. Two reviewers of one candidate never share an actor:
-the checks keep the last assessment per actor, so a second lens under the same
-name replaces the first one's verdict. Never choose a name to avoid matching a
+`security-reviewer@codex`. Two reviewers whose verdicts on one candidate must
+both stand never share an actor: the checks keep the last assessment per actor,
+so a second verifier under the same name replaces the first one's verdict. For
+the same reason, assessing again a candidate your actor already assessed,
+whichever session records it, continues that assessment and replaces its
+verdict: do it once a change to the criteria, scope or evidence it judged bears
+on its findings, starting from those findings and naming as a limit any change
+you cannot see, never as a second try. Never choose a name to avoid matching a
 producer. The toolkit compares strings and reports them as asserted; it cannot
 tell whether the string is true, and it never claims to.
 
@@ -199,8 +204,12 @@ within the scope of the work, and say where you looked; name an occurrence
 outside that scope as a proposal rather than fixing it. After `needs_revision`
 or `reject`, or a follow-up someone chose to make, record a new candidate and
 fresh evidence for what changed: the old evidence belongs to the old candidate.
-A finding recorded as not blocking beside an `accept` asks for no new
-candidate: the accepted one stays accepted, and the finding is follow-up work.
+A finding answered by correcting the task record alone, which snapshots leave
+out, asks for no new candidate: say in the record what the correction changed
+and when, and the assessor's actor assesses the same candidate again. Record no
+evidence entry for it, since nothing ran. A finding recorded as not blocking
+beside an `accept` asks for no new candidate: the accepted one stays accepted,
+and the finding is follow-up work.
 
 ## Be specific
 
