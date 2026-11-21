@@ -588,6 +588,27 @@ already holds the project's output but the last commit holds the old one:
 untracked, so a `.gitignore` that no longer covers `.castwork/local/`, or a
 file committed before it was ignored, is reported.
 
+When a role ran on a model you did not expect, follow the value from where it
+is set to where it ran, in this order:
+
+1. The route and level in effect: `role_routes` in `castwork.json` or
+   `.castwork/local/castwork.json`, and the level the coordinator chose.
+2. The settings for that host, role and level: `role_settings` or
+   `role_levels` in `castwork.json`, with `.castwork/local/castwork.json` set
+   over them key by key, as `update` wrote them into the generated role file
+   the coordinator starts and reports a role's model from. Where a value is
+   cleared or never set, the host's own configuration decides it.
+3. The launch: for a routed role, the command the coordinator ran, which passes
+   those settings through the target CLI's own model, reasoning or variant
+   options, so a correct role file can still meet a wrong launch.
+4. The model the host reports for that run, such as in its transcript.
+
+`validate` checks the toolkit's source and generated output, and `doctor` and
+`update --check` say whether the files on disk are current; none of them shows
+what a running session loaded, since a host reads these files only when a
+session starts. Only steps 3 and 4 show what ran; a new session started after
+`update` is one way to observe them.
+
 ## Adding a host
 
 Add a descriptor at `src/adapters/<host>.json` whose `id` is the host's own

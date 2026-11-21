@@ -34,7 +34,7 @@ test('every role preset and the entry command stay within their word limits, in 
 test('a role over its word limit, or with a line too long to read, is reported', () => {
   const role = { id: 'worker', description: 'd', procedures: [], body: `${'word\n'.repeat(ROLE_WORD_LIMITS.worker)}${'x'.repeat(GUIDANCE_LINE_LIMIT + 1)}` };
   const messages = roleFindings(role, []).map((finding) => finding.message);
-  assert.ok(messages.some((message) => /words; worker is meant to stay within 2305, so a new rule replaces one/.test(message)));
+  assert.ok(messages.some((message) => /words; worker is meant to stay within 2305: first remove repetition .* raises the limit just enough, said in the changelog/.test(message)));
   assert.ok(messages.some((message) => /body line 2306 is 161 characters; wrap it within 160/.test(message)));
 });
 

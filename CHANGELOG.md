@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- The verifier's proportionality lens and the assessment skill add that a
+  test, check or option the candidate added for a mechanism shows what the
+  mechanism does, not that the work needs it: the need is judged from the
+  record and the mechanism's users. A change's own scaffolding had been
+  readable as the evidence that justified it.
+- When a delegated round for a recorded task leaves no readable copy of its
+  brief, the coordinator saves the exact brief sent in
+  `.castwork/local/runs/<task>/`, with the role and round in the filename, so
+  a later review can read what the role was told. A Codex subagent launch is
+  one such round: Codex stores the brief only in encrypted form, so reviews of
+  its sessions had to infer a brief from what the role did, while brief
+  lapses, such as write limits that left out files the record's Scope
+  required, are a recurring cause in reviews of other hosts. A routed CLI run
+  already keeps its brief in its own run directory. The entry command's rule
+  for routed briefs now leaves no copy in the repository outside that run
+  output. The coordinator's word limit goes from 4660 to 4700 for this line.
+- `validate`'s warning for a role preset or the entry command over its word
+  limit now says to remove repetition or move conditional mechanics into a
+  procedure skill first, and to raise the limit just enough, saying so in the
+  changelog, for an agreed rule that still does not fit. It used to say "a
+  new rule replaces one", which invited cutting rules nobody had re-examined
+  to meet a number.
+- The host adapter guide shows how to trace a role that ran on an unexpected
+  model: the route and level in effect, the settings from `castwork.json` and
+  the local override as written into the generated role file, the command that
+  launched a routed role, and the model the host reports for the run. It says
+  that `validate`, `doctor` and `update --check` show the files on disk, while
+  only the launch and the host's record of the run show what ran.
 - Before routing a blocking finding on a consequential criterion, one that
   shapes the design or its cost, the coordinator names where that criterion
   came from: the user's words or decision, a project document, or the agents;

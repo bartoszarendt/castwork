@@ -60,8 +60,9 @@ uncommitted.
      that gap leaves a criterion unshown.
   4. **Proportionate:** would the project want to maintain it? A finding names the concrete burden, such as a concept, option,
      layer or test a reader must carry, and a simpler alternative that keeps the contract; that an abstraction exists, or has one
-     implementation, is not a finding. A missing test is a finding only with the consequential failure it would catch and the gap
-     in coverage; a defect you observed is a defect whether or not a test is needed.
+     implementation, is not a finding. A test, check or option the candidate added for a mechanism shows what the mechanism does,
+     not that the work needs it: judge that need from the record and the mechanism's users. A missing test is a finding only with
+     the consequential failure it would catch and the gap in coverage; a defect you observed is a defect whether or not a test is needed.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
   record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags,
   environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.

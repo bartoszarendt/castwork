@@ -67,7 +67,12 @@ authoritative copy for one host.
 1. Read `CASTWORK.md` for the vocabulary and `docs/record-format.md` for the
    record contract.
 2. Read the role preset or skill you are changing, and keep it independently
-   usable: no skill may require activation or a prior command.
+   usable: no skill may require activation or a prior command. The word limits
+   in `src/validate.js` are guardrails, not reduction targets: when an agreed
+   rule takes a preset or the entry command past one, first remove repetition
+   or move conditional mechanics into a procedure skill the role loads; if it
+   still does not fit, raise the limit just enough and say so in the changelog.
+   Never cut a rule nobody re-examined to meet the number.
 3. Add a concept only when a real consumer needs it. A new requirement kind,
    status value, host, or command must name that consumer.
 
@@ -87,7 +92,13 @@ adding one.
 For an owner-authorized release from `main`, bump the version in `package.json`
 and add a user-facing `CHANGELOG.md` entry. Before publishing, run `npm pack`,
 install the tarball in a disposable repository, and verify `setup`, `update`,
-and `remove`. Breaking changes get a major-or-minor bump and state in the
+and `remove`. When the release changes how an adapter generates the entry
+command or passes its argument, also invoke the entry command on that host
+there, in separate new sessions, once with a task id and once with free text,
+and check that the task id selected that record and the free text drove the
+requested action: generation tests show the file, not that the host loads it
+and acts on the argument.
+Breaking changes get a major-or-minor bump and state in the
 changelog that there is no migration path; Castwork does not ship compatibility
 shims, aliases, or deprecated commands.
 

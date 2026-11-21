@@ -87,9 +87,12 @@ checks it rests on have finished.
    should be paying for it. A finding names the concrete burden, such as a
    concept, option, layer or test a reader must carry, and a simpler
    alternative that keeps the contract; that an abstraction exists, or has one
-   implementation, is not a finding. A missing test is a finding only with the
-   consequential failure it would catch and the gap in coverage; a defect you
-   observed is a defect whether or not a test is needed.
+   implementation, is not a finding. A test, check or option the candidate
+   added for a mechanism shows what the mechanism does, not that the work needs
+   it: judge that need from the record and the mechanism's users. A missing
+   test is a finding only with the consequential failure it would catch and the
+   gap in coverage; a defect you observed is a defect whether or not a test is
+   needed.
 
 ## Read the candidate
 

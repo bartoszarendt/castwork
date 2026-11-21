@@ -534,7 +534,7 @@ for (const host of HOSTS) {
       'A fact about this machine that will still hold next time belongs in `.castwork/local/setup.md`, not in the handoff: add it there, as the other proposals for that file are applied, and point to that file rather than repeating it.',
       "Before the capability runs, tell the user in a line which role you are handing to which host's CLI",
       "states the delegate's actor, `<role>@<route host>`",
-      'leave no copies of a brief or plan in the repository',
+      'leave no copies of a brief or plan in the repository outside the run output in `.castwork/local/runs/`.',
       'repeats the role and the settings flags',
       "with the CLI's own path or permission rules",
       'No other role writes to the same checkout during a routed write.',
@@ -835,7 +835,11 @@ for (const host of HOSTS) {
     ], 'worker');
     all(role(host, 'verifier'), [
       'A finding names the concrete burden, such as a concept, option, layer or test a reader must carry, and a simpler alternative that keeps the contract; that an abstraction exists, or has one implementation, is not a finding.',
+      "A test, check or option the candidate added for a mechanism shows what the mechanism does, not that the work needs it: judge that need from the record and the mechanism's users.",
     ], 'verifier');
+    all(skill('assessment'), [
+      "A test, check or option the candidate added for a mechanism shows what the mechanism does, not that the work needs it: judge that need from the record and the mechanism's users.",
+    ], 'assessment');
   });
 }
 
@@ -1106,6 +1110,7 @@ for (const host of HOSTS) {
       'A thinker re-planning after a round that failed or did not move the task, diagnosing a stall, or stepping back starts fresh whatever its context: resumed, it would question a plan it still holds.',
       "Its brief gives the task id, the user's words that bear on the question, the question, and, as facts, which criteria the blocking findings since the plan cite and in which assessments, not your account of the problem, and asks it to judge from `report <id>` whether the rounds since the plan moved the task.",
       "**What a brief says.** Give the task id and let the role read the record; a paraphrase is one more thing that can drift.",
+      "When a delegated round for a recorded task leaves no readable copy of its brief, save the exact brief sent in `.castwork/local/runs/<task>/`, with the role and round in the filename, so a later review can read what it was told.",
       'A risk keeps its conditions: who it reaches in use now, what must hold, and whether it was seen in use or only in a test that forced it.',
       "if it still leaves it out, bring the call with both views, a line each, the thinker's first.",
       "Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round, never the copy that checkout installs",

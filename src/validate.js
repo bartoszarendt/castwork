@@ -23,9 +23,10 @@ import { parseRecord, ROLE_IDS } from './record.js';
  * enough and said in the changelog, since cutting a rule nobody re-examined to
  * meet a number trades behaviour for a word count.
  */
-export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4660, thinker: 4555, worker: 2305, verifier: 2250 });
+export const ROLE_WORD_LIMITS = Object.freeze({ coordinator: 4700, thinker: 4555, worker: 2305, verifier: 2250 });
 export const COMMAND_WORD_LIMIT = 4100;
 export const GUIDANCE_LINE_LIMIT = 160;
+const OVER_LIMIT = 'first remove repetition or move conditional mechanics into a procedure skill the role loads; an agreed rule that still does not fit raises the limit just enough, said in the changelog';
 
 /** @param {string} text */
 export function wordCount(text) {
@@ -120,7 +121,7 @@ export function roleFindings(role, skills) {
   }
   const limit = /** @type {Record<string, number>} */ (ROLE_WORD_LIMITS)[role.id];
   const words = wordCount(role.body);
-  if (limit !== undefined && words > limit) warn(findings, where, `${words} words; ${role.id} is meant to stay within ${limit}, so a new rule replaces one`);
+  if (limit !== undefined && words > limit) warn(findings, where, `${words} words; ${role.id} is meant to stay within ${limit}: ${OVER_LIMIT}`);
   const long = longLine(role.body);
   if (long) warn(findings, where, `body line ${long.line} is ${long.length} characters; wrap it within ${GUIDANCE_LINE_LIMIT}`);
   return findings;
@@ -143,7 +144,7 @@ function validateCommand(findings) {
   }
   const parsed = parseRecord(fs.readFileSync(file, 'utf8'), { path: file });
   const words = wordCount(parsed.body);
-  if (words > COMMAND_WORD_LIMIT) warn(findings, where, `${words} words; the entry command is meant to stay within ${COMMAND_WORD_LIMIT}, so a new rule replaces one`);
+  if (words > COMMAND_WORD_LIMIT) warn(findings, where, `${words} words; the entry command is meant to stay within ${COMMAND_WORD_LIMIT}: ${OVER_LIMIT}`);
   const long = longLine(parsed.body);
   if (long) warn(findings, where, `body line ${long.line} is ${long.length} characters; wrap it within ${GUIDANCE_LINE_LIMIT}`);
   try {

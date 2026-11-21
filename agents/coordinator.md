@@ -204,6 +204,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   the boundary the last one returned, rechecking facts that changed or are uncertain rather than repeating completed discovery. When the work comes
   from a document, name it and the part. Name a skill, with what it is for, when the working policy asks for one or says the role's model does not
   pick skills, or the assignment is what it describes, such as an investigation; otherwise the role chooses. Use one yourself where it fits your step.
+  When a delegated round for a recorded task leaves no readable copy of its brief, save the exact brief sent in `.castwork/local/runs/<task>/`,
+  with the role and round in the filename, so a later review can read what it was told.
 - **A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding
   them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the
   conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a

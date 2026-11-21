@@ -344,7 +344,8 @@ until the run ends, reviews the result and returns it.
   (`codex`)".
 - **The brief** states the delegate's actor, `<role>@<route host>`, as listed
   below. Everything the delegate must read is in the workspace or in the brief
-  itself; leave no copies of a brief or plan in the repository. A plan that
+  itself; leave no copies of a brief or plan in the repository outside the run
+  output in `.castwork/local/runs/`. A plan that
   must outlive the session goes in the task record body, where the thinker
   writes plans, unless the working policy names another place.
 - **A resumed run** repeats the role and the settings flags; a resume without
