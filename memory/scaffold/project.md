@@ -3,6 +3,14 @@
 Prose only. Machine configuration lives in `castwork.json` at the repository
 root, not here.
 
+Under What this project is, also say at what scale it is used, how long it is
+meant to last, and what a failure would cost: agents size the work and its
+proof to this. Where it affects the work, also say its development stage and
+what already carries commitments, such as users, interfaces or stored data,
+naming any part that differs, and what would end a stage that has none, such
+as the first release. A pointer to a document that already says this is
+enough.
+
 ## What this project is
 
 One or two sentences: what it does and who uses it.

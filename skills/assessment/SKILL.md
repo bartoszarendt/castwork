@@ -50,6 +50,10 @@ checks it rests on have finished.
 
 ## Three lenses, in order
 
+Judge risk, scale and what is consequential against the project's expected
+use, as `.castwork/project.md` or the record's plan states it; where neither
+does, say which use you assumed.
+
 1. **Does it do what the record asked?** Read `## Intent` and
    `## Acceptance criteria` first, then the change. Work that is good but not
    what was asked for is still not what was asked for.
@@ -87,7 +91,11 @@ checks it rests on have finished.
    should be paying for it. A finding names the concrete burden, such as a
    concept, option, layer or test a reader must carry, and a simpler
    alternative that keeps the contract; that an abstraction exists, or has one
-   implementation, is not a finding. A test, check or option the candidate
+   implementation, is not a finding. A limit the candidate names, such as a
+   size, a load or a case it leaves out, is a choice, not an oversight: it is a
+   finding only where it fails a criterion, a declared requirement or what the
+   user committed to, such as safety or data integrity, or the expected use
+   already reaches it. A test, check or option the candidate
    added for a mechanism shows what the mechanism does, not that the work needs
    it: judge that need from the record and the mechanism's users. A missing
    test is a finding only with the consequential failure it would catch and the

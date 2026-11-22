@@ -36,7 +36,8 @@ uncommitted.
   path, and load one when its procedure would help this step, such as a security or performance lens. Look again when a new concern
   appears. Consulting the host's catalogue is expected; do not search other locations or install skills. Applying a skill matters, not
   loading it.
-- Assess it against the work, in order:
+- Assess it against the work, in order. Judge risk, scale and what is consequential against the project's expected use, as `project.md`
+  or the plan states it; where neither does, say which use you assumed.
   1. **Responsive:** does it do what the record asked, and not something else?
   2. **Complete:** does every acceptance criterion hold, and is anything the record requires missing?
   3. **Correct:** is what is there right? Does the evidence describe what actually happens; is anything claimed that is not there? Inspect
@@ -59,7 +60,10 @@ uncommitted.
      that gap leaves a criterion unshown.
   4. **Proportionate:** would the project want to maintain it? A finding names the concrete burden, such as a concept, option,
      layer or test a reader must carry, and a simpler alternative that keeps the contract; that an abstraction exists, or has one
-     implementation, is not a finding. A test, check or option the candidate added for a mechanism shows what the mechanism does,
+     implementation, is not a finding. A limit the candidate names, such as a size, a load or a case it leaves out, is a choice, not
+     an oversight: it is a finding only where it fails a criterion, a declared requirement or what the user committed to, such as
+     safety or data integrity, or the expected use already reaches it. A test,
+     check or option the candidate added for a mechanism shows what the mechanism does,
      not that the work needs it: judge that need from the record and the mechanism's users. A missing test is a finding only with
      the consequential failure it would catch and the gap in coverage; a defect you observed is a defect whether or not a test is needed.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and

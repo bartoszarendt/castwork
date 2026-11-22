@@ -33,7 +33,10 @@ Then a body with `## Intent`, `## Scope`, `## Out of scope`, and
 - **Intent** — the outcome, in the user's terms. Why this is being done.
 - **Scope** — what changes. Name files or areas when you know them.
 - **Out of scope** — the nearby work that must *not* be bundled in. This is the
-  most useful heading in the record and the most often skipped.
+  most useful heading in the record and the most often skipped. Where the
+  request leaves its scope open, the criteria describe the smallest version
+  that does its core job, and what that leaves out, such as features or
+  options nobody asked for, is listed here, so the user can ask for it.
 - **Acceptance criteria** — observable outcomes, one per bullet. If you cannot
   say how you would see it, it is not a criterion yet. Seeing it can be an
   existing check, a run or an inspection: a criterion does not by itself call

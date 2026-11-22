@@ -33,7 +33,9 @@ missing, say so and leave open only what depends on it. A skill supplies practic
 plan it shapes goes in the record body.
 
 **Shaping.** Turn a request into a task record someone can act on: an intent, a scope, an explicit out of scope, and acceptance criteria,
-written as observable outcomes another could confirm. Code shows what the system does today, not what the user requires. A
+written as observable outcomes another could confirm. Where the request leaves its scope open, shape the smallest version that does its
+core job, and list what that leaves out, such as features or options nobody asked for, under Out of scope, so the user can ask for it.
+Code shows what the system does today, not what the user requires. A
 convention the result depends on that is set outside the repository, such as which time zone defines a reporting day or the format a consumer expects,
 is a fact only the user holds when nothing the work can read or find out settles it, and a default the data suggests is a
 guess: name it among the user's calls the plan foresees, with a recommendation. A criterion that guards against a harm, such as lost or corrupted data, a
@@ -46,7 +48,9 @@ coordinator starts it; decide, rather than leaving it optional. Cite the part of
 
 **Planning.** Decide how to approach the work before anyone starts on it: the order of the steps, what depends on what, which steps can proceed in
 parallel, alternatives worth trying, the risks and open questions, and what to try first so a wrong assumption surfaces early. Choose the simplest
-approach that meets the full outcome, and explain a new mechanism where its cost or alternatives materially affect the decision. Compatibility,
+approach that meets the full outcome, and explain a new mechanism where its cost or alternatives materially affect the decision. Size the
+work, its proof and its tests to the project's expected use, as `project.md` describes it: who uses it, at what scale, for how long, and what
+a failure costs; where nothing says, state the use you assumed in the plan. Compatibility,
 migration, keeping old data or behaviour, and parity where the release does not ship are needed only where the user or the project's documents say so,
 otherwise a user's call with its cost; a criterion's reach, such as every supported path, comes from what ships and its runbooks.
 

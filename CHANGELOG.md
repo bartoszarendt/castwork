@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- The thinker sizes the work, its proof and its tests to the project's
+  expected use: who uses it, at what scale, for how long, and what a failure
+  costs. The verifier and the assessment skill judge risk, scale and what is
+  consequential against the same use. Where neither `project.md` nor the plan
+  says, they state the use they assumed. "Consequential" had no anchor, so a
+  model that assumes production scale treated every failure as consequential.
+  The `project.md` scaffold's opening lines now ask for that use under
+  `## What this project is`. The section's own placeholder is unchanged, so
+  `doctor` still flags it in projects that never filled it in.
+- The same opening lines ask, where it affects the work, for the project's
+  development stage and what already carries commitments, such as users,
+  interfaces or stored data, naming any part that differs and what would end a
+  stage that has none, such as the first release. The thinker needs
+  compatibility, migration or kept data only where the user or the project's
+  documents say so, and nothing in `project.md` asked for that answer, so it
+  fell to the user task by task.
+- A limit the candidate names, such as a size, a load or a case it leaves out,
+  is a choice, not an oversight, in the verifier and the assessment skill: it
+  is a finding only where it fails a criterion, a declared requirement or what
+  the user committed to, such as safety or data integrity, or the expected use
+  already reaches it. The worker already named such limits, but nothing told
+  the verifier what that changes.
+- When a request leaves its scope open, the thinker's shaping and
+  `task-record-contract` give it the smallest version that does its core job,
+  and list what that leaves out under Out of scope, so the user can ask for it.
+  The worker builds the smallest result that meets the criteria, so its rule
+  cannot shrink criteria the shaping made too wide. In a field task, the agents
+  had written a selection signal into a task that its consumer did not need,
+  and it was caught only when it blocked an assessment.
+- The thinker's word limit goes from 4555 to 4640 for these two lines.
+
 - The verifier's proportionality lens and the assessment skill add that a
   test, check or option the candidate added for a mechanism shows what the
   mechanism does, not that the work needs it: the need is judged from the

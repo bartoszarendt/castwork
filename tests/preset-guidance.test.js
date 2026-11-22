@@ -841,6 +841,23 @@ for (const host of HOSTS) {
       "A test, check or option the candidate added for a mechanism shows what the mechanism does, not that the work needs it: judge that need from the record and the mechanism's users.",
     ], 'assessment');
   });
+
+  test(`${host} work is sized to the project's expected use, a named limit is a choice, and open scope gets the smallest version`, () => {
+    all(role(host, 'thinker'), [
+      'Where the request leaves its scope open, shape the smallest version that does its core job, and list what that leaves out, such as features or options nobody asked for, under Out of scope, so the user can ask for it.',
+      "Size the work, its proof and its tests to the project's expected use, as `project.md` describes it: who uses it, at what scale, for how long, and what a failure costs; where nothing says, state the use you assumed in the plan.",
+    ], 'thinker');
+    all(role(host, 'verifier'), [
+      "Judge risk, scale and what is consequential against the project's expected use, as `project.md` or the plan states it; where neither does, say which use you assumed.",
+      'A limit the candidate names, such as a size, a load or a case it leaves out, is a choice, not an oversight: it is a finding only where it fails a criterion, a declared requirement or what the user committed to, such as safety or data integrity, or the expected use already reaches it.',
+    ], 'verifier');
+    all(skill('assessment'), [
+      'A limit the candidate names, such as a size, a load or a case it leaves out, is a choice, not an oversight: it is a finding only where it fails a criterion, a declared requirement or what the user committed to, such as safety or data integrity, or the expected use already reaches it.',
+    ], 'assessment');
+    all(skill('task-record-contract'), [
+      'Where the request leaves its scope open, the criteria describe the smallest version that does its core job, and what that leaves out, such as features or options nobody asked for, is listed here, so the user can ask for it.',
+    ], 'task-record-contract');
+  });
 }
 
 test('the assessment skill blocks only on the contract and fixes a finding wherever its kind appears', () => {
