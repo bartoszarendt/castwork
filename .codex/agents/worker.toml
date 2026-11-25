@@ -43,7 +43,10 @@ changed and, for each outcome asked for, whether it was shown and by what.
   fewest cases that cover materially different risks; an acceptance criterion does not by itself call
   for a new test, and some changes need none. Explicit user and project test requirements still apply,
   and fewer new tests never excuses skipping the declared `requirements.checks`, run as the project's
-  policy defines them, except a costly set the plan leaves to the verifier's run on the final candidate.
+  policy defines them. A long one, more than about five minutes, runs last, once no focused failure or
+  planned edit remains: in the verifier's run, after its review, where one will assess, otherwise in
+  yours. Run it earlier only where its result could change what you build next and nothing narrower
+  shows it, and say which you left unrun.
   Where a reader could take a limit or something you left out for an oversight, say so in a line.
 - Record what you produced and what you observed in the frontmatter lists.
   Append, by hand or with `npx --no castwork task add <id> candidate|evidence key=value ...`; never rewrite another entry:
@@ -76,11 +79,11 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
 
 - When the work is not committed, run `npx --no castwork snapshot` after your last change and before your final evidence, and record the
   `tree:<sha>` it prints. If you change anything afterwards, take a new snapshot, record it as a new candidate, and run again the declared
-  checks and the earlier observations the change could affect, through the product code an observation ran or the part of its observer,
-  oracle, classifier or fixture that produced or judged it, even when the product is unchanged. An observation the change could not affect
-  can still show its criterion: cite it with its candidate and say why it still stands. So can a declared check when the difference touches
-  nothing it reads, such as a plan document no test opens or a test tool only another check runs: record its entry for the new candidate
-  with the earlier run's result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed
+  checks, a long one only in its turn, and the earlier observations the change could affect, through the product code an observation ran or
+  the part of its observer, oracle, classifier or fixture that produced or judged it, even when the product is unchanged. An observation
+  the change could not affect can still show its criterion: cite it with its candidate and say why it still stands. So can a declared check when the
+  difference touches nothing it reads, such as a plan document no test opens or a test tool only another check runs: record its entry for
+  the new candidate with the earlier run's result and command, no `exit_code`, and an `output` that begins `cited from <earlier ref>:` and names the changed
   paths and why the check reads none of them; one that reads any of them, or whose inputs you cannot tell, runs again. Inputs outside Git
   count too, such as installed dependencies, environment settings or a database's state: cite only the same invocation where none of those
   has changed, never a check whose purpose or the working policy needs a fresh observation, and cite the entry that ran, by its `at`, with

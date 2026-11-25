@@ -178,7 +178,12 @@ is a structural error, `requirement.misplaced`: lint fails and the task cannot
 be set to `done` until the key is moved.
 
 - `checks: [name, ...]` — each name needs a passing evidence entry for the
-  current candidate. Name them after the project's real commands.
+  current candidate. Name them after the project's real commands. Declare none
+  that another declared check contains, unless the working policy asks for both
+  or its own mode protects a risk the record names; a selection left undeclared
+  runs while working, under its own name, and a declared one that the larger
+  check runs unchanged as a stage takes its entry from that run, as
+  `verification-evidence` describes.
 - `independent_review: true` — someone whose actor string is not among the
   candidate's producers must record an `accept`.
 - `assessment_roles: [role, ...]` — each named role must record an `accept`.

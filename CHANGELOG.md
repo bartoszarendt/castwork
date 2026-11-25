@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+- The verifier reviews before the long checks, whatever order its brief lists
+  them in: it reads, probes and runs the short checks first, and starts a
+  declared check of more than about five minutes only once nothing it found
+  blocks the candidate, or where the result could settle a finding. Where
+  something blocks, it finishes the review, records the verdict naming the
+  checks not run, stops a run it started, and ends the round instead of waiting
+  for a run the verdict does not rest on. An accept still needs every declared
+  check shown. In field sessions, most verifier rounds that ran a long check
+  started it within three minutes, and several had found or even recorded
+  their blocking finding minutes into rounds that lasted up to two hours more.
+- A long declared check runs once, after every review or probe that could
+  change what it runs, the verifier's own included: in the verifier's run
+  where one will assess, otherwise last in the worker's. It never runs while a
+  focused failure or planned edit remains, and earlier only where its result
+  could change what gets built and nothing narrower shows it. The working
+  policy can set another cadence. The thinker, worker, coordinator and
+  `verification-evidence` say so; the coordinator orders no long check before
+  the review, in a brief or a round of its own. This reverses the earlier rule
+  that the assessment follows the gate it rests on: only its accept does. In
+  one field task, ten check rounds in a row passed, and each was followed by a
+  blocking review. The rule that a check reading what changed runs again is
+  unchanged: in the same sessions, two full runs found real failures.
+- The thinker and `task-record-contract` declare no check that another
+  declared check contains, unless the working policy asks for both or its own
+  mode protects a named risk. A declared four-file selection had run serially
+  for 30 to 48 minutes in the same rounds as the full run that contained it.
+  Existing records are not changed, and a declared check still runs with its
+  own flags and selection; one a larger declared check runs unchanged as a
+  stage still takes its entry from that run.
+- A long check a producer passed on the same candidate, with the declared
+  invocation, may stand in the verifier and the assessment skill where the
+  verifier read its whole output, named as the producer's run; the verifier
+  reads this beside its instruction to run the declared checks. Not having run
+  it is then a limit to name, which blocks only where a criterion, a declared
+  requirement, the working policy or a finding calls for an independent run.
+  A producer's run on an earlier candidate still cannot be cited. Verifiers
+  had blocked candidates with no defect found solely because no assessor had
+  run a check, reading the rule about earlier candidates as covering this one.
+- The word limits go from 4700 to 4765 for the coordinator, 4640 to 4701 for
+  the thinker, 2305 to 2355 for the worker and 2250 to 2335 for the verifier,
+  for these rules.
+
 - The thinker sizes the work, its proof and its tests to the project's
   expected use: who uses it, at what scale, for how long, and what a failure
   costs. The verifier and the assessment skill judge risk, scale and what is

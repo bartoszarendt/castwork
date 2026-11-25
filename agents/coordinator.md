@@ -228,6 +228,9 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   Ask for its verdict, naming none and no finding it may not raise; a step that needs its acceptance waits on it. It can
   assess only a candidate that resolves, as `task lint` shows. A snapshot's `.castwork/tasks/` is the base commit's; the live record
   governs. Never rename an actor to make a review independent.
+- **Long checks.** An unrun check of more than about five minutes holds no review back: the verifier runs it after its own, and you order none before
+  that, in its brief or in a round of its own, nor while a focused failure or planned edit remains, unless its result decides the next step. Another
+  planned review that could change what it runs comes first.
 - **Levels and models.** Where the host lists levels for a role, start the one the work calls for, as the entry command's `## Levels` says; choose no model
   otherwise. Report a role's model, effort, or variant from the generated agent file you started.
 

@@ -68,12 +68,15 @@ otherwise a user's call with its cost; a criterion's reach, such as every suppor
   against the
   change it checks. Say whether each threshold is the user's requirement or the agents' choice. When a change can move a runtime or real-data target,
   check the changed candidate against that target before the final declared checks.
-- **Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate, after a
-  planned review or probe that could change what they run and does not rest on them. Plan a new test only where existing checks would miss a consequential
-  failure, unless the user or project requires one. Run an expensive set, such as every supported platform and version, or proof that only qualifies the
-  result for release, once on the final candidate, in the verifier's run where one will assess, holding back no building; develop against one
-  representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy
-  sets a cadence, or an earlier result could change what gets built. Checks are the worker's or verifier's, however long, never the coordinator's.
+- **Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate. A long
+  one, more than about five minutes, runs once unless the working policy sets another cadence, after every review or probe that could change what it
+  runs, the verifier's own included, since only its accept rests on the check: in the verifier's run where one will assess, otherwise last in the
+  worker's, and earlier only where its result could change what gets built and nothing narrower shows it. Declare no check that another declared check
+  contains, unless the working policy asks for both or its own mode protects a risk you name. Plan a new test only where existing checks would miss a
+  consequential failure, unless the user or project requires one. An expensive set, such as every supported platform and version, or proof that only
+  qualifies the result for release, runs the same way, holding back no building; develop against one representative configuration, checking another
+  earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could
+  change what gets built. Checks are the worker's or verifier's, however long, never the coordinator's.
 - **The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the
   user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds. Mark which consequential requirements, rules and thresholds
   are the user's words, quoted, and which are the agents' proposals, confirmed or still open, so later work can tell what they committed to from what the

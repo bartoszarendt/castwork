@@ -62,7 +62,8 @@ identical `tree:` sha.
 Evidence belongs to the bytes it ran on. Take the snapshot after your last
 change and before your final evidence. If you change anything afterwards, take
 a new snapshot, record it as a new candidate, and run again for it the declared
-checks and the earlier observations the change could affect. Decide which from
+checks and the earlier observations the change could affect. A long check waits
+for its turn, under "Run a long check last" below. Decide which from
 what changed: the product code an observation ran, or the part of its
 observer, oracle, classifier or fixture that produced or judged it, can affect
 it even when the product is unchanged, as a fix to a shared false-pass
@@ -206,6 +207,14 @@ what was seen, what it means, what is next; not a new narrative section per run.
   from any stage without saying which. Record the check's own status, such as
   `${PIPESTATUS[0]}` in Bash, read before running another command, or run it
   without the pipe.
+- **Run a long check last.** A declared check that takes more than about five
+  minutes runs once nothing known would still change the candidate: no focused
+  failure, planned edit, or review that could change what the check runs, the
+  verifier's own included. Where a verifier will assess, it runs the check
+  after that review, and otherwise the producer runs it last. Run it earlier
+  only where its result could change what is built next and nothing narrower
+  shows it, or where the working policy sets another cadence. Until it has run,
+  it has no entry: say that it is unrun.
 - **Name the check honestly.** A subset of a declared check, such as some of
   the tests, goes under its own name, never under the declared check's name.
   A declared check that a larger command ran unchanged as a stage, such as a

@@ -66,13 +66,20 @@ uncommitted.
      check or option the candidate added for a mechanism shows what the mechanism does,
      not that the work needs it: judge that need from the record and the mechanism's users. A missing test is a finding only with
      the consequential failure it would catch and the gap in coverage; a defect you observed is a defect whether or not a test is needed.
-- Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and
-  record each run as evidence under your actor, failures included. Keep the project's declared working directory, paths, flags,
-  environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or unavailable invocation.
-  A tool the setup could supply but your run lacks, such as a configured browser server, is a setup gap to name, not a fact about the project.
-  A run of a declared check an assessing actor recorded on an earlier candidate of this task, yours or another session's, you may
-  cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command. Run again
-  what would settle an uncertainty that matters to the verdict.
+- **Review before the long checks,** whatever order your brief lists them in. Read the candidate, probe it and run the short checks first.
+  Start a declared check that takes more than about five minutes only once nothing you found blocks the candidate, for any task it serves,
+  or where its result could settle a finding. Where something blocks, finish the review, record the verdict naming the declared checks not
+  run, and end the round: wait for no run the verdict does not rest on, and stop one you started, cleaning up what it created. An accept
+  still needs every declared check shown.
+- Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each
+  run as evidence under your actor, failures included. A long check a producer passed on this same candidate, with the declared invocation, may stand
+  where you read its whole output, named as the producer's run: not having run it yourself is then a limit to name, which blocks only where a
+  criterion, a declared requirement, the working policy or something you found calls for an independent run. Keep the project's declared working
+  directory, paths, flags, environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or
+  unavailable invocation. A tool the setup could supply but your run lacks, such as a configured browser server, is a setup gap to name, not a fact
+  about the project. A run of a declared check an assessing actor recorded on an earlier candidate of this task, yours or another session's, you may
+  cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command. Run again what would settle an
+  uncertainty that matters to the verdict.
 - Record a verdict, `accept`, `needs_revision`, or `reject`, with findings, by hand or with `npx --no castwork task add <id> assessment key=value ...`:
   the contract item, observation and location, and why it blocks or accepts; not every file read or a restatement of earlier rounds. A finding blocks, as
   `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data

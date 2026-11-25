@@ -398,7 +398,7 @@ for (const host of HOSTS) {
     assert.doesNotMatch(coordinator, phrase('Recommend an answer for each'), 'at a stop the recommendation is the thinker\'s, not the coordinator\'s own');
     all(role(host, 'thinker'), [
       "When a change can move a runtime or real-data target, check the changed candidate against that target before the final declared checks.",
-      "**Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate, after a planned review or probe that could change what they run and does not rest on them.",
+      "**Checks per step.** Focused checks while a correction is under way, where the working policy allows; the declared ones on the final candidate.",
       "Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'A stop you set names what would show the approach wrong, such as a case it misses, a contract it breaks or a cost beyond its resources, not another instance it covers; it returns the work to you to re-plan, and goes to the user only where what follows is their call.',
       "When the path stops converging, or converges only at a cost out of proportion to what it protects, step back, as below, rather than planning another round around it.",
@@ -992,8 +992,7 @@ for (const host of HOSTS) {
       'Run early the step whose result could change the design, such as the real operation under its failure conditions, rather than qualifying the instruments around it.',
       "A probe that ships and enables nothing is investigation, which a sequence that orders the building does not hold back, such as using the assembled result on a disposable instance behind a development-only switch; it stays within existing authorization, approved decisions and the working policy, on isolated resources, or it is the amendment to recommend.",
       "build a new instrument only when those cannot show what the user committed to, weighed against the change it checks.",
-      "the declared ones on the final candidate, after a planned review or probe that could change what they run and does not rest on them.",
-      "Run an expensive set, such as every supported platform and version, or proof that only qualifies the result for release, once on the final candidate, in the verifier's run where one will assess, holding back no building; develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
+      "An expensive set, such as every supported platform and version, or proof that only qualifies the result for release, runs the same way, holding back no building; develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
       "**The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
       'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource.',
       'Name it even where it changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside, and a cheaper version of the same campaign says why it beats changing the gate.',
@@ -1010,7 +1009,7 @@ for (const host of HOSTS) {
     ], 'coordinator');
     const worker = role(host, 'worker');
     all(worker, [
-      'record it as a new candidate, and run again the declared checks and the earlier observations the change could affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged it, even when the product is unchanged.',
+      'record it as a new candidate, and run again the declared checks, a long one only in its turn, and the earlier observations the change could affect, through the product code an observation ran or the part of its observer, oracle, classifier or fixture that produced or judged it, even when the product is unchanged.',
       'An observation the change could not affect can still show its criterion: cite it with its candidate and say why it still stands.',
       "Copy the part it rests on, such as the lines that show the result, not copied sources, archives or a whole run's output the entry already states.",
     ], 'worker');
@@ -1398,7 +1397,6 @@ for (const host of HOSTS) {
       "a step back's route not yet applied with the calls it names, as written or by the path holding it, and no unfinished check claimed as passed.",
     ], 'entry');
     all(role(host, 'worker'), [
-      "run as the project's policy defines them, except a costly set the plan leaves to the verifier's run on the final candidate.",
       'A tool the setup could supply but your run lacks, such as a configured browser server this host did not grant you, is a setup gap to name with what would supply it, not a fact about the project.',
     ], 'worker');
     all(role(host, 'verifier'), [
@@ -1406,3 +1404,47 @@ for (const host of HOSTS) {
     ], 'verifier');
   });
 }
+
+for (const host of HOSTS) {
+  test(`${host} the verifier reviews before the long checks, which run once, and a missing independent run is a limit`, () => {
+    all(role(host, 'verifier'), [
+      '**Review before the long checks,** whatever order your brief lists them in. Read the candidate, probe it and run the short checks first.',
+      'Start a declared check that takes more than about five minutes only once nothing you found blocks the candidate, for any task it serves, or where its result could settle a finding.',
+      'Where something blocks, finish the review, record the verdict naming the declared checks not run, and end the round: wait for no run the verdict does not rest on, and stop one you started, cleaning up what it created.',
+      'An accept still needs every declared check shown.',
+      "A long check a producer passed on this same candidate, with the declared invocation, may stand where you read its whole output, named as the producer's run: not having run it yourself is then a limit to name, which blocks only where a criterion, a declared requirement, the working policy or something you found calls for an independent run.",
+      'record each run as evidence under your actor, failures included. A long check a producer passed on this same candidate',
+    ], 'verifier');
+    all(role(host, 'worker'), [
+      "run as the project's policy defines them. A long one, more than about five minutes, runs last, once no focused failure or planned edit remains: in the verifier's run, after its review, where one will assess, otherwise in yours.",
+      'Run it earlier only where its result could change what you build next and nothing narrower shows it, and say which you left unrun.',
+    ], 'worker');
+    const thinker = role(host, 'thinker');
+    all(thinker, [
+      "A long one, more than about five minutes, runs once unless the working policy sets another cadence, after every review or probe that could change what it runs, the verifier's own included, since only its accept rests on the check: in the verifier's run where one will assess, otherwise last in the worker's, and earlier only where its result could change what gets built and nothing narrower shows it.",
+      'Declare no check that another declared check contains, unless the working policy asks for both or its own mode protects a risk you name.',
+    ], 'thinker');
+    assert.doesNotMatch(thinker, phrase('does not rest on them'), 'the verifier reading is no longer ordered after the gate');
+    all(role(host, 'coordinator'), [
+      '**Long checks.** An unrun check of more than about five minutes holds no review back: the verifier runs it after its own, and you order none before that, in its brief or in a round of its own, nor while a focused failure or planned edit remains, unless its result decides the next step.',
+      'Another planned review that could change what it runs comes first.',
+    ], 'coordinator');
+  });
+}
+
+test('the procedure skills run a long check last, after the review', () => {
+  all(skill('assessment'), [
+    'Read the candidate, probe it and run the short checks first, whatever order the brief lists them in.',
+    'wait for no run the verdict does not rest on, and stop one you started, cleaning up what it created. An accept still needs every declared check shown.',
+    'not having run it yourself is then a limit to name, which blocks only where a criterion, a declared requirement, the working policy or something you found calls for an independent run.',
+  ], 'assessment');
+  all(skill('verification-evidence'), [
+    'A long check waits for its turn, under "Run a long check last" below.',
+    "**Run a long check last.** A declared check that takes more than about five minutes runs once nothing known would still change the candidate: no focused failure, planned edit, or review that could change what the check runs, the verifier's own included.",
+    'Until it has run, it has no entry: say that it is unrun.',
+  ], 'verification-evidence');
+  all(skill('task-record-contract'), [
+    'Declare none that another declared check contains, unless the working policy asks for both or its own mode protects a risk the record names;',
+    'a selection left undeclared runs while working, under its own name, and a declared one that the larger check runs unchanged as a stage takes its entry from that run',
+  ], 'task-record-contract');
+});

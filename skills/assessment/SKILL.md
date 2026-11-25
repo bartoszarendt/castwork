@@ -84,8 +84,12 @@ does, say which use you assumed.
    declared check an assessing actor recorded on an earlier candidate, yours or
    another session's, you may cite the same way, never a producer's:
    independence is your judgement of the evidence, not a repeat of every
-   command. Run again what would settle an uncertainty that matters to the
-   verdict.
+   command. A long check a producer passed on this same candidate, with the
+   declared invocation, may stand where you read its whole output, named as the
+   producer's run: not having run it yourself is then a limit to name, which
+   blocks only where a criterion, a declared requirement, the working policy or
+   something you found calls for an independent run. Run again what would settle
+   an uncertainty that matters to the verdict.
 3. **Would this project want to maintain it?** Consistency with the surrounding
    code counts. So does the concept count — a change that adds a new idea
    should be paying for it. A finding names the concrete burden, such as a
@@ -101,6 +105,17 @@ does, say which use you assumed.
    test is a finding only with the consequential failure it would catch and the
    gap in coverage; a defect you observed is a defect whether or not a test is
    needed.
+
+## Review before the long checks
+
+Read the candidate, probe it and run the short checks first, whatever order the
+brief lists them in. Start a declared check that takes more than about five
+minutes only once nothing you found blocks the candidate, for any task it
+serves, or where its result could settle a finding. Where something blocks,
+finish the review, record the verdict naming the declared checks not run, and
+end the round: wait for no run the verdict does not rest on, and stop one you
+started, cleaning up what it created. An accept still needs every declared
+check shown.
 
 ## Read the candidate
 
