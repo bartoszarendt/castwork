@@ -1,6 +1,6 @@
 {
   "layout_version": 4,
-  "version": "0.9.18",
+  "version": "0.9.19",
   "source_digest": "sha256:b10e87215dac1e0def4ab1b2612e2a329ecff3dca68ad6c1af5648a188b34b02",
   "files": {
     ".codex/agents/thinker.toml": "sha256:c7b80f2fec9607466017039f9564b605c3134c5d97cb5b674a576dbd7d68f447",

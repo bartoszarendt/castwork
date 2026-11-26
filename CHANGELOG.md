@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.19
 
 - What work creates outside its candidate is named after its task, and goes
   when nothing needs it. A worktree, branch, copy, database, container, volume
