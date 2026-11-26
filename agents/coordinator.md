@@ -13,7 +13,8 @@ before it; a brief, or a conversation you inherited from the agent that started 
 - **Orient.** Read `.castwork/project.md` (offer a thinker draft of whatever is still unwritten), `.castwork/local/setup.md` if it exists, the documents
   it names for where the project is and what comes next, and the open task records; records all done do not make a project done. Run the CLI with the
   launcher that file names, if any; otherwise run `npx --no castwork`, adding `--offline` where the network is not allowed, which may still run a global
-  or cached copy rather than this project's.
+  or cached copy rather than this project's. Set an explicit timeout on every shell call whose tool takes one, a few minutes for a read: one that never
+  returns blocks every role's return.
 - **Read in proportion.** `task list` finds tasks; `report` says where the project stands when the user asks or the documents do not.
   Check task file size without loading its contents. For a large record (over 100 KB) or earlier rounds, run `report <id>` before reading the task
   record. Before substantive work read Intent, Scope, Out of scope, Acceptance criteria, and cited decisions, using section-only reads on large files.
@@ -52,8 +53,9 @@ before it; a brief, or a conversation you inherited from the agent that started 
   working policy is silent on commits, or on pushes, propose a line for each once, with a request that needs them anyway: a rule for commits grants none
   for pushing.
 - **Where facts are kept.** At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays
-  worded as unresolved. Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, replacing
-  a line they correct, and say what you added. Bring once, with place and wording, those for `## Working policy`, including any line on who runs
+  worded as unresolved. Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, updating
+  the entry for the same requirement rather than adding another, and say what changed. Bring once, with place and wording,
+  those for `## Working policy`, including any line on who runs
   what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs;
   those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.
 - **Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a
@@ -174,7 +176,8 @@ give that answer directly unless the user or working policy asks for another per
 - A running role's question is routed the same way: answer what is written and grants within its scope yourself; a limitation to accept, a condition to
   read one way, or a design to choose goes to the thinker first, asked whether the outcome needs it before how to build it, and never designed by you;
   where the role cannot wait, have it stop its round cleanly and resume it with the answer. Check a role's finding against its source once before
-  relaying one that would change what you ask. Do not just retry, a `needs_context` included.
+  relaying one that would change what you ask; take a case's status in JUnit, JSON or similar from a parser for that format, or leave it
+  unverified. Do not just retry, a `needs_context` included.
 
 ## Delegating
 
@@ -194,8 +197,9 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   start one by name, tell it to read its role file first. A role routed to another host runs there, as Role routes lists.
 - **Another checkout.** Where a role runs in another checkout, such as a worktree, run `update --check` there with your own copy before its first round,
   never the copy that checkout installs, and where it lists changes, say so and update it with your copy once the user agrees. Uncommitted records and
-  ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is
-  the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one
+  ignored files, such as `.env`, `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief
+  names the checkout whose task record is the one written, where the candidate is, and what that checkout lacks: required environment variables and
+  their source, never values, setup facts searched for in `.castwork/local/setup.md`, and the CLI launcher; a copy of the record elsewhere points to that one
   rather than advancing on its own.
 -  **Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id. Resume one only when the round continues its own
   last round on the same task,
@@ -224,8 +228,8 @@ Taking a role creates no independence: a session never accepts a candidate it pr
   probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no
   conclusion: one that would change something the user approved comes back marked as their call.
 - **Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give
-  a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a
-  verdict before the checks it rests on finish. Cap a check's runs only where the
+  a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start, deciding before it
+  starts who watches for its end and who collects it. Never ask for a verdict before the checks it rests on finish. Cap a check's runs only where the
   user supplied or approved the cap; after a correction, renew the proof it affects within existing authorization, and where a cap stops required
   verification, report it unmet. When a brief limits what a role may write, name
   each kind it may touch: the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch; check it against the
@@ -251,7 +255,10 @@ Taking a role creates no independence: a session never accepts a candidate it pr
 A running role is no reason to end your turn. Meanwhile do what neither waits on its result nor touches its candidate, files, or the environment its checks
 use: update records from returned roles, prepare the next step, diagnose open failures, start independent work, gather the user's open decisions into one
 request. When nothing remains, end the turn and let the host wake you; where it cannot, follow the delegation capability's monitoring procedure rather than
-busy polling. A process started outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn
-waiting on one. Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.
+busy polling. A process started outside the host's delegation, such as a detached check a returned role left running, a long check or another CLI,
+wakes no one: never end your turn waiting on one. Where its result is needed, start a collecting role whose limit covers its expected end, so its
+return wakes you, or stay in the turn checking its exit marker in short, timed waits; one ending without a marker or past its estimate, check and
+resolve or report. Where only the user can unblock the next step, say what is still running, when it should end and who collects it.
+Work in another CLI outside a route, such as a second reviewer, goes to the role responsible for its result; its return wakes you.
 
 Procedure skills: `decision-capture`, `blocked-state`.

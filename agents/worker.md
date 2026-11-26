@@ -24,7 +24,8 @@ changed and, for each outcome asked for, whether it was shown and by what.
 ## Responsibility
 
 - Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine,
-  where they exist. Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
+  where they exist, searching it for the check, checkout and required inputs before running a check. Run the CLI with the launcher your
+  brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
   where the network is not allowed, which may still run a global or cached copy rather than this project's.
   Check a task's file size without loading its contents.
   For a large record (over 100 KB) or when earlier rounds matter, run
@@ -154,8 +155,8 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
 - Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already
   complete. Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run,
   remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as
-  `verification-evidence` says. Start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a
-  detached long check with its log and exit marker.
+  `verification-evidence` says. Start no step the run cannot finish unless the brief names who collects it, such as a detached long check,
+  returned as `verification-evidence` says.
   When the run will end before the assignment does, keep the authorized changes that hold and return
   them as partial, with what the focused checks showed and the next edit; never discard work, or
   revert an authorized amendment, only because the rest is unfinished. Correct or remove what you

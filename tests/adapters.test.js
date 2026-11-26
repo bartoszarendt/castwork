@@ -34,8 +34,9 @@ test('every role preset and the entry command stay within their word limits, in 
 test('a role over its word limit, or with a line too long to read, is reported', () => {
   const role = { id: 'worker', description: 'd', procedures: [], body: `${'word\n'.repeat(ROLE_WORD_LIMITS.worker)}${'x'.repeat(GUIDANCE_LINE_LIMIT + 1)}` };
   const messages = roleFindings(role, []).map((finding) => finding.message);
-  assert.ok(messages.some((message) => /words; worker is meant to stay within 2391: first remove repetition .* raises the limit just enough, said in the changelog/.test(message)));
-  assert.ok(messages.some((message) => /body line 2392 is 161 characters; wrap it within 160/.test(message)));
+  const limit = ROLE_WORD_LIMITS.worker;
+  assert.ok(messages.some((message) => new RegExp(`words; worker is meant to stay within ${limit}: first remove repetition .* raises the limit just enough, said in the changelog`).test(message)));
+  assert.ok(messages.some((message) => message.includes(`body line ${limit + 1} is ${GUIDANCE_LINE_LIMIT + 1} characters; wrap it within ${GUIDANCE_LINE_LIMIT}`)));
 });
 
 for (const host of HOSTS) {

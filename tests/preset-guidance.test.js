@@ -188,7 +188,7 @@ for (const host of HOSTS) {
       "propose where it is kept, in the record under `## Blockers and decisions`: a `## Setup facts` line for `.castwork/project.md` when it holds for this repository,",
       "a line for `.castwork/local/setup.md` when it holds only on this machine; or the host's user-level instructions or a user skill when it holds beyond this project.",
       'Edit none of them unless the user asks.',
-      'Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine, where they exist.',
+      'Read `.castwork/project.md` for the policy and `.castwork/local/setup.md` for facts about this machine, where they exist, searching it for the check, checkout and required inputs before running a check.',
     ], 'worker');
   });
 
@@ -201,7 +201,7 @@ for (const host of HOSTS) {
       "Assess a snapshot's contents, read with git, not the current working tree.",
       'A name such as `HEAD` or a branch is not the candidate',
       'ask for the commit id or a snapshot',
-      'Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each run as evidence under your actor, failures included.',
+      "Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each run as evidence under your actor, failures included; confirm a long one's required inputs first, and return one that outlasts your round as `verification-evidence` says.",
       "Keep the project's declared working directory, paths, flags, environment and selection; a scoped variant is a different check and leaves the declared one unmet.",
       'Name an unclear or unavailable invocation.',
       "A run of a declared check an assessing actor recorded on an earlier candidate of this task, yours or another session's, you may cite the same way, never a producer's: independence is your judgement of the evidence, not a repeat of every command.",
@@ -246,7 +246,7 @@ for (const host of HOSTS) {
       'A plain defect goes back to the worker.',
       "Report a role's model, effort, or variant from the generated agent file you started. ## While roles run A running role is no reason to end your turn.",
       'which role or shape, its level where the host lists levels, the host a routed role goes to, and why now',
-      "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
+      "Uncommitted records and ignored files, such as `.env`, `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and what that checkout lacks: required environment variables and their source, never values, setup facts searched for in `.castwork/local/setup.md`, and the CLI launcher; a copy of the record elsewhere points to that one rather than advancing on its own.",
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
       "Resume one only when the round continues its own last round on the same task, the worker with findings on the candidate it built, the verifier with the next candidate of that task, or the same one after only its record changed, the thinker answering its own question or writing its plan into records, and you read, before resuming, that its context is under about half of its model's window.",
       'Resume one only when the round continues its own last round on the same task',
@@ -370,11 +370,11 @@ for (const host of HOSTS) {
       "Bring one recommendation, the thinker's, citing where it gave it, never a menu of your own and never asking the thinker as their option",
       'a permission with no alternative, or a fact only they hold, needs no thinker.',
       "Look for it in the decisions and records before asking: a brief of yours that contradicts a recorded decision is yours to correct.",
-      "Check a role's finding against its source once before relaying one that would change what you ask.",
+      "Check a role's finding against its source once before relaying one that would change what you ask; take a case's status in JUnit, JSON or similar from a parser for that format, or leave it unverified.",
       "one request for what remains, up front from the plan where there is one. A question asked stays asked.",
       'Before you say where a candidate stands or ask the user to accept it, read it fresh with `task lint`, name it, and correct an earlier claim you find wrong.',
       'At the end or a stop, check each unapplied proposal for where a fact is kept against its source; a cause not established stays worded as unresolved.',
-      'Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, replacing a line they correct, and say what you added.',
+      'Apply those for `.castwork/local/setup.md`, `## Setup facts`, or a `## Checks` line for a check not yet named, yourself, updating the entry for the same requirement rather than adding another, and say what changed.',
       "Bring once, with place and wording, those for `## Working policy`, including any line on who runs what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
       "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
       "Dropping a planned review or check no requirement or working policy demands is your choice, told with its risk; a required one stays until the user changes it.",
@@ -632,6 +632,12 @@ test('generated guidance keeps archives explicit, Current state with the coordin
     for (const content of [entry(host), role(host, 'coordinator')]) assert.ok(!phrase('for a task you will work on over 100 KB run').test(content), `${host} still asks to archive every large record`);
   }
   all(skill('assessment'), ['the contract item, observation and location', 'Not a walk through every file read or a restatement of earlier rounds']);
+  all(skill('verification-evidence'), [
+    'Before starting a costly check, confirm its required inputs are available and usable where it will run,',
+    'keeping any absence the check is meant to exercise; supply a missing one within scope, or record the check as unrun.',
+    'is returned with its run identifier, log and exit-marker paths, estimated finish and who collects it, its result reported as pending.',
+    'with a parser for its format, finding the exact case; one you cannot parse stays unverified.',
+  ]);
   all(skill('verification-evidence'), ['A routine successful probe is a sentence in the body, or nothing', 'A snapshot holds that folder as the base commit has it, without what was written there since, so writing there never changes a candidate.']);
   all(skill('task-record-contract'), ["written from the roles' reports or assigned to one role at a time", '`task archive [<id>] [--check]`', 'A snapshot holds that folder, as it holds the records, as the base commit has it, without what was written there since']);
   all(skill('decision-capture'), ["Where it changes what a task may do or does next, that task's `## Current state` says so once the decision is recorded."]);
@@ -682,6 +688,10 @@ for (const host of HOSTS) {
       assert.match(role(host, id), phrase('`.castwork/local/setup.md` for facts about this machine'), id);
     }
     assert.match(role(host, 'verifier'), phrase('Read `.castwork/project.md` for the policy and the commands its checks name'));
+    for (const id of ['worker', 'verifier']) {
+      assert.match(role(host, id), phrase('searching it for the check, checkout and required inputs before running a check.'), id);
+    }
+    assert.match(role(host, 'verifier'), phrase("confirm a long one's required inputs first, and return one that outlasts your round as `verification-evidence` says."));
     for (const id of ['worker', 'verifier']) {
       const content = role(host, id);
       assert.match(content, phrase('not ignored scratch or `.castwork/tasks/`'), id);
@@ -740,8 +750,8 @@ for (const host of HOSTS) {
       'Closing a record, rewrite its Current state to the closing state, archive it if earlier rounds make it hard to work with, and read `report <id>` before you report it closed.',
       "Use one yourself where it fits your step.",
       "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
-      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
-      "Uncommitted records and ignored files, such as `.castwork/local/setup.md` and an installed CLI, do not pass between checkouts: the brief names the checkout whose task record is the one written, where the candidate is, and the setup facts and CLI launcher that checkout lacks; a copy of the record elsewhere points to that one rather than advancing on its own.",
+      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start, deciding before it starts who watches for its end and who collects it. Never ask for a verdict before the checks it rests on finish.",
+      'required environment variables and their source, never values,',
       "**Fresh or resumed.** Start each round fresh, without inherited conversation, given the task id.",
       "Their raw answers go in no record; a fact or decision you take from them is recorded with the source it rests on. They are not roles and need no actor.",
       "**Keep records current.** When roles are coordinated, Current state is yours: rewrite it in place, about fifteen lines, from the roles' reports and from the user's decisions and stops where they change what is authorized or what comes next, what holds now first and attribution after, citing restrictions by decision id and source pointer; or assign its update to one role, never two at once.",
@@ -749,7 +759,11 @@ for (const host of HOSTS) {
       'the candidate, the task record, a findings file, run output in `.castwork/local/runs/<task>/`, scratch;',
       'Ask for a linked file only where a failure, an acceptance or a reproduction rests on it.',
       "Pass no separate reply path to a role writing repository files: the host may tell it to write its result only there.",
-      "A process started outside the host's delegation, such as a long check or another CLI, wakes no one: never end your turn waiting on one.",
+      "A process started outside the host's delegation, such as a detached check a returned role left running, a long check or another CLI, wakes no one: never end your turn waiting on one.",
+      "Where its result is needed, start a collecting role whose limit covers its expected end, so its return wakes you, or stay in the turn checking its exit marker in short, timed waits; one ending without a marker or past its estimate, check and resolve or report.",
+      "Where only the user can unblock the next step, say what is still running, when it should end and who collects it.",
+      "Set an explicit timeout on every shell call whose tool takes one, a few minutes for a read: one that never returns blocks every role's return.",
+      "take a case's status in JUnit, JSON or similar from a parser for that format, or leave it unverified.",
     ], 'coordinator');
     all(role(host, 'thinker'), [
       "Choose the simplest approach that meets the full outcome, and explain a new mechanism where its cost or alternatives materially affect the decision.",
@@ -1005,7 +1019,7 @@ for (const host of HOSTS) {
       "When it names a call of the user's the thinker leaves out, such as changing a gate they approved, ask the thinker again",
       "Use one yourself where it fits your step.",
       "**A step back's or a second reviewer's brief** names the outcome it serves and the user's commitments in their own words, with the documents holding them, apart from options the agents drafted that the user chose, which bind what they deliver, not how; options it names are context, not the conclusions allowed, unless the user bounded the question. It points at the code and its tests as well as the records, allows a probe in a scratch copy within existing authorization and on isolated resources where the answer turns on how the product behaves, and rules out no conclusion: one that would change something the user approved comes back marked as their call.",
-      "**Time and writes.** Where the host limits a run's length, size each assignment to fit, its setup, reading, checks and recording together, and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects. Never ask for a verdict before the checks it rests on finish.",
+      'or a detached start, deciding before it starts who watches for its end and who collects it.',
     ], 'coordinator');
     const worker = role(host, 'worker');
     all(worker, [
@@ -1318,7 +1332,7 @@ for (const host of HOSTS) {
     all(role(host, 'worker'), [
       'A declared check that a larger command ran unchanged as a stage, such as a full gate running `check` first, takes its entry from that run where the output shows the stage finished: the same command, with `exit_code` only where the whole command passed; never run it again for the name.',
       'Capture a check\'s whole output there, not only a tail, and keep a failing run\'s before you summarize or rerun it: a later pass does not recover it.',
-      'Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already complete. Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run, remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as `verification-evidence` says. Start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a detached long check with its log and exit marker.',
+      'Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already complete. Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run, remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as `verification-evidence` says. Start no step the run cannot finish unless the brief names who collects it, such as a detached long check, returned as `verification-evidence` says.',
     ], 'worker');
     all(role(host, 'verifier'), [
       'A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished.',
@@ -1348,7 +1362,7 @@ for (const host of HOSTS) {
   test(`${host} the coordinator runs no role's checks whatever a setup fact or plan says, and a long check outlasts no role's run`, () => {
     all(role(host, 'coordinator'), [
       "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor, rerunning none just for another.",
-      "and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start a later round collects.",
+      "and give a check that cannot fit a run of its own, raising the limit where launches allow, or a detached start, deciding before it starts who watches for its end and who collects it.",
     ], 'coordinator');
     assert.doesNotMatch(role(host, 'coordinator'), phrase('options.timeoutMs'), 'the preset names no host API; host documentation does');
     all(role(host, 'thinker'), [
@@ -1413,7 +1427,7 @@ for (const host of HOSTS) {
       'Where something blocks, finish the review, record the verdict naming the declared checks not run, and end the round: wait for no run the verdict does not rest on, and stop one you started, cleaning up what it created.',
       'An accept still needs every declared check shown.',
       "A long check a producer passed on this same candidate, with the declared invocation, may stand where you read its whole output, named as the producer's run: not having run it yourself is then a limit to name, which blocks only where a criterion, a declared requirement, the working policy or something you found calls for an independent run.",
-      'record each run as evidence under your actor, failures included. A long check a producer passed on this same candidate',
+      "`verification-evidence` says. A long check a producer passed on this same candidate",
     ], 'verifier');
     all(role(host, 'worker'), [
       "run as the project's policy defines them. A long one, more than about five minutes, runs last, once no focused failure or planned edit remains: in the verifier's run, after its review, where one will assess, otherwise in yours.",

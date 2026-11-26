@@ -172,7 +172,9 @@ Four behaviours of `pi-subagents` 0.76.1 seen in coordinated sessions:
   one that needs longer. A check that may still outlast it runs detached and
   writes its output and exit status under `.castwork/local/runs/<task>/`, so
   the result outlives the run that started it; nothing wakes the coordinator
-  when it ends, so a role, not the coordinator, waits on it.
+  when it ends, so the brief names who collects it: a collecting role whose run
+  limit covers the wait and collection, whose return wakes the coordinator, or
+  otherwise the coordinator, checking the exit marker within its turn.
 - An `output` path on the call appends an instruction to write the reply to
   exactly that path and to ignore every other output path in the task. A role
   that writes its task record, a findings file or a review gets no `output`;

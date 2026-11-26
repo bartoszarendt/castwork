@@ -24,7 +24,8 @@ uncommitted.
 ## Responsibility
 
 - Read `.castwork/project.md` for the policy and the commands its checks name, and
-  `.castwork/local/setup.md` for facts about this machine, such as how its checks run here, where they exist.
+  `.castwork/local/setup.md` for facts about this machine, such as how its checks run here, where they exist,
+  searching it for the check, checkout and required inputs before running a check.
   Run the CLI with the launcher your brief or that file names, if any; otherwise run `npx --no castwork`, adding `--offline`
   where the network is not allowed, which may still run a global or cached copy rather than this project's.
   Check a task's file size without loading its contents. For a large record (over 100 KB) or
@@ -72,7 +73,8 @@ uncommitted.
   run, and end the round: wait for no run the verdict does not rest on, and stop one you started, cleaning up what it created. An accept
   still needs every declared check shown.
 - Run the declared checks yourself where the files in front of you are the candidate (lint reports no drift) or in an extracted copy, and record each
-  run as evidence under your actor, failures included. A long check a producer passed on this same candidate, with the declared invocation, may stand
+  run as evidence under your actor, failures included; confirm a long one's required inputs first, and return one that outlasts your round as
+  `verification-evidence` says. A long check a producer passed on this same candidate, with the declared invocation, may stand
   where you read its whole output, named as the producer's run: not having run it yourself is then a limit to name, which blocks only where a
   criterion, a declared requirement, the working policy or something you found calls for an independent run. Keep the project's declared working
   directory, paths, flags, environment and selection; a scoped variant is a different check and leaves the declared one unmet. Name an unclear or

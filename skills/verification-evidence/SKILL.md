@@ -184,6 +184,16 @@ first. Name in your return each thing kept, its exact identity, what it is for
 and when it can go; one that outlives the round also has that line in its
 `kept.md`.
 
+Before starting a costly check, confirm its required inputs are available and
+usable where it will run, such as an environment variable another checkout's
+ignored files supply, a service or data, keeping any absence the check is meant
+to exercise; supply a missing one within scope, or record the check as unrun. A
+check the brief lets continue after your round is returned with its run
+identifier, log and exit-marker paths, estimated finish and who collects it,
+its result reported as pending. Read a case's status from a structured result,
+such as JUnit or JSON, with a parser for its format, finding the exact case;
+one you cannot parse stays unverified.
+
 A routine successful probe is a sentence in the body, or nothing. An observation
 supporting acceptance or a finding stays a candidate-bound evidence entry, under
 its own name when undeclared. After a costly step, write a short observation:

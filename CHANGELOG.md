@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+- A detached check is assigned with its collection decided first: before it
+  starts, the coordinator decides who watches for its end and who collects
+  it. A check a returned role left running wakes no one, like a long check of
+  the coordinator's own or another CLI. Where its result is needed, the
+  coordinator either starts a collecting role whose run limit covers the
+  expected end, so that role's return wakes it, or stays in the turn and checks
+  the exit marker in short, timed waits. A run that ends without a marker or
+  goes past its estimate is checked and resolved or reported. Where only the
+  user can unblock the next step, the coordinator says what is still running,
+  when it should end and who collects it. `docs/pi-setup.md` says the same.
+- `verification-evidence` has three new rules, and the worker and verifier
+  refer to it:
+  - Before a costly check starts, its required inputs must be available and
+    usable where it will run, keeping any absence the check is meant to
+    exercise. A missing input is supplied within scope, or the check is
+    recorded as unrun.
+  - A check left running after a round is returned with its run identifier,
+    log and exit-marker paths, estimated finish and who collects it, and its
+    result is reported as pending.
+  - A case's status in JUnit, JSON or a similar result is read with a parser
+    for that format, or left unverified. The coordinator follows the same rule
+    before relaying a role's finding.
+- A brief for a role in another checkout names what that checkout lacks: the
+  required environment variables and where they come from, never their values,
+  the setup facts and the CLI launcher. `.env` joins the ignored files that do
+  not pass between checkouts. The coordinator, worker and verifier search
+  `.castwork/local/setup.md` for the check, checkout and required inputs. A
+  setup fact for a requirement already recorded updates that entry instead of
+  adding a second one.
+- The coordinator sets an explicit timeout on every shell call whose tool takes
+  one, a few minutes for a read, because a command that never returns blocks
+  every role's return.
+- The word limits change to 5193 for the coordinator, 2398 for the worker and
+  2402 for the verifier, the measured length of these rules. They come from two
+  field cases. In the first, a coordinator sat idle for 2 h 24 min after a
+  detached lane had finished. Its own brief had left collection to "a later
+  verifier", and the lane had only been rerun because its first run lacked an
+  environment variable that a long setup note recorded further down than the
+  role read. In the second, a coordinator's shell call with no timeout blocked
+  its session for 9 h 35 min while a finished role waited. Whether agents now
+  follow these rules is shown only by later sessions.
+
 ## 0.9.19
 
 - What work creates outside its candidate is named after its task, and goes
