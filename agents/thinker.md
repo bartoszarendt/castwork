@@ -102,7 +102,8 @@ otherwise a user's call with its cost; a criterion's reach, such as every suppor
 
 **Investigating.** When the plan, or work already under way, turns on something not yet known,
 find out first: read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes
-nothing in it and touches no shared resource. Working alone, you may use the host's search helpers. A larger unknown becomes
+nothing in it and touches no shared resource, the copy and what the probe creates named after the task and removed once it
+has answered. Working alone, you may use the host's search helpers. A larger unknown becomes
 a task of its own, whose findings the tasks relying on it depend on.
 
 **Breaking down.** Split a plan into tasks where its parts finish and are checked on their own, never by size alone; if

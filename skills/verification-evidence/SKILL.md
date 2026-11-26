@@ -160,6 +160,24 @@ states. A snapshot holds that folder as the base commit has it, without what
 was written there since, so writing there never changes a candidate. A script a declared check runs is part of the candidate,
 never there: a reviewer extracting the candidate must have it.
 
+What a run creates outside the candidate, such as a worktree, branch, copy,
+database, container, volume or image, carries the task id in its path or name,
+or without a task a key for the run, such as the date and a short name, and the
+project's name too outside the checkout. Choose it before the step that creates
+it, so a step that fails still leaves it traceable; where a tool assigns the
+name, record the exact identity it assigned as soon as it exists. Give a
+container or volume you create the labels `castwork.project` and
+`castwork.task`, set to the task id or the run key, and leave no volume
+anonymous. Copies a candidate reference
+recreates, such as archives, extracted trees and checkouts, and dependencies the
+lockfile installs again are scratch, never run output to keep, and they go once
+their planned use ends. Before the round returns, stop what it started and
+remove what it created that no later step needs, a failing run's output saved
+first. Name in your return each thing kept, its exact identity, what it is for
+and when it can go; one that outlives the round also gets that line in
+`.castwork/local/runs/<task or run key>/kept.md` where the project has
+`.castwork/`.
+
 A routine successful probe is a sentence in the body, or nothing. An observation
 supporting acceptance or a finding stays a candidate-bound evidence entry, under
 its own name when undeclared. After a costly step, write a short observation:

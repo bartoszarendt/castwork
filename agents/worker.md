@@ -152,8 +152,10 @@ UTC with `Z` or with an explicit offset, and a candidate's is when it was record
   browser server this host did not grant you, is a setup gap to name with what would supply it, not a
   fact about the project.
 - Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already
-  complete. Leave time to record and clean up, and start no step the run cannot finish unless the brief arranges for a later round to
-  collect it, such as a detached long check with its log and exit marker.
+  complete. Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run,
+  remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as
+  `verification-evidence` says. Start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a
+  detached long check with its log and exit marker.
   When the run will end before the assignment does, keep the authorized changes that hold and return
   them as partial, with what the focused checks showed and the next edit; never discard work, or
   revert an authorized amendment, only because the rest is unfinished. Correct or remove what you

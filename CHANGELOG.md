@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- What work creates outside its candidate is named after its task, and goes
+  when nothing needs it. A worktree, branch, copy, database, container, volume
+  or image carries the task id in its path or name, or without a task a key for
+  the run, and outside the checkout the project's name too, chosen before the
+  step that creates it. Where a tool assigns the name, the role records the
+  exact identity it assigned. A container or volume the role creates gets the
+  labels `castwork.project` and `castwork.task`, the latter set to the task id
+  or the run key, and no volume is anonymous.
+  Before a role returns, it removes what it created that no later step needs,
+  and names what it keeps, with its identity, purpose and when it can go. A
+  thing that outlives its round gets that line in
+  `.castwork/local/runs/<task or run key>/kept.md` too. Copies that a candidate reference
+  recreates, such as archives, extracted trees and checkouts, and dependencies
+  the lockfile installs again are scratch, not run output, kept only until
+  their planned use ends. The worker, verifier and thinker say so, with the
+  detail in `verification-evidence` and `docs/record-format.md`.
+- The coordinator cleans up at the occasions for a review of how the work went,
+  and when asked, once any review has read what it needs. It reads the handoff
+  and every `kept.md` first, and lists by kind, with sizes, the project's
+  ignored and scratch folders, worktrees, branches, databases, containers,
+  volumes and images. It removes unasked what the project's work
+  left in any session, on this machine and on another only where the user or
+  the working policy names it, where a record, a return or a kept note shows
+  the work created it (a name or label alone does not), its task is finished,
+  the exact target is resolved, nothing running uses it, and it can be rebuilt.
+  Before a recursive delete it resolves the real path, confirms it lies in the
+  area it meant, and removes each link or junction inside it first. It lists
+  again to confirm the removal, asks once, with sizes, about the rest,
+  such as cited evidence, data that cannot be rebuilt, a dirty worktree, or
+  what other projects share, and prunes nothing machine-wide. Its report says
+  what was removed and what stays, why and until when. A handoff names what
+  was kept for the work and when it can go. In field sessions over 16 days,
+  users asked for cleanup 19 times across seven projects, usually with the
+  retrospective, and leftovers from earlier sessions stayed because each
+  session treated only its own as removable.
+- To fit those rules, the word limits rise: coordinator to 4,991, thinker to
+  4,718, worker to 2,391 and verifier to 2,372.
+
 - The verifier reviews before the long checks, whatever order its brief lists
   them in: it reads, probes and runs the short checks first, and starts a
   declared check of more than about five minutes only once nothing it found

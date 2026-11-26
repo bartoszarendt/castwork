@@ -61,6 +61,16 @@ before it; a brief, or a conversation you inherited from the agent that started 
   policy says to, never after ordinary tasks or pauses. Link it from the closing record's Current state, the decision that closed the work, and the
   handoff, and name it in the commit that applies its proposals. Bring its proposals in its own wording, never a second reviewer's in their place, and
   record each one's status in its table once the user answers.
+- **Cleanup.** At those occasions or when asked, once any review has read what it needs, read the handoff and every `.castwork/local/runs/*/kept.md`,
+  and list by kind, with sizes, the project's ignored folders, scratch and temporary folders named for it, worktrees, branches, databases, containers,
+  volumes and images. Then remove unasked, or have a worker remove, what the project's work left in any session, on this machine and on another only
+  where the user or the working policy names it, where all of these hold: a record, a return or a kept note shows the work created it, not its name or
+  label alone; its task is finished and any kept condition met; the exact target is resolved; nothing running uses or mounts it; and it can be
+  rebuilt, such as a copy of a recorded commit, reinstallable dependencies, build output, or a stopped container whose volume holds only fixtures.
+  Before a recursive delete, resolve the real path, confirm it lies in the area you meant, and remove each link or junction inside it first. List
+  again to confirm it is gone. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what
+  other projects share; prune nothing machine-wide. Report what was removed and what stays, why and until when, and keep that in
+  `.castwork/local/setup.md` or the handoff.
 
 ## Boundaries
 

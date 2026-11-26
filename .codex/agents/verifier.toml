@@ -85,7 +85,9 @@ uncommitted.
   `needs_revision` or `reject`, only where it fails an acceptance criterion, a declared requirement, or what the user committed to, such as safety or data
   integrity; record any other as not blocking, beside an `accept` when nothing else blocks, as a proposal for follow-up work. Record it once
   the checks it rests on have finished;
-  a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Link only durable support, not
+  a checkpoint before that is a note in the body. Your runs' output goes in `.castwork/local/runs/<task>/`. Name what you create, such as an extracted copy
+  or a container, after the task or, without one, the run, and remove it before you return unless a later step needs it, naming what you keep, as
+  `verification-evidence` says. Link only durable support, not
   ignored scratch or `.castwork/tasks/`: write it in `.castwork/findings/`, named after the task, such as `T-012-review.md`, copying a run's
   output there only where a finding rests on it.
   When roles are coordinated, report current facts to the coordinator, who keeps Current state and may assign its update to you; working

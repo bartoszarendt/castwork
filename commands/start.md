@@ -239,8 +239,9 @@ When the user asks, in whatever words or language, to stop the work for now:
 - A handoff goes where the user or the project says; otherwise to
   `.castwork/local/handoff.md`, which stays on this machine and outside
   snapshots. Keep in it only context the records do not already capture: the
-  next step across tasks, what is still running, what the environment is like
-  now, and the limits of what the user authorized. Note there each line the
+  next step across tasks, what is still running, what was kept for the work,
+  such as a worktree or an image, and when it can go, what the environment is
+  like now, and the limits of what the user authorized. Note there each line the
   user declined for the working policy, so the next session does not propose
   it again. A fact about this machine
   that will still hold next time belongs in `.castwork/local/setup.md`, not in

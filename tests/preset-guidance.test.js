@@ -728,7 +728,7 @@ for (const host of HOSTS) {
       "Bring once, with place and wording, those for `## Working policy`, including any line on who runs what or how work is split, sized or briefed, even one a measurement prompted, and those that change what a named check runs; those for a place outside this project, such as the repository a role's guidance comes from, are the user's to take there.",
       "**Reviews of how the work went.** When a phase reached its acceptance, work was cancelled, stopped or paused after rounds that did not converge, or a shape or level had its first deliberate trial here, offer in one line a thinker review, naming the occasion; start it unasked only where the working policy says to, never after ordinary tasks or pauses.",
       "Link it from the closing record's Current state, the decision that closed the work, and the handoff, and name it in the commit that applies its proposals.",
-      "Bring its proposals in its own wording, never a second reviewer's in their place, and record each one's status in its table once the user answers. ## Boundaries",
+      "Bring its proposals in its own wording, never a second reviewer's in their place, and record each one's status in its table once the user answers. - **Cleanup.**",
       "**Produce nothing and assess nothing.** If you find yourself changing the result, running its declared checks, or writing an entry under another role's actor, you have changed roles without saying so, even where a setup fact or plan says to: correct it, and keep what you ran under your own actor, rerunning none just for another.",
     ], 'coordinator');
   });
@@ -994,7 +994,7 @@ for (const host of HOSTS) {
       "build a new instrument only when those cannot show what the user committed to, weighed against the change it checks.",
       "An expensive set, such as every supported platform and version, or proof that only qualifies the result for release, runs the same way, holding back no building; develop against one representative configuration, checking another earlier only where it differs materially, the change is sensitive to compatibility, the working policy sets a cadence, or an earlier result could change what gets built.",
       "**The user's part.** Name the user's calls the plan foresees, as defined below, and the questions it leaves open, each with one recommendation, so the user is asked once, when the plan is agreed; settle the rest yourself as the work unfolds.",
-      'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource.',
+      'read the code and run read-only commands, or, within your authorization, a probe in a scratch copy outside the repository that changes nothing in it and touches no shared resource, the copy and what the probe creates named after the task and removed once it has answered.',
       'Name it even where it changes a gate, a sequence or a coverage the user approved: then it is their call, brought with what it saves and risks, not an alternative you set aside, and a cheaper version of the same campaign says why it beats changing the gate.',
       'When a gate keeps blocking, check what it protects in the product itself under the condition the gate excludes, such as a simulated delay or a failing hook, before investigating further what the gate measures: the product may need less than the gate asks, or fail even when it passes.',
       "Frame a call at what the user commits to, such as the outcome, a guarantee, or the risk they accept, not at the method that meets it.",
@@ -1318,7 +1318,7 @@ for (const host of HOSTS) {
     all(role(host, 'worker'), [
       'A declared check that a larger command ran unchanged as a stage, such as a full gate running `check` first, takes its entry from that run where the output shows the stage finished: the same command, with `exit_code` only where the whole command passed; never run it again for the name.',
       'Capture a check\'s whole output there, not only a tail, and keep a failing run\'s before you summarize or rerun it: a later pass does not recover it.',
-      'Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already complete. Leave time to record and clean up, and start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a detached long check with its log and exit marker.',
+      'Before optional proof, such as more measurements or captures, record the candidate and the checks and decisive observations already complete. Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run, remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as `verification-evidence` says. Start no step the run cannot finish unless the brief arranges for a later round to collect it, such as a detached long check with its log and exit marker.',
     ], 'worker');
     all(role(host, 'verifier'), [
       'A declared check that a larger command ran unchanged as a stage counts where its output shows the stage finished.',
@@ -1447,4 +1447,38 @@ test('the procedure skills run a long check last, after the review', () => {
     'Declare none that another declared check contains, unless the working policy asks for both or its own mode protects a risk the record names;',
     'a selection left undeclared runs while working, under its own name, and a declared one that the larger check runs unchanged as a stage takes its entry from that run',
   ], 'task-record-contract');
+});
+
+for (const host of HOSTS) {
+  test(`${host} what work creates is named after its task and removed when no step needs it, and the coordinator cleans up rebuildable leftovers unasked`, () => {
+    all(role(host, 'worker'), [
+      'Leave time to record and clean up: name what you create outside the candidate after the task or, without one, the run, remove before you return what no later step needs, and name each thing you keep, its purpose and when it can go, as `verification-evidence` says.',
+    ], 'worker');
+    all(role(host, 'verifier'), [
+      'Name what you create, such as an extracted copy or a container, after the task or, without one, the run, and remove it before you return unless a later step needs it, naming what you keep,',
+    ], 'verifier');
+    all(role(host, 'thinker'), [
+      'touches no shared resource, the copy and what the probe creates named after the task and removed once it has answered.',
+    ], 'thinker');
+    all(role(host, 'coordinator'), [
+      "**Cleanup.** At those occasions or when asked, once any review has read what it needs, read the handoff and every `.castwork/local/runs/*/kept.md`, and list by kind, with sizes, the project's ignored folders, scratch and temporary folders named for it, worktrees, branches, databases, containers, volumes and images.",
+      'Before a recursive delete, resolve the real path, confirm it lies in the area you meant, and remove each link or junction inside it first.',
+      "remove unasked, or have a worker remove, what the project's work left in any session, on this machine and on another only where the user or the working policy names it, where all of these hold: a record, a return or a kept note shows the work created it, not its name or label alone; its task is finished and any kept condition met; the exact target is resolved; nothing running uses or mounts it; and it can be rebuilt,",
+      'List again to confirm it is gone. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what other projects share; prune nothing machine-wide.',
+      'Report what was removed and what stays, why and until when,',
+    ], 'coordinator');
+    all(entry(host), [
+      'what was kept for the work, such as a worktree or an image, and when it can go,',
+    ], 'entry command');
+  });
+}
+
+test('verification-evidence names what a run creates and keeps no rebuildable copy', () => {
+  all(skill('verification-evidence'), [
+    "carries the task id in its path or name, or without a task a key for the run, such as the date and a short name, and the project's name too outside the checkout.",
+    'where a tool assigns the name, record the exact identity it assigned as soon as it exists.',
+    'Give a container or volume you create the labels `castwork.project` and `castwork.task`, set to the task id or the run key, and leave no volume anonymous.',
+    'dependencies the lockfile installs again are scratch, never run output to keep, and they go once their planned use ends.',
+    'one that outlives the round also gets that line in `.castwork/local/runs/<task or run key>/kept.md` where the project has `.castwork/`.',
+  ], 'verification-evidence');
 });

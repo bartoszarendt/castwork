@@ -43,7 +43,26 @@ exit and pid files, dumps, captures, and the scripts of one-off probes, goes
 in `local/runs/<task>/`, which Git ignores and snapshots leave out. An entry
 says what the run showed, so it reads without the file; a file copied into
 `findings/` when it is linked lasts, and the rest stays on the machine that
-ran it.
+ran it. Copies a candidate reference recreates, such as archives, extracted
+trees and checkouts, and dependencies the lockfile installs again are scratch,
+not run output: they go once their planned use ends, usually when the round
+that made them returns.
+
+What a run creates outside the candidate, such as a worktree, branch,
+database, container, volume or image, carries the task id in its path or name,
+or without a task a key for the run, and the project's name too outside the
+checkout; a container or volume the role creates also carries the labels
+`castwork.project` and `castwork.task`, the latter set to the task id or the
+run key, and where a tool assigns the name, the
+role records the exact identity it assigned. It is removed once no later step
+needs it. One that outlives its round is named, with its exact identity, what
+it is for and when it can go, in the role's return and in
+`local/runs/<task or run key>/kept.md`, which a later cleanup reads with the
+handoff. A
+name or label helps find a thing; removing it unasked also needs a record, a
+return or that note showing the work created it, nothing running using it, and
+a way to rebuild it. A cited folder keeps the files a record relies on, not
+every copy inside it.
 
 For the same reason, `findings/` holds what is written about the work, never
 the work. A file the task delivers, or a script a declared check runs, is part
