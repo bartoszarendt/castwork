@@ -54,15 +54,20 @@ or without a task a key for the run, and the project's name too outside the
 checkout; a container or volume the role creates also carries the labels
 `castwork.project` and `castwork.task`, the latter set to the task id or the
 run key, and where a tool assigns the name, the
-role records the exact identity it assigned. It is removed once no later step
-needs it. One that outlives its round is named, with its exact identity, what
-it is for and when it can go, in the role's return and in
-`local/runs/<task or run key>/kept.md`, which a later cleanup reads with the
-handoff. A
+role records the exact identity it assigned. In a shared temporary directory a
+unique suffix follows that prefix. It is removed once no later step needs it.
+A worktree, container, volume, database, image or large copy that could outlive
+a round cut short is written in `local/runs/<task or run key>/kept.md` before
+it is created, with its planned identity and purpose, then its actual identity,
+and struck once its removal is confirmed. One that outlives its round is named
+there and in the role's return, with what it is for and when it can go; a later
+cleanup reads those notes with the handoff. A
 name or label helps find a thing; removing it unasked also needs a record, a
 return or that note showing the work created it, nothing running using it, and
-a way to rebuild it. A cited folder keeps the files a record relies on, not
-every copy inside it.
+a way to rebuild it. A commit is kept only by a branch, a tag or a bundle,
+never by a record naming it, so a worktree whose commits nothing else holds is
+not rebuildable. A cited folder keeps the files a record relies on, not every
+copy inside it.
 
 For the same reason, `findings/` holds what is written about the work, never
 the work. A file the task delivers, or a script a declared check runs, is part

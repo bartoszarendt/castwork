@@ -1,7 +1,7 @@
 {
   "layout_version": 4,
   "version": "0.9.18",
-  "source_digest": "sha256:6a1f2bc79231dfccb13c72d3f780368c6d7af8c1dbf8ced09f0efbdc44564039",
+  "source_digest": "sha256:b10e87215dac1e0def4ab1b2612e2a329ecff3dca68ad6c1af5648a188b34b02",
   "files": {
     ".codex/agents/thinker.toml": "sha256:c7b80f2fec9607466017039f9564b605c3134c5d97cb5b674a576dbd7d68f447",
     ".codex/agents/verifier.toml": "sha256:745256f84eae0b9b9eb6f90526543908a510ef9bf50af303973a296588208113",

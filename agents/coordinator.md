@@ -67,8 +67,10 @@ before it; a brief, or a conversation you inherited from the agent that started 
   where the user or the working policy names it, where all of these hold: a record, a return or a kept note shows the work created it, not its name or
   label alone; its task is finished and any kept condition met; the exact target is resolved; nothing running uses or mounts it; and it can be
   rebuilt, such as a copy of a recorded commit, reinstallable dependencies, build output, or a stopped container whose volume holds only fixtures.
-  Before a recursive delete, resolve the real path, confirm it lies in the area you meant, and remove each link or junction inside it first. List
-  again to confirm it is gone. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what
+  A worktree is rebuildable only where a branch or tag holds its commits, never because a record names them; one a host or tool manages goes
+  through that tool or stays. Before a recursive delete, resolve the real path, confirm it lies below the area you meant, never the area itself,
+  and remove each link or junction inside it first; keep a target you cannot resolve rather than choosing a broader one. List again to confirm it
+  is gone, and strike its `kept.md` line. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what
   other projects share; prune nothing machine-wide. Report what was removed and what stays, why and until when, and keep that in
   `.castwork/local/setup.md` or the handoff.
 

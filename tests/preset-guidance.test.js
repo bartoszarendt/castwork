@@ -1462,10 +1462,11 @@ for (const host of HOSTS) {
     ], 'thinker');
     all(role(host, 'coordinator'), [
       "**Cleanup.** At those occasions or when asked, once any review has read what it needs, read the handoff and every `.castwork/local/runs/*/kept.md`, and list by kind, with sizes, the project's ignored folders, scratch and temporary folders named for it, worktrees, branches, databases, containers, volumes and images.",
-      'Before a recursive delete, resolve the real path, confirm it lies in the area you meant, and remove each link or junction inside it first.',
       "remove unasked, or have a worker remove, what the project's work left in any session, on this machine and on another only where the user or the working policy names it, where all of these hold: a record, a return or a kept note shows the work created it, not its name or label alone; its task is finished and any kept condition met; the exact target is resolved; nothing running uses or mounts it; and it can be rebuilt,",
-      'List again to confirm it is gone. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what other projects share; prune nothing machine-wide.',
+      'is gone, and strike its `kept.md` line. Ask once, with sizes, for the rest, such as cited evidence, data that cannot be rebuilt, a dirty worktree, or what other projects share; prune nothing machine-wide.',
       'Report what was removed and what stays, why and until when,',
+      'A worktree is rebuildable only where a branch or tag holds its commits, never because a record names them; one a host or tool manages goes through that tool or stays.',
+      'confirm it lies below the area you meant, never the area itself, and remove each link or junction inside it first; keep a target you cannot resolve rather than choosing a broader one.',
     ], 'coordinator');
     all(entry(host), [
       'what was kept for the work, such as a worktree or an image, and when it can go,',
@@ -1475,10 +1476,12 @@ for (const host of HOSTS) {
 
 test('verification-evidence names what a run creates and keeps no rebuildable copy', () => {
   all(skill('verification-evidence'), [
-    "carries the task id in its path or name, or without a task a key for the run, such as the date and a short name, and the project's name too outside the checkout.",
+    "carries the task id in its path or name, or without a task a key for the run, such as the date and a short name, and the project's name too outside the checkout;",
     'where a tool assigns the name, record the exact identity it assigned as soon as it exists.',
     'Give a container or volume you create the labels `castwork.project` and `castwork.task`, set to the task id or the run key, and leave no volume anonymous.',
     'dependencies the lockfile installs again are scratch, never run output to keep, and they go once their planned use ends.',
-    'one that outlives the round also gets that line in `.castwork/local/runs/<task or run key>/kept.md` where the project has `.castwork/`.',
+    'in a shared temporary directory, let `mktemp -d` or the like add a unique suffix to that prefix, since another role may work on the same task.',
+    'Before creating a worktree, container, volume, database, image or large copy that could outlive a round cut short, write its planned identity and purpose in `.castwork/local/runs/<task or run key>/kept.md`, where the project has `.castwork/`, add the actual identity once it exists, and strike the line once its removal is confirmed;',
+    'one that outlives the round also has that line in its `kept.md`.',
   ], 'verification-evidence');
 });

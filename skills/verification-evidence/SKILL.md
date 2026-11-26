@@ -163,9 +163,16 @@ never there: a reviewer extracting the candidate must have it.
 What a run creates outside the candidate, such as a worktree, branch, copy,
 database, container, volume or image, carries the task id in its path or name,
 or without a task a key for the run, such as the date and a short name, and the
-project's name too outside the checkout. Choose it before the step that creates
-it, so a step that fails still leaves it traceable; where a tool assigns the
-name, record the exact identity it assigned as soon as it exists. Give a
+project's name too outside the checkout; in a shared temporary directory, let
+`mktemp -d` or the like add a unique suffix to that prefix, since another role
+may work on the same task. Choose it before the step that creates it, so a step
+that fails still leaves it traceable; where a tool assigns the name, record the
+exact identity it assigned as soon as it exists. Before creating a worktree,
+container, volume, database, image or large copy that could outlive a round cut
+short, write its planned identity and purpose in
+`.castwork/local/runs/<task or run key>/kept.md`, where the project has
+`.castwork/`, add the actual identity once it exists, and strike the line once
+its removal is confirmed; scratch removed in the same step needs no line. Give a
 container or volume you create the labels `castwork.project` and
 `castwork.task`, set to the task id or the run key, and leave no volume
 anonymous. Copies a candidate reference
@@ -174,9 +181,8 @@ lockfile installs again are scratch, never run output to keep, and they go once
 their planned use ends. Before the round returns, stop what it started and
 remove what it created that no later step needs, a failing run's output saved
 first. Name in your return each thing kept, its exact identity, what it is for
-and when it can go; one that outlives the round also gets that line in
-`.castwork/local/runs/<task or run key>/kept.md` where the project has
-`.castwork/`.
+and when it can go; one that outlives the round also has that line in its
+`kept.md`.
 
 A routine successful probe is a sentence in the body, or nothing. An observation
 supporting acceptance or a finding stays a candidate-bound evidence entry, under

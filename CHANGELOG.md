@@ -37,7 +37,17 @@
   users asked for cleanup 19 times across seven projects, usually with the
   retrospective, and leftovers from earlier sessions stayed because each
   session treated only its own as removable.
-- To fit those rules, the word limits rise: coordinator to 4,991, thinker to
+- A worktree, container, volume, database, image or large copy that could
+  outlive a round cut short is written in its `kept.md` before it is created,
+  with its planned identity and purpose, then its actual identity, and struck
+  once its removal is confirmed, so a round the host stops still leaves the
+  work's claim on it. In a shared temporary directory a unique suffix follows
+  the project and task prefix. The coordinator's cleanup treats a worktree as
+  rebuildable only where a branch or tag holds its commits, never because a
+  record names them, leaves one a host or tool manages to that tool, deletes
+  recursively only below the area it meant, never the area itself, and keeps
+  a target it cannot resolve rather than choosing a broader one.
+- To fit those rules, the word limits rise: coordinator to 5,043, thinker to
   4,718, worker to 2,391 and verifier to 2,372.
 
 - The verifier reviews before the long checks, whatever order its brief lists
